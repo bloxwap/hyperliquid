@@ -5,9 +5,24 @@
 
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { encode as encodeMsgpack, type ValueType } from "@jsr/std__msgpack/encode";
 import { type AbstractWallet, type Signature, signTypedData } from "./_abstractWallet.ts";
+import { MsgpackWriter } from "./_msgpack.ts";
 import { trimSignature } from "./_multiSig.ts";
+
+/**
+ * Input shape of {@linkcode adjust}. Mirrors {@linkcode MsgpackValue}, except that the `Uint8Array` arm is
+ * intersected with a string index signature so `adjust`'s `for...in` rebuild of exotic objects type-checks
+ * without a cast. Kept local because it is a quirk of `adjust`, not of the encoder.
+ */
+type ValueType =
+  | string
+  | number
+  | bigint
+  | boolean
+  | null
+  | (Uint8Array & { [key: string]: ValueType })
+  | ValueType[]
+  | { [key: string]: ValueType };
 
 /** EIP-712 domain for L1 (phantom-agent) signing. */
 const L1_DOMAIN = Object.freeze({
@@ -24,6 +39,21 @@ const L1_AGENT_TYPES = Object.freeze({
     { name: "connectionId", type: "bytes32" },
   ],
 });
+
+/**
+ * Reused across calls so the hash preimage costs no allocation beyond the writer's one-time buffer.
+ * Safe because {@linkcode createL1ActionHash} is synchronous; {@linkcode ACTION_WRITER_BUSY} covers the one
+ * way it can still overlap with itself.
+ */
+const ACTION_WRITER = new MsgpackWriter();
+
+/**
+ * Guards {@linkcode ACTION_WRITER} against re-entrancy. `adjust` may return the caller's own object, so a
+ * getter on a caller-supplied action can call back into {@linkcode createL1ActionHash} while the outer call
+ * is mid-write. Sharing one buffer across those two calls would splice the inner preimage into the outer
+ * one and hash — and sign — the wrong bytes, so a nested call gets its own writer instead.
+ */
+let ACTION_WRITER_BUSY = false;
 
 /**
  * Creates a hash of the L1 action.
@@ -53,41 +83,41 @@ export function createL1ActionHash(args: {
 }): `0x${string}` {
   const { action, nonce, vaultAddress, expiresAfter } = args;
 
-  const actionBytes = encodeMsgpack(adjust(action as ValueType));
+  const nested = ACTION_WRITER_BUSY;
+  const writer = nested ? new MsgpackWriter() : ACTION_WRITER;
+  ACTION_WRITER_BUSY = true;
+  try {
+    // Layout: actionBytes ‖ nonce(u64) ‖ vaultMarker ‖ vault(20) ‖ expiresMarker ‖ expires(u64)
+    writer.reset();
+    writer.value(adjust(action as ValueType));
+    writer.uint64(nonce);
 
-  // Layout: actionBytes ‖ nonce(u64) ‖ vaultMarker ‖ vault(20) ‖ expiresMarker ‖ expires(u64)
-  const size = actionBytes.length + 9 + (vaultAddress ? 20 : 0) + (expiresAfter !== undefined ? 9 : 0);
-  const bytes = new Uint8Array(size);
-  const view = new DataView(bytes.buffer);
+    if (vaultAddress) {
+      writer.byte(1);
+      writer.raw(hexToBytes(vaultAddress.slice(2)));
+    } else {
+      writer.byte(0);
+    }
 
-  bytes.set(actionBytes, 0);
-  let offset = actionBytes.length;
-  view.setBigUint64(offset, BigInt(nonce));
-  offset += 8;
+    if (expiresAfter !== undefined) {
+      writer.byte(0);
+      writer.uint64(expiresAfter);
+    }
 
-  if (vaultAddress) {
-    bytes[offset] = 1;
-    bytes.set(hexToBytes(vaultAddress.slice(2)), offset + 1);
-    offset += 21;
-  } else {
-    bytes[offset] = 0;
-    offset += 1;
+    // `view()` aliases the writer's buffer; nothing writes to it again before `keccak_256` consumes it.
+    return `0x${bytesToHex(keccak_256(writer.view()))}`;
+  } finally {
+    ACTION_WRITER_BUSY = nested;
   }
-
-  if (expiresAfter !== undefined) {
-    bytes[offset] = 0;
-    view.setBigUint64(offset + 1, BigInt(expiresAfter));
-  }
-
-  return `0x${bytesToHex(keccak_256(bytes))}`;
 }
 
 /**
- * Normalizes a value into a shape that `@std/msgpack` encodes the way Hyperliquid expects on the wire:
+ * Normalizes a value into a shape {@linkcode MsgpackWriter} encodes the way Hyperliquid expects on the wire:
  * - drops `undefined` properties (otherwise the encoder throws)
  * - widens `number`s outside the int32 range to `BigInt` (otherwise they would be encoded as float64 instead of int64)
  *
- * Returns the ORIGINAL reference when a subtree needs no modification (the common case).
+ * Returns the ORIGINAL reference when a subtree needs no modification (the common case) — which is why the
+ * encoder must treat the result as caller-owned data that may still have getters on it.
  */
 function adjust(value: ValueType): ValueType {
   if (Array.isArray(value)) {
