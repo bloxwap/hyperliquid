@@ -108,6 +108,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// --- Schema key-order cache --------------------------------
+// The canonical key order of an object node is a property of its schema, and schemas in this
+// SDK are frozen module constants, so the key list is worth deriving exactly once. Without
+// this, a 100-order batch calls `Object.keys` 201 times per `canonicalize` (1 root + 100
+// orders + 100 `t` wrappers) and throws away 201 identical arrays. Weakly keyed so schemas
+// built at runtime (and their key arrays) stay collectable.
+const schemaKeyCache = new WeakMap<Record<string, SchemaNode>, readonly string[]>();
+
+/** Returns the cached declaration-ordered key list of a schema's `entries`. */
+function schemaKeys(entries: Record<string, SchemaNode>): readonly string[] {
+  let keys = schemaKeyCache.get(entries);
+  if (keys === undefined) {
+    keys = Object.keys(entries);
+    schemaKeyCache.set(entries, keys);
+  }
+  return keys;
+}
+
 function reorderObject(entries: Record<string, SchemaNode>, value: Record<string, unknown>): Record<string, unknown> {
   // --- Reject extra keys not in schema ---------------------
   for (const key in value) {
@@ -117,8 +135,10 @@ function reorderObject(entries: Record<string, SchemaNode>, value: Record<string
   }
 
   // --- Build reordered result (missing required keys are detected in the same pass)
+  const keys = schemaKeys(entries);
   const result: Record<string, unknown> = {};
-  for (const key of Object.keys(entries)) {
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
     if (key in value) {
       result[key] = walk(entries[key], value[key]);
     } else {
@@ -173,11 +193,18 @@ function matchByStructure(options: readonly SchemaNode[], value: Record<string, 
     if (!allKnown) continue;
 
     // Every required option key must be present in data
-    const allRequired = Object.keys(option.entries).every((k) => {
-      if (k in value) return true;
-      const t = option.entries![k].type;
-      return t === "optional" || t === "nullable" || t === "nullish";
-    });
+    const optionEntries = option.entries;
+    const optionKeys = schemaKeys(optionEntries);
+    let allRequired = true;
+    for (let i = 0; i < optionKeys.length; i++) {
+      const key = optionKeys[i];
+      if (key in value) continue;
+      const t = optionEntries[key].type;
+      if (t !== "optional" && t !== "nullable" && t !== "nullish") {
+        allRequired = false;
+        break;
+      }
+    }
     if (allRequired) return option;
   }
 
