@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue"></a>
-  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg"></a>
-  <a href="https://coveralls.io/github/bloxwap/hyperliquid?branch=main"><img alt="Coverage status" src="https://coveralls.io/repos/github/bloxwap/hyperliquid/badge.svg?branch=main"></a>
-  <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid"></a>
+  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue&style=for-the-badge"></a>
+  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg?style=for-the-badge"></a>
+  <a href="https://coveralls.io/github/bloxwap/hyperliquid?branch=main"><img alt="Coverage status" src="https://img.shields.io/coverallsCoverage/github/bloxwap/hyperliquid?branch=main&style=for-the-badge"></a>
+  <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid?style=for-the-badge"></a>
 </p>
 
 ## Features
