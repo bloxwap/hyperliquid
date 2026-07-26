@@ -6,6 +6,41 @@
 import { type AbstractWallet, type Signature, signTypedData } from "./_abstractWallet.ts";
 import { trimSignature } from "./_multiSig.ts";
 
+/** EIP-712 type definitions; the hash depends on key and field order. */
+type TypedDataTypes = Record<string, readonly { name: string; type: string }[]>;
+
+/** Cache of multi-sig-extended `types` objects (keyed by the original `types` object identity). */
+const multiSigExtendedTypesCache = new WeakMap<TypedDataTypes, TypedDataTypes>();
+
+/**
+ * Injects the multi-sig fields into `types` after the primary type's first field (memoized per
+ * `types` object).
+ *
+ * A multi-sig action is signed once per authorized signer with the same `types`, and the caches
+ * downstream (`viemTypesCache`, `typeFieldNamesCache`) are keyed by object identity — so building a
+ * fresh extension per signer would miss every time. Reusing one object turns N misses into one miss
+ * plus N-1 hits. The extension is a pure function of `types`, which is what makes identity keying
+ * sound: nothing about the signer, the addresses, or the action enters it.
+ */
+function getMultiSigExtendedTypes(types: TypedDataTypes): TypedDataTypes {
+  let extended = multiSigExtendedTypesCache.get(types);
+  if (extended === undefined) {
+    const primaryType = Object.keys(types)[0];
+    const primaryTypeFields = types[primaryType];
+    extended = {
+      ...types,
+      [primaryType]: [
+        primaryTypeFields[0],
+        { name: "payloadMultiSigUser", type: "address" },
+        { name: "outerSigner", type: "address" },
+        ...primaryTypeFields.slice(1),
+      ],
+    };
+    multiSigExtendedTypesCache.set(types, extended);
+  }
+  return extended;
+}
+
 /**
  * Signs a user-signed action.
  *
@@ -116,18 +151,8 @@ export async function signUserSignedInner(args: {
   /** The leader address (address of the wallet that signs the outer wrapper). */
   outerSigner: `0x${string}`;
 }): Promise<Signature> {
-  // Inject fields for multi-sig
-  const primaryType = Object.keys(args.types)[0];
-  const primaryTypeFields = args.types[primaryType];
-  const extendedTypes = {
-    ...args.types,
-    [primaryType]: [
-      primaryTypeFields[0],
-      { name: "payloadMultiSigUser", type: "address" },
-      { name: "outerSigner", type: "address" },
-      ...primaryTypeFields.slice(1),
-    ],
-  };
+  // Inject fields for multi-sig; shared across signers of one action, see the memo above.
+  const extendedTypes = getMultiSigExtendedTypes(args.types);
 
   const signature = await signUserSignedAction({
     wallet: args.signer,

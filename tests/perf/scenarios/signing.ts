@@ -12,8 +12,14 @@
  */
 
 import { privateKeyToAccount } from "viem/accounts";
-import { OrderRequest } from "@bloxwap/hyperliquid/api/exchange";
-import { canonicalize, createL1ActionHash, signL1Action, signMultiSigL1 } from "@bloxwap/hyperliquid/signing";
+import { ApproveAgentTypes, OrderRequest } from "@bloxwap/hyperliquid/api/exchange";
+import {
+  canonicalize,
+  createL1ActionHash,
+  signL1Action,
+  signMultiSigL1,
+  signMultiSigUserSigned,
+} from "@bloxwap/hyperliquid/signing";
 import { scenario } from "../_harness.ts";
 import { TEST_PRIVATE_KEY } from "../_helpers.ts";
 
@@ -157,6 +163,92 @@ scenario({
       action,
       nonce: NONCE,
       isTestnet: true,
+    });
+  },
+});
+
+// The user-signed multi-sig path injects `payloadMultiSigUser`/`outerSigner` into the EIP-712 type
+// before every inner signature. Issue #9 is about doing that type surgery once instead of once per
+// signer, which only shows up with more than one signer — hence three.
+
+scenario({
+  name: "signing/multisig_user_signed_3_signers",
+  group: "signing",
+  description: "signMultiSigUserSigned() with 3 signers over an approveAgent action (type injection + inner ECDSA)",
+  unit: "request",
+  iterations: 10,
+  samples: 10,
+  setup: () => ({
+    signers: [
+      privateKeyToAccount(TEST_PRIVATE_KEY),
+      privateKeyToAccount(EXTRA_KEYS[0]),
+      privateKeyToAccount(EXTRA_KEYS[1]),
+    ] as [ReturnType<typeof privateKeyToAccount>, ...ReturnType<typeof privateKeyToAccount>[]],
+  }),
+  run: async ({
+    signers,
+  }: {
+    signers: [ReturnType<typeof privateKeyToAccount>, ...ReturnType<typeof privateKeyToAccount>[]];
+  }) => {
+    await signMultiSigUserSigned({
+      signers,
+      multiSigUser: "0x1234567890123456789012345678901234567890",
+      action: {
+        type: "approveAgent",
+        signatureChainId: "0x66eee",
+        hyperliquidChain: "Testnet",
+        agentAddress: "0x0000000000000000000000000000000000000001",
+        agentName: "Agent",
+        nonce: NONCE,
+      },
+      types: ApproveAgentTypes,
+    });
+  },
+});
+
+/**
+ * A viem-local-shaped wallet that returns a fixed signature without touching the curve.
+ *
+ * secp256k1 costs ~150 µs per signature, so in a 3-signer multi-sig it accounts for well over 99%
+ * of the wall clock and any change to the SDK-side orchestration is below the noise floor. Stubbing
+ * the curve out leaves exactly the library's own cost — EIP-712 type surgery, message filtering,
+ * wrapper hashing — on the clock, which is what issues #9 and #10 are about.
+ */
+function stubWallet(address: `0x${string}`): {
+  address: `0x${string}`;
+  signTypedData: (params: unknown) => Promise<`0x${string}`>;
+} {
+  const signature = `0x${"11".repeat(64)}1b` as `0x${string}`;
+  return { address, signTypedData: (_params: unknown) => Promise.resolve(signature) };
+}
+
+scenario({
+  name: "signing/multisig_user_signed_3_signers_no_ecdsa",
+  group: "signing",
+  description: "signMultiSigUserSigned() with 3 stub signers: SDK-side multi-sig overhead without secp256k1",
+  unit: "request",
+  iterations: 200,
+  samples: 15,
+  setup: () => ({
+    signers: [
+      stubWallet("0x1111111111111111111111111111111111111111"),
+      stubWallet("0x2222222222222222222222222222222222222222"),
+      stubWallet("0x3333333333333333333333333333333333333333"),
+    ] as [ReturnType<typeof stubWallet>, ...ReturnType<typeof stubWallet>[]],
+  }),
+  run: async ({ signers }: { signers: [ReturnType<typeof stubWallet>, ...ReturnType<typeof stubWallet>[]] }) => {
+    await signMultiSigUserSigned({
+      signers,
+      multiSigUser: "0x1234567890123456789012345678901234567890",
+      action: {
+        type: "approveAgent",
+        signatureChainId: "0x66eee",
+        hyperliquidChain: "Testnet",
+        agentAddress: "0x0000000000000000000000000000000000000001",
+        agentName: "Agent",
+        nonce: NONCE,
+      },
+      types: ApproveAgentTypes,
     });
   },
 });
