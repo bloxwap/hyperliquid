@@ -59,11 +59,10 @@ export type NoopResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -117,6 +116,6 @@ export type NoopSuccessResponse = ExcludeErrorResponse<NoopResponse>;
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#invalidate-pending-nonce-noop
  */
 export function noop(config: ExchangeConfig, params: NoopParameters, opts?: NoopOptions): Promise<NoopSuccessResponse> {
-  const action = canonicalize(NoopActionSchema, parse(NoopActionSchema, { type: "noop" }));
+  const action = buildAction(NoopActionSchema, { type: "noop" }, opts);
   return executeL1Action({ ...config, nonceManager: () => params.nonce }, action, opts);
 }

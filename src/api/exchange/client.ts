@@ -145,6 +145,7 @@ import {
   type PerpDeployParameters,
   type PerpDeploySuccessResponse,
 } from "./_methods/perpDeploy.ts";
+import { prepareRequest, type PreparedExchangeRequest } from "./_methods/prepareRequest.ts";
 import {
   registerReferrer,
   type RegisterReferrerOptions,
@@ -229,6 +230,7 @@ import {
   type SubAccountTransferParameters,
   type SubAccountTransferSuccessResponse,
 } from "./_methods/subAccountTransfer.ts";
+import { submitPrepared, type SubmitPreparedOptions } from "./_methods/submitPrepared.ts";
 import {
   tokenDelegate,
   type TokenDelegateOptions,
@@ -1387,6 +1389,51 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
   }
 
   /**
+   * Build a fully signed Exchange request without sending it (sign now, submit later).
+   *
+   * Runs `run` against a capture transport: the callback executes any Exchange method exactly as
+   * usual (validation, nonce issuance, signing), but the resulting request is captured instead of
+   * being posted. The returned payload can be submitted later with {@linkcode submitPrepared} —
+   * useful for latency-critical flows (e.g. a pre-signed cancel-all fired with zero signing latency).
+   *
+   * The nonce is consumed at prepare time: it is fresh and monotonic when the payload is signed.
+   * **A prepared payload goes stale if another request from the same wallet consumes a later nonce
+   * first** — the server rejects nonces less than or equal to the last one it saw, so submit a
+   * prepared payload before issuing newer requests (or accept that it may be rejected as stale).
+   *
+   * The callback must issue exactly one request (one Exchange method call).
+   *
+   * @param run Callback that issues one Exchange API request (e.g. `(config) => order(config, params)`).
+   * @return The signed request payload (`{ action, signature, nonce, ... }`), ready for {@linkcode submitPrepared}.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before signing).
+   * @throws {HyperliquidError} When the callback issues zero or more than one request.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { order } from "@bloxwap/hyperliquid/api/exchange";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
+   * const prepared = await client.prepareRequest((config) =>
+   *   order(config, {
+   *     orders: [{ a: 0, b: true, p: "30000", s: "0.1", r: false, t: { limit: { tif: "Gtc" } } }],
+   *     grouping: "na",
+   *   }),
+   * );
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets#hyperliquid-nonces
+   */
+  prepareRequest(run: (config: ExchangeConfig) => Promise<unknown>): Promise<PreparedExchangeRequest> {
+    return prepareRequest(this.config_, run);
+  }
+
+  /**
    * Create a referral code.
    *
    * Signing: L1 Action.
@@ -1895,6 +1942,38 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     opts?: SubAccountTransferOptions,
   ): Promise<SubAccountTransferSuccessResponse> {
     return subAccountTransfer(this.config_, params, opts);
+  }
+
+  /**
+   * Submit a previously prepared (signed) Exchange request.
+   *
+   * Posts a payload built by {@linkcode prepareRequest} to the Exchange endpoint as-is: no
+   * re-validation, no re-signing, no nonce refresh. The payload must be submitted through the same
+   * network (testnet vs mainnet) it was signed for — the signature commits to it.
+   *
+   * @param prepared The signed request payload returned by {@linkcode prepareRequest}.
+   * @param opts Request execution options.
+   * @return The API response.
+   *
+   * @throws {TransportError} When the transport layer throws an error.
+   * @throws {ApiRequestError} When the API returns an unsuccessful response (e.g. a stale nonce).
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
+   * await client.submitPrepared(prepared);
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint
+   */
+  submitPrepared<T = unknown>(prepared: PreparedExchangeRequest, opts?: SubmitPreparedOptions): Promise<T> {
+    return submitPrepared(this.config_, prepared, opts);
   }
 
   /**
@@ -2581,6 +2660,7 @@ export type { ModifyOptions, ModifyParameters, ModifySuccessResponse } from "./_
 export type { NoopOptions, NoopParameters, NoopSuccessResponse } from "./_methods/noop.ts";
 export type { OrderOptions, OrderParameters, OrderSuccessResponse } from "./_methods/order.ts";
 export type { PerpDeployOptions, PerpDeployParameters, PerpDeploySuccessResponse } from "./_methods/perpDeploy.ts";
+export type { PreparedExchangeRequest } from "./_methods/prepareRequest.ts";
 export type {
   RegisterReferrerOptions,
   RegisterReferrerParameters,
@@ -2631,6 +2711,7 @@ export type {
   SubAccountTransferParameters,
   SubAccountTransferSuccessResponse,
 } from "./_methods/subAccountTransfer.ts";
+export type { SubmitPreparedOptions } from "./_methods/submitPrepared.ts";
 export type {
   TokenDelegateOptions,
   TokenDelegateParameters,

@@ -20,6 +20,27 @@ export interface BuildResult {
 }
 
 /**
+ * A fully signed Exchange request captured before submission: the exact wire payload of one
+ * Exchange API call, ready to be posted later via `submitPrepared`.
+ *
+ * Produced by `prepareRequest`. The signature commits to `action` and `nonce`, and the nonce was
+ * consumed at prepare time — the payload goes stale once the server has seen a later nonce from
+ * the same wallet.
+ */
+export interface PreparedExchangeRequest {
+  /** The final action as posted (canonicalized; the multi-sig wrapper when applicable). */
+  action: Record<string, unknown>;
+  /** The leader's ECDSA signature over the action and nonce. */
+  signature: Signature;
+  /** Nonce (timestamp in ms) the signature commits to. */
+  nonce: number;
+  /** Vault address, when the request trades on behalf of a vault or sub-account. */
+  vaultAddress?: string;
+  /** Expiration time of the action, when set. */
+  expiresAfter?: number;
+}
+
+/**
  * Common shell for executing an Exchange API request:
  * acquires per-`(walletAddress × isTestnet)` lock, generates nonce, calls `build` to construct
  * the signed payload, sends to the Exchange endpoint, and validates the response.

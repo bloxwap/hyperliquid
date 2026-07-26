@@ -59,11 +59,10 @@ export type ClaimRewardsResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -107,6 +106,6 @@ export type ClaimRewardsSuccessResponse = ExcludeErrorResponse<ClaimRewardsRespo
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#claim-rewards
  */
 export function claimRewards(config: ExchangeConfig, opts?: ClaimRewardsOptions): Promise<ClaimRewardsSuccessResponse> {
-  const action = canonicalize(ClaimRewardsActionSchema, parse(ClaimRewardsActionSchema, { type: "claimRewards" }));
+  const action = buildAction(ClaimRewardsActionSchema, { type: "claimRewards" }, opts);
   return executeL1Action(config, action, opts);
 }

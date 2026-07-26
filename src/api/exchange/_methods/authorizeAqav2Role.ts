@@ -63,11 +63,10 @@ export type AuthorizeAqav2RoleResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -122,9 +121,6 @@ export function authorizeAqav2Role(
   params: AuthorizeAqav2RoleParameters,
   opts?: AuthorizeAqav2RoleOptions,
 ): Promise<AuthorizeAqav2RoleSuccessResponse> {
-  const action = canonicalize(
-    AuthorizeAqav2RoleActionSchema,
-    parse(AuthorizeAqav2RoleActionSchema, { type: "authorizeAqav2Role", ...params }),
-  );
+  const action = buildAction(AuthorizeAqav2RoleActionSchema, { type: "authorizeAqav2Role", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

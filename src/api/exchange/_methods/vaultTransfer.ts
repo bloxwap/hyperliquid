@@ -65,11 +65,10 @@ export type VaultTransferResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -125,9 +124,6 @@ export function vaultTransfer(
   params: VaultTransferParameters,
   opts?: VaultTransferOptions,
 ): Promise<VaultTransferSuccessResponse> {
-  const action = canonicalize(
-    VaultTransferActionSchema,
-    parse(VaultTransferActionSchema, { type: "vaultTransfer", ...params }),
-  );
+  const action = buildAction(VaultTransferActionSchema, { type: "vaultTransfer", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

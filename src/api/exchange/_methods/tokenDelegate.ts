@@ -69,11 +69,10 @@ export type TokenDelegateResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeUserSignedAction,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -144,9 +143,6 @@ export function tokenDelegate(
   params: TokenDelegateParameters,
   opts?: TokenDelegateOptions,
 ): Promise<TokenDelegateSuccessResponse> {
-  const action = canonicalize(
-    TokenDelegateActionSchema,
-    parse(TokenDelegateActionSchema, { type: "tokenDelegate", ...params }),
-  );
+  const action = buildAction(TokenDelegateActionSchema, { type: "tokenDelegate", ...params }, opts);
   return executeUserSignedAction(config, action, TokenDelegateTypes, opts);
 }

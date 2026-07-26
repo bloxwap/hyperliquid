@@ -76,6 +76,28 @@ export type ExchangeConfig<T extends IRequestTransport = IRequestTransport> =
 interface BaseOptions {
   /** {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel a request. */
   signal?: AbortSignal;
+
+  /**
+   * Opt-in escape hatch for trusted, performance-critical callers: skip request validation
+   * (the valibot `parse` + canonicalization pass every exchange method runs before signing).
+   *
+   * **Unsafe for untrusted input.** When `true`, the SDK performs no validation, normalization,
+   * default-filling, or key reordering on the action parameters — they are signed and posted
+   * exactly as given. The caller must therefore supply parameters that are already in canonical
+   * wire form:
+   * - object keys in schema-declared order (the signature commits to the encoded key order);
+   * - decimals as normalized strings (e.g. `"30000"`, not `3e4` or `"030000"`);
+   * - addresses and hex strings in lowercase;
+   * - every schema field with a default (e.g. `grouping: "na"`) provided explicitly.
+   *
+   * Invalid input on this path is the caller's problem: instead of a client-side
+   * `ValidationError`, the server rejects the request — detecting that drift is the cost of the
+   * saved microseconds. Client-side guards for documented constraints (e.g. `scheduleCancel`'s
+   * 5-second lead time) are cheap and still run.
+   *
+   * Default: `false` (validate).
+   */
+  skipValidation?: boolean;
 }
 
 /** Extract request options from a request type (excludes action, nonce, signature). */

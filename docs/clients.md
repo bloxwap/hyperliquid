@@ -214,6 +214,34 @@ nonces. When more than one process signs for the same wallet, back the manager w
 
 {% endhint %}
 
+### Pre-signed payloads (sign now, submit later)
+
+`prepareRequest` builds a fully signed request **without sending it**; `submitPrepared` posts it later. A latency-critical
+flow (e.g. a tap-trading UI) can pre-sign a cancel-all and fire it with zero signing latency:
+
+```ts
+import { order, prepareRequest, submitPrepared } from "@bloxwap/hyperliquid/api/exchange";
+
+// Sign now — nothing is sent yet
+const prepared = await client.prepareRequest((config) => order(config, { orders: [/* ... */], grouping: "na" }));
+
+// Submit later, over any transport
+await client.submitPrepared(prepared);
+```
+
+The callback runs any Exchange method exactly as usual (validation, nonce issuance, signing) against a capture
+transport, and must issue exactly one request. The returned payload is the exact wire body (`{ action, signature,
+nonce, ... }`), works over both `HttpTransport` and `WebSocketTransport`, and must be submitted through the same
+network (testnet vs mainnet) it was signed for.
+
+{% hint style="warning" %}
+
+The nonce is consumed at **prepare** time. A prepared payload goes **stale** if another request from the same wallet
+consumes a later nonce first — the server rejects nonces less than or equal to the last one it saw. Submit a prepared
+payload before issuing newer requests (or accept that it may be rejected as stale).
+
+{% endhint %}
+
 ## WebSocket subscriptions
 
 `SubscriptionClient` requires a [`WebSocketTransport`](transports.md#websocket) — subscriptions can't run over HTTP. See
@@ -336,3 +364,31 @@ await client.order({ orders: [/* ... */], grouping: "na" }, {
 
 Unlike [`Expiration`](#expiration), which is a server-side guard, cancellation aborts the request on the client side
 before or during delivery.
+
+### Skipping validation (unsafe)
+
+Every [`ExchangeClient`](#exchange-endpoint) call validates and normalizes its parameters before signing (a valibot
+parse + key canonicalization pass, ~1 µs). Trusted, performance-critical callers can opt out per request with
+`skipValidation`:
+
+```ts
+await client.order({ orders: [/* ... */], grouping: "na" }, {
+  skipValidation: true,
+});
+```
+
+{% hint style="danger" %}
+
+**Unsafe for untrusted input.** On this path the SDK performs no validation, normalization, default-filling, or key
+reordering — parameters are signed and posted exactly as given, so they must already be in canonical wire form:
+
+- object keys in schema-declared order (the signature commits to the encoded key order);
+- decimals as normalized strings (e.g. `"30000"`, not `3e4` or `"030000"`);
+- addresses and hex strings in lowercase;
+- every schema field with a default (e.g. `grouping: "na"`) provided explicitly.
+
+Invalid input is the caller's problem: instead of a client-side `ValidationError`, the server rejects the request —
+detecting that drift is the cost of the saved microseconds. Cheap deterministic guards for documented constraints
+(e.g. `scheduleCancel`'s 5-second lead time) still run.
+
+{% endhint %}

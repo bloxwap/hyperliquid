@@ -85,11 +85,10 @@ export type TwapOrderResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -150,6 +149,6 @@ export function twapOrder(
   params: TwapOrderParameters,
   opts?: TwapOrderOptions,
 ): Promise<TwapOrderSuccessResponse> {
-  const action = canonicalize(TwapOrderActionSchema, parse(TwapOrderActionSchema, { type: "twapOrder", ...params }));
+  const action = buildAction(TwapOrderActionSchema, { type: "twapOrder", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

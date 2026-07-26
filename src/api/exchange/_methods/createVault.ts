@@ -72,11 +72,10 @@ export type CreateVaultResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -133,10 +132,7 @@ export function createVault(
   params: CreateVaultParameters,
   opts?: CreateVaultOptions,
 ): Promise<CreateVaultSuccessResponse> {
-  const action = canonicalize(
-    CreateVaultActionSchema,
-    parse(CreateVaultActionSchema, { type: "createVault", ...params, nonce: 0 }),
-  );
+  const action = buildAction(CreateVaultActionSchema, { type: "createVault", ...params, nonce: 0 }, opts);
   return executeL1Action(
     {
       ...config,

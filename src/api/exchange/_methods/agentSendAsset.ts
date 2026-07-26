@@ -76,11 +76,10 @@ export type AgentSendAssetResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -141,10 +140,7 @@ export function agentSendAsset(
   params: AgentSendAssetParameters,
   opts?: AgentSendAssetOptions,
 ): Promise<AgentSendAssetSuccessResponse> {
-  const action = canonicalize(
-    AgentSendAssetActionSchema,
-    parse(AgentSendAssetActionSchema, { type: "agentSendAsset", ...params, nonce: 0 }),
-  );
+  const action = buildAction(AgentSendAssetActionSchema, { type: "agentSendAsset", ...params, nonce: 0 }, opts);
   return executeL1Action(
     {
       ...config,

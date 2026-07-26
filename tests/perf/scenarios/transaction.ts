@@ -152,3 +152,23 @@ scenario({
     ctx.manager.getNonce(ctx.keys[ctx.next++ % OVER_CAPACITY_KEYS]);
   },
 });
+
+// --- Skip-validation fast path (issue #28) ----------------------------------
+// `skipValidation: true` opts out of the valibot parse + canonicalize pass. secp256k1 dominates
+// the sequential call (~150 µs of ~156 µs), so the saving is below the noise floor here — the
+// isolated view is `signing/order_e2e_no_ecdsa_unchecked`. This scenario exists so the report
+// shows the unchecked path end to end and guards its plumbing against regressions.
+
+scenario({
+  name: "transaction/order_sequential_unchecked",
+  group: "transaction",
+  description:
+    "ExchangeClient.order() with skipValidation: true, one order at a time, 0 ms transport latency (opt-in fast path)",
+  unit: "order",
+  iterations: 50,
+  samples: 10,
+  setup: () => instantClient(),
+  run: async ({ client }: { client: ExchangeClient }) => {
+    await client.order({ orders: [order(0)], grouping: "na" }, { skipValidation: true });
+  },
+});

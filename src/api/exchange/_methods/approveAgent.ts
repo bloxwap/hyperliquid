@@ -84,11 +84,11 @@ export type ApproveAgentResponse =
 // ============================================================
 
 import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import type { IRequestTransport } from "../../../transport/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeUserSignedAction,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -120,6 +120,27 @@ export const ApproveAgentTypes = {
     { name: "nonce", type: "uint64" },
   ],
 };
+
+/** Maximum expiration lead time for an approved agent: 180 days, per the API docs. */
+const MAX_AGENT_EXPIRATION_MS = 180 * 24 * 60 * 60 * 1000;
+
+/** Matches a trailing ` valid_until <timestamp>` expiration marker in an agent name. */
+const VALID_UNTIL_PATTERN = / valid_until (\d+)$/;
+
+/**
+ * Schema enforcing the documented "`valid_until` at most 180 days in the future" constraint.
+ * Kept out of {@linkcode ApproveAgentRequest}: the check reads `Date.now()` at call time, which
+ * would make the shared request schema non-deterministic for validating recorded payloads.
+ */
+const AgentExpirationSchema = /* @__PURE__ */ (() => {
+  return v.pipe(
+    UnsignedInteger,
+    v.check(
+      (input) => input <= Date.now() + MAX_AGENT_EXPIRATION_MS,
+      "Agent expiration (valid_until) must be at most 180 days in the future",
+    ),
+  );
+})();
 
 /**
  * Approve an agent to sign on behalf of the master account.
@@ -173,10 +194,13 @@ export function approveAgent(
   params: ApproveAgentParameters,
   opts?: ApproveAgentOptions,
 ): Promise<ApproveAgentSuccessResponse> {
-  const action = canonicalize(
-    ApproveAgentActionSchema,
-    parse(ApproveAgentActionSchema, { type: "approveAgent", ...params }),
-  );
+  // Docs: an agent's `valid_until` expiration can be at most 180 days in the future. Guarded only
+  // when a timestamp is present — a name without `valid_until` (or an unnamed agent) carries no
+  // expiration. Cheap deterministic guard; runs even when `skipValidation` is set.
+  const validUntil = typeof params.agentName === "string" ? VALID_UNTIL_PATTERN.exec(params.agentName)?.[1] : undefined;
+  if (validUntil !== undefined) parse(AgentExpirationSchema, validUntil);
+
+  const action = buildAction(ApproveAgentActionSchema, { type: "approveAgent", ...params }, opts);
   // Python SDK parity: an unnamed agent is signed with `agentName: ""` (the EIP-712 string field
   // cannot be omitted), but the key itself is dropped from the posted action.
   if (action.agentName !== "") {

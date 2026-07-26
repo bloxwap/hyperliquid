@@ -69,11 +69,10 @@ export type AgentSetAbstractionResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -129,9 +128,6 @@ export function agentSetAbstraction(
   params: AgentSetAbstractionParameters,
   opts?: AgentSetAbstractionOptions,
 ): Promise<AgentSetAbstractionSuccessResponse> {
-  const action = canonicalize(
-    AgentSetAbstractionActionSchema,
-    parse(AgentSetAbstractionActionSchema, { type: "agentSetAbstraction", ...params }),
-  );
+  const action = buildAction(AgentSetAbstractionActionSchema, { type: "agentSetAbstraction", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

@@ -65,11 +65,10 @@ export type Hip3LiquidatorTransferResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -125,9 +124,6 @@ export function hip3LiquidatorTransfer(
   params: Hip3LiquidatorTransferParameters,
   opts?: Hip3LiquidatorTransferOptions,
 ): Promise<Hip3LiquidatorTransferSuccessResponse> {
-  const action = canonicalize(
-    Hip3LiquidatorTransferActionSchema,
-    parse(Hip3LiquidatorTransferActionSchema, { type: "hip3LiquidatorTransfer", ...params }),
-  );
+  const action = buildAction(Hip3LiquidatorTransferActionSchema, { type: "hip3LiquidatorTransfer", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

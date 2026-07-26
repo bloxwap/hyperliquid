@@ -67,11 +67,10 @@ export type Withdraw3Response =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeUserSignedAction,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -136,6 +135,6 @@ export function withdraw3(
   params: Withdraw3Parameters,
   opts?: Withdraw3Options,
 ): Promise<Withdraw3SuccessResponse> {
-  const action = canonicalize(Withdraw3ActionSchema, parse(Withdraw3ActionSchema, { type: "withdraw3", ...params }));
+  const action = buildAction(Withdraw3ActionSchema, { type: "withdraw3", ...params }, opts);
   return executeUserSignedAction(config, action, Withdraw3Types, opts);
 }

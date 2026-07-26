@@ -54,17 +54,23 @@ export async function executeL1Action<T>(
     vaultAddress?: string;
     expiresAfter?: string | number;
     signal?: AbortSignal;
+    /** Skip validation of `vaultAddress`/`expiresAfter`. See the `skipValidation` option in `_config.ts`. */
+    skipValidation?: boolean;
   },
 ): Promise<T> {
-  // Validate options before acquiring the lock.
-  const vaultAddress = parse(OptionalVaultAddressSchema, options?.vaultAddress ?? config.defaultVaultAddress);
-  const expiresAfter = parse(
-    OptionalExpiresAfterSchema,
+  // Validate options before acquiring the lock (unless the caller opted out via `skipValidation`).
+  const vaultAddressInput = options?.vaultAddress ?? config.defaultVaultAddress;
+  const expiresAfterInput =
     options?.expiresAfter ??
-      (typeof config.defaultExpiresAfter === "function"
-        ? await config.defaultExpiresAfter()
-        : config.defaultExpiresAfter),
-  );
+    (typeof config.defaultExpiresAfter === "function"
+      ? await config.defaultExpiresAfter()
+      : config.defaultExpiresAfter);
+  const vaultAddress = options?.skipValidation
+    ? (vaultAddressInput as `0x${string}` | undefined)
+    : parse(OptionalVaultAddressSchema, vaultAddressInput);
+  const expiresAfter = options?.skipValidation
+    ? (expiresAfterInput as number | undefined)
+    : parse(OptionalExpiresAfterSchema, expiresAfterInput);
 
   return executeWithShell<T>(
     config,

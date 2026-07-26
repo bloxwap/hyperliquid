@@ -61,11 +61,10 @@ export type ValidatorL1StreamResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -119,9 +118,6 @@ export function validatorL1Stream(
   params: ValidatorL1StreamParameters,
   opts?: ValidatorL1StreamOptions,
 ): Promise<ValidatorL1StreamSuccessResponse> {
-  const action = canonicalize(
-    ValidatorL1StreamActionSchema,
-    parse(ValidatorL1StreamActionSchema, { type: "validatorL1Stream", ...params }),
-  );
+  const action = buildAction(ValidatorL1StreamActionSchema, { type: "validatorL1Stream", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

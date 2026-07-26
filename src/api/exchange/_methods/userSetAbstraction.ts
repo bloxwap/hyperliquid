@@ -70,11 +70,10 @@ export type UserSetAbstractionResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeUserSignedAction,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -153,9 +152,6 @@ export function userSetAbstraction(
   params: UserSetAbstractionParameters,
   opts?: UserSetAbstractionOptions,
 ): Promise<UserSetAbstractionSuccessResponse> {
-  const action = canonicalize(
-    UserSetAbstractionActionSchema,
-    parse(UserSetAbstractionActionSchema, { type: "userSetAbstraction", ...params }),
-  );
+  const action = buildAction(UserSetAbstractionActionSchema, { type: "userSetAbstraction", ...params }, opts);
   return executeUserSignedAction(config, action, UserSetAbstractionTypes, { ...opts, toMultiSigPayloadAction });
 }

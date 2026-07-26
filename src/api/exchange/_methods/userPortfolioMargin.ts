@@ -67,11 +67,10 @@ export type UserPortfolioMarginResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeUserSignedAction,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -140,9 +139,6 @@ export function userPortfolioMargin(
   params: UserPortfolioMarginParameters,
   opts?: UserPortfolioMarginOptions,
 ): Promise<UserPortfolioMarginSuccessResponse> {
-  const action = canonicalize(
-    UserPortfolioMarginActionSchema,
-    parse(UserPortfolioMarginActionSchema, { type: "userPortfolioMargin", ...params }),
-  );
+  const action = buildAction(UserPortfolioMarginActionSchema, { type: "userPortfolioMargin", ...params }, opts);
   return executeUserSignedAction(config, action, UserPortfolioMarginTypes, opts);
 }

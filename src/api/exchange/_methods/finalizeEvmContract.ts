@@ -78,11 +78,10 @@ export type FinalizeEvmContractResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -137,9 +136,6 @@ export function finalizeEvmContract(
   params: FinalizeEvmContractParameters,
   opts?: FinalizeEvmContractOptions,
 ): Promise<FinalizeEvmContractSuccessResponse> {
-  const action = canonicalize(
-    FinalizeEvmContractActionSchema,
-    parse(FinalizeEvmContractActionSchema, { type: "finalizeEvmContract", ...params }),
-  );
+  const action = buildAction(FinalizeEvmContractActionSchema, { type: "finalizeEvmContract", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

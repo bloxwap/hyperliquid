@@ -65,11 +65,10 @@ export type VaultModifyResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -125,9 +124,6 @@ export function vaultModify(
   params: VaultModifyParameters,
   opts?: VaultModifyOptions,
 ): Promise<VaultModifySuccessResponse> {
-  const action = canonicalize(
-    VaultModifyActionSchema,
-    parse(VaultModifyActionSchema, { type: "vaultModify", ...params }),
-  );
+  const action = buildAction(VaultModifyActionSchema, { type: "vaultModify", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

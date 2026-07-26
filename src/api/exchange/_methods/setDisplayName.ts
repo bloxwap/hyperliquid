@@ -64,11 +64,10 @@ export type SetDisplayNameResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -122,9 +121,6 @@ export function setDisplayName(
   params: SetDisplayNameParameters,
   opts?: SetDisplayNameOptions,
 ): Promise<SetDisplayNameSuccessResponse> {
-  const action = canonicalize(
-    SetDisplayNameActionSchema,
-    parse(SetDisplayNameActionSchema, { type: "setDisplayName", ...params }),
-  );
+  const action = buildAction(SetDisplayNameActionSchema, { type: "setDisplayName", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

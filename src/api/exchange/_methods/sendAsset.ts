@@ -78,11 +78,10 @@ export type SendAssetResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeUserSignedAction,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -156,6 +155,6 @@ export function sendAsset(
   params: SendAssetParameters,
   opts?: SendAssetOptions,
 ): Promise<SendAssetSuccessResponse> {
-  const action = canonicalize(SendAssetActionSchema, parse(SendAssetActionSchema, { type: "sendAsset", ...params }));
+  const action = buildAction(SendAssetActionSchema, { type: "sendAsset", ...params }, opts);
   return executeUserSignedAction(config, action, SendAssetTypes, opts);
 }

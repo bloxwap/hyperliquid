@@ -67,11 +67,10 @@ export type UserDexAbstractionResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeUserSignedAction,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -142,9 +141,6 @@ export function userDexAbstraction(
   params: UserDexAbstractionParameters,
   opts?: UserDexAbstractionOptions,
 ): Promise<UserDexAbstractionSuccessResponse> {
-  const action = canonicalize(
-    UserDexAbstractionActionSchema,
-    parse(UserDexAbstractionActionSchema, { type: "userDexAbstraction", ...params }),
-  );
+  const action = buildAction(UserDexAbstractionActionSchema, { type: "userDexAbstraction", ...params }, opts);
   return executeUserSignedAction(config, action, UserDexAbstractionTypes, opts);
 }
