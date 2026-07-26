@@ -19,9 +19,12 @@ jobs:
   # commit and the head commit back to back on the SAME runner and compares those two reports.
   # The committed baseline stays useful for local runs (`bun run perf:gate`) on one machine.
   #
-  # Runners are shared and noisy even against themselves; the threshold plus each run's measured
-  # margin of error is what keeps that noise from becoming a false failure. If this job flaps, widen
-  # the threshold — do not add retries and do not drop the job.
+  # Runners are shared and noisy even against themselves: a single pair of runs can be off by
+  # tens of percent on microsecond scenarios (#36). So each revision is measured three times in
+  # alternating order and the comparison uses each scenario's MINIMUM across its runs — runner
+  # interference is one-sided (it only slows measurements), making the minimum the least-noise
+  # estimate. The threshold plus each merged run's margin of error absorbs what variance remains.
+  # If this job flaps, widen the threshold — do not add retries and do not drop the job.
   perf:
     runs-on: ubuntu-latest
 
@@ -39,10 +42,15 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Measure this PR
-        run: bun run tests/perf/run.ts --label "PR head" --out "$RUNNER_TEMP/head.json"
+      # Each revision is measured 3 times in alternating order (H B B H H B), and the comparison
+      # uses each scenario's MINIMUM across the 3 runs. On a shared runner interference only ever
+      # makes a measurement slower, so the minimum is the least-noise estimate — single-run
+      # comparisons flagged phantom regressions of +30…+200% on untouched scenarios (#36), and a
+      # discarded warm-up run alone did not fix it. Alternating order cancels drift direction.
+      - name: Measure this PR (round 1)
+        run: bun run tests/perf/run.ts --label "head-1" --out "$RUNNER_TEMP/head-1.json"
 
-      - name: Measure the base commit
+      - name: Measure the base commit (rounds 1 and 2)
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -55,13 +63,30 @@ jobs:
             exit 0
           fi
           bun install --frozen-lockfile
-          bun run tests/perf/run.ts --label "base" --out "$RUNNER_TEMP/base.json"
+          bun run tests/perf/run.ts --label "base-1" --out "$RUNNER_TEMP/base-1.json"
+          bun run tests/perf/run.ts --label "base-2" --out "$RUNNER_TEMP/base-2.json"
+
+      - name: Measure this PR (rounds 2 and 3)
+        run: |
+          set -euo pipefail
+          bun run tests/perf/run.ts --label "head-2" --out "$RUNNER_TEMP/head-2.json"
+          bun run tests/perf/run.ts --label "head-3" --out "$RUNNER_TEMP/head-3.json"
+
+      - name: Measure the base commit (round 3)
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/base/tests/perf/run.ts" ]; then
+            cd "$RUNNER_TEMP/base"
+            bun run tests/perf/run.ts --label "base-3" --out "$RUNNER_TEMP/base-3.json"
+          fi
 
       - name: Compare
         run: |
           set -euo pipefail
-          if [ ! -f "$RUNNER_TEMP/base.json" ]; then
+          if [ ! -f "$RUNNER_TEMP/base-1.json" ]; then
             echo "No base measurement was produced; nothing to gate."
             exit 0
           fi
+          bun run .dev/perf/minimize.ts "$RUNNER_TEMP/head.json" "$RUNNER_TEMP/head-1.json" "$RUNNER_TEMP/head-2.json" "$RUNNER_TEMP/head-3.json"
+          bun run .dev/perf/minimize.ts "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/base-1.json" "$RUNNER_TEMP/base-2.json" "$RUNNER_TEMP/base-3.json"
           bun run .dev/perf/compare.ts "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/head.json"

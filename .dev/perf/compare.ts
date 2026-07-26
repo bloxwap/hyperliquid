@@ -122,6 +122,41 @@ export function compareReports(
 export type ComparisonResult = ReturnType<typeof compareReports>;
 
 /**
+ * Merges repeated measurements of the SAME revision into one report by taking each scenario's
+ * minimum per-unit cost across the runs.
+ *
+ * Why the minimum: on a shared CI runner, interference only ever makes a CPU-bound measurement
+ * SLOWER, never faster — so the fastest observed run is the closest estimate of the true cost.
+ * Comparing single runs turned runner noise into phantom regressions (#36); comparing
+ * min-of-N runs of each revision makes the gate robust without widening the threshold.
+ *
+ * The per-scenario margin of error is taken from the run that produced the minimum. Scenarios
+ * are matched by name; a scenario absent from some runs is kept from the runs that have it.
+ *
+ * @param reports Two or more reports of the same revision, in any order.
+ * @return A single report whose scenarios carry the per-scenario minima. Metadata comes from the first report.
+ */
+export function mergeReportsMin(reports: readonly PerfReport[]): PerfReport {
+  if (reports.length === 0) throw new Error("mergeReportsMin needs at least one report");
+  const merged: PerfReport = JSON.parse(JSON.stringify(reports[0]));
+  const byName = new Map(merged.scenarios.map((s) => [s.name, s]));
+  for (const report of reports.slice(1)) {
+    for (const scenario of report.scenarios) {
+      const existing = byName.get(scenario.name);
+      if (!existing) {
+        byName.set(scenario.name, scenario);
+        merged.scenarios.push(scenario);
+      } else if (scenario.nsPerUnit < existing.nsPerUnit) {
+        const index = merged.scenarios.indexOf(existing);
+        merged.scenarios[index] = scenario;
+        byName.set(scenario.name, scenario);
+      }
+    }
+  }
+  return merged;
+}
+
+/**
  * Renders the human-readable comparison: run metadata, the per-scenario table, and totals.
  *
  * Shared with `.dev/perf/gate.ts` so both entry points report identically.
