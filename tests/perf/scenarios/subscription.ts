@@ -120,9 +120,11 @@ scenario({
   description: "Cost of establishing 200 l2Book subscriptions (per-subscribe bookkeeping and user-limit scans)",
   unit: "subscription",
   unitsPerIteration: 200,
+  // A sample builds 200 subscriptions, so iterations cannot be raised; more samples is the
+  // only lever available against an otherwise ~40% margin of error.
   iterations: 1,
-  samples: 8,
-  warmupSamples: 2,
+  samples: 25,
+  warmupSamples: 3,
   setup: () => {
     installMockWebSocket();
   },

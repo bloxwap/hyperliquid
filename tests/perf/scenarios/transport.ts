@@ -61,6 +61,11 @@ scenario({
   description: "HttpTransport.request() against a stubbed fetch (encode + URL + timeout wiring + decode)",
   unit: "request",
   iterations: 200,
+  // 25 samples rather than the default: this scenario produced a spurious +35% regression on a
+  // change that touched no transport code. The median is robust to outliers, so the fix is more
+  // samples, not more iterations per sample -- longer samples let GC pauses land inside them and
+  // measurably WIDENED the spread when tried (rme 5% -> 20%).
+  samples: 25,
   setup: httpContext,
   run: async ({ transport }: HttpContext) => {
     await transport.request("info", { type: "allMids" });
@@ -78,6 +83,11 @@ scenario({
   description: "HttpTransport.request() with a caller AbortSignal, so the abort relay is wired per request",
   unit: "request",
   iterations: 200,
+  // 25 samples rather than the default: this scenario produced a spurious +35% regression on a
+  // change that touched no transport code. The median is robust to outliers, so the fix is more
+  // samples, not more iterations per sample -- longer samples let GC pauses land inside them and
+  // measurably WIDENED the spread when tried (rme 5% -> 20%).
+  samples: 25,
   setup: (): HttpContext & { controller: AbortController } => ({
     ...httpContext(),
     // One long-lived controller: a fresh AbortController per call would measure its

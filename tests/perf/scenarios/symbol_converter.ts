@@ -150,8 +150,10 @@ scenario({
   description: `formatPrice() over ${PRICE_INPUTS.length} values spanning szDecimals 0-5`,
   unit: "value",
   unitsPerIteration: PRICE_INPUTS.length,
-  iterations: 20,
-  samples: 10,
+  // ~350 ns per call: a sample needs thousands of iterations to rise above timer
+  // granularity and scheduler jitter, or the reported spread is all noise.
+  iterations: 5000,
+  samples: 15,
   setup: () => ({ sink: 0 }),
   run: (ctx: { sink: number }) => {
     let total = 0;
@@ -166,8 +168,10 @@ scenario({
   description: `formatSize() over ${SIZE_INPUTS.length} values spanning szDecimals 0-5`,
   unit: "value",
   unitsPerIteration: SIZE_INPUTS.length,
-  iterations: 20,
-  samples: 10,
+  // ~350 ns per call: a sample needs thousands of iterations to rise above timer
+  // granularity and scheduler jitter, or the reported spread is all noise.
+  iterations: 5000,
+  samples: 15,
   setup: () => ({ sink: 0 }),
   run: (ctx: { sink: number }) => {
     let total = 0;
