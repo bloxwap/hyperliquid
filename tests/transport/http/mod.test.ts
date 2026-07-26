@@ -358,4 +358,51 @@ describe("HttpTransport", () => {
       assertEquals(getEventListeners(controller.signal, "abort").length, 0);
     });
   });
+
+  describe("exchangeTimeout", () => {
+    /** Never responds; rejects when the request's abort signal fires. */
+    const hangUntilAbort = (_req: FetchArgs[0], init?: FetchArgs[1]): Promise<Response> =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+      });
+
+    test("times exchange requests out with the override, info/explorer with the global timeout", async () => {
+      const transport = new HttpTransport({ timeout: 30, exchangeTimeout: 5 });
+
+      mockFetch(hangUntilAbort);
+      await assertRejects(() => transport.request("exchange", {}), HttpRequestError, "Request timed out after 5 ms");
+
+      mockFetch(hangUntilAbort);
+      await assertRejects(() => transport.request("info", {}), HttpRequestError, "Request timed out after 30 ms");
+
+      mockFetch(hangUntilAbort);
+      await assertRejects(() => transport.request("explorer", {}), HttpRequestError, "Request timed out after 30 ms");
+    });
+
+    test("falls back to the global timeout when unset", async () => {
+      const transport = new HttpTransport({ timeout: 5 });
+
+      mockFetch(hangUntilAbort);
+      await assertRejects(() => transport.request("exchange", {}), HttpRequestError, "Request timed out after 5 ms");
+    });
+
+    test("null disables the timeout for exchange requests only", async () => {
+      mockFetch(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return jsonResponse();
+      });
+
+      // 30 ms exceeds the 5 ms global timeout, but the exchange override is disabled.
+      const transport = new HttpTransport({ timeout: 5, exchangeTimeout: null });
+      await transport.request("exchange", {});
+    });
+
+    test("is mutable like timeout", async () => {
+      const transport = new HttpTransport({ timeout: 30 });
+      transport.exchangeTimeout = 5;
+
+      mockFetch(hangUntilAbort);
+      await assertRejects(() => transport.request("exchange", {}), HttpRequestError, "Request timed out after 5 ms");
+    });
+  });
 });

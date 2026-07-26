@@ -77,6 +77,23 @@ const transport = new HttpTransport({
 });
 ```
 
+### Exchange timeout
+
+`timeout` covers every request, so a hung `/exchange` POST blocks an order for the full duration. `exchangeTimeout`
+gives the exchange endpoint its own — usually shorter — deadline, while info and explorer requests keep the global
+one:
+
+```ts
+import { HttpTransport } from "@bloxwap/hyperliquid";
+
+const transport = new HttpTransport({
+  timeout: 10_000, // info and explorer requests
+  exchangeTimeout: 5_000, // order placement, cancels, transfers
+});
+```
+
+Pass `null` to disable the timeout for exchange requests only. Like `timeout`, the field is mutable on the instance.
+
 ## WebSocket
 
 `WebSocketTransport` opens one connection and reuses it, shaving a little latency off each request and allows using the
@@ -130,6 +147,24 @@ import { WebSocketTransport } from "@bloxwap/hyperliquid";
 
 const transport = new WebSocketTransport({
   reconnect: { maxRetries: 5, reconnectionDelay: 1_000 },
+});
+```
+
+### Keep-alive
+
+A ping/pong watchdog detects a half-open connection — one that looks open but no longer carries frames — and forces
+a [reconnect](#reconnection). Every `interval` it sends a ping; if no pong arrives within `timeout`, the connection
+is recycled.
+
+Defaults are `interval: 5_000` and `timeout: 3_000`, so a dead feed is detected in at most ~8 s. The server closes a
+connection that has been silent for ~60 s, so keep the interval well below that. Lower values detect a stale feed
+faster at the cost of more ping traffic; raise them on constrained networks.
+
+```ts
+import { WebSocketTransport } from "@bloxwap/hyperliquid";
+
+const transport = new WebSocketTransport({
+  keepAlive: { interval: 10_000, timeout: 5_000 },
 });
 ```
 

@@ -15,13 +15,13 @@ export interface WebSocketKeepAliveOptions {
    *
    * The server closes a connection that has been silent for ~60 s, so pings must come more often than that.
    *
-   * Default: `30_000`
+   * Default: `5_000`
    */
   interval?: number;
   /**
    * Time to wait for a pong before forcing a reconnect, in ms.
    *
-   * Default: `10_000`
+   * Default: `3_000`
    */
   timeout?: number;
 }
@@ -36,8 +36,8 @@ export class WebSocketKeepAlive {
 
   constructor(socket: ReconnectingWebSocket, hlEvents: HyperliquidEventTarget, options?: WebSocketKeepAliveOptions) {
     this._socket = socket;
-    this._interval = options?.interval ?? 30_000;
-    this._timeout = options?.timeout ?? 10_000;
+    this._interval = options?.interval ?? 5_000;
+    this._timeout = options?.timeout ?? 3_000;
 
     hlEvents.addEventListener("pong", () => this._disarm());
     socket.addEventListener("open", () => this._start());

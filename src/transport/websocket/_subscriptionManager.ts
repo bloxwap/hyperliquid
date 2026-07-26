@@ -15,6 +15,15 @@ import { payloadEventType } from "./_routing.ts";
 
 /** Per-listener registration: its unsubscribe handle and optional error callback. */
 interface ListenerRegistration {
+  /**
+   * Event type this listener is attached to, derived from its own call's channel and payload.
+   *
+   * Stored per registration rather than per subscription: distinct channels can share one payload
+   * id — `activeAssetCtx` and `activeSpotAssetCtx` send the identical `{type:"activeAssetCtx",…}`
+   * payload, so the server serves both from a single subscription — and a listener joining such an
+   * entry must receive its own channel's frames, not the channel of the call that created it.
+   */
+  eventType: string;
   /** Removes this listener and, if it is the last, unsubscribes from the channel. */
   unsubscribe: () => Promise<void>;
   /** Optional callback invoked once on subscription failure (see {@link WebSocketSubscriptionManager.subscribe}). */
@@ -30,23 +39,19 @@ interface ListenerRegistration {
 /** Internal state for managing a subscription. */
 interface SubscriptionState {
   /**
-   * Event type this subscription's listeners are attached to, used to detach them on teardown.
-   * Either the bare channel name or its routed form (see `_routing.ts`); derived once at
-   * subscribe time from the channel and the payload, so a reconnect cannot change it.
-   */
-  eventType: string;
-  /**
-   * The subscription payload as the caller passed it. Kept so the reconnect and teardown paths
-   * report and re-issue the original object instead of re-parsing the stringified id.
+   * Snapshot of the subscription payload, taken once at subscribe time as
+   * `JSON.parse(requestToId(payload))` — the normalized form the server echoes back.
+   *
+   * The reconnect and teardown paths re-issue and report this copy: the caller still owns the
+   * object it passed, and mutating `payload.coin`/`payload.user` after subscribing must not
+   * corrupt what unsubscribe sends or what a reconnect re-subscribes, while the registry key,
+   * the routed event type, and the user refcount all still reflect the original.
    */
   payload: unknown;
   /**
-   * The user this subscription counts against, resolved once at subscribe time.
-   *
-   * Read from {@linkcode SubscriptionState.payload} on both the increment and the decrement path,
-   * this would be a live read of an object the caller still owns: mutating `payload.user` between
-   * subscribe and unsubscribe would decrement a different key and leak the original user's count
-   * upward until the unique-user guard tripped on subscriptions that no longer exist.
+   * The user this subscription counts against, resolved once at subscribe time from
+   * {@linkcode SubscriptionState.payload}, so the refcount increment and decrement always
+   * hit the same key.
    */
   user: string | undefined;
   /** Map of event listeners to their registration. */
@@ -143,6 +148,10 @@ export class WebSocketSubscriptionManager {
       throw new WebSocketRequestError("Subscription was aborted", { cause: signal.reason, request: payload });
     }
     const id = requestToId(payload);
+    // The routed event type belongs to this call, not to the subscription entry: an entry keyed
+    // by payload id alone can serve several channels (see {@linkcode ListenerRegistration.eventType}),
+    // so every listener attaches to — and later detaches from — its own call's routed type.
+    const eventType = payloadEventType(channel, payload);
 
     // --- Subscription state --------------------------------------------------
     let subscription = this._subscriptions.get(id);
@@ -158,11 +167,13 @@ export class WebSocketSubscriptionManager {
         });
       }
 
-      const promise = this._dispatcher.request("subscribe", payload).finally(() => (created.promiseFinished = true));
+      // Snapshot the payload in the normalized form the server echoes: the id already holds it
+      // as a string, so parsing it back costs one parse per new subscription.
+      const snapshot: unknown = JSON.parse(id);
+      const promise = this._dispatcher.request("subscribe", snapshot).finally(() => (created.promiseFinished = true));
       const created: SubscriptionState = {
-        eventType: payloadEventType(channel, payload),
-        payload,
-        user: userOf(payload),
+        payload: snapshot,
+        user: userOf(snapshot),
         listeners: new Map(),
         promise,
         promiseFinished: false,
@@ -178,10 +189,6 @@ export class WebSocketSubscriptionManager {
       promise.catch(() => {});
     }
 
-    // The routed event type belongs to the subscription, not to this call: a second caller joining
-    // an existing entry must attach to (and later detach from) exactly the type it was created with.
-    const { eventType } = subscription;
-
     // --- Listener registration -----------------------------------------------
     let registration = subscription.listeners.get(listener);
     const createdRegistration = registration === undefined;
@@ -195,13 +202,13 @@ export class WebSocketSubscriptionManager {
           this._deleteSubscription(id);
 
           if (this._socket.readyState === ReconnectingWebSocket.OPEN) {
-            await this._dispatcher.request("unsubscribe", payload);
+            await this._dispatcher.request("unsubscribe", current.payload);
           }
         }
       };
 
       this._hlEvents.addEventListener(eventType, listener);
-      registration = { unsubscribe, onError, confirmed: false };
+      registration = { eventType, unsubscribe, onError, confirmed: false };
       subscription.listeners.set(listener, registration);
     }
 
@@ -224,7 +231,7 @@ export class WebSocketSubscriptionManager {
             // On abort the shared request stays in flight and may still confirm:
             // free the server-side slot nobody is listening to.
             if (signal && error === signal.reason && this._socket.readyState === ReconnectingWebSocket.OPEN) {
-              this._dispatcher.request("unsubscribe", payload).catch(() => {});
+              this._dispatcher.request("unsubscribe", subscription.payload).catch(() => {});
             }
           }
         }
@@ -341,7 +348,7 @@ export class WebSocketSubscriptionManager {
     this._deleteSubscription(id);
 
     for (const [listener, registration] of subscription.listeners) {
-      this._hlEvents.removeEventListener(subscription.eventType, listener);
+      this._hlEvents.removeEventListener(registration.eventType, listener);
       // An unconfirmed listener observes the failure through its still-pending
       // subscribe() call instead.
       if (!registration.confirmed) continue;
