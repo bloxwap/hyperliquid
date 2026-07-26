@@ -74,7 +74,7 @@ export function isSubset(subset: unknown, superset: unknown): boolean {
 }
 
 /** Recursively sorts object keys and lowercases hex strings. */
-function normalize(value: unknown): unknown {
+export function normalize(value: unknown): unknown {
   if (typeof value === "string" && HEX_REGEX.test(value)) {
     return value.toLowerCase();
   }
@@ -84,7 +84,16 @@ function normalize(value: unknown): unknown {
   if (typeof value === "object" && value !== null) {
     const result: Record<string, unknown> = {};
     for (const key of Object.keys(value).sort()) {
-      result[key] = normalize((value as Record<string, unknown>)[key]);
+      const item = normalize((value as Record<string, unknown>)[key]);
+      // `__proto__` is the one key with a setter on `Object.prototype`: plain assignment would
+      // invoke it and silently drop an own `__proto__` key a `JSON.parse`d payload can carry,
+      // collapsing two logically distinct payloads onto the same id. Define it as a data
+      // property instead; every other key shadows its prototype member on assignment.
+      if (key === "__proto__") {
+        Object.defineProperty(result, key, { value: item, writable: true, enumerable: true, configurable: true });
+      } else {
+        result[key] = item;
+      }
     }
     return result;
   }

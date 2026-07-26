@@ -10,7 +10,7 @@ import * as abort from "../_abort.ts";
 import { TransportError } from "../_base.ts";
 import { Promise_ } from "../_polyfills.ts";
 import type { HyperliquidEventTarget, PostResponse, SubscribeUnsubscribeResponse } from "./_events.ts";
-import { isSubset, requestToId, specificity } from "./_id.ts";
+import { isSubset, normalize, requestToId, specificity } from "./_id.ts";
 
 // =============================================================================
 // Errors
@@ -83,15 +83,17 @@ interface PendingRequest {
   frame: string;
   sent: boolean;
   /**
-   * Echo-matching data for a `subscribe` / `unsubscribe` request, derived from its string id when
-   * the entry is created. Absent for `post` requests, which match on their numeric id.
+   * Echo-matching data for a `subscribe` / `unsubscribe` request: the normalized request
+   * envelope (the object form of the entry's string id) and its specificity, derived when the
+   * entry is created. Absent for `post` requests, which match on their numeric id.
    *
-   * Every `subscriptionResponse` frame walks the whole queue looking for its match, so deriving
-   * this per scan made a burst of N re-subscriptions cost N² parses — a reconnect at the
-   * 1000-subscription cap stalled the event loop exactly when the book was most stale.
+   * Every `subscriptionResponse` frame that misses the exact-id bucket walks the whole queue
+   * looking for its match, so deriving this per scan made a burst of N re-subscriptions cost
+   * N² parses — a reconnect at the 1000-subscription cap stalled the event loop exactly when
+   * the book was most stale.
    */
   echo?: {
-    /** `JSON.parse` of the id: the normalized request envelope compared against the echo. */
+    /** The normalized request envelope compared against the echo. */
     request: unknown;
     /** {@linkcode specificity} of `request`, the tie-breaker between several subset matches. */
     specificity: number;
@@ -124,6 +126,13 @@ export class WebSocketDispatcher {
   private readonly _queue: Set<PendingRequest> = new Set();
   /** Index of {@linkcode _queue} by numeric `post` id, so a post response matches in O(1). */
   private readonly _posts: Map<number, PendingRequest> = new Map();
+  /**
+   * Index of {@linkcode _queue} by string subscription id, in enqueue order per bucket. A
+   * verbatim server echo normalizes to exactly that id, so the common case matches with one
+   * map lookup instead of an O(queue) subset scan per frame — the scan made a burst of N
+   * re-subscription echoes cost N² subset checks.
+   */
+  private readonly _byEchoId: Map<string, PendingRequest[]> = new Map();
 
   constructor(socket: ReconnectingWebSocket, hlEvents: HyperliquidEventTarget, timeout: number | null) {
     this.timeout = timeout;
@@ -142,6 +151,7 @@ export class WebSocketDispatcher {
       const abandoned = [...this._queue];
       this._queue.clear();
       this._posts.clear();
+      this._byEchoId.clear();
       for (const { sent, payload, reject } of abandoned) {
         reject(
           new WebSocketRequestError(
@@ -187,14 +197,18 @@ export class WebSocketDispatcher {
       // --- Build request envelope --------------------------------------------
       const request: SubscribeUnsubscribeRequest | PostRequest =
         method === "post" ? { method, id: ++this._lastId, request: payload } : { method, subscription: payload };
-      const id = "id" in request ? request.id : requestToId(request);
 
-      // Matching a subscription echo needs the id back as an object; parse it once here rather
-      // than once per queue entry per response frame.
+      // A subscription id is the normalized envelope; keep the normalized object alongside it,
+      // since echo matching consumes it as an object and re-parsing the id would just undo the
+      // stringify. The wire frame below still stringifies the envelope as built.
+      let id: number | string;
       let echo: PendingRequest["echo"];
-      if (typeof id === "string") {
-        const parsed: unknown = JSON.parse(id);
-        echo = { request: parsed, specificity: specificity(parsed) };
+      if ("id" in request) {
+        id = request.id;
+      } else {
+        const normalized = normalize(request);
+        id = JSON.stringify(normalized);
+        echo = { request: normalized, specificity: specificity(normalized) };
       }
 
       // --- Send or queue -----------------------------------------------------
@@ -250,17 +264,30 @@ export class WebSocketDispatcher {
   // Queue
   // ===========================================================================
 
-  /** Queues a request and indexes it by id when it is a `post`. */
+  /** Queues a request and indexes it by id. */
   private _enqueue(entry: PendingRequest): void {
     this._queue.add(entry);
     if (typeof entry.id === "number") this._posts.set(entry.id, entry);
+    if (typeof entry.id === "string") {
+      const bucket = this._byEchoId.get(entry.id);
+      if (bucket) bucket.push(entry);
+      else this._byEchoId.set(entry.id, [entry]);
+    }
   }
 
-  /** Removes a request from the queue and from the `post` index. Idempotent. */
+  /** Removes a request from the queue and from the id indexes. Idempotent. */
   private _dequeue(entry: PendingRequest): void {
     if (!this._queue.delete(entry)) return;
     // Post ids are handed out by `++this._lastId`, so no later entry can hold this one.
     if (typeof entry.id === "number") this._posts.delete(entry.id);
+    if (typeof entry.id === "string") {
+      const bucket = this._byEchoId.get(entry.id);
+      if (bucket) {
+        const index = bucket.indexOf(entry);
+        if (index !== -1) bucket.splice(index, 1);
+        if (bucket.length === 0) this._byEchoId.delete(entry.id);
+      }
+    }
   }
 
   // ===========================================================================
@@ -291,11 +318,17 @@ export class WebSocketDispatcher {
       return;
     }
 
-    // The remaining heuristics match by the request echoed in the message body;
-    // an embedded `{…}` body is valid JSON by the server contract.
+    // The remaining heuristics match by the request echoed in the message body; an embedded
+    // `{…}` body is valid JSON by the server contract, but a malformed one must not throw out
+    // of the event listener — it simply matches nothing, like a body-less message.
     const requestMatch = detail.match(/{.*}/)?.[0];
     if (!requestMatch) return;
-    const parsedRequest = JSON.parse(requestMatch) as Record<string, unknown>;
+    let parsedRequest: Record<string, unknown>;
+    try {
+      parsedRequest = JSON.parse(requestMatch) as Record<string, unknown>;
+    } catch {
+      return;
+    }
 
     // A `post` envelope echo carries a numeric id.
     if (typeof parsedRequest.id === "number") {
@@ -327,13 +360,25 @@ export class WebSocketDispatcher {
   /**
    * Finds the pending request matching an echoed body.
    *
-   * The server normalizes the echo — fields can be added to the payload and
-   * unknown ones dropped — so the queue is searched by subset. Among several
-   * subset matches the most specific pending wins: when one in-flight payload
-   * is a subset of another, the looser one must not swallow the echo meant
-   * for the stricter one.
+   * The server usually echoes the request verbatim, so the echo's normalized form is
+   * byte-identical to the pending entry's id and a bucket lookup answers in O(1). The server
+   * can also normalize the echo — fields can be added to the payload and unknown ones dropped —
+   * in which case the bucket misses and the queue is searched by subset. Among several subset
+   * matches the most specific pending wins: when one in-flight payload is a subset of another,
+   * the looser one must not swallow the echo meant for the stricter one.
    */
   private _findByEcho(echo: unknown): PendingRequest | undefined {
+    // Bucket order is enqueue order and every entry in a bucket shares one normalized request,
+    // hence one specificity — so the first match here is exactly what the scan below would pick
+    // (a same-specificity tie goes to the earliest enqueued). The subset check is a formality:
+    // an id collision implies equal normalized forms, which always subset-match.
+    const bucket = this._byEchoId.get(requestToId(echo));
+    if (bucket) {
+      for (const pending of bucket) {
+        if (pending.echo !== undefined && isSubset(pending.echo.request, echo)) return pending;
+      }
+    }
+
     let best: PendingRequest | undefined;
     let bestSpecificity = -1;
     for (const pending of this._queue) {

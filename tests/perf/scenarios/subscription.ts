@@ -25,6 +25,10 @@ import { installMockWebSocket, lastMockWebSocket, type MockWebSocket, restoreWeb
 const COIN_SUBSCRIPTIONS = 50;
 /** Frames injected per measured sample. */
 const FRAMES = 500;
+/** Subscriptions in flight during the reconnect burst scenario. */
+const BURST_SUBSCRIPTIONS = 500;
+/** Book levels per side in the e2e l2Book frame. */
+const BOOK_LEVELS = 20;
 
 interface DispatchContext {
   transport: WebSocketTransport;
@@ -141,6 +145,119 @@ scenario({
     transport.close();
   },
   teardown: () => {
+    restoreWebSocket();
+  },
+});
+
+scenario({
+  name: "subscription/reconnect_resubscribe_burst",
+  group: "subscription",
+  description:
+    `Reconnect re-subscribe burst: ${BURST_SUBSCRIPTIONS} subscribe requests in flight, then ` +
+    `${BURST_SUBSCRIPTIONS} subscriptionResponse echoes; the echo phase alone is reported as echoNsPerFrame`,
+  unit: "echo",
+  unitsPerIteration: BURST_SUBSCRIPTIONS,
+  iterations: 1,
+  samples: 10,
+  warmupSamples: 2,
+  setup: () => {
+    installMockWebSocket();
+  },
+  run: async () => {
+    // A fresh transport per sample: the burst's cost is a function of how many requests are in
+    // flight, and a reused transport would only accumulate settled subscriptions.
+    const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+    await transport.ready();
+    const socket = lastMockWebSocket();
+
+    // Suppress the mock's auto-answer: every subscribe must still be in flight when the echoes
+    // arrive, which is exactly the reconnect shape this scenario measures.
+    const frames: string[] = [];
+    socket.send = (data: string | ArrayBufferLike | Blob | ArrayBufferView): void => {
+      frames.push(String(data));
+    };
+
+    const client = new SubscriptionClient({ transport });
+    const subs = Array.from({ length: BURST_SUBSCRIPTIONS }, (_, i) => client.l2Book({ coin: `BURST${i}` }, () => {}));
+
+    // The server echoes each subscription verbatim, one frame per task; the microtask flushes
+    // let each confirmed request dequeue before the next echo, as on a real socket.
+    const echoes = frames.map((frame) => {
+      const { method, subscription } = JSON.parse(frame) as { method: string; subscription: unknown };
+      return { channel: "subscriptionResponse", data: { method, subscription } };
+    });
+    const flush = (): Promise<void> => new Promise((resolve) => queueMicrotask(resolve));
+    const echoStart = performance.now();
+    for (const echo of echoes) {
+      socket.serverSend(echo);
+      await flush();
+      await flush();
+    }
+    const echoNs = (performance.now() - echoStart) * 1e6;
+
+    await Promise.all(subs);
+    transport.close();
+    return { echoNsPerFrame: echoNs / echoes.length, echoes: echoes.length };
+  },
+  teardown: () => {
+    restoreWebSocket();
+  },
+});
+
+interface FrameDispatchContext {
+  transport: WebSocketTransport;
+  socket: MockWebSocket;
+  counter: { delivered: number };
+  /** The raw l2Book frame text, serialized once in setup. */
+  frameText: string;
+}
+
+scenario({
+  name: "subscription/l2book_frame_dispatch_e2e",
+  group: "subscription",
+  description:
+    `End-to-end dispatch of a raw ${BOOK_LEVELS}-level l2Book frame: JSON text on the socket ` +
+    `through parse and routing to the subscribed listener`,
+  unit: "frame",
+  unitsPerIteration: FRAMES,
+  iterations: 1,
+  samples: 10,
+  setup: async (): Promise<FrameDispatchContext> => {
+    installMockWebSocket();
+    const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+    await transport.ready();
+    const socket = lastMockWebSocket();
+
+    const counter = { delivered: 0 };
+    const client = new SubscriptionClient({ transport });
+    await client.l2Book({ coin: "BTC" }, () => counter.delivered++);
+
+    // The frame text is pre-serialized: `serverSend` would stringify per frame and bill that
+    // to the scenario, while the cost under measurement starts at the socket's JSON.parse.
+    const level = (i: number): { px: string; sz: string; n: number } => ({ px: `${30_000 + i}`, sz: "1.5", n: i % 7 });
+    const frameText = JSON.stringify({
+      channel: "l2Book",
+      data: {
+        coin: "BTC",
+        time: 1_700_000_000_000,
+        levels: [
+          Array.from({ length: BOOK_LEVELS }, (_, i) => level(i)),
+          Array.from({ length: BOOK_LEVELS }, (_, i) => level(i + BOOK_LEVELS)),
+        ],
+      },
+    });
+
+    return { transport, socket, counter, frameText };
+  },
+  run: ({ socket, counter, frameText }: FrameDispatchContext) => {
+    counter.delivered = 0;
+    for (let i = 0; i < FRAMES; i++) {
+      socket.dispatchEvent(new MessageEvent("message", { data: frameText }));
+    }
+    return { deliveredPerTick: counter.delivered / FRAMES };
+  },
+  teardown: ({ transport }: FrameDispatchContext) => {
+    transport.close();
     restoreWebSocket();
   },
 });

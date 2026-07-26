@@ -129,7 +129,9 @@ function schemaKeys(entries: Record<string, SchemaNode>): readonly string[] {
 function reorderObject(entries: Record<string, SchemaNode>, value: Record<string, unknown>): Record<string, unknown> {
   // --- Reject extra keys not in schema ---------------------
   for (const key in value) {
-    if (!(key in entries)) {
+    // `hasOwn`, not `in`: a data key naming an `Object.prototype` member (`constructor`,
+    // `toString`, …) would pass an `in` check via the prototype chain and be silently dropped.
+    if (!Object.hasOwn(entries, key)) {
       throw new CanonicalizeError(`Key "${key}" exists in data but not in schema`);
     }
   }
@@ -182,10 +184,11 @@ function matchByStructure(options: readonly SchemaNode[], value: Record<string, 
   for (const option of options) {
     if (option.type !== "object" || !option.entries) continue;
 
-    // Every data key must be declared in the option
+    // Every data key must be declared in the option (`hasOwn` for the same
+    // prototype-chain reason as in `reorderObject`)
     let allKnown = true;
     for (const key in value) {
-      if (!(key in option.entries)) {
+      if (!Object.hasOwn(option.entries, key)) {
         allKnown = false;
         break;
       }
