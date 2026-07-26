@@ -46,6 +46,7 @@ const INHERITED_KEYS = [
   "repository",
   "engines",
   "dependencies",
+  "optionalDependencies",
 ] as const;
 
 // --- Types -------------------------------------------------------------------

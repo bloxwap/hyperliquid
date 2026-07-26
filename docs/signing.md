@@ -588,6 +588,39 @@ All signing functions accept `AbstractWallet` — a union of supported wallet in
 Any object matching one of these interfaces works — for a custom signer (HSM, MPC, remote service), implement the viem
 Local Account shape (`address` and `signTypedData`), as in the [Custom tab](#l1-actions).
 
+## Fast local wallet (WASM secp256k1)
+
+`createFastLocalWallet` builds a local account whose raw-digest signing runs on
+[`tiny-secp256k1`](https://github.com/bitcoinjs/tiny-secp256k1) (WASM libsecp256k1) instead of the pure-JS secp256k1
+inside viem — roughly half the ECDSA cost per L1 action (~55 µs vs ~85 µs per signature). Both signers are RFC 6979
+deterministic with low-S normalization, so the produced signature is byte-identical to the viem one; the SDK's
+differential tests pin that identity.
+
+```ts
+import { createFastLocalWallet, signL1Action } from "@bloxwap/hyperliquid/signing";
+
+const wallet = await createFastLocalWallet("0x..."); // same shape as a viem local account
+
+const action = { type: "cancel", cancels: [{ a: 0, o: 12345 }] };
+const signature = await signL1Action({ wallet, action, nonce: Date.now() });
+```
+
+The acceleration is strictly opt-in:
+
+- **Extra dependency.** `tiny-secp256k1` is an optional dependency, loaded through a guarded dynamic import inside the
+  factory — wallets created any other way never touch the WASM module. It pulls in one small package of its own
+  (`uint8array-tools`). If your package manager skips optional dependencies, install it explicitly:
+  `npm install tiny-secp256k1`.
+- **Graceful fallback.** If the module is missing or fails to initialize, the factory warns once and returns the plain
+  viem account (noble path) — signing keeps working, just slower. Pass `{ wasm: false }` to skip the WASM path (and the
+  warning) deliberately.
+- **`signTypedData` is not accelerated.** User-signed actions and multi-sig wrappers delegate to a viem local account
+  created from the same key (imported lazily on first use), so those flows require `viem` installed. A wallet used only
+  for L1 actions never loads viem.
+
+Use it when signature latency is on the hot path — market making, high-frequency order management, bursts of cancels.
+For occasional actions the default viem account is fine.
+
 ## Helpers
 
 These functions work with any supported wallet type:
