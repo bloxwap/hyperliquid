@@ -561,4 +561,47 @@ describe("floatToWire", () => {
       }
     });
   });
+
+  describe("tie detection and path boundaries", () => {
+    test("8-decimal ties round half-even even when the guard passes", () => {
+      // Reviewer repro: the double IS the exact tie …900390625; half-even keeps the even digit.
+      // A bare `toFixed(8)` fast path would emit …063, and the 1e-12 guard cannot catch it —
+      // both candidates parse back to the same double at this magnitude.
+      assertEquals(floatToWire(-233095212199.9004), "-233095212199.90039062");
+      assertEquals(floatToWire(233095212199.9004), "233095212199.90039062");
+    });
+
+    test("toFixed(9)-ends-in-5 values that pass the guard round correctly", () => {
+      // False-positive predicate hits (9th decimal 5 without an exact tie) take the exact path.
+      // Pinned from the CPython differential sweep; the doubles' exact binary expansions are
+      //   165447253.989987075328826904296875
+      //   181072224.81630742549896240234375
+      //   195078029.2041599750518798828125
+      // — the literals below are the same doubles' shortest round-trip forms.
+      assertEquals(floatToWire(-165447253.98998708), "-165447253.98998708");
+      assertEquals(floatToWire(-181072224.81630743), "-181072224.81630743");
+      assertEquals(floatToWire(-195078029.20415998), "-195078029.20415998");
+    });
+
+    test("exact binary ties at the 8th decimal always throw via the guard", () => {
+      // m/512 for odd m: the decimal expansion ends in 5 at the 9th place — an exact tie moves
+      // the value by exactly 5e-9, tripping the 1e-12 guard.
+      assertThrows(() => floatToWire(0.001953125), FormatError); // 1/512
+      assertThrows(() => floatToWire(0.005859375), FormatError); // 3/512
+      assertThrows(() => floatToWire(-0.005859375), FormatError);
+      assertThrows(() => floatToWire(7.998046875), FormatError); // 4095/512
+    });
+
+    test("|x| >= 1e21 takes the exact path (toFixed degenerates to exponent form)", () => {
+      assertEquals(floatToWire(1e21), "1000000000000000000000");
+      assertEquals(floatToWire(-1e21), "-1000000000000000000000");
+      assertEquals(floatToWire(1e25), "10000000000000000905969664");
+      assertEquals(floatToWire(1.5e25), "15000000000000000285212672");
+    });
+
+    test("subnormals round to zero and pass the guard", () => {
+      assertEquals(floatToWire(5e-324), "0");
+      assertEquals(floatToWire(1e-310), "0");
+    });
+  });
 });

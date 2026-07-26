@@ -397,7 +397,34 @@ export function floatToWire(x: number): string {
     throw new FormatError(`floatToWire: ${String(x)} is not finite`);
   }
 
-  // Number inputs render their EXACT binary value via {@linkcode exactDecimalParts} — CPython's
+  // Fast path: for |x| < 1e21, native `toFixed(8)` renders the EXACT stored double (V8/JSC exact-mode
+  // dtoa — `1e18 + 128` comes out as "1000000000000000128.00000000"), byte-identical to CPython's
+  // `f"{x:.8f}"` on every input EXCEPT an exact 8-decimal tie, where it rounds half-up while Python
+  // rounds half-even (repro: -233095212199.9004 → toFixed gives …063, Python gives …062). The 1e-12
+  // guard does NOT catch that — both candidates parse back to x — so ties must not take this path.
+  // A tie means the exact expansion terminates in digit 5 at the 9th decimal, so `toFixed(9)` ending
+  // in "5" detects every potential tie (no false negatives; false positives only cost the slow path).
+  // |x| >= 1e21 also takes the slow path: toFixed degenerates to `String()` (exponent form) there.
+  if (Math.abs(x) < 1e21 && !x.toFixed(9).endsWith("5")) {
+    let wire = x.toFixed(8);
+    // toFixed pads to exactly 8 decimals; strip the padding (Python's `Decimal(rounded).normalize()`):
+    // trailing zeros, then a bare decimal point. "-0.00000000" collapses to "0" — the documented -0
+    // mapping. A manual strip rather than the scanDecimal/toFixed round-trip: the string shape is
+    // fixed, so no parse is needed, and it is ~90 ns/call cheaper (see tests/perf float_to_wire).
+    let end = wire.length;
+    while (wire.charCodeAt(end - 1) === 48) end--; // "0"
+    if (wire.charCodeAt(end - 1) === 46) end--; // "."
+    wire = wire.slice(0, end);
+    if (wire === "-0") wire = "0";
+    // Python: `if abs(float(rounded) - x) >= 1e-12: raise ValueError("float_to_wire causes rounding")`.
+    // Python's `float()` is the nearest double to the decimal string — exactly what `Number()` parses.
+    if (Math.abs(Number(wire) - x) >= 1e-12) {
+      throw new FormatError(`floatToWire causes rounding: ${x}`);
+    }
+    return wire;
+  }
+
+  // Exact path: render the double's exact binary value via {@linkcode exactDecimalParts} — CPython's
   // `f"{x:.8f}"` does the same, so the rounding input is byte-identical to Python's on every double,
   // including integers above 2^53 where shortest-roundtrip `String(x)` diverges (`1e18 + 128` is
   // stored as 1000000000000000128, not …100). An exact tie at the 8th decimal (e.g. 1/512 =
@@ -407,7 +434,6 @@ export function floatToWire(x: number): string {
   const wire = toFixed(rounded); // zero renders as "0" with no sign — the documented -0 collapse
 
   // Python: `if abs(float(rounded) - x) >= 1e-12: raise ValueError("float_to_wire causes rounding", x)`.
-  // Python's `float()` is the nearest double to the decimal string — exactly what `Number()` parses.
   if (Math.abs(Number(wire) - x) >= 1e-12) {
     throw new FormatError(`floatToWire causes rounding: ${x}`);
   }

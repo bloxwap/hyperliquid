@@ -12,7 +12,7 @@
  * @module
  */
 
-import { formatPrice, formatSize, SymbolConverter } from "@bloxwap/hyperliquid/utils";
+import { formatPrice, formatSize, floatToWire, SymbolConverter } from "@bloxwap/hyperliquid/utils";
 import { scenario } from "../_harness.ts";
 import {
   metaFixture,
@@ -176,6 +176,33 @@ scenario({
   run: (ctx: { sink: number }) => {
     let total = 0;
     for (const [size, szDecimals] of SIZE_INPUTS) total += formatSize(size, szDecimals).length;
+    ctx.sink += total;
+  },
+});
+
+// --- Wire float conversion -------------------------------------------------
+// `floatToWire` runs a native-`toFixed` fast path for ordinary values and pays an exact BigInt
+// expansion only for ties and |x| >= 1e21; this scenario guards the fast path (~170 ns) against
+// silently falling back to the expansion on every call (~570 ns).
+
+/** 8-decimal-clean floats spanning 1e-8..1e6 — the prices and sizes that actually reach the wire. */
+const WIRE_INPUTS: readonly number[] = Array.from({ length: 100 }, (_, i) => {
+  const magnitude = 10 ** ((i % 15) - 8);
+  return Number(((1 + (i % 97) / 97) * magnitude).toFixed(8));
+});
+
+scenario({
+  name: "utils/float_to_wire",
+  group: "utils",
+  description: `floatToWire() over ${WIRE_INPUTS.length} wire-clean values spanning 1e-8..1e6`,
+  unit: "value",
+  unitsPerIteration: WIRE_INPUTS.length,
+  iterations: 5000,
+  samples: 15,
+  setup: () => ({ sink: 0 }),
+  run: (ctx: { sink: number }) => {
+    let total = 0;
+    for (const value of WIRE_INPUTS) total += floatToWire(value).length;
     ctx.sink += total;
   },
 });
