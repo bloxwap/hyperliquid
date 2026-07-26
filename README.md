@@ -132,39 +132,13 @@ await subs.l2Book({ coin: "ETH" }, (data) => {
 
 ## Key management
 
-- **Never hardcode private keys** in source or commit them to git. Load them from environment variables or a secret
-  store (Bun auto-loads a local `.env`, which is gitignored in this repo).
-- For trading bots, prefer a Hyperliquid **agent wallet** (API wallet) over the master account key: an agent key can
-  trade but cannot withdraw, and it can be revoked without rotating the master key.
-- See [Signing](docs/signing.md) for how wallets, signatures, and nonces work.
+> [!WARNING]
+> - **Never hardcode private keys** in source or commit them to git. Load them from environment variables or a secret
+>   store (Bun auto-loads a local `.env`, which is gitignored in this repo).
+> - For trading bots, prefer a Hyperliquid **agent wallet** (API wallet) over the master account key: an agent key can
+>   trade but cannot withdraw, and it can be revoked without rotating the master key.
+> - See [Signing](docs/signing.md) for how wallets, signatures, and nonces work.
 
 ## Documentation
 
 Full guides, examples, and API reference: [nktkas.gitbook.io/hyperliquid](https://nktkas.gitbook.io/hyperliquid)
-
-## Versioning
-
-This SDK follows [Semantic Versioning](https://semver.org/). Until `1.0.0`, breaking changes bump the minor version and
-everything else bumps the patch — the [caret-range](https://github.com/npm/node-semver#caret-ranges-123-025-004)
-convention.
-
-The exception is the request, response, and event types that mirror the Hyperliquid API. The API is unversioned and
-always serves its latest shape, so changes to these types ship in **patch** releases even when breaking — the break
-comes from Hyperliquid, not the SDK.
-
-## Star History
-
-<a href="https://www.star-history.com/#bloxwap/hyperliquid&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=bloxwap/hyperliquid&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=bloxwap/hyperliquid&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=bloxwap/hyperliquid&type=date&legend=top-left" />
- </picture>
-</a>
-
-## License
-
-**@bloxwap/hyperliquid** is licensed under the [MIT License](LICENSE).
-
-Copyright © 2024-present [nktkas](https://github.com/nktkas) and
-[contributors](https://github.com/bloxwap/hyperliquid/graphs/contributors).
