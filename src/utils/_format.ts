@@ -118,7 +118,7 @@ function scanDecimal(str: string, sign: 1 | -1): DecimalParts | null {
  *
  * @throws {FormatError} If the value is unparsable or not finite.
  */
-function toDecimal(value: string | number, field: "price" | "size" | "value"): DecimalParts {
+function toDecimal(value: string | number, field: "price" | "size"): DecimalParts {
   let str = typeof value === "number" ? String(value) : value;
 
   let sign: 1 | -1 = 1;
@@ -148,6 +148,52 @@ function toDecimal(value: string | number, field: "price" | "size" | "value"): D
   }
   // "NaN", "Infinity", or exponent overflow — all rejected as not finite.
   throw new FormatError(`Invalid ${field}: ${String(value)} is not finite`);
+}
+
+/** Scratch view for {@linkcode exactDecimalParts}'s bit decomposition; reused across calls. */
+const FLOAT64_VIEW = new DataView(new ArrayBuffer(8));
+
+/**
+ * Decompose a finite double into its EXACT decimal expansion as {@linkcode DecimalParts}.
+ *
+ * `String(number)` is shortest-roundtrip, which diverges from the stored binary value: above 2^53 it
+ * picks a shorter neighbor (`String(1e18 + 128)` is "1000000000000000100", but the double is exactly
+ * 1000000000000000128), and below it it hides the tail (0.1 is really
+ * 0.1000000000000000055511151231257827021181583404541015625). CPython's `f"{x:.8f}"` renders the
+ * exact binary value, so byte parity with Python requires the same input: decompose into
+ * mantissa × 2^e, then expand with bigint arithmetic — shift left for `e >= 0`, and for `e < 0`
+ * multiply by 5^(-e) and place the decimal point (binary fractions have finite decimal expansions,
+ * so this is exact).
+ *
+ * @param x A finite double.
+ */
+function exactDecimalParts(x: number): DecimalParts {
+  if (x === 0) return { sign: 1, digits: "", exp: 0 }; // covers -0: zero carries no sign by convention
+
+  FLOAT64_VIEW.setFloat64(0, Math.abs(x));
+  const high = FLOAT64_VIEW.getUint32(0);
+  const low = FLOAT64_VIEW.getUint32(4);
+  const exponentBits = (high >>> 20) & 0x7ff;
+
+  let mantissa: bigint;
+  let e: number;
+  if (exponentBits === 0) {
+    // Subnormal: no implicit leading bit, exponent fixed.
+    mantissa = (BigInt(high & 0xfffff) << 32n) | BigInt(low);
+    e = -1074;
+  } else {
+    mantissa = (BigInt((high & 0xfffff) | 0x100000) << 32n) | BigInt(low);
+    e = exponentBits - 1075; // 1023 bias + 52 stored mantissa bits
+  }
+
+  const sign: 1 | -1 = x < 0 ? -1 : 1;
+  if (e >= 0) {
+    const digits = (mantissa << BigInt(e)).toString();
+    return { sign, digits: stripTrailingZeros(digits), exp: digits.length };
+  }
+  // x = mantissa / 2^(-e) = mantissa × 5^(-e) × 10^e.
+  const scaled = (mantissa * 5n ** BigInt(-e)).toString();
+  return { sign, digits: stripTrailingZeros(scaled), exp: scaled.length + e };
 }
 
 /**
@@ -347,14 +393,17 @@ export function formatSize(size: string | number, szDecimals: number): string {
  * ```
  */
 export function floatToWire(x: number): string {
-  // `toDecimal` parses the double's shortest round-trip form rather than its exact binary value, but the
-  // precision guard below rejects every input where that distinction could reach the 8th decimal (any
-  // value close enough to a rounding boundary for the two forms to disagree is >= ~5e-9 away from its
-  // rounded result), so the output matches Python's `f"{x:.8f}"` on every input. An exact tie at the 8th
-  // decimal (e.g. 1/512 = 0.001953125) always trips the guard — a tie moves the value by exactly 5e-9 —
-  // so half-even vs `toFixed`'s half-up is unobservable here; half-even is used for faithfulness.
-  // Non-finite input is rejected inside `toDecimal`, like the other formatters.
-  const rounded = toDecimalPlacesHalfEven(toDecimal(x, "value"), 8);
+  if (!Number.isFinite(x)) {
+    throw new FormatError(`floatToWire: ${String(x)} is not finite`);
+  }
+
+  // Number inputs render their EXACT binary value via {@linkcode exactDecimalParts} — CPython's
+  // `f"{x:.8f}"` does the same, so the rounding input is byte-identical to Python's on every double,
+  // including integers above 2^53 where shortest-roundtrip `String(x)` diverges (`1e18 + 128` is
+  // stored as 1000000000000000128, not …100). An exact tie at the 8th decimal (e.g. 1/512 =
+  // 0.001953125) always trips the guard below — a tie moves the value by exactly 5e-9 — so half-even
+  // vs round-half-up is unobservable here; half-even matches Python.
+  const rounded = toDecimalPlacesHalfEven(exactDecimalParts(x), 8);
   const wire = toFixed(rounded); // zero renders as "0" with no sign — the documented -0 collapse
 
   // Python: `if abs(float(rounded) - x) >= 1e-12: raise ValueError("float_to_wire causes rounding", x)`.

@@ -153,11 +153,12 @@ export type Cloid = v.InferOutput<typeof Cloid>;
  * @throws {HyperliquidError} If `n` is negative, `>= 2^128`, or a number that is not a safe integer.
  *
  * @example
- * ```ts ignore
- * cloidFromInt(0);                  // => "0x00000000000000000000000000000000"
- * cloidFromInt(1);                  // => "0x00000000000000000000000000000001"
- * cloidFromInt(2n ** 128n - 1n);    // => "0xffffffffffffffffffffffffffffffff"
- * cloidFromInt(2n ** 128n);         // => throws HyperliquidError
+ * ```ts
+ * import { cloidFromInt } from "@bloxwap/hyperliquid/api/exchange";
+ *
+ * cloidFromInt(0);               // → "0x00000000000000000000000000000000"
+ * cloidFromInt(1);               // → "0x00000000000000000000000000000001"
+ * cloidFromInt(2n ** 128n - 1n); // → "0xffffffffffffffffffffffffffffffff"
  * ```
  */
 export function cloidFromInt(n: bigint | number): Cloid {

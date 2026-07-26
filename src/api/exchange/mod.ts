@@ -5,6 +5,9 @@
  * or to access {@link https://github.com/fabian-hiller/valibot | valibot} Request schemas
  * (responses are plain TypeScript types and are not validated at runtime).
  *
+ * Also re-exported: {@linkcode cloidFromInt}, which builds a client order ID (the `c` field of
+ * an order, or `cancelByCloid`'s parameter) from a non-negative integer.
+ *
  * @example
  * ```ts
  * import { privateKeyToAccount } from "viem/accounts";
@@ -44,6 +47,8 @@ export {
   type ExchangeMultiSigConfig,
   type ExchangeSingleWalletConfig,
 } from "./_methods/_base/mod.ts";
+
+export { cloidFromInt } from "../_schemas.ts";
 
 export * from "./_methods/agentEnableDexAbstraction.ts";
 export * from "./_methods/agentSendAsset.ts";

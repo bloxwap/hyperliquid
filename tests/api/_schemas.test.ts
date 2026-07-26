@@ -11,6 +11,8 @@ import * as v from "valibot";
 
 import { Decimal, UnsignedDecimal, cloidFromInt } from "../../src/api/_schemas.ts";
 import { HyperliquidError } from "../../src/_base.ts";
+// The public surface: cloidFromInt is re-exported from the exchange API module.
+import { cloidFromInt as cloidFromIntPublic } from "@bloxwap/hyperliquid/api/exchange";
 
 describe("UnsignedDecimal", () => {
   test("expands exponent notation from number inputs", () => {
@@ -65,6 +67,10 @@ describe("Decimal", () => {
 });
 
 describe("cloidFromInt", () => {
+  test("is re-exported from the public exchange module", () => {
+    assertEquals(cloidFromIntPublic, cloidFromInt);
+  });
+
   test("matches Python's Cloid.from_int format (0x + 32 lowercase hex, zero-padded)", () => {
     assertEquals(cloidFromInt(1), "0x00000000000000000000000000000001");
     assertEquals(cloidFromInt(255), "0x000000000000000000000000000000ff");
