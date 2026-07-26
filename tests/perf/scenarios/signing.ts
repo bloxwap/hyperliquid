@@ -12,6 +12,8 @@
  */
 
 import { privateKeyToAccount } from "viem/accounts";
+import { hashTypedData } from "viem";
+import { ExchangeClient } from "@bloxwap/hyperliquid";
 import { ApproveAgentTypes, OrderRequest } from "@bloxwap/hyperliquid/api/exchange";
 import {
   canonicalize,
@@ -20,8 +22,9 @@ import {
   signMultiSigL1,
   signMultiSigUserSigned,
 } from "@bloxwap/hyperliquid/signing";
+import { createL1AgentDigest } from "../../../src/signing/_fastDigest.ts";
 import { scenario } from "../_harness.ts";
-import { TEST_PRIVATE_KEY } from "../_helpers.ts";
+import { MockExchangeTransport, TEST_PRIVATE_KEY } from "../_helpers.ts";
 
 /** Extra keys used by the multi-sig signers, so each has a distinct address. */
 const EXTRA_KEYS = [
@@ -249,6 +252,103 @@ scenario({
         nonce: NONCE,
       },
       types: ApproveAgentTypes,
+    });
+  },
+});
+
+// --- EIP-712 Agent digest ---------------------------------------------------
+// The fixed L1 `Agent` shape lets the digest be hand-rolled from precomputed constants
+// (`createL1AgentDigest`) instead of viem's generic `hashTypedData`. The pair is measured
+// side by side so the saving stays visible in the report; byte-equality is pinned by
+// `tests/signing/fastDigest.test.ts`, not here.
+
+const AGENT_ACTION_HASH = "0x27015072154fc147842efc672ab345311190856b5143f4b2def65830657fb15d" as const;
+
+/** The typed-data envelope viem's `hashTypedData` is benchmarked on (testnet `source`). */
+const AGENT_TYPED_DATA = {
+  domain: {
+    name: "Exchange",
+    version: "1",
+    chainId: 1337,
+    verifyingContract: "0x0000000000000000000000000000000000000000",
+  },
+  types: {
+    EIP712Domain: [
+      { name: "name", type: "string" },
+      { name: "version", type: "string" },
+      { name: "chainId", type: "uint256" },
+      { name: "verifyingContract", type: "address" },
+    ],
+    Agent: [
+      { name: "source", type: "string" },
+      { name: "connectionId", type: "bytes32" },
+    ],
+  },
+  primaryType: "Agent",
+  message: { source: "b", connectionId: AGENT_ACTION_HASH },
+} as const;
+
+scenario({
+  name: "signing/eip712_agent_digest",
+  group: "signing",
+  description: "createL1AgentDigest(): hand-rolled EIP-712 digest of the fixed L1 Agent message",
+  unit: "digest",
+  iterations: 5000,
+  run: () => {
+    createL1AgentDigest(AGENT_ACTION_HASH, true);
+  },
+});
+
+scenario({
+  name: "signing/eip712_agent_digest_viem",
+  group: "signing",
+  description: "viem hashTypedData() over the same L1 Agent message (the oracle the fast digest replaces)",
+  unit: "digest",
+  iterations: 2000,
+  run: () => {
+    hashTypedData(AGENT_TYPED_DATA as never);
+  },
+});
+
+// --- End-to-end order without ECDSA -----------------------------------------
+// secp256k1 dominates `client.order` (~85 µs of ~147 µs), which masks the SDK's own plumbing
+// cost — validation, nonce, action hashing, digest, dispatch. Stubbing the curve out (a fixed
+// signature, same shape as `stubWallet` above but with the raw-digest `sign` a viem local
+// account carries) leaves exactly that shell on the clock.
+
+/** A viem-local-shaped wallet whose `sign` returns a fixed signature without touching the curve. */
+function digestStubWallet(address: `0x${string}`): {
+  address: `0x${string}`;
+  sign: (args: { hash: `0x${string}` }) => Promise<`0x${string}`>;
+  signTypedData: (params: unknown) => Promise<`0x${string}`>;
+} {
+  const signature = `0x${"11".repeat(64)}1b` as `0x${string}`;
+  return {
+    address,
+    sign: (_args: { hash: `0x${string}` }) => Promise.resolve(signature),
+    signTypedData: (_params: unknown) => Promise.resolve(signature),
+  };
+}
+
+scenario({
+  name: "signing/order_e2e_no_ecdsa",
+  group: "signing",
+  description: "ExchangeClient.order() with a stub wallet (fixed signature): SDK shell overhead without secp256k1",
+  unit: "order",
+  iterations: 200,
+  samples: 15,
+  setup: () => {
+    const transport = new MockExchangeTransport(0);
+    const client = new ExchangeClient({
+      transport,
+      wallet: digestStubWallet("0x1111111111111111111111111111111111111111"),
+    });
+    return { client };
+  },
+  run: async ({ client }: { client: ExchangeClient }) => {
+    await client.order({
+      orders: [{ a: 0, b: true, p: "30000", s: "0.001", r: false, t: { limit: { tif: "Gtc" } } }],
+      grouping: "na",
     });
   },
 });

@@ -58,6 +58,12 @@ interface Signer {
   readonly kind: "viem-local" | "viem-jsonrpc";
   /** Sign EIP-712 typed data and return the parsed signature. */
   signTypedData(args: TypedDataArgs): Promise<Signature>;
+  /**
+   * Sign a raw 32-byte digest directly, skipping EIP-712 encoding entirely. Present only when the
+   * wallet can do so locally (viem local accounts expose `sign`); JSON-RPC wallets never have it,
+   * so their behavior is unchanged.
+   */
+  signDigest?(digest: `0x${string}`): Promise<Signature>;
   /** Lowercase wallet address. */
   getAddress(): Promise<`0x${string}`>;
   /** Wallet chain ID as a hex string. */
@@ -175,6 +181,13 @@ export interface AbstractViemLocalAccount {
    * accepted for wallet extensions like {@link https://docs.privy.io/wallets/using-wallets/ethereum/sign-typed-data | Privy}.
    */
   signTypedData(params: ViemTypedDataParams, options?: unknown): Promise<`0x${string}`>;
+  /**
+   * Optional raw-digest signing, matching {@link https://viem.sh/docs/accounts/local#sign-optional | viem's
+   * `LocalAccount.sign`}. When present, L1 action signing uses it to sign the action's EIP-712 digest
+   * directly — skipping the generic typed-data encoding — while producing a byte-identical signature.
+   * Wallets without it (or JSON-RPC wallets) are unaffected and keep going through `signTypedData`.
+   */
+  sign?(args: { hash: `0x${string}` }): Promise<`0x${string}`>;
   address: `0x${string}`;
 }
 
@@ -200,6 +213,12 @@ function adaptViemLocal(wallet: AbstractViemLocalAccount): Signer {
       });
       return parseSignature(hex);
     },
+    // A viem local account can sign a raw 32-byte digest locally; wire that up so callers with a
+    // precomputed digest can skip the typed-data encoding round trip entirely.
+    signDigest:
+      typeof wallet.sign === "function"
+        ? async (digest: `0x${string}`): Promise<Signature> => parseSignature(await wallet.sign!({ hash: digest }))
+        : undefined,
     getAddress(): Promise<`0x${string}`> {
       return Promise.resolve(wallet.address.toLowerCase() as `0x${string}`);
     },
@@ -336,6 +355,35 @@ export async function signTypedData(args: {
   } catch (error) {
     if (error instanceof AbstractWalletError) throw error;
     throw new AbstractWalletError(`Failed to sign the typed data using the wallet`, { cause: error });
+  }
+}
+
+/**
+ * Signs a raw 32-byte digest directly when the wallet supports it (a viem local account exposing
+ * `sign`), bypassing EIP-712 encoding. Returns `undefined` for wallets without that capability —
+ * JSON-RPC wallets among them — so the caller can fall back to {@linkcode signTypedData}.
+ *
+ * Internal to the signing module: the caller is responsible for computing a digest that is
+ * byte-identical to what the typed-data path would have produced.
+ *
+ * @param args The wallet and the digest to sign.
+ * @return The ECDSA signature components, or `undefined` when raw-digest signing is unsupported.
+ *
+ * @throws {AbstractWalletError} If the wallet type is unknown or signing fails.
+ */
+export async function signRawDigest(args: {
+  /** Wallet to sign the digest. */
+  wallet: AbstractWallet;
+  /** The 32-byte digest to sign. */
+  digest: `0x${string}`;
+}): Promise<Signature | undefined> {
+  const signDigest = adapt(args.wallet).signDigest;
+  if (signDigest === undefined) return undefined;
+  try {
+    return await signDigest(args.digest);
+  } catch (error) {
+    if (error instanceof AbstractWalletError) throw error;
+    throw new AbstractWalletError(`Failed to sign the digest using the wallet`, { cause: error });
   }
 }
 
