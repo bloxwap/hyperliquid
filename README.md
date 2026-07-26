@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue&style=for-the-badge"></a>
-  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg?style=for-the-badge"></a>
-  <a href="https://coveralls.io/github/bloxwap/hyperliquid?branch=main"><img alt="Coverage status" src="https://img.shields.io/coverallsCoverage/github/bloxwap/hyperliquid?branch=main&style=for-the-badge"></a>
-  <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid?style=for-the-badge"></a>
+  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue&style=flat-square"></a>
+  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg?style=flat-square"></a>
+  <a href="https://coveralls.io/github/bloxwap/hyperliquid?branch=main"><img alt="Coverage status" src="https://img.shields.io/coverallsCoverage/github/bloxwap/hyperliquid?branch=main&style=flat-square"></a>
+  <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid?style=flat-square"></a>
 </p>
 
 ## Features
@@ -55,7 +55,7 @@ yarn add @bloxwap/hyperliquid
 
 ## Quick Example
 
-### Read data
+### Read
 
 ```ts
 // 1. Import module
@@ -77,7 +77,7 @@ const openOrders = await info.openOrders({ user: "0x..." });
 const book = await info.l2Book({ coin: "BTC" });
 ```
 
-### Trading
+### Trade
 
 ```ts
 // 1. Import modules
@@ -112,7 +112,7 @@ await exchange.updateLeverage({ asset: 0, isCross: true, leverage: 5 });
 await exchange.withdraw3({ destination: "0x...", amount: "1" });
 ```
 
-### Real-time updates
+### Subscribe
 
 ```ts
 // 1. Import module
