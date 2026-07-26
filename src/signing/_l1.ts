@@ -5,13 +5,14 @@
 
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { type AbstractWallet, type Signature, signTypedData } from "./_abstractWallet.ts";
+import { type AbstractWallet, type Signature, signRawDigest, signTypedData } from "./_abstractWallet.ts";
+import { createL1AgentDigest } from "./_fastDigest.ts";
 import { MsgpackWriter } from "./_msgpack.ts";
 import { trimSignature } from "./_multiSig.ts";
 
 /**
  * Input shape of {@linkcode adjust}. Mirrors {@linkcode MsgpackValue}, except that the `Uint8Array` arm is
- * intersected with a string index signature so `adjust`'s `for...in` rebuild of exotic objects type-checks
+ * intersected with a string index signature so `adjust`'s rebuild of exotic objects type-checks
  * without a cast. Kept local because it is a quirk of `adjust`, not of the encoder.
  */
 type ValueType =
@@ -133,11 +134,13 @@ function adjust(value: ValueType): ValueType {
     return changed ? value.map(adjust) : value;
   }
   if (typeof value === "object" && value !== null) {
-    // Fast path is limited to plain objects; exotic objects (e.g., `Uint8Array`) keep the legacy rebuild
+    // Fast path is limited to plain objects; exotic objects (e.g., `Uint8Array`) keep the legacy rebuild.
+    // `Object.keys` — never `for...in`: the encoder hashes own enumerable keys only, so inherited
+    // enumerable props (class instances, prototype pollution) must not be promoted into the rebuild.
     const proto = Object.getPrototypeOf(value);
     if (proto === Object.prototype || proto === null) {
       let changed = false;
-      for (const key in value) {
+      for (const key of Object.keys(value)) {
         const entry = value[key];
         if (entry === undefined || adjust(entry) !== entry) {
           changed = true;
@@ -147,7 +150,7 @@ function adjust(value: ValueType): ValueType {
       if (!changed) return value;
     }
     const result: Record<string, ValueType> = {};
-    for (const key in value) {
+    for (const key of Object.keys(value)) {
       const entry = value[key];
       if (entry !== undefined) result[key] = adjust(entry);
     }
@@ -233,7 +236,7 @@ export async function signL1Action<TAction extends Record<string, unknown> | unk
 }
 
 /** Signs a precomputed L1 action hash as the `connectionId` of an `Agent` message. */
-function signL1ActionHash(args: {
+async function signL1ActionHash(args: {
   /** Wallet to sign the hash. */
   wallet: AbstractWallet;
   /** The precomputed action hash. */
@@ -246,6 +249,14 @@ function signL1ActionHash(args: {
   isTestnet?: boolean;
 }): Promise<Signature> {
   const { wallet, actionHash, isTestnet = false } = args;
+
+  // Fast path: a wallet that can sign a raw digest (viem local accounts expose `sign`) signs the
+  // hand-rolled Agent digest directly and skips viem's whole EIP-712 encoding. The digest is
+  // byte-identical — the differential test pins it against viem's `hashTypedData`. Wallets without
+  // the capability (every JSON-RPC wallet) fall through to the unchanged typed-data path.
+  const fast = await signRawDigest({ wallet, digest: createL1AgentDigest(actionHash, isTestnet) });
+  if (fast !== undefined) return fast;
+
   return signTypedData({
     wallet,
     domain: L1_DOMAIN,
