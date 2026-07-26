@@ -6,7 +6,7 @@
 
 import { describe, test } from "bun:test";
 import { assertEquals, assertRejects } from "@jsr/std__assert";
-import { ReconnectingWebSocket } from "@nktkas/rews";
+import { ReconnectingWebSocket } from "../../../src/transport/websocket/_reconnectingSocket.ts";
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
 import { drain, getLastSent, MockWebSocket, RESPONSES } from "./_mock.ts";

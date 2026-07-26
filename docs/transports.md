@@ -136,11 +136,12 @@ await explorer.explorerBlock((data) => {
 
 ### Reconnection
 
-`WebSocketTransport` reconnects on its own when the connection drops, through
-[`@nktkas/rews`](https://github.com/nktkas/rews) — minimal WebSocket wrapper with reconnection logic.
+`WebSocketTransport` reconnects on its own when the connection drops, through the in-house
+`ReconnectingWebSocket` (`src/transport/websocket/_reconnectingSocket.ts`) — a minimal WebSocket wrapper with
+reconnection logic.
 
-By default it retries 3 times with exponential backoff (capped at 10 s); pass `reconnect` to change the retry count,
-delay, or connection timeout. See [`ReconnectingWebSocketOptions`](https://github.com/nktkas/rews#options) for the rest.
+By default it retries with exponential backoff (capped at 10 s); pass `reconnect` to change the retry count,
+delay, or connection timeout. See `ReconnectingWebSocketOptions` in the source for the rest.
 
 ```ts
 import { WebSocketTransport } from "@bloxwap/hyperliquid";

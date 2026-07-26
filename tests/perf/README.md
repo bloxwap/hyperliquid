@@ -112,7 +112,7 @@ symptoms have the same cause; a fix that isolates listener errors per message re
 
 ## Notes
 
-- The mock WebSocket is installed over `globalThis.WebSocket` (picked up by `@nktkas/rews`) and auto-answers
+- The mock WebSocket is installed over `globalThis.WebSocket` (picked up by `ReconnectingWebSocket`) and auto-answers
   `subscriptionResponse` confirmations and `post` responses like the real server. Server frames are injected via
   `socket.serverSend(...)`.
 - The mock exchange transport records every call and its concurrency high-water mark; responses mimic the real `order`

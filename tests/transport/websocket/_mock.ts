@@ -4,7 +4,10 @@
  * @module
  */
 
-import { ReconnectingWebSocket, ReconnectingWebSocketError } from "@nktkas/rews";
+import {
+  ReconnectingWebSocket,
+  ReconnectingWebSocketError,
+} from "../../../src/transport/websocket/_reconnectingSocket.ts";
 
 /** In-memory ReconnectingWebSocket stand-in: records frames out, replays frames in. */
 // @ts-expect-error: Mocking WebSocket for testing purposes

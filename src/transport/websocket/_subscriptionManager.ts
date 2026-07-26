@@ -5,7 +5,7 @@
  * @module
  */
 
-import { ReconnectingWebSocket } from "@nktkas/rews";
+import { ReconnectingWebSocket } from "./_reconnectingSocket.ts";
 import * as abort from "../_abort.ts";
 import type { ISubscription } from "../_base.ts";
 import type { HyperliquidEventTarget } from "./_events.ts";

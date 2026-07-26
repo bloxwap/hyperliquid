@@ -167,7 +167,7 @@ export class MockWebSocket extends EventTarget {
 
 const OriginalWebSocket: typeof globalThis.WebSocket = globalThis.WebSocket;
 
-/** Replaces `globalThis.WebSocket` with {@linkcode MockWebSocket} (picked up by `@nktkas/rews`). */
+/** Replaces `globalThis.WebSocket` with {@linkcode MockWebSocket} (picked up by `ReconnectingWebSocket`). */
 export function installMockWebSocket(): void {
   MockWebSocket.instances = [];
   // The mock implements only what the transport touches, so it is not structurally a

@@ -5,7 +5,7 @@
  * @module
  */
 
-import type { ReconnectingWebSocket } from "@nktkas/rews";
+import type { ReconnectingWebSocket } from "./_reconnectingSocket.ts";
 import type { HyperliquidEventTarget } from "./_events.ts";
 
 /** Configuration options for the keep-alive watchdog. */
