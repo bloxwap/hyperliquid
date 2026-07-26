@@ -263,6 +263,36 @@ function toSignificantDigits(value: DecimalParts, sd: number): DecimalParts {
   return value;
 }
 
+/**
+ * Round to `sd` significant digits, ties to even — `toSignificantDigits` with decimal.js's
+ * `ROUND_HALF_EVEN`, and the rounding half of CPython's `Decimal.normalize()` under the default
+ * context (precision 28). Mutates and returns `value`, which never escapes the format pipeline.
+ */
+function toSignificantDigitsHalfEven(value: DecimalParts, sd: number): DecimalParts {
+  if (value.digits.length <= sd) return value;
+  const rest = value.digits.slice(sd);
+  // Round up when the discarded tail exceeds half a unit, or ties it with an odd preceding digit
+  // (digit char codes are odd exactly when the digit is; digits is normalized, so lexicographic
+  // comparison against "5" is the numeric comparison against half a unit).
+  const roundUp = rest > "5" || (rest === "5" && value.digits.charCodeAt(sd - 1) % 2 === 1);
+  value.digits = value.digits.slice(0, sd);
+  if (roundUp) {
+    // Increment the kept digits: flip the rightmost non-"9" up and zero the run after it; a run
+    // reaching the front ("999…") carries out as 0.1 × 10^(exp+1).
+    let i = sd - 1;
+    while (i >= 0 && value.digits.charCodeAt(i) === 57) i--; // "9"
+    if (i < 0) {
+      value.digits = "1";
+      value.exp += 1;
+    } else {
+      value.digits =
+        value.digits.slice(0, i) + String.fromCharCode(value.digits.charCodeAt(i) + 1) + "0".repeat(sd - 1 - i);
+    }
+  }
+  value.digits = stripTrailingZeros(value.digits);
+  return value;
+}
+
 /** Whether the value has no fractional part (zero counts as an integer). */
 function isInteger(value: DecimalParts): boolean {
   return value.exp >= value.digits.length;
@@ -362,6 +392,8 @@ export function formatSize(size: string | number, szDecimals: number): string {
  * ({@link https://github.com/hyperliquid-dex/hyperliquid-python-sdk/blob/master/hyperliquid/utils/signing.py | signing.py}):
  * - Round to 8 decimal places, half-even (Python's `f"{x:.8f}"`)
  * - Throw if rounding changed the value by `>= 1e-12` (Python's `ValueError("float_to_wire causes rounding")`)
+ * - Normalize under CPython's default decimal context (precision 28): results longer than 28
+ *   significant digits round half-even to 28 — `Decimal.normalize()` rounds, it does not merely strip
  * - Strip trailing zeros and a bare decimal point; integers have no decimal point
  * - Never emit scientific notation
  *
@@ -369,8 +401,9 @@ export function formatSize(size: string | number, szDecimals: number): string {
  * - **Negatives are accepted** and keep their sign — `float_to_wire` is used for both signed and unsigned
  *   contexts in Python, so the sign is mirrored and callers validate it, exactly as in Python.
  * - **Any value rounding to zero maps to `"0"`**, including `-0` and tiny negatives that pass the precision
- *   guard. Python intends this (`if rounded == "-0": rounded = "0"`) but the guard never fires there —
- *   `f"{x:.8f}"` always carries a fraction — so CPython actually emits `"-0"`. `"0"` matches this SDK's
+ *   guard. This is an INTENTIONAL divergence (requested in issue #15), pinned in tests: Python intends
+ *   the same (`if rounded == "-0": rounded = "0"`) but the guard never fires there — `f"{x:.8f}"` always
+ *   carries a fraction — so CPython actually emits `"-0"` (e.g. for `-5e-324`). `"0"` matches this SDK's
  *   decimal schemas, which collapse negative zero.
  * - **Non-finite input throws.** Python would emit `"inf"`/`"nan"` strings that the exchange rejects
  *   anyway; this SDK's format helpers refuse non-finite values, so `floatToWire` does too.
@@ -405,6 +438,8 @@ export function floatToWire(x: number): string {
   // A tie means the exact expansion terminates in digit 5 at the 9th decimal, so `toFixed(9)` ending
   // in "5" detects every potential tie (no false negatives; false positives only cost the slow path).
   // |x| >= 1e21 also takes the slow path: toFixed degenerates to `String()` (exponent form) there.
+  // This path never exceeds 28 significant digits (≤ 20 integer digits + 8 decimals below 1e20;
+  // doubles in [1e20, 1e21) are integers), so the context-28 normalize below can only strip here.
   if (Math.abs(x) < 1e21 && !x.toFixed(9).endsWith("5")) {
     let wire = x.toFixed(8);
     // toFixed pads to exactly 8 decimals; strip the padding (Python's `Decimal(rounded).normalize()`):
@@ -438,5 +473,9 @@ export function floatToWire(x: number): string {
     throw new FormatError(`floatToWire causes rounding: ${x}`);
   }
 
-  return wire;
+  // Python's last step is `Decimal(rounded).normalize()` under the DEFAULT decimal context (precision
+  // 28): normalize ROUNDS half-even to 28 significant digits when there are more — it does not merely
+  // strip zeros (e.g. 1e29 renders "99999999999999991433150857220", not …216). The guard above is
+  // applied to the 8-decimal string BEFORE this rounding, exactly as Python does.
+  return toFixed(toSignificantDigitsHalfEven(rounded, 28));
 }

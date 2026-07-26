@@ -604,4 +604,37 @@ describe("floatToWire", () => {
       assertEquals(floatToWire(1e-310), "0");
     });
   });
+
+  describe("context-28 normalize parity (CPython Decimal precision 28)", () => {
+    test("results over 28 significant digits round half-even to 28", () => {
+      // CPython's `Decimal(rounded).normalize()` ROUNDS under the default context (precision 28) —
+      // it does not merely strip zeros. Pinned outputs computed with CPython's float_to_wire.
+      assertEquals(floatToWire(1e29), "99999999999999991433150857220");
+      assertEquals(floatToWire(-1e29), "-99999999999999991433150857220");
+      assertEquals(floatToWire(1.2345678901234568e28), "12345678901234568227576610820");
+      assertEquals(floatToWire(1.5e29), "149999999999999995945819308000");
+    });
+
+    test("results of exactly 28 significant digits are left alone", () => {
+      assertEquals(floatToWire(1e28), "9999999999999999583119736832");
+      // 1e300's exact expansion strips to exactly 28 significant digits — CPython renders it whole:
+      // "1000000000000000052504760255" followed by zeros to 301 digits.
+      assertEquals(floatToWire(1e300), `1000000000000000052504760255${"0".repeat(273)}`);
+    });
+
+    test("doubles in [1e20, 1e21) are integers — the 8-decimal form stays within 28 digits", () => {
+      assertEquals(floatToWire(1.2345678901234567e20), "123456789012345667584");
+      assertEquals(floatToWire(9.999999999999999e20), "999999999999999868928");
+    });
+
+    test('negative underflow to "0" is pinned as an intentional divergence', () => {
+      // CPython returns "-0" for these: `f"{x:.8f}"` yields "-0.00000000" and its
+      // `if rounded == "-0"` guard is dead code (the 8-decimal form always carries a fraction),
+      // so the sign survives Decimal.normalize(). Issue #15 specifies "0" — deliberate divergence.
+      assertEquals(floatToWire(-0.0), "0");
+      assertEquals(floatToWire(-5e-324), "0");
+      assertEquals(floatToWire(-1e-310), "0");
+      assertEquals(floatToWire(-1e-13), "0");
+    });
+  });
 });
