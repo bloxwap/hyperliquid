@@ -409,3 +409,38 @@ scenario({
     });
   },
 });
+
+// --- WASM secp256k1 -------------------------------------------------------------
+// `createFastLocalWallet` (issue #13) swaps noble's pure-JS secp256k1 for tiny-secp256k1
+// (WASM libsecp256k1) on the raw-digest `sign` the L1 path uses — the opt-in counterpart of
+// `sign_l1_action_order_1` above. Byte-identity of the signature is pinned by
+// `tests/signing/fastWallet.test.ts`, not here. The scenario registers only when the optional
+// dependency is installed, so a checkout without it skips the scenario cleanly. (The import
+// declaration is hoisted; keeping it next to the scenario keeps this file append-only.)
+
+import { type AbstractViemLocalAccount, createFastLocalWallet } from "@bloxwap/hyperliquid/signing";
+
+const tinySecp256k1Available = await import("tiny-secp256k1").then(
+  () => true,
+  () => false,
+);
+
+if (tinySecp256k1Available) {
+  scenario({
+    name: "signing/sign_l1_action_order_1_wasm",
+    group: "signing",
+    description:
+      "signL1Action() with a createFastLocalWallet() wallet (WASM tiny-secp256k1 secp256k1); opt-in counterpart of sign_l1_action_order_1",
+    unit: "order",
+    unitsPerIteration: 1,
+    iterations: 50,
+    samples: 10,
+    setup: async () => ({
+      wallet: await createFastLocalWallet(TEST_PRIVATE_KEY),
+      action: orderAction(1),
+    }),
+    run: async ({ wallet, action }: { wallet: AbstractViemLocalAccount; action: object }) => {
+      await signL1Action({ wallet, action: action as Record<string, unknown>, nonce: NONCE, isTestnet: true });
+    },
+  });
+}

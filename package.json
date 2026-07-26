@@ -71,6 +71,10 @@
     "decimal.js": "10.6.0",
     "valibot": "1.4.2"
   },
+  "//optionalDependencies": "Opt-in accelerators, loaded only through guarded dynamic imports. `tiny-secp256k1` powers the WASM fast wallet (see `createFastLocalWallet` in src/signing/mod.ts); installs that skip optional dependencies transparently fall back to the viem/noble path.",
+  "optionalDependencies": {
+    "tiny-secp256k1": "2.2.4"
+  },
   "//devDependencies": "`typescript` is pinned to 5.x on purpose: TypeScript 7's npm package ships only a native binary with no JS compiler API, and `ts-json-schema-generator` needs that API. TypeScript 7 is installed separately under .dev/ts7 and used solely as a type-check gate.",
   "devDependencies": {
     "@biomejs/biome": "2.5.5",
