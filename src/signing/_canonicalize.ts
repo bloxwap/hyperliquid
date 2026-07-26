@@ -17,9 +17,14 @@ export class CanonicalizeError extends HyperliquidError {
 /**
  * Recursively rebuilds a value with object keys in schema-definition order.
  *
+ * Subtrees already in schema order are returned by reference instead of being rebuilt, so
+ * `canonicalize` over `v.parse` output — which valibot emits in schema-entry order — is a
+ * verification walk with no allocation. The result may therefore alias the input; every exchange
+ * method feeds it `parse` output that is never mutated afterwards.
+ *
  * @param schema A valibot schema defining the canonical key order.
  * @param value The value whose keys should be reordered.
- * @return A new value with keys in schema-definition order.
+ * @return A value with keys in schema-definition order (the input itself when already canonical).
  *
  * @throws {CanonicalizeError} If keys in data don't match the schema.
  *
@@ -65,19 +70,19 @@ function walk(schema: SchemaNode, value: unknown): unknown {
     return value === null || value === undefined ? value : walk(schema.wrapped!, value);
   }
 
-  // Object → reorder keys by schema.entries
+  // Object → reorder keys by schema.entries (a no-op rebuild is skipped: return the input)
   if (t === "object" && isRecord(value)) {
-    return reorderObject(schema.entries!, value);
+    return isCanonical(schema, value) ? value : reorderObject(schema.entries!, value);
   }
 
-  // Array → canonicalize each item
+  // Array → canonicalize each item (skip the copy when every item is already canonical)
   if (t === "array" && Array.isArray(value)) {
-    return value.map((item) => walk(schema.item!, item));
+    return isCanonical(schema, value) ? value : value.map((item) => walk(schema.item!, item));
   }
 
   // Tuple → canonicalize each item by index
   if (t === "tuple" && Array.isArray(value)) {
-    return value.map((item, i) => walk(schema.items![i], item));
+    return isCanonical(schema, value) ? value : value.map((item, i) => walk(schema.items![i], item));
   }
 
   // Variant → match option by discriminator + structural fallback
@@ -98,6 +103,101 @@ function walk(schema: SchemaNode, value: unknown): unknown {
 
   // Primitives, literals, picklists, enums → return as-is
   return value;
+}
+
+/**
+ * True when {@linkcode walk} would leave `value` unchanged — every object key already in schema
+ * order, every value canonical — making the rebuild skippable without changing a single encoded
+ * byte. Mirrors `walk`'s dispatch exactly, including its edge behavior:
+ * - nodes `walk` passes through untouched (primitives, schema types it does not walk, unions with
+ *   no structural match) are "canonical" by definition;
+ * - nodes `walk` rejects (unknown or inherited data keys, missing required keys, unmatched
+ *   variants, over-long tuples) are NOT, so the caller falls into the slow path and the same
+ *   error (or `TypeError`) is raised from there.
+ */
+function isCanonical(schema: SchemaNode, value: unknown): boolean {
+  const t = schema.type;
+
+  // Unwrap optional / nullable / nullish
+  if (t === "optional" || t === "nullable" || t === "nullish") {
+    return value === null || value === undefined ? true : isCanonical(schema.wrapped!, value);
+  }
+
+  if (t === "object" && isRecord(value)) {
+    return isCanonicalObject(schema.entries!, value);
+  }
+
+  if (t === "array" && Array.isArray(value)) {
+    // Holes read as `undefined` here; every schema node treats `undefined` as canonical (walk
+    // returns it as-is), which matches `Array.prototype.map` preserving the hole.
+    for (let i = 0; i < value.length; i++) {
+      if (!isCanonical(schema.item!, value[i])) return false;
+    }
+    return true;
+  }
+
+  if (t === "tuple" && Array.isArray(value)) {
+    const items = schema.items!;
+    // `walk` indexes `items[i]` unconditionally and dies on a missing schema — keep that on the
+    // slow path rather than swallowing it.
+    if (value.length > items.length) return false;
+    for (let i = 0; i < value.length; i++) {
+      if (!isCanonical(items[i], value[i])) return false;
+    }
+    return true;
+  }
+
+  if (t === "variant" && isRecord(value)) {
+    const option = matchVariantOption(schema.key!, schema.options!, value);
+    // No matching option → `walk` throws CanonicalizeError; route to the slow path for that.
+    return option !== undefined && isCanonical(option, value);
+  }
+
+  if (t === "union" && isRecord(value)) {
+    const option = matchByStructure(schema.options!, value);
+    // No structural match → `walk` passes the value through whole, which is identity.
+    return option === undefined || isCanonical(option, value);
+  }
+
+  return true;
+}
+
+/**
+ * True when {@linkcode reorderObject} would rebuild `value` into an object with the same keys in
+ * the same order and canonical values. Both sides iterate with `for...in` and go through the
+ * engine's own key ordering (integer-like keys first), so the relative-order comparison is exact.
+ * Returns false wherever reorderObject would throw instead, so the error still comes from there.
+ */
+function isCanonicalObject(entries: Record<string, SchemaNode>, value: Record<string, unknown>): boolean {
+  const keys = schemaKeys(entries);
+
+  // Every required schema key must be present (`in`, like reorderObject — inherited keys count).
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (!(key in value)) {
+      const t = entries[key].type;
+      if (t !== "optional" && t !== "nullable" && t !== "nullish") return false;
+    }
+  }
+
+  let position = 0;
+  for (const key in value) {
+    // An undeclared key makes reorderObject throw; an INHERITED declared key would be promoted to
+    // an own key by the rebuild, which changes what `Object.keys` (and the encoder) sees — both
+    // must take the slow path.
+    if (!Object.hasOwn(entries, key) || !Object.hasOwn(value, key)) return false;
+    let found = -1;
+    for (let i = position; i < keys.length; i++) {
+      if (keys[i] === key) {
+        found = i;
+        break;
+      }
+    }
+    if (found === -1) return false; // keys present but not in schema order
+    position = found + 1;
+    if (!isCanonical(entries[key], value[key])) return false;
+  }
+  return true;
 }
 
 // ============================================================
