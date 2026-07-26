@@ -98,7 +98,7 @@ export interface RoundPriceOptions {
 }
 
 /**
- * Mutable snapshot of the four lookup maps, built privately by {@link SymbolConverter._reload}
+ * Mutable snapshot of the lookup maps, built privately by {@link SymbolConverter._reload}
  * and published onto the instance in a single synchronous block once fully populated.
  */
 interface SymbolConverterDraft {
@@ -106,6 +106,8 @@ interface SymbolConverterDraft {
   nameToSzDecimals: Map<string, number>;
   nameToSpotPairId: Map<string, string>;
   spotPairIdToName: Map<string, string>;
+  /** Slugs of outcome markets, which follow the spot (not perp) price rules. */
+  outcomeNames: Set<string>;
 }
 
 /** Options for creating a {@link SymbolConverter} instance. */
@@ -154,6 +156,7 @@ export class SymbolConverter {
   private _nameToSzDecimals = new Map<string, number>();
   private _nameToSpotPairId = new Map<string, string>();
   private _spotPairIdToName = new Map<string, string>();
+  private _outcomeNames = new Set<string>();
   private _reloadPromise: Promise<void> | undefined;
 
   /**
@@ -220,6 +223,7 @@ export class SymbolConverter {
       nameToSzDecimals: new Map(),
       nameToSpotPairId: new Map(),
       spotPairIdToName: new Map(),
+      outcomeNames: new Set(),
     };
 
     this._processPerps(draft, perpMetaData);
@@ -227,12 +231,13 @@ export class SymbolConverter {
     this._processOutcomeMarkets(draft, outcomeMetaData);
     if (perpDexsData) await this._processBuilderDexs(draft, perpDexsData);
 
-    // Publish atomically: no await may run between these four assignments, so a concurrent
+    // Publish atomically: no await may run between these assignments, so a concurrent
     // reader can never observe a half-built cache.
     this._nameToAssetId = draft.nameToAssetId;
     this._nameToSzDecimals = draft.nameToSzDecimals;
     this._nameToSpotPairId = draft.nameToSpotPairId;
     this._spotPairIdToName = draft.spotPairIdToName;
+    this._outcomeNames = draft.outcomeNames;
   }
 
   // ============================================================
@@ -330,8 +335,13 @@ export class SymbolConverter {
         if (!slug) return;
 
         draft.nameToAssetId.set(slug, 100000000 + 10 * outcome.outcome + sideIdx);
-        // Outcome markets are absent from szDecimals metadata; they are all 5
-        draft.nameToSzDecimals.set(slug, 5);
+        // Outcome markets carry no precision field in outcomeMeta, and empirically their sizes
+        // are whole integers: every observed resting book size is integer-valued and HIP-4
+        // guides report fractional sizes rejected (no funded accept/reject probe was possible).
+        // The lot precision is modeled as 0 decimals on that evidence — an observation of
+        // current behavior, not a protocol guarantee.
+        draft.nameToSzDecimals.set(slug, 0);
+        draft.outcomeNames.add(slug);
       });
     });
   }
@@ -464,7 +474,7 @@ export class SymbolConverter {
    * converter.getSzDecimals("BTC"); // → 5
    * converter.getSzDecimals("HYPE/USDC"); // → 2
    * converter.getSzDecimals("test:ABC"); // → 0
-   * converter.getSzDecimals("btc-above-61720-yes-jun-08-0600"); // → 5
+   * converter.getSzDecimals("btc-above-61720-yes-jun-08-0600"); // → 0 (empirically integer sizes, not protocol-guaranteed)
    * ```
    */
   getSzDecimals(name: string): number | undefined {
@@ -519,6 +529,11 @@ export class SymbolConverter {
    * The tick is constant within each power-of-ten decade and steps with the price magnitude, so the
    * price argument matters: the tick at `0.0001` differs from the tick at `12345`.
    *
+   * Outcome markets (slugs such as `"btc-above-64570-yes-jul-27-0300"`) share the spot
+   * implementation per the official asset-ID docs: with their integer lot (`szDecimals` 0) the
+   * tick is `max(10^(floor(log10(px)) - 4), 1e-8)` — `0.00001` at `0.68`, `0.000001` at `0.05`,
+   * and `0.00000001` at `0.00001`, where the 8-decimal ceiling clamps the bare formula.
+   *
    * Accepts the same name formats as {@link SymbolConverter.getSzDecimals} and likewise returns
    * `undefined` for an unknown coin (a spot pair ID like `"@107"` is unknown here — use `"HYPE/USDC"`).
    *
@@ -546,11 +561,13 @@ export class SymbolConverter {
     if (szDecimals === undefined) return undefined;
 
     const d = toPriceDecimal(price);
-    // Spot markets carry a spot pair ID; everything else (perps, builder dexs, outcomes) uses the perp formula.
-    const maxDecimals = Math.max((this._nameToSpotPairId.has(name) ? 8 : 6) - szDecimals, 0);
+    // Spot markets carry a spot pair ID; outcome markets share the spot implementation (official
+    // asset-ID docs); everything else (perps, builder dexs) uses the perp formula.
+    const spotLike = this._nameToSpotPairId.has(name) || this._outcomeNames.has(name);
+    const tickExp = tickExponent(d, Math.max((spotLike ? 8 : 6) - szDecimals, 0));
 
     // 10^tickExp in the normalized form: a single "1" digit at exponent tickExp + 1.
-    return toFixed({ sign: 1, digits: "1", exp: tickExponent(d, maxDecimals) + 1 });
+    return toFixed({ sign: 1, digits: "1", exp: tickExp + 1 });
   }
 
   /**
@@ -566,6 +583,10 @@ export class SymbolConverter {
    * A price already on the tick grid is returned unchanged. All math is exact string arithmetic
    * (the tick is a power of ten, so rounding is digit truncation or a one-digit increment),
    * so no floating-point artifacts can appear.
+   *
+   * Outcome markets (slugs such as `"btc-above-64570-yes-jul-27-0300"`) share the spot
+   * implementation per the official asset-ID docs, so the spot-like tick applies to them:
+   * `max(10^(floor(log10(px)) - 4), 1e-8)` (5 significant figures, 8-decimal ceiling).
    *
    * Accepts the same name formats as {@link SymbolConverter.getSzDecimals} and likewise returns
    * `undefined` for an unknown coin.
@@ -597,12 +618,14 @@ export class SymbolConverter {
     if (szDecimals === undefined) return undefined;
 
     const d = toPriceDecimal(price);
-    // Spot markets carry a spot pair ID; everything else (perps, builder dexs, outcomes) uses the perp formula.
-    const maxDecimals = Math.max((this._nameToSpotPairId.has(name) ? 8 : 6) - szDecimals, 0);
+    // Spot markets carry a spot pair ID; outcome markets share the spot implementation (official
+    // asset-ID docs); everything else (perps, builder dexs) uses the perp formula.
+    const spotLike = this._nameToSpotPairId.has(name) || this._outcomeNames.has(name);
+    const tickExp = tickExponent(d, Math.max((spotLike ? 8 : 6) - szDecimals, 0));
 
     // Maker-safe default rounds against the trade direction (buy down, sell up); aggressive flips both.
     const roundUp = side === "buy" ? (opts?.aggressive ?? false) : !(opts?.aggressive ?? false);
-    const result = roundToTick(d, tickExponent(d, maxDecimals), roundUp);
+    const result = roundToTick(d, tickExp, roundUp);
 
     if (result.digits === "") {
       throw new FormatError("Price is too small and was rounded to 0");
