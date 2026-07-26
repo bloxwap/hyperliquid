@@ -68,7 +68,7 @@ larger than the smallest stored, never repeat, and fall within `(T - 2 days, T +
 
 - **One signer = one process.** A wallet must be driven by a single nonce source. Multi-process deployments
   (replicas, workers) need a shared `nonceManager` backed by external state (e.g. Redis), or the processes emit
-  colliding or out-of-order nonces and the exchange rejects them.
+  colliding nonces, or nonces that fall outside the 100-highest window the exchange tracks, and get rejected.
 - **Restarts after running ahead of wall-clock.** Under burst load the built-in manager issues `last + 1`, running
   ahead of `Date.now()`. A restarted process re-derives nonces from the wall clock, so until real time catches up
   with the previously issued nonces the exchange can reject fresh requests.

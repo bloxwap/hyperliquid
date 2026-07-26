@@ -1397,17 +1397,39 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * useful for latency-critical flows (e.g. a pre-signed cancel-all fired with zero signing latency).
    *
    * The nonce is consumed at prepare time: it is fresh and monotonic when the payload is signed.
-   * **A prepared payload goes stale if another request from the same wallet consumes a later nonce
-   * first** — the server rejects nonces less than or equal to the last one it saw, so submit a
-   * prepared payload before issuing newer requests (or accept that it may be rejected as stale).
+   * **A prepared payload stays valid while its nonce is among the 100 highest the exchange has seen
+   * from the wallet** (and within the block-timestamp window) — another request consuming a later
+   * nonce does NOT invalidate it; it goes stale only after 100 newer nonces have been consumed.
+   * Prepare immediately before use anyway: the fewer intervening requests, the longer the payload
+   * stays submittable.
    *
-   * The callback must issue exactly one request (one Exchange method call).
+   * The callback must issue exactly one request (one Exchange method call) to the `exchange`
+   * endpoint. Exactly-one is enforced — synchronously recorded, fail-closed at finalize — for
+   * every attempt that reaches the capture transport before the callback's returned promise
+   * settles: any invalid attempt arriving within that window — a request to a non-`exchange`
+   * endpoint or a second request — fails the whole `prepareRequest` call, even if the callback
+   * swallowed the rejection.
+   *
+   * Limitations (beyond callback settle, enforcement is best-effort):
+   * - An attempt that reaches the capture transport only after the callback settled — a floating
+   *   (un-awaited) attempt fired as the callback returns, whose signing path spans several
+   *   microtasks past the settle microtask, or leaked callback work beginning later (e.g. still
+   *   awaiting a remote signer) — cannot be caught at prepare time; it poisons the payload
+   *   instead: the attempt's own promise rejects, and `submitPrepared` re-checks the poison flag
+   *   synchronously before posting and rejects a poisoned payload.
+   * - The poison guard is in-process only: the payload-to-state link lives in a `WeakMap`, so
+   *   serializing and re-parsing a payload silently drops the guard.
+   * - `submitPrepared`'s re-check is a point-in-time check, not a happens-before guarantee: an
+   *   attempt landing after the check but before or during the actual post is not caught.
+   * - A leaked attempt whose promise is discarded (`void order(...)`) rejects unobserved — an
+   *   unhandledRejection by definition. The rejection is delivered to the attempt's own promise;
+   *   observing it is the leaker's responsibility, not something the SDK can prevent.
    *
    * @param run Callback that issues one Exchange API request (e.g. `(config) => order(config, params)`).
    * @return The signed request payload (`{ action, signature, nonce, ... }`), ready for {@linkcode submitPrepared}.
    *
    * @throws {ValidationError} When the request parameters fail validation (before signing).
-   * @throws {HyperliquidError} When the callback issues zero or more than one request.
+   * @throws {HyperliquidError} When the callback issues zero or more than one request, or targets a non-`exchange` endpoint.
    *
    * @example
    * ```ts
@@ -1429,7 +1451,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets#hyperliquid-nonces
    */
-  prepareRequest(run: (config: ExchangeConfig) => Promise<unknown>): Promise<PreparedExchangeRequest> {
+  prepareRequest<T>(run: (config: ExchangeConfig) => Promise<T>): Promise<PreparedExchangeRequest<T>> {
     return prepareRequest(this.config_, run);
   }
 
@@ -1951,10 +1973,16 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * re-validation, no re-signing, no nonce refresh. The payload must be submitted through the same
    * network (testnet vs mainnet) it was signed for — the signature commits to it.
    *
+   * If the prepare callback leaked a request attempt that began after `prepareRequest` returned,
+   * the payload is poisoned (best-effort, in-process guard) and submission rejects with a
+   * `HyperliquidError` — discard it and prepare again. The poison re-check is a point-in-time
+   * check immediately before posting, not a happens-before guarantee.
+   *
    * @param prepared The signed request payload returned by {@linkcode prepareRequest}.
    * @param opts Request execution options.
    * @return The API response.
    *
+   * @throws {HyperliquidError} When the payload was poisoned by a request attempted after it was produced.
    * @throws {TransportError} When the transport layer throws an error.
    * @throws {ApiRequestError} When the API returns an unsuccessful response (e.g. a stale nonce).
    *
@@ -1972,7 +2000,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint
    */
-  submitPrepared<T = unknown>(prepared: PreparedExchangeRequest, opts?: SubmitPreparedOptions): Promise<T> {
+  submitPrepared<T>(prepared: PreparedExchangeRequest<T>, opts?: SubmitPreparedOptions): Promise<T> {
     return submitPrepared(this.config_, prepared, opts);
   }
 
