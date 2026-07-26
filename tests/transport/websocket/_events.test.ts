@@ -195,5 +195,75 @@ describe("HyperliquidEventTarget", () => {
       dispatchMessage(socket, '{"foo":"bar"}');
       assertFalse(triggered);
     });
+
+    test("garbage frames never throw out of the handler and leave listeners intact", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      let received = 0;
+      target.addEventListener("l2Book", () => received++);
+
+      const garbage = [
+        "not json",
+        "12345",
+        '"just a string"',
+        "null",
+        "true",
+        "{}",
+        "[]",
+        "[1,2,3]",
+        '[{"blockTime":1}]', // partial explorer block
+        '{"channel":123,"data":{}}', // channel not a string
+        '{"channel":["l2Book"],"data":{}}', // channel not a string
+        '{"channel":"error","data":1e1000}', // huge number (Infinity)
+        "   ", // whitespace only
+        "", // empty frame
+      ];
+      for (const frame of garbage) {
+        dispatchMessage(socket, frame); // must not throw
+      }
+      assertEquals(received, 0);
+
+      // Subsequent valid frames still dispatch.
+      dispatchMessage(socket, JSON.stringify({ channel: "l2Book", data: { coin: "BTC", levels: [] } }));
+      assertEquals(received, 1);
+    });
+
+    test("a throwing listener neither kills the handler nor starves the other listeners", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      // Bun and Node raise a listener's synchronous throw as an uncaught error, which would
+      // kill the process and skip the remaining listeners; the guard contains it instead.
+      let survived = 0;
+      target.addEventListener("testChannel", () => {
+        throw new Error("bug in a listener");
+      });
+      target.addEventListener("testChannel", () => survived++);
+
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+      assertEquals(survived, 1);
+
+      // The throwing listener stays registered and contained on later frames too.
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+      assertEquals(survived, 2);
+    });
+
+    test("a removed listener stays removed despite the guard wrapper", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      let calls = 0;
+      const listener = (): void => {
+        calls++;
+      };
+      target.addEventListener("testChannel", listener);
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+
+      target.removeEventListener("testChannel", listener);
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+
+      assertEquals(calls, 1);
+    });
   });
 });

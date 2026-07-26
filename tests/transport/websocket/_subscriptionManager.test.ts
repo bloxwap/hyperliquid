@@ -7,6 +7,7 @@
 import { describe, test } from "bun:test";
 import { assert, assertEquals, assertFalse, assertRejects } from "@jsr/std__assert";
 import { ReconnectingWebSocket } from "@nktkas/rews";
+import type { ISubscription } from "../../../src/transport/_base.ts";
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
 import { WebSocketSubscriptionManager } from "../../../src/transport/websocket/_subscriptionManager.ts";
@@ -365,6 +366,71 @@ describe("WebSocketSubscriptionManager", () => {
       assertEquals(first, 1);
       assertEquals(second, 1);
     });
+
+    /**
+     * Subscribes to both asset-ctx variants of `coin`. Both API methods declare the identical
+     * payload type, so the server serves the perp and the spot channel from one subscription.
+     */
+    async function subscribeAssetCtxs(
+      socket: MockWebSocket,
+      manager: ManagerWithInternals,
+      coin: string,
+      counter: { perp: number; spot: number },
+      first: "activeAssetCtx" | "activeSpotAssetCtx",
+    ): Promise<{ perp: ISubscription; spot: ISubscription }> {
+      const payload = { type: "activeAssetCtx", coin };
+      const subs: { perp?: ISubscription; spot?: ISubscription } = {};
+      const subscribe = async (channel: "activeAssetCtx" | "activeSpotAssetCtx"): Promise<void> => {
+        const promise = manager.subscribe(channel, payload, () =>
+          channel === "activeAssetCtx" ? counter.perp++ : counter.spot++,
+        );
+        // Only the first call sends a subscribe frame; the second joins the same entry.
+        if (channel === first) socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+        subs[channel === "activeAssetCtx" ? "perp" : "spot"] = await promise;
+      };
+      await subscribe(first);
+      await subscribe(first === "activeAssetCtx" ? "activeSpotAssetCtx" : "activeAssetCtx");
+      return subs as { perp: ISubscription; spot: ISubscription };
+    }
+
+    for (const order of ["activeAssetCtx first", "activeSpotAssetCtx first"] as const) {
+      test(`perp and spot asset ctx share the wire subscription but not the frames (${order})`, async () => {
+        const { socket, manager } = createManager();
+        const counter = { perp: 0, spot: 0 };
+        const payload = { type: "activeAssetCtx", coin: "@1" };
+
+        const sentBefore = socket.sentMessages.length;
+        const subs = await subscribeAssetCtxs(
+          socket,
+          manager,
+          "@1",
+          counter,
+          order === "activeAssetCtx first" ? "activeAssetCtx" : "activeSpotAssetCtx",
+        );
+        // One entry, one wire subscription: the joiner sent no second subscribe frame.
+        assertEquals(manager._subscriptions.size, 1);
+        assertEquals(socket.sentMessages.length, sentBefore + 1);
+
+        // Each listener receives only its own channel's frames, whichever came first.
+        socket.mockMessage(RESPONSES.channelEvent("activeAssetCtx", { coin: "@1", ctx: {} }));
+        assertEquals(counter, { perp: 1, spot: 0 });
+        socket.mockMessage(RESPONSES.channelEvent("activeSpotAssetCtx", { coin: "@1", ctx: {} }));
+        assertEquals(counter, { perp: 1, spot: 1 });
+
+        // Unsubscribing one leaves the other's routing — and the wire subscription — intact.
+        await subs.perp.unsubscribe();
+        socket.mockMessage(RESPONSES.channelEvent("activeAssetCtx", { coin: "@1", ctx: {} }));
+        socket.mockMessage(RESPONSES.channelEvent("activeSpotAssetCtx", { coin: "@1", ctx: {} }));
+        assertEquals(counter, { perp: 1, spot: 2 });
+        assertEquals(manager._subscriptions.size, 1);
+
+        // The last listener leaving retires the shared wire subscription.
+        const unsubPromise = subs.spot.unsubscribe();
+        socket.mockMessage(RESPONSES.subscriptionResponse("unsubscribe", payload));
+        await unsubPromise;
+        assertEquals(manager._subscriptions.size, 0);
+      });
+    }
   });
 
   describe("autoResubscribe", () => {
@@ -867,6 +933,41 @@ describe("WebSocketSubscriptionManager", () => {
       await promise;
 
       assertEquals(manager._subscriptions.size, 11);
+    });
+
+    test("mutating the payload after subscribing corrupts neither the unsubscribe nor the user guard", async () => {
+      const { socket, manager } = createManager();
+
+      const subs = [];
+      for (let i = 0; i < 15; i++) {
+        const payload = { type: "userEvents", user: `0x${i.toString().padStart(40, "0")}` };
+        const promise = manager.subscribe("userEvents", payload, () => {});
+        socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+        subs.push({ sub: await promise, payload });
+      }
+
+      // The caller still owns the object it passed and mutates it before unsubscribing.
+      subs[0].payload.user = "0x00000000000000000000000000000000000000ff";
+
+      const unsubPromise = subs[0].sub.unsubscribe();
+      // The unsubscribe goes out with the payload as subscribed, not as mutated.
+      assertEquals(JSON.parse(socket.sentMessages[socket.sentMessages.length - 1]).subscription, {
+        type: "userEvents",
+        user: "0x0000000000000000000000000000000000000000",
+      });
+      socket.mockMessage(
+        RESPONSES.subscriptionResponse("unsubscribe", {
+          type: "userEvents",
+          user: "0x0000000000000000000000000000000000000000",
+        }),
+      );
+      await unsubPromise;
+
+      // The original user's slot was released: a 16th unique user fits again.
+      const payload16 = { type: "userEvents", user: "0x000000000000000000000000000000000000000f" };
+      const promise = manager.subscribe("userEvents", payload16, () => {});
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload16));
+      await promise;
     });
   });
 

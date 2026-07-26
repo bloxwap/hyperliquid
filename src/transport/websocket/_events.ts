@@ -168,6 +168,18 @@ export class HyperliquidEventTarget extends EventTarget {
    */
   private readonly _bareChannels: Set<string> = new Set();
 
+  /**
+   * Guarded form of every registered listener, so a listener's synchronous throw cannot escape
+   * a dispatch.
+   *
+   * The DOM spec reports a listener exception and continues dispatching; Bun and Node instead
+   * raise it as an uncaught error, killing the process and skipping the remaining listeners.
+   * One malformed frame reaching a frame-parsing consumer (or one throwing listener) would
+   * otherwise take down every subscription on the socket, so each listener runs behind a guard
+   * that swallows the throw — the frame is lost only to that listener.
+   */
+  private readonly _listenerGuards = new WeakMap<EventListenerOrEventListenerObject, EventListener>();
+
   addEventListener<K extends keyof HyperliquidEventMap>(
     type: K,
     listener: ((event: HyperliquidEventMap[K]) => void) | EventListenerObject | null,
@@ -180,7 +192,34 @@ export class HyperliquidEventTarget extends EventTarget {
     options?: boolean | AddEventListenerOptions,
   ): void {
     if (isBareChannel(type)) this._bareChannels.add(type);
-    super.addEventListener(type, listener, options);
+    super.addEventListener(type, listener === null ? null : this._guarded(listener), options);
+  }
+
+  /** Removes the guarded wrapper registered for `listener` (see {@linkcode _listenerGuards}). */
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    const guarded = listener !== null ? this._listenerGuards.get(listener) : undefined;
+    super.removeEventListener(type, guarded ?? listener, options);
+  }
+
+  /** Returns the guarded form of `listener`, creating and caching it on first use. */
+  private _guarded(listener: EventListenerOrEventListenerObject): EventListener {
+    let guarded = this._listenerGuards.get(listener);
+    if (guarded === undefined) {
+      guarded = (event: Event): void => {
+        try {
+          if (typeof listener === "function") listener.call(this, event);
+          else listener.handleEvent(event);
+        } catch {
+          // Swallowed: one bad listener (or one bad frame) must not abort the dispatch.
+        }
+      };
+      this._listenerGuards.set(listener, guarded);
+    }
+    return guarded;
   }
 
   constructor(socket: WebSocket) {

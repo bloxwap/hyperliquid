@@ -44,6 +44,16 @@ export interface HttpTransportOptions {
    */
   timeout?: number | null;
   /**
+   * Request timeout in ms for the `exchange` endpoint only, overriding {@linkcode HttpTransportOptions.timeout}.
+   * Set to `null` to disable the timeout for exchange requests.
+   *
+   * Order placement shares the endpoint with every other action, so a shorter timeout here bounds
+   * how long a hung `/exchange` POST can block an order while info calls keep the global timeout.
+   *
+   * Default: `undefined` (uses `timeout`)
+   */
+  exchangeTimeout?: number | null;
+  /**
    * Custom API URL for `info` and `exchange` requests.
    *
    * Default: `https://api.hyperliquid.xyz` for mainnet, `https://api.hyperliquid-testnet.xyz` for testnet.
@@ -141,6 +151,13 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   readonly isTestnet: boolean;
   /** Request timeout in ms. Set to `null` to disable. */
   timeout: number | null;
+  /**
+   * Request timeout in ms for the `exchange` endpoint only, overriding {@linkcode timeout}.
+   * Set to `null` to disable the timeout for exchange requests.
+   *
+   * Default: `undefined` (uses `timeout`)
+   */
+  exchangeTimeout: number | null | undefined;
   /** Custom API URL for requests. */
   apiUrl: string | URL;
   /** Custom RPC URL for explorer requests. */
@@ -153,6 +170,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   constructor(options?: HttpTransportOptions) {
     this.isTestnet = options?.isTestnet ?? false;
     this.timeout = options?.timeout === undefined ? 10_000 : options.timeout;
+    this.exchangeTimeout = options?.exchangeTimeout;
     this.apiUrl = options?.apiUrl ?? (this.isTestnet ? TESTNET_API_URL : MAINNET_API_URL);
     this.rpcUrl = options?.rpcUrl ?? (this.isTestnet ? TESTNET_RPC_URL : MAINNET_RPC_URL);
     this.fetchOptions = options?.fetchOptions ?? {};
@@ -182,7 +200,10 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
     // One controller per request: the timeout timer and all user signals relay into it,
     // and `finally` detaches everything, so no listener or timer outlives the request.
     const controller = new AbortController();
-    const timeoutMs = this.timeout; // for correct error message after user changes
+    // Captured now, so the error message reports the value the timer was armed with even
+    // if the field is reassigned mid-flight. The exchange endpoint honors its own override.
+    const timeoutMs =
+      endpoint === "exchange" && this.exchangeTimeout !== undefined ? this.exchangeTimeout : this.timeout;
     const timeout = abort.scheduleTimeout(controller, timeoutMs);
     const fetchSignal = this.fetchOptions.signal;
     const detachRelay =

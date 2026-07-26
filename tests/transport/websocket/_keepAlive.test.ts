@@ -37,10 +37,10 @@ describe("WebSocketKeepAlive", () => {
     const { socket } = createKeepAlive();
 
     socket.open();
-    time.tick(30_000);
+    time.tick(5_000);
     assertEquals(getLastSent(socket).method, "ping");
 
-    time.tick(10_000);
+    time.tick(3_000);
     assertEquals(socket.reconnectCalls, 1);
   });
 
@@ -48,10 +48,10 @@ describe("WebSocketKeepAlive", () => {
     const { socket } = createKeepAlive();
 
     socket.open();
-    time.tick(30_000);
+    time.tick(5_000);
     socket.mockMessage({ channel: "pong" });
 
-    time.tick(10_000);
+    time.tick(3_000);
     assertEquals(socket.reconnectCalls, 0);
   });
 
@@ -59,7 +59,7 @@ describe("WebSocketKeepAlive", () => {
     const { socket } = createKeepAlive();
 
     socket.open();
-    time.tick(30_000);
+    time.tick(5_000);
     socket.disconnect();
 
     const sentBeforeTick = socket.sentMessages.length;
