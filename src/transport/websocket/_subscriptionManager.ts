@@ -11,6 +11,7 @@ import type { ISubscription } from "../_base.ts";
 import type { HyperliquidEventTarget } from "./_events.ts";
 import { type WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
 import { requestToId } from "./_id.ts";
+import { payloadEventType } from "./_routing.ts";
 
 /** Per-listener registration: its unsubscribe handle and optional error callback. */
 interface ListenerRegistration {
@@ -28,8 +29,26 @@ interface ListenerRegistration {
 
 /** Internal state for managing a subscription. */
 interface SubscriptionState {
-  /** Event channel name, used to detach listeners on teardown. */
-  channel: string;
+  /**
+   * Event type this subscription's listeners are attached to, used to detach them on teardown.
+   * Either the bare channel name or its routed form (see `_routing.ts`); derived once at
+   * subscribe time from the channel and the payload, so a reconnect cannot change it.
+   */
+  eventType: string;
+  /**
+   * The subscription payload as the caller passed it. Kept so the reconnect and teardown paths
+   * report and re-issue the original object instead of re-parsing the stringified id.
+   */
+  payload: unknown;
+  /**
+   * The user this subscription counts against, resolved once at subscribe time.
+   *
+   * Read from {@linkcode SubscriptionState.payload} on both the increment and the decrement path,
+   * this would be a live read of an object the caller still owns: mutating `payload.user` between
+   * subscribe and unsubscribe would decrement a different key and leak the original user's count
+   * upward until the unique-user guard tripped on subscriptions that no longer exist.
+   */
+  user: string | undefined;
   /** Map of event listeners to their registration. */
   listeners: Map<(data: CustomEvent) => void, ListenerRegistration>;
   /** Promise tracking the subscription request. */
@@ -54,6 +73,13 @@ const MAX_SUBSCRIPTIONS = 1000;
  */
 const MAX_UNIQUE_USERS = 15;
 
+/** Lowercased `user` of a subscription payload, or `undefined` when the payload tracks no user. */
+function userOf(payload: unknown): string | undefined {
+  return typeof payload === "object" && payload !== null && "user" in payload && typeof payload.user === "string"
+    ? payload.user.toLowerCase()
+    : undefined;
+}
+
 /** Tracks listeners per subscription payload, resubscribes on reconnect, enforces server-side limits. */
 export class WebSocketSubscriptionManager {
   /** Enable automatic re-subscription to Hyperliquid subscription after reconnection. */
@@ -63,6 +89,11 @@ export class WebSocketSubscriptionManager {
   private readonly _dispatcher: WebSocketDispatcher;
   private readonly _hlEvents: HyperliquidEventTarget;
   private _subscriptions: Map<string, SubscriptionState> = new Map();
+  /**
+   * Live subscription count per tracked user, maintained incrementally so the unique-user guard
+   * stays O(1) per subscribe instead of rescanning (and re-parsing) every registered id.
+   */
+  private readonly _users: Map<string, number> = new Map();
 
   constructor(
     socket: ReconnectingWebSocket,
@@ -128,8 +159,15 @@ export class WebSocketSubscriptionManager {
       }
 
       const promise = this._dispatcher.request("subscribe", payload).finally(() => (created.promiseFinished = true));
-      const created: SubscriptionState = { channel, listeners: new Map(), promise, promiseFinished: false };
-      this._subscriptions.set(id, created);
+      const created: SubscriptionState = {
+        eventType: payloadEventType(channel, payload),
+        payload,
+        user: userOf(payload),
+        listeners: new Map(),
+        promise,
+        promiseFinished: false,
+      };
+      this._addSubscription(id, created);
       subscription = created;
 
       // Each subscriber awaits this promise through its own abort.race below,
@@ -140,17 +178,21 @@ export class WebSocketSubscriptionManager {
       promise.catch(() => {});
     }
 
+    // The routed event type belongs to the subscription, not to this call: a second caller joining
+    // an existing entry must attach to (and later detach from) exactly the type it was created with.
+    const { eventType } = subscription;
+
     // --- Listener registration -----------------------------------------------
     let registration = subscription.listeners.get(listener);
     const createdRegistration = registration === undefined;
     if (!registration) {
       const unsubscribe = async (): Promise<void> => {
-        this._hlEvents.removeEventListener(channel, listener);
+        this._hlEvents.removeEventListener(eventType, listener);
         const current = this._subscriptions.get(id);
         current?.listeners.delete(listener);
 
         if (current?.listeners.size === 0) {
-          this._subscriptions.delete(id);
+          this._deleteSubscription(id);
 
           if (this._socket.readyState === ReconnectingWebSocket.OPEN) {
             await this._dispatcher.request("unsubscribe", payload);
@@ -158,7 +200,7 @@ export class WebSocketSubscriptionManager {
         }
       };
 
-      this._hlEvents.addEventListener(channel, listener);
+      this._hlEvents.addEventListener(eventType, listener);
       registration = { unsubscribe, onError, confirmed: false };
       subscription.listeners.set(listener, registration);
     }
@@ -173,12 +215,12 @@ export class WebSocketSubscriptionManager {
       // retried on the next open), but a listener whose subscribe() failed must
       // never receive events — its caller holds no handle to remove it.
       if (createdRegistration) {
-        this._hlEvents.removeEventListener(channel, listener);
+        this._hlEvents.removeEventListener(eventType, listener);
         const current = this._subscriptions.get(id);
         if (current === subscription) {
           subscription.listeners.delete(listener);
           if (subscription.listeners.size === 0) {
-            this._subscriptions.delete(id);
+            this._deleteSubscription(id);
             // On abort the shared request stays in flight and may still confirm:
             // free the server-side slot nobody is listening to.
             if (signal && error === signal.reason && this._socket.readyState === ReconnectingWebSocket.OPEN) {
@@ -214,12 +256,12 @@ export class WebSocketSubscriptionManager {
         this._failSubscription(
           id,
           subscription,
-          new WebSocketRequestError("WebSocket connection closed", { request: JSON.parse(id) }),
+          new WebSocketRequestError("WebSocket connection closed", { request: subscription.payload }),
         );
         continue;
       }
 
-      const promise = this._dispatcher.request("subscribe", JSON.parse(id));
+      const promise = this._dispatcher.request("subscribe", subscription.payload);
       subscription.promise = promise;
       subscription.promiseFinished = false;
 
@@ -251,11 +293,37 @@ export class WebSocketSubscriptionManager {
       const error = terminal
         ? new WebSocketRequestError("WebSocket connection permanently terminated", {
             cause: this._socket.terminationSignal.reason,
-            request: JSON.parse(id),
+            request: subscription.payload,
           })
-        : new WebSocketRequestError("WebSocket connection closed", { request: JSON.parse(id) });
+        : new WebSocketRequestError("WebSocket connection closed", { request: subscription.payload });
       this._failSubscription(id, subscription, error);
     }
+  }
+
+  // ===========================================================================
+  // Registry
+  // ===========================================================================
+
+  /** Registers a subscription and counts its user towards the unique-user limit. */
+  private _addSubscription(id: string, subscription: SubscriptionState): void {
+    this._subscriptions.set(id, subscription);
+    const user = subscription.user;
+    if (user !== undefined) this._users.set(user, (this._users.get(user) ?? 0) + 1);
+  }
+
+  /** Removes a subscription and releases its user from the unique-user count. */
+  private _deleteSubscription(id: string): void {
+    const subscription = this._subscriptions.get(id);
+    if (subscription === undefined) return;
+    this._subscriptions.delete(id);
+
+    const user = subscription.user;
+    if (user === undefined) return;
+    const count = this._users.get(user);
+    // The count is only ever absent if a registration was lost, in which case forgetting the user
+    // is the safe direction: the server rejects a genuine overflow, a stuck count would not.
+    if (count === undefined || count <= 1) this._users.delete(user);
+    else this._users.set(user, count - 1);
   }
 
   // ===========================================================================
@@ -270,10 +338,10 @@ export class WebSocketSubscriptionManager {
    */
   private _failSubscription(id: string, subscription: SubscriptionState, error: WebSocketRequestError): void {
     if (this._subscriptions.get(id) !== subscription) return;
-    this._subscriptions.delete(id);
+    this._deleteSubscription(id);
 
     for (const [listener, registration] of subscription.listeners) {
-      this._hlEvents.removeEventListener(subscription.channel, listener);
+      this._hlEvents.removeEventListener(subscription.eventType, listener);
       // An unconfirmed listener observes the failure through its still-pending
       // subscribe() call instead.
       if (!registration.confirmed) continue;
@@ -291,19 +359,8 @@ export class WebSocketSubscriptionManager {
 
   /** True when subscribing `payload` would track one user above the limit. */
   private _exceedsUserLimit(payload: unknown): boolean {
-    const userOf = (p: unknown): string | undefined =>
-      typeof p === "object" && p !== null && "user" in p && typeof p.user === "string"
-        ? p.user.toLowerCase()
-        : undefined;
-
     const user = userOf(payload);
     if (user === undefined) return false;
-
-    const users = new Set<string>();
-    for (const id of this._subscriptions.keys()) {
-      const tracked = userOf(JSON.parse(id));
-      if (tracked !== undefined) users.add(tracked);
-    }
-    return !users.has(user) && users.size >= MAX_UNIQUE_USERS;
+    return !this._users.has(user) && this._users.size >= MAX_UNIQUE_USERS;
   }
 }

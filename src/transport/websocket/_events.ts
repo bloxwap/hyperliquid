@@ -8,6 +8,7 @@
  */
 
 import { CustomEvent_ } from "../_polyfills.ts";
+import { frameEventType, isBareChannel } from "./_routing.ts";
 
 /**
  * Confirmation frame of a `subscribe` / `unsubscribe` request.
@@ -128,6 +129,10 @@ function isExplorerTxsEvent(msg: unknown): msg is TxDetails[] {
 /**
  * Listens for WebSocket messages and re-dispatches them as typed Hyperliquid events.
  *
+ * Only `removeEventListener` is typed here; `addEventListener` carries its typed overload on the
+ * class itself, because it needs a body (see {@linkcode HyperliquidEventTarget.addEventListener})
+ * and a member cannot be declared on both the class and its merged interface.
+ *
  * @example
  * ```ts ignore
  * const hlEvents = new HyperliquidEventTarget(socket);
@@ -137,18 +142,47 @@ function isExplorerTxsEvent(msg: unknown): msg is TxDetails[] {
  * ```
  */
 export interface HyperliquidEventTarget {
-  addEventListener<K extends keyof HyperliquidEventMap>(
-    type: K,
-    listener: ((event: HyperliquidEventMap[K]) => void) | EventListenerObject | null,
-    options?: boolean | AddEventListenerOptions,
-  ): void;
   removeEventListener<K extends keyof HyperliquidEventMap>(
     type: K,
     listener: ((event: HyperliquidEventMap[K]) => void) | EventListenerObject | null,
     options?: boolean | EventListenerOptions,
   ): void;
 }
+
+/**
+ * Re-dispatches every frame as a typed event.
+ *
+ * On the channels `_routing.ts` can key, the frame goes out on its routed type so a subscription
+ * only runs for the frames it asked for; it additionally goes out on the bare channel whenever
+ * something is listening there, which keeps broadcast semantics for unroutable frames, unrouted
+ * channels and unkeyed subscriptions.
+ */
 export class HyperliquidEventTarget extends EventTarget {
+  /**
+   * Channels that have ever had a listener on their bare name, so a routed frame knows it still
+   * owes them a broadcast.
+   *
+   * Entries are never removed: the set exists only to skip an event allocation nobody would
+   * observe, so a stale entry costs one such dispatch, while a missing entry would silently drop
+   * frames. Growth is bounded by the number of channels.
+   */
+  private readonly _bareChannels: Set<string> = new Set();
+
+  addEventListener<K extends keyof HyperliquidEventMap>(
+    type: K,
+    listener: ((event: HyperliquidEventMap[K]) => void) | EventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  /** Records bare-channel registrations, then registers the listener as `EventTarget` does. */
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    if (isBareChannel(type)) this._bareChannels.add(type);
+    super.addEventListener(type, listener, options);
+  }
+
   constructor(socket: WebSocket) {
     super();
     socket.addEventListener("message", (event) => {
@@ -160,6 +194,13 @@ export class HyperliquidEventTarget extends EventTarget {
       }
 
       if (isHyperliquidEvent(msg)) {
+        // Routed first, then the channel itself unless nothing has ever listened there. A routing
+        // mistake can therefore only ever cost an extra discarded call, never a missed frame.
+        const routed = frameEventType(msg.channel, msg.data);
+        if (routed !== undefined) {
+          this.dispatchEvent(new CustomEvent_(routed, { detail: msg.data }));
+          if (!this._bareChannels.has(msg.channel)) return;
+        }
         this.dispatchEvent(new CustomEvent_(msg.channel, { detail: msg.data }));
       } else if (isExplorerBlockEvent(msg)) {
         this.dispatchEvent(new CustomEvent_("explorerBlock_", { detail: msg }));

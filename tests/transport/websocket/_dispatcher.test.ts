@@ -47,6 +47,21 @@ describe("WebSocketDispatcher", () => {
         assertEquals(await promise, "TestData");
       });
 
+      test("concurrent posts each resolve with the response carrying their id", async () => {
+        const { socket, requester } = createRequester();
+
+        const promises = [0, 1, 2].map(() => requester.request("post", { foo: "bar" }));
+        const ids = socket.sentMessages.map((frame) => JSON.parse(frame).id as number);
+
+        // Answered out of order: matching is by id, not by arrival.
+        for (const id of [...ids].reverse()) socket.mockMessage(RESPONSES.info(id, `data-${id}`));
+
+        assertEquals(
+          await Promise.all(promises),
+          ids.map((id) => `data-${id}`),
+        );
+      });
+
       test("receives action response", async () => {
         const { socket, requester } = createRequester();
 
@@ -157,6 +172,24 @@ describe("WebSocketDispatcher", () => {
 
         socket.mockMessage(RESPONSES.errorChannel(errorMsg));
         await assertRejects(() => promise, WebSocketRequestError, errorMsg);
+      });
+
+      test("a burst of subscriptions each resolves with its own echo", async () => {
+        const { socket, requester } = createRequester();
+
+        const coins = ["BTC", "ETH", "SOL", "DOGE"];
+        const promises = coins.map((coin) => requester.request("subscribe", { type: "l2Book", coin }));
+
+        // Answered out of order, as a reconnect burst would be.
+        for (const coin of [...coins].reverse()) {
+          socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin }));
+        }
+
+        const results = (await Promise.all(promises)) as { subscription: { coin: string } }[];
+        assertEquals(
+          results.map((result) => result.subscription.coin),
+          coins,
+        );
       });
 
       describe("an echo matches the most specific pending payload", () => {
