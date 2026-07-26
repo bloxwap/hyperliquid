@@ -4,7 +4,7 @@
  */
 
 import { type AbstractWallet, getWalletAddress, type Signature, signTypedData } from "./_abstractWallet.ts";
-import { createL1ActionHash, signL1Inner } from "./_l1.ts";
+import { createL1ActionHash, preadjustL1Action, signL1Inner } from "./_l1.ts";
 import { signUserSignedInner } from "./_userSigned.ts";
 
 /** EIP-712 types for the multi-sig outer wrapper. */
@@ -48,6 +48,12 @@ async function signMultiSigOuter(args: {
   leader: AbstractWallet;
   /** The wrapper to sign. */
   wrapper: MultiSigAction;
+  /**
+   * The inner action already normalized by `preadjustL1Action`. When present, it stands in for
+   * `wrapper.payload.action` inside the hash preimage, so the preimage reuses the adjusted
+   * subtree instead of re-traversing it. The wrapper itself (and its wire form) is untouched.
+   */
+  adjustedAction?: unknown;
   /** The current timestamp in ms. */
   nonce: number;
   /**
@@ -64,7 +70,13 @@ async function signMultiSigOuter(args: {
   const { leader, wrapper, nonce, isTestnet = false, vaultAddress, expiresAfter } = args;
   const { type: _, ...wrapperWithoutType } = wrapper;
   const multiSigActionHash = createL1ActionHash({
-    action: wrapperWithoutType,
+    action:
+      args.adjustedAction === undefined
+        ? wrapperWithoutType
+        : // Property overwrites keep their original positions, so the preimage key order —
+          // `signatureChainId, signatures, payload` / `multiSigUser, outerSigner, action` —
+          // is identical to hashing the wrapper itself.
+          { ...wrapperWithoutType, payload: { ...wrapper.payload, action: args.adjustedAction } },
     nonce,
     vaultAddress,
     expiresAfter,
@@ -187,9 +199,16 @@ export async function signMultiSigL1(args: {
   // --- Resolve leader (outer signer) address ---------------
   const outerSigner = await getWalletAddress(args.signers[0]);
 
+  // --- Normalize the action once for both hashes -----------
+  // The action sits in two preimages — the inner payload every signer signs and the outer
+  // wrapper the leader signs. Adjust it up front and hand the marker to both, so the second
+  // hash reuses the adjusted subtree instead of re-traversing it. The wrapper that goes on
+  // the wire keeps the caller's original action object.
+  const adjustedAction = preadjustL1Action(args.action);
+
   // --- Hash the inner payload (identical for every signer) -
   const innerActionHash = createL1ActionHash({
-    action: [args.multiSigUser.toLowerCase(), outerSigner.toLowerCase(), args.action],
+    action: [args.multiSigUser.toLowerCase(), outerSigner.toLowerCase(), adjustedAction],
     nonce: args.nonce,
     vaultAddress: args.vaultAddress,
     expiresAfter: args.expiresAfter,
@@ -222,6 +241,7 @@ export async function signMultiSigL1(args: {
   const signature = await signMultiSigOuter({
     leader: args.signers[0],
     wrapper,
+    adjustedAction,
     nonce: args.nonce,
     isTestnet: args.isTestnet,
     vaultAddress: args.vaultAddress,
