@@ -1,7 +1,7 @@
 {
   "name": "@bloxwap/hyperliquid",
-  "version": "0.33.2",
-  "description": "Hyperliquid API SDK for all major JS runtimes, written in TypeScript.",
+  "version": "0.1.0",
+  "description": "Blazing fast TypeScript Hyperliquid SDK.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,

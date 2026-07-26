@@ -1,42 +1,52 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./.github/hyperliquid-light.svg">
-    <img alt="Hyperliquid" src="./.github/hyperliquid-dark.svg">
+    <img alt="Hyperliquid" src="./.github/hyperliquid-dark.svg" height="50">
   </picture>
   <br>
-  A community-supported <a href="https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api">Hyperliquid API</a>
-  SDK for all major JavaScript runtimes, written in TypeScript.
+  <strong>Blazing fast typescript
+    <a href="https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api">Hyperliquid SDK</a></strong>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue"></a>
-  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg"></a>
-  <a href="https://coveralls.io/github/bloxwap/hyperliquid?branch=main"><img alt="Coverage status" src="https://coveralls.io/repos/github/bloxwap/hyperliquid/badge.svg?branch=main"></a>
-  <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid"></a>
+  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue&style=flat-square"></a>
+  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg?style=flat-square"></a>
+  <a href="https://coveralls.io/github/bloxwap/hyperliquid?branch=main"><img alt="Coverage status" src="https://img.shields.io/coverallsCoverage/github/bloxwap/hyperliquid?branch=main&style=flat-square"></a>
+  <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid?style=flat-square"></a>
 </p>
 
 ## Features
 
-- 🖋️ **Typed**: Source code is 100% TypeScript.
-- 🧪 **Tested**: Good code coverage and type relevance.
-- 📦 **Minimal dependencies**: A few small trusted dependencies.
-- 🌐 **Cross-Environment Support**: Compatible with all major JS runtimes.
-- 🔧 **Integratable**: Easy to use with [viem](https://github.com/wevm/viem) accounts — local (private key) or JSON-RPC
+- **Typed**: Source code is 100% TypeScript.
+- **Tested**: Good code coverage and type relevance.
+- **Minimal dependencies**: A few small trusted dependencies.
+- **Cross-Environment Support**: Compatible with all major JS runtimes.
+- **Integratable**: Easy to use with [viem](https://github.com/wevm/viem) accounts — local (private key) or JSON-RPC
   (browser wallet).
 
 ## Installation
 
+**Bun 1.3.3+**
+
 ```sh
-# Bun 1.3.3+
 bun add @bloxwap/hyperliquid
+```
 
-# Node.js 22.12+ / React Native 0.86+
+**Node.js 22.12+ / React Native 0.86+**
+
+```sh
 npm i @bloxwap/hyperliquid
+```
 
-# pnpm
+**pnpm**
+
+```sh
 pnpm add @bloxwap/hyperliquid
+```
 
-# yarn
+**Yarn**
+
+```sh
 yarn add @bloxwap/hyperliquid
 ```
 
@@ -45,7 +55,7 @@ yarn add @bloxwap/hyperliquid
 
 ## Quick Example
 
-### Read data
+### Read
 
 ```ts
 // 1. Import module
@@ -67,7 +77,7 @@ const openOrders = await info.openOrders({ user: "0x..." });
 const book = await info.l2Book({ coin: "BTC" });
 ```
 
-### Trading
+### Trade
 
 ```ts
 // 1. Import modules
@@ -102,7 +112,7 @@ await exchange.updateLeverage({ asset: 0, isCross: true, leverage: 5 });
 await exchange.withdraw3({ destination: "0x...", amount: "1" });
 ```
 
-### Real-time updates
+### Subscribe
 
 ```ts
 // 1. Import module
@@ -129,8 +139,6 @@ await subs.l2Book({ coin: "ETH" }, (data) => {
   console.log(data);
 });
 ```
-
-## Key management
 
 > [!WARNING]
 > - **Never hardcode private keys** in source or commit them to git. Load them from environment variables or a secret
