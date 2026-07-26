@@ -94,7 +94,11 @@
  *
  * The estimate is only as good as the pairing, so malformed input FAILS the gate
  * (collected in `failures`, surfaced by `renderFailure` and `isFailure`) instead of
- * silently degrading:
+ * silently degrading. Before any of that, every report passes structural validation
+ * (`assertReportStructure`): schema, meta shape, unique non-empty scenario names,
+ * finite-positive costs, positive-integer sampling parameters, non-negative margins —
+ * violations THROW (exit 2 in the CLI), because a report whose numbers are 0/NaN/missing
+ * would turn the ratios into NaN and fall through to "unchanged" (a fail-open). Then:
  *
  * - every round of a side must measure the same scenario set — a round that omits a
  *   scenario would otherwise shrink that scenario's estimate to fewer pairs, destroying
@@ -217,6 +221,85 @@ function signedPct(pct: number): string {
 const IDENTITY_FIELDS = ["group", "unit", "description", "samples", "iterations", "unitsPerIteration"] as const;
 
 /**
+ * Structural validation of one report — fails CLOSED on input that cannot produce
+ * meaningful numbers.
+ *
+ * This throws (a usage error: exit 2 in the CLI) rather than recording a comparison
+ * failure, because input this broken is not a measurement at all. The motivating
+ * fail-open: an `nsPerUnit` of 0, negative, missing, or NaN turns every log-ratio and
+ * band into NaN, and NaN comparisons fall through every verdict branch to "unchanged" —
+ * garbage would PASS the gate.
+ *
+ * @param report The report to validate.
+ * @param side `"base"` or `"current"`, for the error message.
+ * @param round 1-based round number, for the error message.
+ * @throws {Error} Naming the round, scenario, and field that is malformed.
+ */
+function assertReportStructure(report: PerfReport, side: string, round: number): void {
+  const where = `${side} round ${round}`;
+  if (report.schema !== 1) {
+    throw new Error(`${where}: schema ${report.schema}, expected 1 — re-record the reports with the current harness.`);
+  }
+  const meta = report.meta;
+  if (typeof meta?.cpu !== "string" || meta.cpu.length === 0) {
+    throw new Error(`${where}: meta.cpu must be a non-empty string, got ${JSON.stringify(meta?.cpu)}.`);
+  }
+  if (typeof meta.runtime !== "string" || meta.runtime.length === 0) {
+    throw new Error(`${where}: meta.runtime must be a non-empty string, got ${JSON.stringify(meta?.runtime)}.`);
+  }
+  if (meta.label !== undefined && (typeof meta.label !== "string" || meta.label.length === 0)) {
+    throw new Error(`${where}: meta.label must be a non-empty string when present, got ${JSON.stringify(meta.label)}.`);
+  }
+  if (
+    meta.suiteFingerprint !== undefined &&
+    (typeof meta.suiteFingerprint !== "string" || meta.suiteFingerprint.length === 0)
+  ) {
+    throw new Error(
+      `${where}: meta.suiteFingerprint must be a non-empty string when present, got ${JSON.stringify(meta.suiteFingerprint)}.`,
+    );
+  }
+  if (!Array.isArray(report.scenarios) || report.scenarios.length === 0) {
+    // An empty report compares nothing and would PASS vacuously — fail closed instead.
+    throw new Error(`${where}: the report contains no scenarios.`);
+  }
+  const seen = new Set<string>();
+  for (const scenario of report.scenarios) {
+    if (typeof scenario.name !== "string" || scenario.name.length === 0) {
+      throw new Error(`${where}: a scenario has a missing or empty name.`);
+    }
+    if (seen.has(scenario.name)) {
+      throw new Error(
+        `${where}: duplicate scenario name ${JSON.stringify(scenario.name)} — names join the two sides, ` +
+          `so they must be unique within a report.`,
+      );
+    }
+    seen.add(scenario.name);
+    const at = `${where}, scenario ${JSON.stringify(scenario.name)}`;
+    for (const field of ["nsPerUnit", "unitsPerSec"] as const) {
+      if (!Number.isFinite(scenario[field]) || (scenario[field] as number) <= 0) {
+        throw new Error(`${at}: ${field} must be finite and positive, got ${JSON.stringify(scenario[field])}.`);
+      }
+    }
+    for (const field of ["samples", "iterations", "unitsPerIteration"] as const) {
+      if (!Number.isInteger(scenario[field]) || (scenario[field] as number) <= 0) {
+        throw new Error(`${at}: ${field} must be a positive integer, got ${JSON.stringify(scenario[field])}.`);
+      }
+    }
+    if (!Number.isFinite(scenario.rme) || scenario.rme < 0) {
+      throw new Error(`${at}: rme must be finite and non-negative, got ${JSON.stringify(scenario.rme)}.`);
+    }
+    if (
+      scenario.fingerprint !== undefined &&
+      (typeof scenario.fingerprint !== "string" || scenario.fingerprint.length === 0)
+    ) {
+      throw new Error(
+        `${at}: fingerprint must be a non-empty string when present, got ${JSON.stringify(scenario.fingerprint)}.`,
+      );
+    }
+  }
+}
+
+/**
  * Fails when a scenario's identity is not constant across all its occurrences.
  *
  * A change in any {@linkcode IDENTITY_FIELDS} field means a renamed, repurposed, or
@@ -262,13 +345,22 @@ function identityDrift(
         `scenario ${JSON.stringify(name)}'s rounds disagree on carrying a workload fingerprint — ` +
           `the round files come from different suite versions; re-record them with one harness.`,
       );
-    } else if (!allowUnfingerprintedBase) {
+    } else {
+      // The grace covers ONE direction only: an old BASE missing fingerprints. A current
+      // side without fingerprints means they were REMOVED — never the rollout case, never excused.
       const predating = runs.find((r) => r.scenario.fingerprint === undefined)?.side ?? "base";
-      failures.push(
-        `scenario ${JSON.stringify(name)} has a workload fingerprint on one side but none on the ${predating} side — ` +
-          `the ${predating} reports predate workload fingerprinting. Re-record them (or merge a base that contains ` +
-          `fingerprints), or pass --allow-unfingerprinted-base during the transition.`,
-      );
+      if (predating === "current") {
+        failures.push(
+          `scenario ${JSON.stringify(name)} has no workload fingerprint on the current side — ` +
+            `removing fingerprints is not the rollout case and is never excused; re-record the current reports.`,
+        );
+      } else if (!allowUnfingerprintedBase) {
+        failures.push(
+          `scenario ${JSON.stringify(name)} has a workload fingerprint on one side but none on the base side — ` +
+            `the base reports predate workload fingerprinting. Re-record them (or merge a base that contains ` +
+            `fingerprints), or pass --allow-unfingerprinted-base during the transition.`,
+        );
+      }
     }
   }
   if (withPrint.length === runs.length && new Set(withPrint.map((r) => r.scenario.fingerprint)).size > 1) {
@@ -285,10 +377,12 @@ export interface CompareOptions {
   /**
    * Transition grace: reports recorded before workload fingerprinting existed carry no
    * fingerprints, so a pre-fingerprint base compared against a fingerprinted head would
-   * otherwise fail the presence-parity check. This flag downgrades exactly that case to a
-   * skip; everything else (fingerprint mismatches, mixed-version files) still fails.
-   * Fail-closed is the default on purpose: a silently skipped equality gate is how
-   * unequal workloads get compared, so the transition cost is made explicit instead.
+   * otherwise fail the presence-parity check. This flag downgrades exactly that ONE
+   * direction (base absent, current present) to a skip; fingerprints missing on the
+   * CURRENT side mean they were removed and always fail, as do fingerprint mismatches
+   * and mixed-version files. Fail-closed is the default on purpose: a silently skipped
+   * equality gate is how unequal workloads get compared, so the transition cost is made
+   * explicit instead.
    */
   allowUnfingerprintedBase?: boolean;
 }
@@ -307,9 +401,11 @@ export interface CompareOptions {
  * @return Per-scenario comparisons, missing/added scenarios, and validation failures.
  * @throws {Error} If either side has no reports, the sides have different round counts
  *   (rounds pair by position, so truncating a longer side would silently change the
- *   input), or the round count is even and greater than one — with an even count the
- *   median log-ratio falls BETWEEN two rounds and no actual round reproduces it, so
- *   paired mode requires an odd count (the CI workflow measures 3).
+ *   input), the round count is even and greater than one — with an even count the median
+ *   log-ratio falls BETWEEN two rounds and no actual round reproduces it, so paired mode
+ *   requires an odd count (the CI workflow measures 3) — or any report is structurally
+ *   malformed (see {@linkcode assertReportStructure}; broken numbers must not silently
+ *   compare as "unchanged").
  */
 export function comparePairedReports(
   baselineRuns: readonly PerfReport[],
@@ -337,18 +433,18 @@ export function comparePairedReports(
     { name: "base", runs: baselineRuns },
     { name: "current", runs: currentRuns },
   ] as const;
+
+  // Structural validation comes FIRST: input this broken is not a measurement at all.
+  for (const side of sides) {
+    for (const [i, run] of side.runs.entries()) {
+      assertReportStructure(run, side.name, i + 1);
+    }
+  }
+
   const failures: string[] = [];
 
   // --- Suite-identity guards: the round files must come from one suite, in order --------
   for (const side of sides) {
-    for (const [i, run] of side.runs.entries()) {
-      if (run.schema !== 1) {
-        failures.push(
-          `${side.name} round ${i + 1} has schema ${run.schema}, expected 1 — ` +
-            `re-record the reports with the current harness.`,
-        );
-      }
-    }
     if (rounds >= 2) {
       const labels = side.runs.map((r) => r.meta.label);
       if (labels.some((label) => label === undefined)) {
@@ -400,10 +496,16 @@ export function comparePairedReports(
   }
   const baseHasPrints = sidePrints[0].every((f) => f !== undefined);
   const headHasPrints = sidePrints[1].every((f) => f !== undefined);
-  if (baseHasPrints !== headHasPrints && !options.allowUnfingerprintedBase) {
-    const predating = baseHasPrints ? "current" : "base";
+  if (!headHasPrints && baseHasPrints) {
+    // A current side without fingerprints means they were REMOVED — never the rollout
+    // case, and the grace flag must not excuse it.
     failures.push(
-      `the ${predating} reports carry no suite fingerprint — they predate workload fingerprinting. ` +
+      `the current reports carry no suite fingerprint — removing fingerprints is not the rollout case ` +
+        `and is never excused; re-record the current reports with the current harness.`,
+    );
+  } else if (!baseHasPrints && headHasPrints && !options.allowUnfingerprintedBase) {
+    failures.push(
+      `the base reports carry no suite fingerprint — they predate workload fingerprinting. ` +
         `Re-record them (or merge a base that contains fingerprints), ` +
         `or pass --allow-unfingerprinted-base during the transition.`,
     );

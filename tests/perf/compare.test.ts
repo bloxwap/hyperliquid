@@ -384,6 +384,22 @@ test("workload fingerprint: mismatch fails, presence parity fails, grace excuses
     },
   );
   assert(isFailure(graceMismatch));
+
+  // Direction: the grace excuses ONLY base-absent + head-present. A head that DROPPED
+  // fingerprints fails with or without the flag.
+  const headDropped = comparePairedReports(withPrint("base", "aaaaaaaaaaaaaaaa"), withPrint("head", undefined), 10);
+  assert(isFailure(headDropped));
+  assert(headDropped.failures[0].includes("never excused"), `direction: ${headDropped.failures[0]}`);
+  const headDroppedGrace = comparePairedReports(
+    withPrint("base", "aaaaaaaaaaaaaaaa"),
+    withPrint("head", undefined),
+    10,
+    {
+      allowUnfingerprintedBase: true,
+    },
+  );
+  assert(isFailure(headDroppedGrace));
+  assert(headDroppedGrace.failures[0].includes("never excused"), `direction+grace: ${headDroppedGrace.failures[0]}`);
 });
 
 test("suite fingerprint: mismatch fails closed, presence parity fails, grace excuses only parity", () => {
@@ -428,6 +444,28 @@ test("suite fingerprint: mismatch fails closed, presence parity fails, grace exc
     mixed.failures.some((f) => f.includes("different suite versions")),
     `mixed: ${mixed.failures}`,
   );
+
+  // Direction: the grace excuses ONLY base-absent + head-present. A head that DROPPED
+  // the suite fingerprint fails with or without the flag.
+  const headDropped = comparePairedReports(withSuite("base", "suiteaaaaaaaaaaa"), withSuite("head", undefined), 10);
+  assert(isFailure(headDropped));
+  assert(
+    headDropped.failures.some((f) => f.includes("never excused")),
+    `direction: ${headDropped.failures}`,
+  );
+  const headDroppedGrace = comparePairedReports(
+    withSuite("base", "suiteaaaaaaaaaaa"),
+    withSuite("head", undefined),
+    10,
+    {
+      allowUnfingerprintedBase: true,
+    },
+  );
+  assert(isFailure(headDroppedGrace));
+  assert(
+    headDroppedGrace.failures.some((f) => f.includes("never excused")),
+    `direction+grace: ${headDroppedGrace.failures}`,
+  );
 });
 
 test("round labels are required in paired mode", () => {
@@ -471,4 +509,76 @@ test("round labels from different suites or out of order fail the comparison", (
   assert(isFailure(misordered));
   assertEquals(misordered.failures.length, 1);
   assert(misordered.failures[0].includes("measurement order"), `order: ${misordered.failures[0]}`);
+});
+
+test("structurally broken reports throw instead of passing (fail-closed)", () => {
+  const base = () => roundsOf("base", "scenario", [100, 100, 100]);
+  const head = () => roundsOf("head", "scenario", [100, 100, 100]);
+  /** Mutates head round 1 and returns the [base, head] pair. */
+  const withBrokenHead = (mutate: (report: PerfReport) => void): [PerfReport[], PerfReport[]] => {
+    const runs = head();
+    mutate(runs[0]);
+    return [base(), runs];
+  };
+  const mutable = (report: PerfReport): Record<string, unknown> =>
+    report.scenarios[0] as unknown as Record<string, unknown>;
+
+  // The fail-open being pinned shut: a broken nsPerUnit would turn every log-ratio and
+  // band into NaN, and NaN falls through every verdict branch to "unchanged".
+  for (const bad of [0, -5, Number.NaN, undefined]) {
+    assertThrows(
+      () => comparePairedReports(...withBrokenHead((r) => void (mutable(r).nsPerUnit = bad)), 10),
+      Error,
+      'current round 1, scenario "scenario": nsPerUnit must be finite and positive',
+    );
+  }
+  // …and none of them can PASS, not just fail a verdict:
+  for (const bad of [0, -5, Number.NaN, undefined]) {
+    let passed = false;
+    try {
+      passed = !isFailure(comparePairedReports(...withBrokenHead((r) => void (mutable(r).nsPerUnit = bad)), 10));
+    } catch {
+      passed = false;
+    }
+    assert(!passed, `nsPerUnit=${String(bad)} must not be able to pass the gate`);
+  }
+
+  // Duplicate scenario names within one report: the join key must be unique.
+  assertThrows(
+    () =>
+      compareReports(
+        report("baseline", [{ name: "scenario", nsPerUnit: 100 }]),
+        report("current", [
+          { name: "scenario", nsPerUnit: 100 },
+          { name: "scenario", nsPerUnit: 200 },
+        ]),
+        10,
+      ),
+    Error,
+    'duplicate scenario name "scenario"',
+  );
+
+  // A negative margin of error is not a measurement.
+  assertThrows(
+    () => comparePairedReports(...withBrokenHead((r) => void (mutable(r).rme = -1)), 10),
+    Error,
+    "rme must be finite and non-negative",
+  );
+
+  // Sampling parameters must be positive integers.
+  assertThrows(
+    () => comparePairedReports(...withBrokenHead((r) => void (mutable(r).samples = 0)), 10),
+    Error,
+    "samples must be a positive integer",
+  );
+  assertThrows(
+    () => comparePairedReports(...withBrokenHead((r) => void (mutable(r).iterations = 1.5)), 10),
+    Error,
+    "iterations must be a positive integer",
+  );
+
+  // The unmutated pair passes validation (and the gate).
+  const result = comparePairedReports(base(), head(), 10);
+  assertEquals(result.failures, []);
+  assert(!isFailure(result));
 });
