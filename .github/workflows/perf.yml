@@ -5,18 +5,29 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Enforces the zero-performance-regression policy: `.dev/perf/gate.ts` runs the suite in tests/perf/ and compares it
-  # against the committed tests/perf/results/baseline.json, exiting non-zero when a scenario got materially slower.
+  # Enforces the zero-performance-regression policy: a change may keep performance the same or
+  # improve it, never regress it.
   #
-  # GitHub-hosted runners are shared, throttled and noisy, so absolute timings here are not comparable to a developer
-  # machine. Nothing in this job tries to make the runner quiet; the gate's own regression threshold is what keeps that
-  # noise from turning into false positives. If this job starts flapping, widen the threshold in the gate — do not add
-  # retries or drop the job.
+  # WHY THIS MEASURES TWICE INSTEAD OF USING tests/perf/results/baseline.json:
+  # the scenarios measure between 9 ns and 600 µs per unit. A GitHub-hosted runner is several times
+  # slower than a developer machine, so comparing a committed baseline (recorded on whatever machine
+  # last touched it) against a runner would flag nearly every scenario as a regression on every PR.
+  # `.dev/perf/compare.ts` now refuses such a comparison outright. So this job measures the base
+  # commit and the head commit back to back on the SAME runner and compares those two reports.
+  # The committed baseline stays useful for local runs (`bun run perf:gate`) on one machine.
+  #
+  # Runners are shared and noisy even against themselves; the threshold plus each run's measured
+  # margin of error is what keeps that noise from becoming a false failure. If this job flaps, widen
+  # the threshold — do not add retries and do not drop the job.
   perf:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The base commit must be reachable so it can be checked out into a second worktree.
+          fetch-depth: 0
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: canary
@@ -24,5 +35,29 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Performance gate
-        run: bun run .dev/perf/gate.ts
+      - name: Measure this PR
+        run: bun run tests/perf/run.ts --label "PR head" --out "$RUNNER_TEMP/head.json"
+
+      - name: Measure the base commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
+          cd "$RUNNER_TEMP/base"
+          # A base commit from before the perf suite existed has nothing to compare against.
+          if [ ! -f tests/perf/run.ts ]; then
+            echo "Base commit $BASE_SHA has no performance suite; skipping the comparison."
+            exit 0
+          fi
+          bun install --frozen-lockfile
+          bun run tests/perf/run.ts --label "base" --out "$RUNNER_TEMP/base.json"
+
+      - name: Compare
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/base.json" ]; then
+            echo "No base measurement was produced; nothing to gate."
+            exit 0
+          fi
+          bun run .dev/perf/compare.ts "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/head.json"

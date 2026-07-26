@@ -16,6 +16,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Everything after `--` is forwarded to the test files; `--offline` makes them skip live Hyperliquid endpoints.
+      # Runs the same script contributors run, so CI and CONTRIBUTING.md cannot drift apart.
+      # It sets HL_OFFLINE=1, which makes tests needing live Hyperliquid endpoints skip.
+      #
+      # `bun test tests/ -- --offline` also works: tests/_offline.ts recovers the raw command line
+      # because `bun test` does not forward argv to test files. The env var is preferred here because
+      # it needs no such recovery — that path reads /proc/self/cmdline on Linux and is exercised only
+      # in CI, so relying on it would put the least-tested branch on the critical path.
       - name: bun test (offline)
-        run: bun test tests/ -- --offline
+        run: bun run test:offline

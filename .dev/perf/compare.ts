@@ -229,6 +229,37 @@ export function isFailure(result: ComparisonResult): boolean {
   return result.missing.length > 0 || result.comparisons.some((c) => c.verdict === "regression");
 }
 
+/**
+ * Explains why two reports cannot be compared, or `undefined` when they can.
+ *
+ * These scenarios measure between 9 ns and 600 µs per unit. A different CPU or JS engine shifts
+ * every one of those numbers by a multiple, which swamps the regression threshold and turns the
+ * whole comparison into noise — reporting either a page of phantom regressions or, worse, hiding a
+ * real one behind a machine that happens to be faster.
+ *
+ * This is a hard error rather than a warning on purpose: a warning above a table of red rows still
+ * gets read as "the gate is broken again", which is how a perf gate stops being trusted. Two
+ * revisions must be measured on the same machine, in the same run, to be comparable at all.
+ */
+export function incomparableReason(baseline: PerfReport, current: PerfReport): string | undefined {
+  const fields: [string, string, string][] = [
+    ["CPU", baseline.meta.cpu, current.meta.cpu],
+    ["OS", baseline.meta.os, current.meta.os],
+    ["runtime", baseline.meta.runtime, current.meta.runtime],
+  ];
+  const differing = fields.filter(([, a, b]) => a !== b);
+  if (differing.length === 0) return undefined;
+
+  return [
+    `Refusing to compare: the two runs were measured in different environments.`,
+    ...differing.map(([name, a, b]) => `  ${name}: baseline ${JSON.stringify(a)} vs current ${JSON.stringify(b)}`),
+    ``,
+    `Measure both revisions on the same machine in the same run. In CI, check out the base commit`,
+    `and the head commit on one runner and compare those two reports; do not compare against a`,
+    `baseline recorded elsewhere. Pass --allow-environment-mismatch to override for a rough look.`,
+  ].join("\n");
+}
+
 if (import.meta.main) {
   const args = Bun.argv.slice(2);
   const positional = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--")));
@@ -249,6 +280,13 @@ if (import.meta.main) {
 
   const baseline = await readReport(baselinePath);
   const current = await readReport(currentPath);
+
+  const incomparable = incomparableReason(baseline, current);
+  if (incomparable && !args.includes("--allow-environment-mismatch")) {
+    console.error(incomparable);
+    process.exit(2);
+  }
+
   const result = compareReports(baseline, current, thresholdPct);
 
   console.log(renderComparison(baseline, current, result, thresholdPct));

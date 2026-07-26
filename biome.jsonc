@@ -16,7 +16,18 @@
     "useIgnoreFile": false
   },
   "files": {
-    "includes": ["**", "!**/node_modules", "!dist", "!coverage", "!.dev/ts7/node_modules", "!.dev/ts7/tsconfig.json"]
+    // `.claude` holds agent worktrees — nested checkouts of this repo. Biome hard-fails with
+    // "Found a nested root configuration" if it sees another biome.jsonc, and `vcs.enabled` is
+    // false so .gitignore is not consulted. Excluding it keeps `bun run check` working locally.
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!dist",
+      "!coverage",
+      "!.claude",
+      "!.dev/ts7/node_modules",
+      "!.dev/ts7/tsconfig.json"
+    ]
   },
   "formatter": {
     "enabled": true,
