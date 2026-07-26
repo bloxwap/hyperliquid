@@ -15,15 +15,19 @@ jobs:
   # the scenarios measure between 9 ns and 600 µs per unit. A GitHub-hosted runner is several times
   # slower than a developer machine, so comparing a committed baseline (recorded on whatever machine
   # last touched it) against a runner would flag nearly every scenario as a regression on every PR.
-  # `.dev/perf/compare.ts` now refuses such a comparison outright. So this job measures the base
+  # `.dev/perf/compare.ts` refuses such a comparison outright. So this job measures the base
   # commit and the head commit back to back on the SAME runner and compares those two reports.
   # The committed baseline stays useful for local runs (`bun run perf:gate`) on one machine.
   #
   # Runners are shared and noisy even against themselves: a single pair of runs can be off by
-  # tens of percent on microsecond scenarios (#36). So each revision is measured three times in
-  # alternating order and the comparison uses each scenario's MINIMUM across its runs — runner
-  # interference is one-sided (it only slows measurements), making the minimum the least-noise
-  # estimate. The threshold plus each merged run's margin of error absorbs what variance remains.
+  # tens of percent on microsecond scenarios (#36). So the job measures THREE PAIRED ROUNDS —
+  # round i writes head-i.json and base-i.json — with the two revisions measured back to back
+  # and the order alternating between rounds: (head, base), (base, head), (head, base). Runner
+  # load drifts over minutes, and a drift that slows a round slows BOTH revisions in it, so it
+  # cancels in the per-round ratio; alternating the order cancels any trend within a round.
+  # `.dev/perf/compare.ts` aggregates the per-round ratios with a median plus a conservative
+  # between-round band and only flags a regression when the WHOLE band clears the threshold,
+  # so one contaminated round widens the band instead of fabricating a regression.
   # If this job flaps, widen the threshold — do not add retries and do not drop the job.
   perf:
     runs-on: ubuntu-latest
@@ -42,39 +46,57 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Each revision is measured 3 times in alternating order (H B B H H B), and the comparison
-      # uses each scenario's MINIMUM across the 3 runs. On a shared runner interference only ever
-      # makes a measurement slower, so the minimum is the least-noise estimate — single-run
-      # comparisons flagged phantom regressions of +30…+200% on untouched scenarios (#36), and a
-      # discarded warm-up run alone did not fix it. Alternating order cancels drift direction.
-      - name: Measure this PR (round 1)
-        run: bun run tests/perf/run.ts --label "head-1" --out "$RUNNER_TEMP/head-1.json"
-
-      - name: Measure the base commit (rounds 1 and 2)
+      # On pull_request, BASE_REF is the base commit SHA. On workflow_dispatch the pull_request
+      # payload is absent, so the expression falls back to the default branch NAME — the script
+      # resolves either form to a SHA before adding the worktree (an empty BASE_REF would make
+      # `git worktree add` fail).
+      - name: Check out the base commit into a worktree
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
         run: |
           set -euo pipefail
+          # Prefer the remote-tracking ref: a stale local branch of the same name must not
+          # win over origin's tip; a raw SHA has no origin/<sha> ref and falls through.
+          BASE_SHA=$(git rev-parse --verify "origin/$BASE_REF^{commit}" 2>/dev/null || git rev-parse --verify "$BASE_REF^{commit}" 2>/dev/null) || {
+            echo "Could not resolve BASE_REF '$BASE_REF' to a commit."
+            exit 1
+          }
+          echo "Base: $BASE_REF -> $BASE_SHA"
           git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
-          cd "$RUNNER_TEMP/base"
-          # A base commit from before the perf suite existed has nothing to compare against.
-          if [ ! -f tests/perf/run.ts ]; then
+          # A base commit from before the perf suite existed has nothing to compare against;
+          # the round steps then skip the base side and the Compare step passes the job.
+          if [ -f "$RUNNER_TEMP/base/tests/perf/run.ts" ]; then
+            cd "$RUNNER_TEMP/base"
+            bun install --frozen-lockfile
+          else
             echo "Base commit $BASE_SHA has no performance suite; skipping the comparison."
-            exit 0
           fi
-          bun install --frozen-lockfile
-          bun run tests/perf/run.ts --label "base-1" --out "$RUNNER_TEMP/base-1.json"
-          bun run tests/perf/run.ts --label "base-2" --out "$RUNNER_TEMP/base-2.json"
 
-      - name: Measure this PR (rounds 2 and 3)
+      # Paired rounds: each round measures both revisions back to back into round-numbered
+      # files, alternating which revision runs first so within-round drift hits both sides.
+      - name: Round 1 (head, then base)
         run: |
           set -euo pipefail
+          bun run tests/perf/run.ts --label "head-1" --out "$RUNNER_TEMP/head-1.json"
+          if [ -f "$RUNNER_TEMP/base/tests/perf/run.ts" ]; then
+            cd "$RUNNER_TEMP/base"
+            bun run tests/perf/run.ts --label "base-1" --out "$RUNNER_TEMP/base-1.json"
+          fi
+
+      - name: Round 2 (base, then head)
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/base/tests/perf/run.ts" ]; then
+            cd "$RUNNER_TEMP/base"
+            bun run tests/perf/run.ts --label "base-2" --out "$RUNNER_TEMP/base-2.json"
+            cd "$GITHUB_WORKSPACE"
+          fi
           bun run tests/perf/run.ts --label "head-2" --out "$RUNNER_TEMP/head-2.json"
-          bun run tests/perf/run.ts --label "head-3" --out "$RUNNER_TEMP/head-3.json"
 
-      - name: Measure the base commit (round 3)
+      - name: Round 3 (head, then base)
         run: |
           set -euo pipefail
+          bun run tests/perf/run.ts --label "head-3" --out "$RUNNER_TEMP/head-3.json"
           if [ -f "$RUNNER_TEMP/base/tests/perf/run.ts" ]; then
             cd "$RUNNER_TEMP/base"
             bun run tests/perf/run.ts --label "base-3" --out "$RUNNER_TEMP/base-3.json"
@@ -87,6 +109,8 @@ jobs:
             echo "No base measurement was produced; nothing to gate."
             exit 0
           fi
-          bun run .dev/perf/minimize.ts "$RUNNER_TEMP/head.json" "$RUNNER_TEMP/head-1.json" "$RUNNER_TEMP/head-2.json" "$RUNNER_TEMP/head-3.json"
-          bun run .dev/perf/minimize.ts "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/base-1.json" "$RUNNER_TEMP/base-2.json" "$RUNNER_TEMP/base-3.json"
-          bun run .dev/perf/compare.ts "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/head.json"
+          # base-i pairs with head-i by position; the estimator is documented in compare.ts.
+          bun run .dev/perf/compare.ts \
+            "$RUNNER_TEMP/base-1.json" "$RUNNER_TEMP/base-2.json" "$RUNNER_TEMP/base-3.json" \
+            --vs \
+            "$RUNNER_TEMP/head-1.json" "$RUNNER_TEMP/head-2.json" "$RUNNER_TEMP/head-3.json"
