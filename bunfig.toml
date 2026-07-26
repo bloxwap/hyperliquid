@@ -1,3 +1,9 @@
+[install]
+# Supply-chain protection: refuse dependency versions published within the last 3 days (259200
+# seconds). Just-published malicious releases — compromised maintainer accounts, hijacked
+# packages — are typically pulled from the registry within that window.
+minimumReleaseAge = 259200
+
 [test]
 # Test files should not count toward the library's coverage numbers.
 coveragePathIgnorePatterns = ["tests/"]

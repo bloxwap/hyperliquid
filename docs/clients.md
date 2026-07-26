@@ -190,12 +190,29 @@ The SDK generates
 automatically using the `Date.now()` function with auto-increment on duplicates. Replace it if you need custom logic:
 
 ```ts
+// Custom manager that keeps the built-in monotonic rule, keyed per address
+const lastNonceByAddress = new Map<string, number>();
+
 const client = new ExchangeClient({
   transport,
   wallet,
-  nonceManager: (address) => Date.now(), // function - recomputed per request
+  nonceManager: (address) => {
+    const last = lastNonceByAddress.get(address) ?? 0;
+    const nonce = Math.max(Date.now(), last + 1); // unique and monotonically increasing
+    lastNonceByAddress.set(address, nonce);
+    return nonce;
+  },
 });
 ```
+
+{% hint style="warning" %}
+
+A custom `nonceManager` MUST return unique, monotonically increasing values per address — a plain
+`(address) => Date.now()` reintroduces same-millisecond collisions, and Hyperliquid rejects repeated or non-increasing
+nonces. When more than one process signs for the same wallet, back the manager with shared state (e.g. Redis). See
+[Operational nonce rules](signing.md#operational-nonce-rules).
+
+{% endhint %}
 
 ## WebSocket subscriptions
 

@@ -48,7 +48,8 @@ bun test tests/
 ```
 
 Optional: Set `PRIVATE_KEY` env for complete tests. Required testnet balance: ~100 usdc-perps, ~3 usdc-spot, ~0.0000001
-hype-spot.
+hype-spot. If you keep the key in a local `.env` file (Bun auto-loads it), never commit it — `.env` is gitignored, and
+a committed funded key will be drained.
 
 Without a key — or without network — run only the tests that never touch live endpoints:
 

@@ -11,7 +11,10 @@
 
 import type { IRequestTransport } from "@bloxwap/hyperliquid";
 
-/** Well-known test private key (the same one used by `tests/signing/mod.test.ts`). */
+/**
+ * Well-known test private key (the same one used by `tests/signing/mod.test.ts`).
+ * Public throwaway key for offline tests: it is unfunded and must never receive funds.
+ */
 export const TEST_PRIVATE_KEY = "0x822e9959e022b78423eb653a62ea0020cd283e71a2a8133a6ff2aeffaf373cff";
 
 /** Successful `order` response, shaped like the real Exchange endpoint payload. */

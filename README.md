@@ -123,6 +123,14 @@ await subs.l2Book({ coin: "ETH" }, (data) => {
 });
 ```
 
+## Key management
+
+- **Never hardcode private keys** in source or commit them to git. Load them from environment variables or a secret
+  store (Bun auto-loads a local `.env`, which is gitignored in this repo).
+- For trading bots, prefer a Hyperliquid **agent wallet** (API wallet) over the master account key: an agent key can
+  trade but cannot withdraw, and it can be revoked without rotating the master key.
+- See [Signing](docs/signing.md) for how wallets, signatures, and nonces work.
+
 ## Documentation
 
 Full guides, examples, and API reference: [nktkas.gitbook.io/hyperliquid](https://nktkas.gitbook.io/hyperliquid)

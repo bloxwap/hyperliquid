@@ -64,6 +64,15 @@ The nonce is a unix millisecond timestamp. Hyperliquid stores the 100 highest no
 larger than the smallest stored, never repeat, and fall within `(T - 2 days, T + 1 day)` of the block timestamp. See
 [Nonces](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets).
 
+#### Operational nonce rules
+
+- **One signer = one process.** A wallet must be driven by a single nonce source. Multi-process deployments
+  (replicas, workers) need a shared `nonceManager` backed by external state (e.g. Redis), or the processes emit
+  colliding or out-of-order nonces and the exchange rejects them.
+- **Restarts after running ahead of wall-clock.** Under burst load the built-in manager issues `last + 1`, running
+  ahead of `Date.now()`. A restarted process re-derives nonces from the wall clock, so until real time catches up
+  with the previously issued nonces the exchange can reject fresh requests.
+
 Hex is case-sensitive for signing. The SDK lowercases the values it generates (wallet addresses, multi-sig fields); any
 hex you place into an action yourself must already be lowercase, or the signature won't verify server-side.
 
