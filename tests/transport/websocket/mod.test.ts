@@ -49,6 +49,11 @@ function createTestServer(): TestServer {
         const data = JSON.parse(message.toString());
 
         if (data.method === "post") {
+          // A `fail` marker in the wrapped payload makes the server reject the request.
+          if (data.request.payload?.fail) {
+            send({ channel: "post", data: { id: data.id, response: { type: "error", payload: "rejected" } } });
+            return;
+          }
           send({
             channel: "post",
             data: { id: data.id, response: { type: "info", payload: { data: `response:${data.request.type}` } } },
@@ -107,6 +112,36 @@ describe("WebSocketTransport", () => {
 
     const result = await transport.request("exchange", { key: "value" });
     assertEquals(result, "response:action");
+  });
+
+  test("request() error redacts signatures recursively in the public error object", async () => {
+    await using transport = createTransport(url);
+    await transport.ready();
+
+    const realR = `0x${"a".repeat(64)}`;
+    const realS = `0x${"b".repeat(64)}`;
+    const payload = {
+      fail: true, // makes the test server reject the post
+      action: {
+        type: "multiSig",
+        signatures: [{ r: realR, s: realS, v: 27 }],
+        payload: { multiSigUser: "0x111", outerSigner: "0x222", action: { type: "order", orders: [] } },
+      },
+      signature: { r: realR, s: realS, v: 27 },
+      nonce: 999,
+    };
+
+    const error = await assertRejects(() => transport.request("exchange", payload), WebSocketRequestError);
+
+    // The transport wraps the payload as { type: "action", payload }, so the signature sits one
+    // level down — no real signature hex may appear anywhere in the serialized public error.
+    const serialized = JSON.stringify(error.request);
+    assert(!serialized.includes("a".repeat(64)), "real r leaked into error.request");
+    assert(!serialized.includes("b".repeat(64)), "real s leaked into error.request");
+    assert(serialized.includes('"signature":"0x<redacted>"'));
+    assert(serialized.includes('"signatures":["0x<redacted>"]'));
+    assert(serialized.includes("multiSigUser")); // action content remains
+    assertEquals(payload.signature.r, realR); // the caller's object was never mutated
   });
 
   test("subscription() subscribes, receives event, unsubscribes", async () => {

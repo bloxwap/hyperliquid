@@ -7,7 +7,7 @@
  *
  * ```text
  * HttpTransport.request():
- *   rateLimit? ◄─ token bucket waits for the request's weight (opt-in; disabled by default)
+ *   rateLimit? ◄─ token bucket wait for the request's weight (opt-in; abort-aware; disabled by default)
  *   controller ◄─ timeout / user signal / fetchOptions.signal
  *    └─► fetch ┬─► non-OK or non-JSON body ─► HttpRequestError; 429 ─► HttpRateLimitError
  *              └─► parse JSON ─► T
@@ -29,7 +29,7 @@
 
 import { type IRequestTransport, TransportError } from "../_base.ts";
 import * as abort from "../_abort.ts";
-import { redactSignature } from "../_redact.ts";
+import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import { TokenBucketRateLimiter } from "./_rateLimiter.ts";
 
 /** Configuration options for the HTTP transport layer. */
@@ -62,12 +62,13 @@ export interface HttpTransportOptions {
    * When set, every request acquires its weight from a token bucket before sending and WAITS
    * (async) while the bucket is empty, instead of failing with HTTP 429 after the fact. Weights
    * follow the server rules: `1 + floor(batchLength / 40)` for exchange batches — the batch
-   * length is read from the action's `orders`/`cancels`/`modifies` array — and the documented
-   * minimum of 1 for every other request. The server's per-endpoint info/explorer weights
-   * (2–60) are not tabulated; `refillPerMinute` is the knob for info-heavy workloads.
+   * length read from the action's `orders`/`cancels`/`modifies` array, unwrapping multi-sig
+   * actions — the documented per-`type` weight for info requests (2/20/60), and 40 for explorer
+   * requests. Response-size surcharges (per 20/60 returned items, per block on `blockList`) are
+   * debited after the response arrives, so later requests wait off the real cost.
    *
-   * The wait happens before the request timeout is armed, so deliberate throttling never trips
-   * {@linkcode HttpTransportOptions.timeout}.
+   * The wait honors caller aborts and ends before the request timeout is armed, so deliberate
+   * throttling never trips {@linkcode HttpTransportOptions.timeout}.
    *
    * Default: `undefined` (no client-side limiting)
    *
@@ -144,11 +145,13 @@ export class HttpRequestError extends TransportError {
   /** The HTTP status code of the response, when one was received. */
   status?: number;
   /**
-   * The original request payload that triggered the error, if available.
-   *
-   * A signed payload (`{ action, signature, nonce }`) is stored as a COPY with the `signature`
-   * replaced by `"0x<redacted>"`, so logging or forwarding the error cannot leak it; the object
-   * sent to the server is never mutated.
+   * The request payload as it went over the wire, if available: a snapshot of the exact
+   * serialization the transport sent, with every `signature`/`signatures` value replaced by
+   * `"0x<redacted>"` — at any depth, including multi-sig `action.signatures` — so logging or
+   * forwarding the error cannot leak them. It is always a plain-data copy, never the live
+   * object (getters, proxies, and `toJSON` run exactly once, inside the serialization itself);
+   * when the payload could not be serialized at all, it is the constant
+   * `"[unserializable request]"`.
    */
   request?: unknown;
 
@@ -209,8 +212,10 @@ export class HttpRequestError extends TransportError {
  */
 export class HttpRateLimitError extends HttpRequestError {
   /**
-   * Seconds the server asked to wait before retrying, parsed from the `Retry-After` response
-   * header; `undefined` when the header is absent or unparseable.
+   * Seconds the server asked to wait before retrying, parsed verbatim from the `Retry-After`
+   * response header (delay-seconds, or an HTTP-date in the IMF-fixdate / RFC 850 / asctime
+   * form; a date in the past clamps to 0). `undefined` when the header is absent, matches
+   * neither RFC 9110 form, or is a `delay-seconds` beyond the safe-integer range.
    */
   retryAfter?: number;
 
@@ -297,40 +302,56 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
    * ```
    */
   async request<T>(endpoint: "info" | "exchange" | "explorer", payload: unknown, signal?: AbortSignal): Promise<T> {
-    // Opt-in rate limiting, ahead of any timeout wiring: a throttled request waits here for its
-    // weight, so deliberate pacing never trips the request timeout. `null` costs one branch.
-    const rateLimit = this._rateLimit;
-    if (rateLimit !== null) await rateLimit.acquire(requestWeight(endpoint, payload));
-
-    // One controller per request: the timeout timer and all user signals relay into it,
-    // and `finally` detaches everything, so no listener or timer outlives the request.
+    // One controller per request: the caller's signals relay into it FIRST, so they also cancel
+    // a rate-limit wait; the timeout timer is armed only after the wait, so deliberate pacing
+    // never trips it; and `finally` detaches everything, so no listener or timer outlives the
+    // request.
     const controller = new AbortController();
-    // Captured now, so the error message reports the value the timer was armed with even
-    // if the field is reassigned mid-flight. The exchange endpoint honors its own override.
-    const timeoutMs =
-      endpoint === "exchange" && this.exchangeTimeout !== undefined ? this.exchangeTimeout : this.timeout;
-    const timeout = abort.scheduleTimeout(controller, timeoutMs);
     const fetchSignal = this.fetchOptions.signal;
     const detachRelay =
       signal !== undefined || (fetchSignal !== undefined && fetchSignal !== null)
         ? abort.relay([signal, fetchSignal], controller)
         : noop; // no signals to relay, so nothing to wire up
+    // Captured now, so the error message reports the value the timer was armed with even
+    // if the field is reassigned mid-flight. The exchange endpoint honors its own override.
+    const timeoutMs =
+      endpoint === "exchange" && this.exchangeTimeout !== undefined ? this.exchangeTimeout : this.timeout;
+    let timeout: ReturnType<typeof abort.scheduleTimeout> | undefined;
+    // The one serialization of the payload — wire form, weight source, and error snapshot all
+    // derive from it, so getters/proxies/toJSON run exactly once per request.
+    let body: string | undefined;
+    // The parsed form of `body`, computed when the limiter needs the weight; `undefined` until then.
+    let snapshot: unknown;
 
     try {
+      // --- Serialize -----------------------------------------------------------
+      body = JSON.stringify(payload);
+
+      // --- Rate limiting -------------------------------------------------------
+      // Opt-in token bucket: the request waits here for its weight. The wait honors caller
+      // aborts through the relayed controller signal; an aborted wait never reaches fetch.
+      const rateLimit = this._rateLimit;
+      if (rateLimit !== null) {
+        snapshot = JSON.parse(body); // plain data: billing is immune to getters/proxies/toJSON
+        await rateLimit.acquire(requestWeight(endpoint, snapshot), controller.signal);
+      }
+
+      timeout = abort.scheduleTimeout(controller, timeoutMs);
+
       // --- Request init ------------------------------------------------------
       const url = this._endpointUrl(endpoint === "explorer" ? this.rpcUrl : this.apiUrl, endpoint);
       // With default options there is nothing to merge, and a plain headers
       // record avoids allocating Headers instances fetch would normalize anyway.
       const init: RequestInit = isEmptyRequestInit(this.fetchOptions)
         ? {
-            body: JSON.stringify(payload),
+            body,
             headers: { "Content-Type": "application/json" },
             method: "POST",
             signal: controller.signal,
           }
         : mergeRequestInit(
             {
-              body: JSON.stringify(payload),
+              body,
               headers: {
                 "Content-Type": "application/json",
               },
@@ -344,43 +365,54 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       const response = await fetch(url, init);
       if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) {
         const clone = response.clone();
-        const body = await response.text().catch(() => undefined); // releases connection, clone stays readable
+        const text = await response.text().catch(() => undefined); // releases connection, clone stays readable
         // 429 gets its own subclass so callers can back off programmatically.
         const ErrorClass = clone.status === 429 ? HttpRateLimitError : HttpRequestError;
         throw new ErrorClass({
           response: clone,
-          detail: body ? truncate(body) : undefined,
-          request: payload,
+          detail: text ? truncate(text) : undefined,
+          request: requestSnapshot(body, snapshot),
         });
       }
 
       // --- Parse -------------------------------------------------------------
       const text = await response.text();
       try {
-        return JSON.parse(text);
+        const parsed = JSON.parse(text);
+        // Response-size surcharges can only be billed after the fact: debit the bucket so
+        // later requests wait off the real cost instead of the pre-request estimate.
+        if (rateLimit !== null) {
+          const surcharge = responseSurcharge(endpoint, snapshot, parsed);
+          if (surcharge > 0) rateLimit.charge(surcharge);
+        }
+        return parsed;
       } catch (error) {
         throw new HttpRequestError({
           response: recreateResponse(response, text),
           detail: "Invalid JSON response body",
           cause: error,
-          request: payload,
+          request: requestSnapshot(body, snapshot),
         });
       }
     } catch (error) {
       if (error instanceof TransportError) throw error;
-      if (error === timeout.reason) {
+      if (timeout !== undefined && error === timeout.reason) {
         throw new HttpRequestError({
           detail: `Request timed out after ${timeoutMs} ms`,
           cause: error,
-          request: payload,
+          request: requestSnapshot(body, snapshot),
         });
       }
       if (controller.signal.aborted && error === controller.signal.reason) {
-        throw new HttpRequestError({ detail: "Request aborted", cause: error, request: payload });
+        throw new HttpRequestError({
+          detail: "Request aborted",
+          cause: error,
+          request: requestSnapshot(body, snapshot),
+        });
       }
-      throw new HttpRequestError({ cause: error, request: payload });
+      throw new HttpRequestError({ cause: error, request: requestSnapshot(body, snapshot) });
     } finally {
-      timeout.cancel();
+      timeout?.cancel();
       detachRelay();
     }
   }
@@ -407,37 +439,271 @@ function truncate(text: string, limit = 1024): string {
   return `${text.slice(0, limit)}… (${text.length} chars total)`;
 }
 
+// --- Rate-limit weights -------------------------------------------------------
+// The tables below mirror the official documentation; keep them in sync with it.
+// https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits
+
 /**
- * Weight of a request under Hyperliquid's REST rate limits: `1 + floor(batchLength / 40)` for
- * exchange batches — the batch length read from the action's `orders`/`cancels`/`modifies`
- * array — and 1 for everything else. The server's per-endpoint info/explorer weights (2–60) are
- * deliberately not tabulated; actions without such a batch — including multi-sig wrappers, which
- * nest the real action one level down — cost the documented minimum of 1.
+ * The `request` carried by an error: the parsed form of the one wire serialization, so it is
+ * always a plain-data snapshot — never the live payload (getters, proxies, and stateful `toJSON`
+ * run exactly once, inside the serialization itself). When serialization failed there is no
+ * snapshot, and the original is never traversed as a fallback: a safe constant remains.
+ */
+function requestSnapshot(body: string | undefined, snapshot: unknown): unknown {
+  if (body === undefined) return UNSERIALIZABLE_REQUEST;
+  return snapshot !== undefined ? snapshot : JSON.parse(body);
+}
+
+/** Info requests with weight 2. */
+const INFO_WEIGHT_2: ReadonlySet<string> = new Set([
+  "l2Book",
+  "allMids",
+  "clearinghouseState",
+  "orderStatus",
+  "spotClearinghouseState",
+  "exchangeStatus",
+]);
+
+/** Info requests with weight 60. */
+const INFO_WEIGHT_60: ReadonlySet<string> = new Set(["userRole"]);
+
+/** Info endpoints surcharged 1 extra weight per 20 items returned in the response. */
+const INFO_SURCHARGE_PER_20_ITEMS: ReadonlySet<string> = new Set([
+  "recentTrades",
+  "historicalOrders",
+  "userFills",
+  "userFillsByTime",
+  "fundingHistory",
+  "userFunding",
+  "nonUserFundingUpdates",
+  "twapHistory",
+  "userTwapSliceFills",
+  "userTwapSliceFillsByTime",
+  "delegatorHistory",
+  "delegatorRewards",
+  "validatorStats",
+]);
+
+/** Info endpoints surcharged 1 extra weight per 60 items returned in the response. */
+const INFO_SURCHARGE_PER_60_ITEMS: ReadonlySet<string> = new Set(["candleSnapshot"]);
+
+/**
+ * Weight of a request under Hyperliquid's REST rate limits, billed before sending: the
+ * documented per-`type` weight for info requests (2/20/60), 40 for explorer requests, and
+ * `1 + floor(batchLength / 40)` for exchange requests. Weights that depend on the response
+ * size cannot be known here — see {@linkcode responseSurcharge}.
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits
  */
 function requestWeight(endpoint: "info" | "exchange" | "explorer", payload: unknown): number {
-  if (endpoint !== "exchange" || typeof payload !== "object" || payload === null) return 1;
-  const action = (payload as { action?: unknown }).action;
-  if (typeof action !== "object" || action === null) return 1;
+  if (endpoint === "explorer") return 40;
+  if (endpoint === "info") {
+    const type = payloadType(payload);
+    if (type !== undefined && INFO_WEIGHT_2.has(type)) return 2;
+    if (type !== undefined && INFO_WEIGHT_60.has(type)) return 60;
+    return 20; // all other documented info requests
+  }
+  return exchangeWeight(payload);
+}
+
+/**
+ * Exchange weight: `1 + floor(batchLength / 40)`, the batch length read from the action's
+ * `orders`/`cancels`/`modifies` array. Actions without such a batch cost the documented
+ * minimum of 1.
+ *
+ * The three keys are the DOCUMENTED batch subset: other actions carry arrays that are not
+ * batch-billed (`spotDeploy`/`perpDeploy` payloads, the multi-sig `signatures` array), so a
+ * generic "first array" rule would mis-bill them. Whether the protocol's `batch_length` covers
+ * anything beyond these three is tracked in https://github.com/bloxwap/hyperliquid/issues/49.
+ */
+function exchangeWeight(payload: unknown): number {
+  const action = exchangeAction(payload);
+  if (action === undefined) return 1;
   for (const key of ["orders", "cancels", "modifies"] as const) {
-    const batch = (action as Record<string, unknown>)[key];
+    const batch = action[key];
     if (Array.isArray(batch)) return 1 + Math.floor(batch.length / 40);
   }
   return 1;
 }
 
+/** The action carrying the batch: the payload's `action`, unwrapped one level for multi-sig. */
+function exchangeAction(payload: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(payload) || !isRecord(payload.action)) return undefined;
+  const action = payload.action;
+  // A multi-sig action wraps the real one: { type: "multiSig", signatures, payload: { ..., action } }.
+  if (action.type === "multiSig" && isRecord(action.payload) && isRecord(action.payload.action)) {
+    return action.payload.action;
+  }
+  return action;
+}
+
 /**
- * Parses a `Retry-After` header value into seconds, supporting both the delay-seconds and
- * HTTP-date forms; returns `undefined` when the header is absent or unparseable.
+ * Additional weight that only becomes knowable once the response arrives, debited
+ * post-response (see {@linkcode TokenBucketRateLimiter.charge}): 1 per 20 returned items on the
+ * documented info endpoints, 1 per 60 on `candleSnapshot`, and 1 per block on explorer
+ * `blockList`. Post-hoc accounting keeps the limiter honest on average: the response array is
+ * the item count the server bills by.
+ */
+function responseSurcharge(endpoint: "info" | "exchange" | "explorer", payload: unknown, response: unknown): number {
+  if (!Array.isArray(response) || response.length === 0) return 0;
+  const type = payloadType(payload);
+  if (type === undefined) return 0;
+  if (endpoint === "info") {
+    if (INFO_SURCHARGE_PER_20_ITEMS.has(type)) return Math.ceil(response.length / 20);
+    if (INFO_SURCHARGE_PER_60_ITEMS.has(type)) return Math.ceil(response.length / 60);
+  } else if (endpoint === "explorer" && type === "blockList") {
+    return response.length; // 1 per block
+  }
+  return 0;
+}
+
+/** The `type` discriminator every Hyperliquid info/exchange/explorer request payload carries. */
+function payloadType(payload: unknown): string | undefined {
+  if (!isRecord(payload)) return undefined;
+  const type = payload.type;
+  return typeof type === "string" ? type : undefined;
+}
+
+/** True when `value` is a non-null object. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+// The three date forms a recipient must accept per RFC 9110 §5.6.7, with every component
+// captured: `Date.parse` is too lenient for validation (it ignores weekday tokens, maps 2-digit
+// years naively, and rolls invalid components like Feb 31 or minute 60 forward), so the fields
+// are validated arithmetically below.
+/** IMF-fixdate: `Sun, 06 Nov 1994 08:49:37 GMT`. */
+const IMF_FIXDATE =
+  /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/;
+/** RFC 850: `Sunday, 06-Nov-94 08:49:37 GMT`. */
+const RFC850_DATE =
+  /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), (\d{2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{2}) (\d{2}):(\d{2}):(\d{2}) GMT$/;
+/** asctime: `Sun Nov  6 08:49:37 1994` (a single-digit day is padded with a second space). */
+const ASCTIME_DATE =
+  /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (?:(\d{2})| (\d)) (\d{2}):(\d{2}):(\d{2}) (\d{4})$/;
+
+/** Weekday token (short or long form) to its `Date.getUTCDay()` index. */
+const WEEKDAY_INDEX: Readonly<Record<string, number>> = {
+  Sun: 0,
+  Sunday: 0,
+  Mon: 1,
+  Monday: 1,
+  Tue: 2,
+  Tuesday: 2,
+  Wed: 3,
+  Wednesday: 3,
+  Thu: 4,
+  Thursday: 4,
+  Fri: 5,
+  Friday: 5,
+  Sat: 6,
+  Saturday: 6,
+};
+
+/** Month token to its 0-based index. */
+const MONTH_INDEX: Readonly<Record<string, number>> = {
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11,
+};
+
+/**
+ * Parses an HTTP-date in any of the three RFC 9110 recipient forms into epoch milliseconds,
+ * validating every component arithmetically: hour ≤ 23, minute ≤ 59, second ≤ 60 (60 is the
+ * leap-second marker, read as the final second of the same minute), a real calendar day (no
+ * Feb 31), and a weekday token consistent with the computed date. RFC 850's 2-digit year is
+ * resolved per the RFC 9110 recipient rule: more than 50 years into the future rolls back one
+ * century. Anything invalid yields `undefined`.
+ */
+function parseHttpDate(value: string): number | undefined {
+  let match = IMF_FIXDATE.exec(value);
+  if (match !== null) {
+    return buildDate(match[1], match[2], match[3], Number(match[4]), match[5], match[6], match[7]);
+  }
+  match = RFC850_DATE.exec(value);
+  if (match !== null) {
+    const currentYear = new Date().getUTCFullYear();
+    let year = Math.floor(currentYear / 100) * 100 + Number(match[4]);
+    if (year > currentYear + 50) year -= 100; // RFC 9110: >50 years out means the previous century
+    return buildDate(match[1], match[2], match[3], year, match[5], match[6], match[7]);
+  }
+  match = ASCTIME_DATE.exec(value);
+  if (match !== null) {
+    return buildDate(match[1], match[3] ?? match[4], match[2], Number(match[8]), match[5], match[6], match[7]);
+  }
+  return undefined;
+}
+
+/** Validates the captured components and returns the epoch milliseconds for them. */
+function buildDate(
+  weekday: string,
+  dayStr: string,
+  monthName: string,
+  year: number,
+  hourStr: string,
+  minuteStr: string,
+  secondStr: string,
+): number | undefined {
+  const day = Number(dayStr);
+  const month = MONTH_INDEX[monthName];
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  let second = Number(secondStr);
+  if (hour > 23 || minute > 59 || second > 60) return undefined;
+  if (second === 60) second = 59; // leap-second marker: the final second of the same minute
+
+  const date = new Date(Date.UTC(year, month, day, hour, minute, second));
+  // Round-trip validation: any component Date.UTC rolled forward (Feb 31, month 13, an
+  // out-of-range day) shows up as a mismatch.
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month ||
+    date.getUTCDate() !== day ||
+    date.getUTCHours() !== hour ||
+    date.getUTCMinutes() !== minute ||
+    date.getUTCSeconds() !== second
+  ) {
+    return undefined;
+  }
+  if (date.getUTCDay() !== WEEKDAY_INDEX[weekday]) return undefined;
+  return date.getTime();
+}
+
+/**
+ * Parses a `Retry-After` header value into seconds, following the RFC 9110 grammar:
+ * `delay-seconds` (decimal digits only, optional surrounding whitespace) or an HTTP-date in any
+ * of the three recipient forms (IMF-fixdate, RFC 850, asctime).
+ *
+ * The parsed value is preserved verbatim: `retryAfter` is the server-requested delay, so any
+ * safe-integer result is returned as-is (a date in the past clamps to 0 — the asked moment has
+ * already passed). Anything matching neither form yields `undefined` — including a
+ * `delay-seconds` beyond the safe-integer range, which `Number` would silently round or
+ * overflow into an immediate retry.
+ *
+ * Callers scheduling from this value must apply their own bounds — the SDK's only internal
+ * scheduler (the rate-limit bucket) slices timer waits at 2^31-1 ms for exactly that reason.
  */
 function parseRetryAfter(value: string | null): number | undefined {
   if (value === null) return undefined;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.max(0, seconds);
-  const date = Date.parse(value);
-  if (!Number.isNaN(date)) return Math.max(0, (date - Date.now()) / 1000);
-  return undefined;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    if (!Number.isSafeInteger(seconds)) return undefined;
+    return seconds;
+  }
+  const date = parseHttpDate(trimmed);
+  if (date === undefined) return undefined;
+  return Math.max(0, (date - Date.now()) / 1000);
 }
 
 /** Resolves an endpoint against a base URL without dropping the base path or query. */

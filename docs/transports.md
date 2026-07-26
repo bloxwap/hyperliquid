@@ -112,20 +112,42 @@ const transport = new HttpTransport({
 });
 ```
 
-- The exchange batch weight is read from the action's `orders`/`cancels`/`modifies` array; every other request counts
-  as the documented minimum of 1. The per-endpoint info/explorer weights are not tabulated — if your workload polls
-  info endpoints heavily, lower `refillPerMinute` accordingly.
-- The wait happens before the request timeout is armed, so throttling never trips `timeout` / `exchangeTimeout`.
+The limiter bills the documented weights:
+
+| Request                                                                                                             | Weight                                                                                |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `info`: `l2Book`, `allMids`, `clearinghouseState`, `orderStatus`, `spotClearinghouseState`, `exchangeStatus`        | 2                                                                                     |
+| `info`: any other documented request                                                                                | 20                                                                                    |
+| `info`: `userRole`                                                                                                  | 60                                                                                    |
+| `explorer`                                                                                                          | 40                                                                                    |
+| `exchange`                                                                                                          | `1 + floor(batchLength / 40)`                                                         |
+
+The exchange batch length is read from the action's `orders`/`cancels`/`modifies` array, unwrapping multi-sig
+actions (the batch lives inside `action.payload.action`). Those three keys are the documented batch subset — other
+actions carry arrays that are not batch-billed (`spotDeploy`/`perpDeploy` payloads, the multi-sig `signatures`
+array), so the limiter deliberately does not bill by a generic "first array" rule; whether the protocol's
+`batch_length` covers anything more is tracked in [issue #49](https://github.com/bloxwap/hyperliquid/issues/49).
+
+Response-size surcharges can only be known once the response arrives, so they are debited from the bucket **after**
+the response: 1 extra weight per 20 returned items on the documented list endpoints (`recentTrades`, `userFills`,
+`historicalOrders`, …), per 60 on `candleSnapshot`, and per returned block on explorer `blockList`. Later requests
+then wait off the real cost rather than the estimate the request was sent with. One caveat: the official docs warn
+that older `blockList` blocks "may be weighted more heavily" server-side, so the +1-per-block debit is exact only
+for recent blocks.
+
+- The wait happens before the request timeout is armed, so throttling never trips `timeout` / `exchangeTimeout`;
+  aborting the request's signal cancels the wait instead — an aborted request never reaches the wire.
 - The limiter is off by default; without `rateLimit` the transport never delays a request client-side.
 
-Two server-side complements:
+**The limiter is per `HttpTransport` instance.** It tracks only the requests it sends itself — other transport
+instances, other processes, and other machines behind the same IP do not coordinate, yet they all share the same
+1200 weight/minute budget. Treat it as best-effort local throttling, not a guarantee against 429s: bursts that
+exceed what one instance can see still hit the server limit, and there is no endpoint that reports the IP bucket's
+state. Handle [`HttpRateLimitError`](error-handling.md#httpratelimiterror) (which carries `status` and, when the
+server sends a `Retry-After` header, a `retryAfter` hint in seconds) as the backstop.
 
-- A 429 that still gets through throws [`HttpRateLimitError`](error-handling.md#httpratelimiterror) — an
-  `HttpRequestError` subclass carrying `status` and, when the server sends a `Retry-After` header, a `retryAfter`
-  hint in seconds.
-- The [`userRateLimit`](clients.md) info method reports the server's own view of your used vs. allowed weight. The
-  client-side bucket is a local approximation (other processes and machines share the same IP budget); the endpoint
-  is the truth.
+The separate **address-based** limits (requests allowed per user, growing with cumulative trading volume) are what
+the [`userRateLimit`](clients.md) info method reports — it has no view of the shared per-IP weight budget either.
 
 ## WebSocket
 

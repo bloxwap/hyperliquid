@@ -32,10 +32,13 @@ Error
 | `HttpRateLimitError`    | Server answered 429 (rate limited)               | `status`, `retryAfter`, `cause` |
 | `WebSocketRequestError` | WebSocket operation failed                       | `message`, `cause`              |
 
-Both transport errors also carry a `request` field with the original request payload. If that payload is signed
-(`{ action, signature, nonce }`), the error holds a **copy** with `signature` replaced by `"0x<redacted>"`, so logging
-or forwarding errors to telemetry never leaks the signature (it reveals trading intent, though never keys). The object
-actually sent to the server is never mutated.
+Both transport errors also carry a `request` field with the request payload **as it went over the wire**: a snapshot
+of the exact serialization the transport sent, with every `signature`/`signatures` value replaced by
+`"0x<redacted>"` — at any depth, including multi-sig `action.signatures` and the `{ type, payload }` envelope
+`WebSocketTransport` wraps exchange requests in — so logging or forwarding errors to telemetry never leaks a
+signature (it reveals trading intent, though never keys). The snapshot is always plain data, never the live object:
+getters, proxies, and `toJSON` run exactly once (inside the one serialization the transport computes for sending).
+A payload that cannot be serialized at all becomes the constant `"[unserializable request]"`.
 
 ## `ValidationError`
 

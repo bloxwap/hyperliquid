@@ -9,7 +9,7 @@ import { ReconnectingWebSocket } from "./_reconnectingSocket.ts";
 import * as abort from "../_abort.ts";
 import { TransportError } from "../_base.ts";
 import { Promise_ } from "../_polyfills.ts";
-import { redactSignature } from "../_redact.ts";
+import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import type { HyperliquidEventTarget, PostResponse, SubscribeUnsubscribeResponse } from "./_events.ts";
 import { isSubset, normalize, requestToId, specificity } from "./_id.ts";
 
@@ -37,11 +37,12 @@ import { isSubset, normalize, requestToId, specificity } from "./_id.ts";
  */
 export class WebSocketRequestError extends TransportError {
   /**
-   * The original request payload that triggered the error, if available.
-   *
-   * A signed payload (`{ action, signature, nonce }`) is stored as a COPY with the `signature`
-   * replaced by `"0x<redacted>"`, so logging or forwarding the error cannot leak it; the object
-   * sent to the server is never mutated.
+   * The request payload as it went over the wire, if available: a snapshot of the exact
+   * serialization the transport sent, with every `signature`/`signatures` value replaced by
+   * `"0x<redacted>"` — at any depth, including the `{ type, payload }` envelope this transport
+   * wraps exchange requests in and multi-sig `action.signatures` — so logging or forwarding the
+   * error cannot leak them. It is always a plain-data copy, never the live object; when the
+   * payload could not be serialized at all, it is the constant `"[unserializable request]"`.
    */
   request?: unknown;
 
@@ -85,8 +86,11 @@ interface SubscribeUnsubscribeRequest {
 /** A queued request awaiting its response. */
 interface PendingRequest {
   id: number | string;
-  payload: unknown;
-  /** The wire frame, kept until the connection can actually carry it. */
+  /**
+   * The wire frame, kept until the connection can actually carry it. It is also the snapshot
+   * source for the `request` field of any error this entry produces — the live payload is never
+   * stored, so errors never traverse it.
+   */
   frame: string;
   sent: boolean;
   /**
@@ -159,11 +163,11 @@ export class WebSocketDispatcher {
       this._queue.clear();
       this._posts.clear();
       this._byEchoId.clear();
-      for (const { sent, payload, reject } of abandoned) {
-        reject(
+      for (const entry of abandoned) {
+        entry.reject(
           new WebSocketRequestError(
-            sent ? "WebSocket connection closed" : "WebSocket connection closed before the request was sent",
-            { request: payload },
+            entry.sent ? "WebSocket connection closed" : "WebSocket connection closed before the request was sent",
+            { request: payloadSnapshot(entry.frame, typeof entry.id === "number") },
           ),
         );
       }
@@ -198,6 +202,8 @@ export class WebSocketDispatcher {
     const detachRelay = abort.relay([signal, this._socket.terminationSignal], controller);
 
     let entry: PendingRequest | undefined;
+    // The one serialization of the request envelope — wire form and error snapshot source.
+    let frame: string | undefined;
     try {
       if (controller.signal.aborted) throw controller.signal.reason;
 
@@ -219,12 +225,12 @@ export class WebSocketDispatcher {
       }
 
       // --- Send or queue -----------------------------------------------------
-      const frame = JSON.stringify(request);
+      frame = JSON.stringify(request);
       const sent = this._socket.readyState === ReconnectingWebSocket.OPEN;
       if (sent) this._socket.send(frame);
 
       const { promise, resolve, reject } = Promise_.withResolvers<T>();
-      const pending = (entry = { id, payload, frame, sent, echo, resolve, reject });
+      const pending = (entry = { id, frame, sent, echo, resolve, reject });
       this._enqueue(pending);
 
       controller.signal.addEventListener(
@@ -244,21 +250,24 @@ export class WebSocketDispatcher {
       if (error === timeout.reason) {
         throw new WebSocketRequestError(`Request timed out after ${timeoutMs} ms`, {
           cause: error,
-          request: payload,
+          request: payloadSnapshot(frame, method === "post"),
         });
       }
       if (this._socket.terminationSignal.aborted && error === this._socket.terminationSignal.reason) {
         throw new WebSocketRequestError("WebSocket connection permanently terminated", {
           cause: error,
-          request: payload,
+          request: payloadSnapshot(frame, method === "post"),
         });
       }
       if (controller.signal.aborted && error === controller.signal.reason) {
-        throw new WebSocketRequestError("Request aborted", { cause: error, request: payload });
+        throw new WebSocketRequestError("Request aborted", {
+          cause: error,
+          request: payloadSnapshot(frame, method === "post"),
+        });
       }
       throw new WebSocketRequestError(`Unknown error while making a WebSocket request: ${error}`, {
         cause: error,
-        request: payload,
+        request: payloadSnapshot(frame, method === "post"),
       });
     } finally {
       if (entry) this._dequeue(entry);
@@ -310,7 +319,11 @@ export class WebSocketDispatcher {
     if (!pending) return;
 
     if (detail.response.type === "error") {
-      pending.reject(new WebSocketRequestError(detail.response.payload, { request: pending.payload }));
+      pending.reject(
+        new WebSocketRequestError(detail.response.payload, {
+          request: payloadSnapshot(pending.frame, typeof pending.id === "number"),
+        }),
+      );
     } else {
       const data = detail.response.type === "info" ? detail.response.payload.data : detail.response.payload;
       pending.resolve(data);
@@ -361,7 +374,9 @@ export class WebSocketDispatcher {
 
   /** Rejects `pending`, when found, with the server text as the message. */
   private _reject(pending: PendingRequest | undefined, detail: string): void {
-    pending?.reject(new WebSocketRequestError(detail, { request: pending.payload }));
+    pending?.reject(
+      new WebSocketRequestError(detail, { request: payloadSnapshot(pending.frame, typeof pending.id === "number") }),
+    );
   }
 
   /**
@@ -399,4 +414,17 @@ export class WebSocketDispatcher {
     }
     return best;
   }
+}
+
+/**
+ * The payload as the one wire serialization produced it, for the `request` field of dispatcher
+ * errors: always a plain-data snapshot parsed from the frame, never the live object. `post`
+ * envelopes carry it under `request`, subscription envelopes under `subscription`. When the
+ * frame was never produced (the serialization itself failed), a safe constant remains and the
+ * original is never traversed as a fallback.
+ */
+function payloadSnapshot(frame: string | undefined, post: boolean): unknown {
+  if (frame === undefined) return UNSERIALIZABLE_REQUEST;
+  const parsed = JSON.parse(frame) as Record<string, unknown>;
+  return post ? parsed.request : parsed.subscription;
 }
