@@ -13,6 +13,6 @@
     "@jsr/std__async": "1.5.0",
     "@jsr/std__msgpack": "1.0.3",
     "@jsr/valibot__valibot": "1.4.2",
-    "decimal.js": "^10.6.0"
+    "decimal.js": "10.6.0"
   }
 }
