@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -61,10 +61,13 @@ export type CancelResponse = {
     /** Specific data. */
     data: {
       /** Array of statuses for each cancel attempt, indicating success or error messages. */
-      statuses: ("success" | {
-        /** Error message returned by the exchange. */
-        error: string;
-      })[];
+      statuses: (
+        | "success"
+        | {
+            /** Error message returned by the exchange. */
+            error: string;
+          }
+      )[];
     };
   };
 };
@@ -112,11 +115,11 @@ export type CancelSuccessResponse = ExcludeErrorResponse<CancelResponse>;
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { cancel } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { cancel } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await cancel({ transport, wallet }, {
@@ -131,9 +134,6 @@ export function cancel(
   params: CancelParameters,
   opts?: CancelOptions,
 ): Promise<CancelSuccessResponse> {
-  const action = canonicalize(
-    CancelActionSchema,
-    parse(CancelActionSchema, { type: "cancel", ...params }),
-  );
+  const action = canonicalize(CancelActionSchema, parse(CancelActionSchema, { type: "cancel", ...params }));
   return executeL1Action(config, action, opts);
 }

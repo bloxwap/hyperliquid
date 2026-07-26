@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -46,8 +46,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { perpCategories } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { perpCategories } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -56,10 +56,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perp-categories
  */
-export function perpCategories(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<PerpCategoriesResponse> {
+export function perpCategories(config: InfoConfig, signal?: AbortSignal): Promise<PerpCategoriesResponse> {
   const request = parse(PerpCategoriesRequest, {
     type: "perpCategories",
   });

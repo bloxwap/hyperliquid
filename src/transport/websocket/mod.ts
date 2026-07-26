@@ -6,7 +6,7 @@
  *
  * @example
  * ```ts
- * import { SubscriptionClient, WebSocketTransport } from "@nktkas/hyperliquid";
+ * import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
  *
  * const transport = new WebSocketTransport();
  * const client = new SubscriptionClient({ transport });
@@ -82,7 +82,7 @@ export const TESTNET_RPC_WS_URL = "wss://rpc.hyperliquid-testnet.xyz/ws";
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
  *
  * const transport = new WebSocketTransport();
  * const mids = await transport.request("info", { type: "allMids" });
@@ -115,7 +115,6 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
 
   private readonly _hlEvents: HyperliquidEventTarget;
   private readonly _dispatcher: WebSocketDispatcher;
-  private readonly _keepAlive: WebSocketKeepAlive; // self-contained
   private readonly _subscriptionManager: WebSocketSubscriptionManager;
 
   /** Creates the transport and immediately starts connecting. */
@@ -133,7 +132,9 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
       this._hlEvents,
       options?.timeout === undefined ? 10_000 : options.timeout,
     );
-    this._keepAlive = new WebSocketKeepAlive(this.socket, this._hlEvents, options?.keepAlive);
+    // The keep-alive watchdog is fully self-contained: it exposes no API and drives itself from the
+    // socket's own "open"/"close"/"error" events, which keep it reachable. Nothing to hold on to.
+    new WebSocketKeepAlive(this.socket, this._hlEvents, options?.keepAlive);
     this._subscriptionManager = new WebSocketSubscriptionManager(
       this.socket,
       this._dispatcher,
@@ -156,7 +157,7 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
    *
    * @example
    * ```ts
-   * import { WebSocketTransport } from "@nktkas/hyperliquid";
+   * import { WebSocketTransport } from "@bloxwap/hyperliquid";
    *
    * const transport = new WebSocketTransport();
    * const mids = await transport.request("info", { type: "allMids" });
@@ -180,7 +181,7 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
    *
    * @example
    * ```ts
-   * import { WebSocketTransport } from "@nktkas/hyperliquid";
+   * import { WebSocketTransport } from "@bloxwap/hyperliquid";
    *
    * const transport = new WebSocketTransport();
    * const subscription = await transport.subscribe("allMids", { type: "allMids" }, (event) => {
@@ -222,7 +223,7 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
    *
    * @example
    * ```ts
-   * import { WebSocketTransport } from "@nktkas/hyperliquid";
+   * import { WebSocketTransport } from "@bloxwap/hyperliquid";
    *
    * const transport = new WebSocketTransport();
    * await transport.ready(AbortSignal.timeout(5_000));
@@ -230,13 +231,13 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
    */
   ready(signal?: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
-      const failTerminated = () =>
+      const failTerminated = (): void =>
         reject(
           new WebSocketRequestError("Failed to establish WebSocket connection", {
             cause: this.socket.terminationSignal.reason,
           }),
         );
-      const failAborted = () =>
+      const failAborted = (): void =>
         reject(new WebSocketRequestError("Waiting for the connection was aborted", { cause: signal?.reason }));
 
       if (signal?.aborted) return failAborted();
@@ -244,9 +245,11 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
       if (this.socket.readyState === ReconnectingWebSocket.OPEN) return resolve();
 
       const done = new AbortController();
-      const settle = (fn: () => void) => () => {
-        done.abort();
-        fn();
+      const settle = (fn: () => void): (() => void) => {
+        return (): void => {
+          done.abort();
+          fn();
+        };
       };
 
       this.socket.addEventListener("open", settle(resolve), { signal: done.signal });
@@ -260,7 +263,7 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
    *
    * @example
    * ```ts
-   * import { WebSocketTransport } from "@nktkas/hyperliquid";
+   * import { WebSocketTransport } from "@bloxwap/hyperliquid";
    *
    * const transport = new WebSocketTransport();
    * transport.close();

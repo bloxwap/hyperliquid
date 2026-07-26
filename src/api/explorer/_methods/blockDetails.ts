@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -76,8 +76,8 @@ export type BlockDetailsParameters = Omit<v.InferInput<typeof BlockDetailsReques
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { blockDetails } from "@nktkas/hyperliquid/api/explorer";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { blockDetails } from "@bloxwap/hyperliquid/api/explorer";
  *
  * const transport = new HttpTransport(); // only `HttpTransport` supports this API
  *

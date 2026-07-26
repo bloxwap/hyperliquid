@@ -1,5 +1,5 @@
-import { type TxDetailsParameters, TxDetailsRequest } from "@nktkas/hyperliquid/api/explorer";
-import * as v from "@valibot/valibot";
+import { type TxDetailsParameters, TxDetailsRequest } from "@bloxwap/hyperliquid/api/explorer";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";

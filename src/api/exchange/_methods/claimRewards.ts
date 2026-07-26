@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -40,20 +40,20 @@ export type ClaimRewardsRequest = v.InferOutput<typeof ClaimRewardsRequest>;
  */
 export type ClaimRewardsResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -94,11 +94,11 @@ export type ClaimRewardsSuccessResponse = ExcludeErrorResponse<ClaimRewardsRespo
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { claimRewards } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { claimRewards } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await claimRewards({ transport, wallet });
@@ -106,13 +106,7 @@ export type ClaimRewardsSuccessResponse = ExcludeErrorResponse<ClaimRewardsRespo
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#claim-rewards
  */
-export function claimRewards(
-  config: ExchangeConfig,
-  opts?: ClaimRewardsOptions,
-): Promise<ClaimRewardsSuccessResponse> {
-  const action = canonicalize(
-    ClaimRewardsActionSchema,
-    parse(ClaimRewardsActionSchema, { type: "claimRewards" }),
-  );
+export function claimRewards(config: ExchangeConfig, opts?: ClaimRewardsOptions): Promise<ClaimRewardsSuccessResponse> {
+  const action = canonicalize(ClaimRewardsActionSchema, parse(ClaimRewardsActionSchema, { type: "claimRewards" }));
   return executeL1Action(config, action, opts);
 }

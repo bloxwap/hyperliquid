@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -39,371 +39,371 @@ export type UserNonFundingLedgerUpdatesResponse = {
   /** Update details. */
   delta:
     | {
-      /** Update type. */
-      type: "accountClassTransfer";
-      /**
-       * Amount transferred in USDC.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-      /** Indicates if the transfer is to the perpetual account. */
-      toPerp: boolean;
-    }
-    | {
-      /** Update type. */
-      type: "deposit";
-      /**
-       * Amount deposited in USDC.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-    }
-    | {
-      /** Update type. */
-      type: "internalTransfer";
-      /**
-       * Amount transferred in USDC.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-      /**
-       * Initiator address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      user: `0x${string}`;
-      /**
-       * Destination address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      destination: `0x${string}`;
-      /**
-       * Transfer fee.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      fee: string;
-    }
-    | {
-      /** Update type. */
-      type: "liquidation";
-      /**
-       * Total notional value of liquidated positions.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      liquidatedNtlPos: string;
-      /**
-       * Account value at liquidation time.
-       * @pattern ^-?[0-9]+(\.[0-9]+)?$
-       */
-      accountValue: string;
-      /** Leverage type for liquidated positions. */
-      leverageType: "Cross" | "Isolated";
-      /** Details of each liquidated position. */
-      liquidatedPositions: {
-        /** Asset symbol of the liquidated position. */
-        coin: string;
+        /** Update type. */
+        type: "accountClassTransfer";
         /**
-         * Signed position size liquidated.
+         * Amount transferred in USDC.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+        /** Indicates if the transfer is to the perpetual account. */
+        toPerp: boolean;
+      }
+    | {
+        /** Update type. */
+        type: "deposit";
+        /**
+         * Amount deposited in USDC.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+      }
+    | {
+        /** Update type. */
+        type: "internalTransfer";
+        /**
+         * Amount transferred in USDC.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+        /**
+         * Initiator address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        user: `0x${string}`;
+        /**
+         * Destination address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        destination: `0x${string}`;
+        /**
+         * Transfer fee.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        fee: string;
+      }
+    | {
+        /** Update type. */
+        type: "liquidation";
+        /**
+         * Total notional value of liquidated positions.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        liquidatedNtlPos: string;
+        /**
+         * Account value at liquidation time.
          * @pattern ^-?[0-9]+(\.[0-9]+)?$
          */
-        szi: string;
-      }[];
-    }
+        accountValue: string;
+        /** Leverage type for liquidated positions. */
+        leverageType: "Cross" | "Isolated";
+        /** Details of each liquidated position. */
+        liquidatedPositions: {
+          /** Asset symbol of the liquidated position. */
+          coin: string;
+          /**
+           * Signed position size liquidated.
+           * @pattern ^-?[0-9]+(\.[0-9]+)?$
+           */
+          szi: string;
+        }[];
+      }
     | {
-      /** Update type. */
-      type: "rewardsClaim";
-      /**
-       * Amount of rewards claimed.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-      /** Token symbol (e.g., USDC). */
-      token: string;
-    }
+        /** Update type. */
+        type: "rewardsClaim";
+        /**
+         * Amount of rewards claimed.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        amount: string;
+        /** Token symbol (e.g., USDC). */
+        token: string;
+      }
     | {
-      /** Update type. */
-      type: "spotTransfer";
-      /** Token symbol (e.g., USDC). */
-      token: string;
-      /**
-       * Amount transferred.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-      /**
-       * Equivalent USDC value.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdcValue: string;
-      /**
-       * Initiator address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      user: `0x${string}`;
-      /**
-       * Destination address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      destination: `0x${string}`;
-      /**
-       * Transfer fee.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      fee: string;
-      /**
-       * Fee in native token.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      nativeTokenFee: string;
-      /** Nonce of the transfer. */
-      nonce: number | null;
-      /** Token in which the fee is denominated (e.g., USDC). */
-      feeToken: string;
-    }
+        /** Update type. */
+        type: "spotTransfer";
+        /** Token symbol (e.g., USDC). */
+        token: string;
+        /**
+         * Amount transferred.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        amount: string;
+        /**
+         * Equivalent USDC value.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdcValue: string;
+        /**
+         * Initiator address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        user: `0x${string}`;
+        /**
+         * Destination address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        destination: `0x${string}`;
+        /**
+         * Transfer fee.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        fee: string;
+        /**
+         * Fee in native token.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        nativeTokenFee: string;
+        /** Nonce of the transfer. */
+        nonce: number | null;
+        /** Token in which the fee is denominated (e.g., USDC). */
+        feeToken: string;
+      }
     | {
-      /** Update type. */
-      type: "subAccountTransfer";
-      /**
-       * Amount transferred in USDC.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-      /**
-       * Initiator address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      user: `0x${string}`;
-      /**
-       * Destination address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      destination: `0x${string}`;
-    }
+        /** Update type. */
+        type: "subAccountTransfer";
+        /**
+         * Amount transferred in USDC.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+        /**
+         * Initiator address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        user: `0x${string}`;
+        /**
+         * Destination address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        destination: `0x${string}`;
+      }
     | {
-      /** Update type. */
-      type: "vaultCreate";
-      /**
-       * Address of the created vault.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      vault: `0x${string}`;
-      /**
-       * Initial allocated amount in USDC.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-      /**
-       * Vault creation fee.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      fee: string;
-    }
+        /** Update type. */
+        type: "vaultCreate";
+        /**
+         * Address of the created vault.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        vault: `0x${string}`;
+        /**
+         * Initial allocated amount in USDC.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+        /**
+         * Vault creation fee.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        fee: string;
+      }
     | {
-      /** Update type. */
-      type: "vaultDeposit";
-      /**
-       * Address of the target vault.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      vault: `0x${string}`;
-      /**
-       * Amount deposited in USDC.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-    }
+        /** Update type. */
+        type: "vaultDeposit";
+        /**
+         * Address of the target vault.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        vault: `0x${string}`;
+        /**
+         * Amount deposited in USDC.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+      }
     | {
-      /** Update type. */
-      type: "vaultDistribution";
-      /**
-       * Address of the vault distributing funds.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      vault: `0x${string}`;
-      /**
-       * Amount distributed in USDC.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-    }
+        /** Update type. */
+        type: "vaultDistribution";
+        /**
+         * Address of the vault distributing funds.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        vault: `0x${string}`;
+        /**
+         * Amount distributed in USDC.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+      }
     | {
-      /** Update type. */
-      type: "vaultWithdraw";
-      /**
-       * Vault address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      vault: `0x${string}`;
-      /**
-       * Address of the user withdrawing funds.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      user: `0x${string}`;
-      /**
-       * Withdrawal request amount in USD.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      requestedUsd: string;
-      /**
-       * Withdrawal commission fee.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      commission: string;
-      /**
-       * Closing cost associated with positions.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      closingCost: string;
-      /**
-       * Basis value for withdrawal calculation.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      basis: string;
-      /**
-       * Net withdrawn amount in USD after fees and costs.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      netWithdrawnUsd: string;
-    }
+        /** Update type. */
+        type: "vaultWithdraw";
+        /**
+         * Vault address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        vault: `0x${string}`;
+        /**
+         * Address of the user withdrawing funds.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        user: `0x${string}`;
+        /**
+         * Withdrawal request amount in USD.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        requestedUsd: string;
+        /**
+         * Withdrawal commission fee.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        commission: string;
+        /**
+         * Closing cost associated with positions.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        closingCost: string;
+        /**
+         * Basis value for withdrawal calculation.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        basis: string;
+        /**
+         * Net withdrawn amount in USD after fees and costs.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        netWithdrawnUsd: string;
+      }
     | {
-      /** Update type. */
-      type: "withdraw";
-      /**
-       * Amount withdrawn in USDC.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-      /** Nonce (timestamp in ms) used to prevent replay attacks. */
-      nonce: number;
-      /**
-       * Withdrawal fee.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      fee: string;
-    }
+        /** Update type. */
+        type: "withdraw";
+        /**
+         * Amount withdrawn in USDC.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+        /** Nonce (timestamp in ms) used to prevent replay attacks. */
+        nonce: number;
+        /**
+         * Withdrawal fee.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        fee: string;
+      }
     | {
-      /** Update type. */
-      type: "send";
-      /**
-       * Address of the sender.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      user: `0x${string}`;
-      /**
-       * Destination address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      destination: `0x${string}`;
-      /** Source DEX ("" for default USDC perp DEX, "spot" for spot). */
-      sourceDex: string;
-      /** Destination DEX ("" for default USDC perp DEX, "spot" for spot). */
-      destinationDex: string;
-      /** Token symbol (e.g., USDC). */
-      token: string;
-      /**
-       * Amount to send (not in wei).
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-      /**
-       * Equivalent USDC value.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdcValue: string;
-      /**
-       * Transfer fee.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      fee: string;
-      /**
-       * Fee in native token.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      nativeTokenFee: string;
-      /** Nonce of the transfer. */
-      nonce: number;
-      /** Token in which the fee is denominated (e.g., USDC). */
-      feeToken: string;
-    }
+        /** Update type. */
+        type: "send";
+        /**
+         * Address of the sender.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        user: `0x${string}`;
+        /**
+         * Destination address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        destination: `0x${string}`;
+        /** Source DEX ("" for default USDC perp DEX, "spot" for spot). */
+        sourceDex: string;
+        /** Destination DEX ("" for default USDC perp DEX, "spot" for spot). */
+        destinationDex: string;
+        /** Token symbol (e.g., USDC). */
+        token: string;
+        /**
+         * Amount to send (not in wei).
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        amount: string;
+        /**
+         * Equivalent USDC value.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdcValue: string;
+        /**
+         * Transfer fee.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        fee: string;
+        /**
+         * Fee in native token.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        nativeTokenFee: string;
+        /** Nonce of the transfer. */
+        nonce: number;
+        /** Token in which the fee is denominated (e.g., USDC). */
+        feeToken: string;
+      }
     | {
-      /** Update type. */
-      type: "deployGasAuction";
-      /** Token symbol (e.g., USDC). */
-      token: string;
-      /**
-       * Amount in the specified token.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-    }
+        /** Update type. */
+        type: "deployGasAuction";
+        /** Token symbol (e.g., USDC). */
+        token: string;
+        /**
+         * Amount in the specified token.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        amount: string;
+      }
     | {
-      /** Update type. */
-      type: "cStakingTransfer";
-      /** Token symbol (e.g., USDC). */
-      token: string;
-      /**
-       * Amount in the specified token.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-      /** `true` for deposit, `false` for withdrawal. */
-      isDeposit: boolean;
-    }
+        /** Update type. */
+        type: "cStakingTransfer";
+        /** Token symbol (e.g., USDC). */
+        token: string;
+        /**
+         * Amount in the specified token.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        amount: string;
+        /** `true` for deposit, `false` for withdrawal. */
+        isDeposit: boolean;
+      }
     | {
-      /** Update type. */
-      type: "borrowLend";
-      /** Token symbol (e.g., USDC). */
-      token: string;
-      /** Operation type. */
-      operation: "supply" | "withdraw" | "repay" | "borrow";
-      /**
-       * Amount in the specified token.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-      /**
-       * Interest amount in the specified token.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      interestAmount: string;
-    }
+        /** Update type. */
+        type: "borrowLend";
+        /** Token symbol (e.g., USDC). */
+        token: string;
+        /** Operation type. */
+        operation: "supply" | "withdraw" | "repay" | "borrow";
+        /**
+         * Amount in the specified token.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        amount: string;
+        /**
+         * Interest amount in the specified token.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        interestAmount: string;
+      }
     | {
-      /** Update type. */
-      type: "spotGenesis";
-      /** Token symbol (e.g., USDC). */
-      token: string;
-      /**
-       * Amount in the specified token.
-       * @pattern ^-?[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-    }
+        /** Update type. */
+        type: "spotGenesis";
+        /** Token symbol (e.g., USDC). */
+        token: string;
+        /**
+         * Amount in the specified token.
+         * @pattern ^-?[0-9]+(\.[0-9]+)?$
+         */
+        amount: string;
+      }
     | {
-      /** Update type. */
-      type: "activateDexAbstraction";
-      /** DEX name (empty string for main dex). */
-      dex: string;
-      /** Token symbol (e.g., USDC). */
-      token: string;
-      /**
-       * Amount in the specified token.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-    }
+        /** Update type. */
+        type: "activateDexAbstraction";
+        /** DEX name (empty string for main dex). */
+        dex: string;
+        /** Token symbol (e.g., USDC). */
+        token: string;
+        /**
+         * Amount in the specified token.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        amount: string;
+      }
     | {
-      /** Update type. */
-      type: "vaultLeaderCommission";
-      /**
-       * Address of the leader.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      user: `0x${string}`;
-      /**
-       * Amount earned in USDC.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-    };
+        /** Update type. */
+        type: "vaultLeaderCommission";
+        /**
+         * Address of the leader.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        user: `0x${string}`;
+        /**
+         * Amount earned in USDC.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+      };
 }[];
 
 // ============================================================
@@ -432,8 +432,8 @@ export type UserNonFundingLedgerUpdatesParameters = Omit<
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userNonFundingLedgerUpdates } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userNonFundingLedgerUpdates } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -48,20 +48,20 @@ export type UsdSendRequest = v.InferOutput<typeof UsdSendRequest>;
  */
 export type UsdSendResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -78,10 +78,7 @@ import {
 
 /** Schema for action fields (excludes request-level system fields). */
 const UsdSendActionSchema = /* @__PURE__ */ (() => {
-  return v.omit(
-    v.object(UsdSendRequest.entries.action.entries),
-    ["signatureChainId", "hyperliquidChain", "time"],
-  );
+  return v.omit(v.object(UsdSendRequest.entries.action.entries), ["signatureChainId", "hyperliquidChain", "time"]);
 })();
 
 /** Action parameters for the {@linkcode usdSend} function. */
@@ -119,11 +116,11 @@ export const UsdSendTypes = {
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { usdSend } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { usdSend } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await usdSend({ transport, wallet }, {
@@ -139,9 +136,6 @@ export function usdSend(
   params: UsdSendParameters,
   opts?: UsdSendOptions,
 ): Promise<UsdSendSuccessResponse> {
-  const action = canonicalize(
-    UsdSendActionSchema,
-    parse(UsdSendActionSchema, { type: "usdSend", ...params }),
-  );
+  const action = canonicalize(UsdSendActionSchema, parse(UsdSendActionSchema, { type: "usdSend", ...params }));
   return executeUserSignedAction(config, action, UsdSendTypes, opts);
 }

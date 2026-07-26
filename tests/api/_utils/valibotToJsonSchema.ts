@@ -9,7 +9,7 @@
  *
  * @example
  * ```ts
- * import * as v from "@valibot/valibot";
+ * import * as v from "valibot";
  * import { valibotToJsonSchema } from "./valibotToJsonSchema.ts";
  *
  * const Request = v.object({ type: v.literal("foo"), coin: v.string() });
@@ -19,7 +19,7 @@
  * @module
  */
 
-import { type ConversionConfig, toJsonSchema } from "jsr:@valibot/to-json-schema@1";
+import { type ConversionConfig, toJsonSchema } from "@valibot/to-json-schema";
 import type { JsonSchema } from "./schemaCoverage.ts";
 
 export type { JsonSchema } from "./schemaCoverage.ts";

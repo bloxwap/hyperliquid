@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -88,8 +88,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { spotMeta } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { spotMeta } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -98,10 +98,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-metadata
  */
-export function spotMeta(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<SpotMetaResponse> {
+export function spotMeta(config: InfoConfig, signal?: AbortSignal): Promise<SpotMetaResponse> {
   const request = parse(SpotMetaRequest, {
     type: "spotMeta",
   });

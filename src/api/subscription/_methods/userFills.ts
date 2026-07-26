@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -64,8 +64,8 @@ export type UserFillsParameters = Omit<v.InferInput<typeof UserFillsRequest>, "t
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { userFills } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { userFills } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -89,9 +89,14 @@ export function userFills(
     ...params,
     aggregateByTime: params.aggregateByTime ?? false,
   });
-  return config.transport.subscribe<UserFillsEvent>(payload.type, payload, (e) => {
-    if (e.detail.user === payload.user) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<UserFillsEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.user === payload.user) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

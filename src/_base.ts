@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 /** Base error class for all SDK errors. */
 export class HyperliquidError extends Error {
@@ -19,9 +19,10 @@ export class ValidationError extends HyperliquidError {
 }
 
 /** Wrapper around `v.parse` that throws {@linkcode ValidationError} instead of `ValiError`. */
-export function parse<
-  const TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
->(schema: TSchema, input: unknown): v.InferOutput<TSchema> {
+export function parse<const TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
+  schema: TSchema,
+  input: unknown,
+): v.InferOutput<TSchema> {
   try {
     return v.parse(schema, input);
   } catch (error) {

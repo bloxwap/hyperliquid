@@ -6,8 +6,8 @@
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { blockDetails } from "@nktkas/hyperliquid/api/explorer";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { blockDetails } from "@bloxwap/hyperliquid/api/explorer";
  * //       ^^^^^^^^^^^^
  * //       same name as in `ExplorerClient`
  *
@@ -20,8 +20,8 @@
  * ```
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { explorerBlock } from "@nktkas/hyperliquid/api/explorer";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { explorerBlock } from "@bloxwap/hyperliquid/api/explorer";
  * //       ^^^^^^^^^^^^^
  * //       same name as in `ExplorerClient`
  *

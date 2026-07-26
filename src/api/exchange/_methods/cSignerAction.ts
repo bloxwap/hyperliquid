@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -50,20 +50,20 @@ export type CSignerActionRequest = v.InferOutput<typeof CSignerActionRequest>;
  */
 export type CSignerActionResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -84,9 +84,12 @@ const CSignerActionActionSchema = /* @__PURE__ */ (() => {
 })();
 
 /** Action parameters for the {@linkcode cSignerAction} function. */
-export type CSignerActionParameters = v.InferInput<typeof CSignerActionActionSchema> extends infer T
-  ? T extends unknown ? { [K in Exclude<keyof T, "type">]: T[K] } : never
-  : never;
+export type CSignerActionParameters =
+  v.InferInput<typeof CSignerActionActionSchema> extends infer T
+    ? T extends unknown
+      ? { [K in Exclude<keyof T, "type">]: T[K] }
+      : never
+    : never;
 
 /** Request options for the {@linkcode cSignerAction} function. */
 export type CSignerActionOptions = ExtractRequestOptions<v.InferInput<typeof CSignerActionRequest>>;
@@ -110,11 +113,11 @@ export type CSignerActionSuccessResponse = ExcludeErrorResponse<CSignerActionRes
  *
  * @example Jail self
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { cSignerAction } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { cSignerAction } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await cSignerAction({ transport, wallet }, {
@@ -124,11 +127,11 @@ export type CSignerActionSuccessResponse = ExcludeErrorResponse<CSignerActionRes
  *
  * @example Unjail self
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { cSignerAction } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { cSignerAction } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await cSignerAction({ transport, wallet }, {

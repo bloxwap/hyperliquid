@@ -55,7 +55,7 @@ export interface Signature {
 /** Uniform interface produced by adapting any {@link AbstractWallet}. */
 interface Signer {
   /** Wallet kind label, used in error messages. */
-  readonly kind: "viem-local" | "viem-jsonrpc" | "ethers-v6" | "ethers-v5";
+  readonly kind: "viem-local" | "viem-jsonrpc";
   /** Sign EIP-712 typed data and return the parsed signature. */
   signTypedData(args: TypedDataArgs): Promise<Signature>;
   /** Lowercase wallet address. */
@@ -80,90 +80,6 @@ function parseSignature(hex: `0x${string}`): Signature {
 }
 
 // ============================================================
-// Ethers V6
-// ============================================================
-
-/** Abstract interface for an {@link https://docs.ethers.org/v6/api/providers/#Signer | ethers.js v6}. */
-export interface AbstractEthersV6Signer {
-  signTypedData(
-    domain: TypedDataDomain,
-    types: TypedDataTypes,
-    value: Record<string, unknown>,
-  ): Promise<string>;
-  getAddress(): Promise<string>;
-  provider?:
-    | { getNetwork(): Promise<{ chainId: number | bigint }> }
-    | null;
-}
-
-function isEthersV6Signer(wallet: AbstractWallet): wallet is AbstractEthersV6Signer {
-  return "signTypedData" in wallet && typeof wallet.signTypedData === "function" &&
-    wallet.signTypedData.length === 3 &&
-    "getAddress" in wallet && typeof wallet.getAddress === "function";
-}
-
-function adaptEthersV6(wallet: AbstractEthersV6Signer): Signer {
-  return {
-    kind: "ethers-v6",
-    async signTypedData(args: TypedDataArgs): Promise<Signature> {
-      const hex = await wallet.signTypedData(args.domain, args.types, args.message);
-      return parseSignature(hex as `0x${string}`);
-    },
-    async getAddress(): Promise<`0x${string}`> {
-      const address = await wallet.getAddress();
-      return address.toLowerCase() as `0x${string}`;
-    },
-    async getChainId(): Promise<`0x${string}`> {
-      if (!wallet.provider) return "0x1";
-      const network = await wallet.provider.getNetwork();
-      return `0x${network.chainId.toString(16)}`;
-    },
-  };
-}
-
-// ============================================================
-// Ethers V5
-// ============================================================
-
-/** Abstract interface for an {@link https://docs.ethers.org/v5/api/signer/ | ethers.js v5}. */
-export interface AbstractEthersV5Signer {
-  _signTypedData(
-    domain: TypedDataDomain,
-    types: TypedDataTypes,
-    value: Record<string, unknown>,
-  ): Promise<string>;
-  getAddress(): Promise<string>;
-  provider?:
-    | { getNetwork(): Promise<{ chainId: number | bigint }> }
-    | null;
-}
-
-function isEthersV5Signer(wallet: AbstractWallet): wallet is AbstractEthersV5Signer {
-  return "_signTypedData" in wallet && typeof wallet._signTypedData === "function" &&
-    wallet._signTypedData.length === 3 &&
-    "getAddress" in wallet && typeof wallet.getAddress === "function";
-}
-
-function adaptEthersV5(wallet: AbstractEthersV5Signer): Signer {
-  return {
-    kind: "ethers-v5",
-    async signTypedData(args: TypedDataArgs): Promise<Signature> {
-      const hex = await wallet._signTypedData(args.domain, args.types, args.message);
-      return parseSignature(hex as `0x${string}`);
-    },
-    async getAddress(): Promise<`0x${string}`> {
-      const address = await wallet.getAddress();
-      return address.toLowerCase() as `0x${string}`;
-    },
-    async getChainId(): Promise<`0x${string}`> {
-      if (!wallet.provider) return "0x1";
-      const network = await wallet.provider.getNetwork();
-      return `0x${network.chainId.toString(16)}`;
-    },
-  };
-}
-
-// ============================================================
 // Viem JSON-RPC Account
 // ============================================================
 
@@ -174,6 +90,19 @@ const EIP712_DOMAIN_TYPE = [
   { name: "chainId", type: "uint256" },
   { name: "verifyingContract", type: "address" },
 ];
+
+/** Cache of viem `types` objects merged with `EIP712Domain` (keyed by the original `types` object identity). */
+const viemTypesCache = new WeakMap<TypedDataTypes, TypedDataTypes>();
+
+/** Merges `EIP712Domain` into `types` for viem wallets (memoized per `types` object). */
+function mergeViemTypes(types: TypedDataTypes): TypedDataTypes {
+  let merged = viemTypesCache.get(types);
+  if (merged === undefined) {
+    merged = { EIP712Domain: EIP712_DOMAIN_TYPE, ...types };
+    viemTypesCache.set(types, merged);
+  }
+  return merged;
+}
 
 /** Viem-style typed data parameters. */
 interface ViemTypedDataParams {
@@ -200,10 +129,15 @@ export interface AbstractViemJsonRpcAccount {
 }
 
 function isViemJsonRpc(wallet: AbstractWallet): wallet is AbstractViemJsonRpcAccount {
-  return "signTypedData" in wallet && typeof wallet.signTypedData === "function" &&
+  return (
+    "signTypedData" in wallet &&
+    typeof wallet.signTypedData === "function" &&
     (wallet.signTypedData.length === 1 || wallet.signTypedData.length === 2) &&
-    "getAddresses" in wallet && typeof wallet.getAddresses === "function" &&
-    "getChainId" in wallet && typeof wallet.getChainId === "function";
+    "getAddresses" in wallet &&
+    typeof wallet.getAddresses === "function" &&
+    "getChainId" in wallet &&
+    typeof wallet.getChainId === "function"
+  );
 }
 
 function adaptViemJsonRpc(wallet: AbstractViemJsonRpcAccount): Signer {
@@ -212,7 +146,7 @@ function adaptViemJsonRpc(wallet: AbstractViemJsonRpcAccount): Signer {
     async signTypedData(args: TypedDataArgs): Promise<Signature> {
       const hex = await wallet.signTypedData({
         domain: args.domain,
-        types: { EIP712Domain: EIP712_DOMAIN_TYPE, ...args.types },
+        types: mergeViemTypes(args.types),
         primaryType: args.primaryType,
         message: args.message,
       });
@@ -245,9 +179,13 @@ export interface AbstractViemLocalAccount {
 }
 
 function isViemLocal(wallet: AbstractWallet): wallet is AbstractViemLocalAccount {
-  return "signTypedData" in wallet && typeof wallet.signTypedData === "function" &&
+  return (
+    "signTypedData" in wallet &&
+    typeof wallet.signTypedData === "function" &&
     (wallet.signTypedData.length === 1 || wallet.signTypedData.length === 2) &&
-    "address" in wallet && typeof wallet.address === "string";
+    "address" in wallet &&
+    typeof wallet.address === "string"
+  );
 }
 
 function adaptViemLocal(wallet: AbstractViemLocalAccount): Signer {
@@ -256,7 +194,7 @@ function adaptViemLocal(wallet: AbstractViemLocalAccount): Signer {
     async signTypedData(args: TypedDataArgs): Promise<Signature> {
       const hex = await wallet.signTypedData({
         domain: args.domain,
-        types: { EIP712Domain: EIP712_DOMAIN_TYPE, ...args.types },
+        types: mergeViemTypes(args.types),
         primaryType: args.primaryType,
         message: args.message,
       });
@@ -277,24 +215,79 @@ function adaptViemLocal(wallet: AbstractViemLocalAccount): Signer {
 // ============================================================
 
 /** Abstract interface for a wallet that can sign typed data. */
-export type AbstractWallet =
-  | AbstractViemJsonRpcAccount
-  | AbstractViemLocalAccount
-  | AbstractEthersV6Signer
-  | AbstractEthersV5Signer;
+export type AbstractWallet = AbstractViemJsonRpcAccount | AbstractViemLocalAccount;
 
-/** Adapt a wallet of any supported kind to the uniform {@link Signer} interface. */
+/** Cache of wallet adapters (keyed by wallet object identity; adaptation re-runs structural guards). */
+const adapterCache = new WeakMap<AbstractWallet, Signer>();
+
+/** Adapt a wallet of any supported kind to the uniform {@link Signer} interface (memoized per wallet object). */
 function adapt(wallet: AbstractWallet): Signer {
+  let signer = adapterCache.get(wallet);
+  if (signer === undefined) {
+    signer = createSigner(wallet);
+    adapterCache.set(wallet, signer);
+  }
+  return signer;
+}
+
+/** Build the uniform {@link Signer} adapter for a wallet of any supported kind. */
+function createSigner(wallet: AbstractWallet): Signer {
   if (isViemJsonRpc(wallet)) return adaptViemJsonRpc(wallet);
   if (isViemLocal(wallet)) return adaptViemLocal(wallet);
-  if (isEthersV6Signer(wallet)) return adaptEthersV6(wallet);
-  if (isEthersV5Signer(wallet)) return adaptEthersV5(wallet);
   throw new AbstractWalletError("Failed to adapt wallet: unknown wallet type");
 }
 
 // ============================================================
 // Public API
 // ============================================================
+
+/** Cache of declared field names per EIP-712 type-fields array (keyed by array object identity). */
+const typeFieldNamesCache = new WeakMap<readonly { name: string; type: string }[], Set<string>>();
+
+/** Cache of wallet address promises (dedupes concurrent lookups, e.g. a live `eth_accounts` RPC per order). */
+const addressCache = new WeakMap<AbstractWallet, Promise<`0x${string}`>>();
+
+/** Cache of wallet chain ID promises. */
+const chainIdCache = new WeakMap<AbstractWallet, Promise<`0x${string}`>>();
+
+/**
+ * Returns the cached promise for a wallet, computing and caching it on first use.
+ *
+ * `stable` decides how long a *fulfilled* value may be reused:
+ * - `true` — keep it for the life of the wallet object. Only correct when the answer cannot
+ *   change: a viem local account carries a fixed address and has no notion of chain.
+ * - `false` — evict as soon as the promise settles. A JSON-RPC wallet is a live connection whose
+ *   selected account and network the user can change at any moment, so a fulfilled value must
+ *   never outlive the call that produced it. Concurrent callers (a burst of orders sharing one
+ *   wallet) still collapse onto a single round trip, which is where the cost actually was;
+ *   the next burst re-reads the live value instead of signing against a stale one.
+ *
+ * A rejected promise is always evicted, so a transient failure can be retried.
+ */
+function cachedPerWallet<T>(
+  cache: WeakMap<AbstractWallet, Promise<T>>,
+  wallet: AbstractWallet,
+  stable: boolean,
+  compute: () => Promise<T>,
+): Promise<T> {
+  const cached = cache.get(wallet);
+  if (cached !== undefined) return cached;
+
+  const promise = compute();
+  cache.set(wallet, promise);
+  // Compare before deleting: a later call may already have replaced this entry.
+  const evict = (): void => {
+    if (cache.get(wallet) === promise) cache.delete(wallet);
+  };
+  if (stable) promise.catch(evict);
+  else promise.then(evict, evict);
+  return promise;
+}
+
+/** True when a wallet's address and chain cannot change under us, making a fulfilled value reusable. */
+function hasStableIdentity(wallet: AbstractWallet): boolean {
+  return adapt(wallet).kind === "viem-local";
+}
 
 /**
  * Signs [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed data using the provided wallet.
@@ -314,9 +307,25 @@ export async function signTypedData(args: {
   try {
     // Filter message to only contain fields defined in types (required by some wallets)
     const typeFields = args.types[args.primaryType];
-    const message = typeFields
-      ? Object.fromEntries(Object.entries(args.message).filter(([k]) => typeFields.some((f) => f.name === k)))
-      : args.message;
+    let message = args.message;
+    if (typeFields) {
+      let fieldNames = typeFieldNamesCache.get(typeFields);
+      if (fieldNames === undefined) {
+        fieldNames = new Set(typeFields.map((f) => f.name));
+        typeFieldNamesCache.set(typeFields, fieldNames);
+      }
+      // Fast path: skip the rebuild when every message key is already declared
+      let needsFilter = false;
+      for (const key in message) {
+        if (!fieldNames.has(key)) {
+          needsFilter = true;
+          break;
+        }
+      }
+      if (needsFilter) {
+        message = Object.fromEntries(Object.entries(message).filter(([key]) => fieldNames.has(key)));
+      }
+    }
 
     return await adapt(args.wallet).signTypedData({
       domain: args.domain,
@@ -333,6 +342,10 @@ export async function signTypedData(args: {
 /**
  * Gets the lowercase wallet address from various wallet types.
  *
+ * Concurrent calls for the same wallet share a single lookup. For a local account the resolved
+ * address is reused thereafter; for a JSON-RPC wallet it is re-read on the next call, because the
+ * user may have switched accounts in the meantime.
+ *
  * @param wallet The wallet to query.
  * @return The lowercase wallet address as a hex string.
  *
@@ -340,7 +353,7 @@ export async function signTypedData(args: {
  */
 export async function getWalletAddress(wallet: AbstractWallet): Promise<`0x${string}`> {
   try {
-    return await adapt(wallet).getAddress();
+    return await cachedPerWallet(addressCache, wallet, hasStableIdentity(wallet), () => adapt(wallet).getAddress());
   } catch (error) {
     if (error instanceof AbstractWalletError) throw error;
     throw new AbstractWalletError("Failed to get an address from the wallet", { cause: error });
@@ -350,8 +363,12 @@ export async function getWalletAddress(wallet: AbstractWallet): Promise<`0x${str
 /**
  * Gets the chain ID of the wallet.
  *
- * For wallets that have no notion of chain (e.g., a viem local account, or an ethers signer without a provider),
- * defaults to `"0x1"`.
+ * For wallets that have no notion of chain (e.g., a viem local account), defaults to `"0x1"`.
+ *
+ * Concurrent calls for the same wallet share a single lookup. For a local account the answer is a
+ * constant and is reused; for a JSON-RPC wallet it is re-read on the next call, because the user may
+ * have switched networks — and this value becomes the EIP-712 domain `chainId`, so a stale one would
+ * produce a signature for the wrong chain.
  *
  * @param wallet The wallet to query.
  * @return The chain ID as a hex string.
@@ -360,7 +377,7 @@ export async function getWalletAddress(wallet: AbstractWallet): Promise<`0x${str
  */
 export async function getWalletChainId(wallet: AbstractWallet): Promise<`0x${string}`> {
   try {
-    return await adapt(wallet).getChainId();
+    return await cachedPerWallet(chainIdCache, wallet, hasStableIdentity(wallet), () => adapt(wallet).getChainId());
   } catch (error) {
     if (error instanceof AbstractWalletError) throw error;
     throw new AbstractWalletError("Failed to get the chain ID from the wallet", { cause: error });

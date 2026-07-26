@@ -1,5 +1,5 @@
-import { type L2BookEvent, type L2BookParameters, L2BookRequest } from "@nktkas/hyperliquid/api/subscription";
-import * as v from "@valibot/valibot";
+import { type L2BookEvent, type L2BookParameters, L2BookRequest } from "@bloxwap/hyperliquid/api/subscription";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";

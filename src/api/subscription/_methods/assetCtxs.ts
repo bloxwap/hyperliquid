@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -56,8 +56,8 @@ export type AssetCtxsParameters = Omit<v.InferInput<typeof AssetCtxsRequest>, "t
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { assetCtxs } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { assetCtxs } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -88,17 +88,22 @@ export function assetCtxs(
 ): Promise<ISubscription> {
   const isListenerFirst = typeof paramsOrListener === "function";
   const params = isListenerFirst ? {} : paramsOrListener;
-  const listener = isListenerFirst ? paramsOrListener : listenerOrOptions as (data: AssetCtxsEvent) => void;
-  const options = isListenerFirst ? listenerOrOptions as SubscriptionOptions | undefined : maybeOptions;
+  const listener = isListenerFirst ? paramsOrListener : (listenerOrOptions as (data: AssetCtxsEvent) => void);
+  const options = isListenerFirst ? (listenerOrOptions as SubscriptionOptions | undefined) : maybeOptions;
 
   const payload = parse(AssetCtxsRequest, {
     type: "assetCtxs",
     ...params,
     dex: params.dex ?? "", // same value as in response
   });
-  return config.transport.subscribe<AssetCtxsEvent>(payload.type, payload, (e) => {
-    if (e.detail.dex === payload.dex) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<AssetCtxsEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.dex === payload.dex) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

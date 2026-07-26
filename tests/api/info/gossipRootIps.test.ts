@@ -10,8 +10,6 @@ runTest({
   codeTestFn: async (_t, client) => {
     const data = await Promise.all([client.gossipRootIps()]);
 
-    schemaCoverage(responseSchema, data, [
-      "#/array",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/array"]);
   },
 });

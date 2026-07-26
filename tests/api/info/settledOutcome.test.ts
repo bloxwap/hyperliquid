@@ -1,5 +1,5 @@
-import { type SettledOutcomeParameters, SettledOutcomeRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type SettledOutcomeParameters, SettledOutcomeRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,10 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(SettledOutcomeRequest, ["type"])
 runTest({
   name: "settledOutcome",
   codeTestFn: async (_t, client) => {
-    const params: SettledOutcomeParameters[] = [
-      { outcome: 100 },
-      { outcome: 999999999 },
-    ];
+    const params: SettledOutcomeParameters[] = [{ outcome: 100 }, { outcome: 999999999 }];
 
     const data = await Promise.all(params.map((p) => client.settledOutcome(p)));
 

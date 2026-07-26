@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -56,8 +56,8 @@ export type AllMidsParameters = Omit<v.InferInput<typeof AllMidsRequest>, "type"
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { allMids } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { allMids } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -88,17 +88,22 @@ export function allMids(
 ): Promise<ISubscription> {
   const isListenerFirst = typeof paramsOrListener === "function";
   const params = isListenerFirst ? {} : paramsOrListener;
-  const listener = isListenerFirst ? paramsOrListener : listenerOrOptions as (data: AllMidsEvent) => void;
-  const options = isListenerFirst ? listenerOrOptions as SubscriptionOptions | undefined : maybeOptions;
+  const listener = isListenerFirst ? paramsOrListener : (listenerOrOptions as (data: AllMidsEvent) => void);
+  const options = isListenerFirst ? (listenerOrOptions as SubscriptionOptions | undefined) : maybeOptions;
 
   const payload = parse(AllMidsRequest, {
     type: "allMids",
     ...params,
     dex: params.dex || undefined, // Same value as in response
   });
-  return config.transport.subscribe<AllMidsEvent>(payload.type, payload, (e) => {
-    if (e.detail.dex === payload.dex) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<AllMidsEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.dex === payload.dex) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

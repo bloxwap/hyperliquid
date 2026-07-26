@@ -1,8 +1,8 @@
 import {
   type UserNonFundingLedgerUpdatesParameters,
   UserNonFundingLedgerUpdatesRequest,
-} from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+} from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -31,8 +31,6 @@ runTest({
     const data = await Promise.all(params.map((p) => client.userNonFundingLedgerUpdates(p)));
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data, [
-      "#/items/properties/delta/anyOf/3/properties/leverageType/enum/0",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/items/properties/delta/anyOf/3/properties/leverageType/enum/0"]);
   },
 });

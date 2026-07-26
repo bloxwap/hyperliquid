@@ -24,8 +24,8 @@ export interface SymbolConverterOptions {
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { SymbolConverter } from "@nktkas/hyperliquid/utils";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  * const converter = await SymbolConverter.create({ transport });
@@ -77,8 +77,8 @@ export class SymbolConverter {
    *
    * @example
    * ```ts
-   * import { HttpTransport } from "@nktkas/hyperliquid";
-   * import { SymbolConverter } from "@nktkas/hyperliquid/utils";
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
    *
    * const transport = new HttpTransport(); // or `WebSocketTransport`
    * const converter = await SymbolConverter.create({ transport });
@@ -180,9 +180,7 @@ export class SymbolConverter {
     if (dexsToProcess.length === 0) return;
 
     const config = { transport: this._transport };
-    const results = await Promise.allSettled(
-      dexsToProcess.map((item) => meta(config, { dex: item.dex.name })),
-    );
+    const results = await Promise.allSettled(dexsToProcess.map((item) => meta(config, { dex: item.dex.name })));
 
     results.forEach((result, idx) => {
       if (result.status !== "fulfilled") return;
@@ -205,9 +203,11 @@ export class SymbolConverter {
   private _processOutcomeMarkets(outcomeMetaData: OutcomeMetaResponse): void {
     // Map each named outcome to its owning question, which holds the price spec and bucket order
     const questionByOutcome = new Map<number, OutcomeMetaResponse["questions"][number]>();
-    outcomeMetaData.questions.forEach((question) => {
-      question.namedOutcomes.forEach((outcomeId) => questionByOutcome.set(outcomeId, question));
-    });
+    for (const question of outcomeMetaData.questions) {
+      for (const outcomeId of question.namedOutcomes) {
+        questionByOutcome.set(outcomeId, question);
+      }
+    }
 
     // Fallback outcomes are not tradable on their own and have no public slug
     const fallbackOutcomes = new Set(outcomeMetaData.questions.map((question) => question.fallbackOutcome));
@@ -321,8 +321,8 @@ export class SymbolConverter {
    *
    * @example
    * ```ts
-   * import { HttpTransport } from "@nktkas/hyperliquid";
-   * import { SymbolConverter } from "@nktkas/hyperliquid/utils";
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
    *
    * const transport = new HttpTransport(); // or `WebSocketTransport`
    * const converter = await SymbolConverter.create({ transport });
@@ -346,8 +346,8 @@ export class SymbolConverter {
    *
    * @example
    * ```ts
-   * import { HttpTransport } from "@nktkas/hyperliquid";
-   * import { SymbolConverter } from "@nktkas/hyperliquid/utils";
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
    *
    * const transport = new HttpTransport(); // or `WebSocketTransport`
    * const converter = await SymbolConverter.create({ transport });
@@ -367,8 +367,8 @@ export class SymbolConverter {
    *
    * @example
    * ```ts
-   * import { HttpTransport } from "@nktkas/hyperliquid";
-   * import { SymbolConverter } from "@nktkas/hyperliquid/utils";
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
    *
    * const transport = new HttpTransport(); // or `WebSocketTransport`
    * const converter = await SymbolConverter.create({ transport });
@@ -386,8 +386,8 @@ export class SymbolConverter {
    *
    * @example
    * ```ts
-   * import { HttpTransport } from "@nktkas/hyperliquid";
-   * import { SymbolConverter } from "@nktkas/hyperliquid/utils";
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
    *
    * const transport = new HttpTransport(); // or `WebSocketTransport`
    * const converter = await SymbolConverter.create({ transport });

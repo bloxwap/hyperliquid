@@ -1,15 +1,13 @@
-import { ApiRequestError } from "@nktkas/hyperliquid";
-import { type PerpDeployParameters, PerpDeployRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
-import { assertRejects } from "jsr:@std/assert@1";
+import { ApiRequestError } from "@bloxwap/hyperliquid";
+import { type PerpDeployParameters, PerpDeployRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
+import { assertRejects } from "@jsr/std__assert";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
 import { runTest } from "./_t.ts";
 
 const paramsSchema = valibotToJsonSchema(
-  v.union(
-    PerpDeployRequest.entries.action.options.map((option) => v.omit(option, ["type"])),
-  ),
+  v.union(PerpDeployRequest.entries.action.options.map((option) => v.omit(option, ["type"]))),
 );
 
 runTest({
@@ -133,13 +131,29 @@ runTest({
       {
         setOracle: {
           dex: "test",
-          oraclePxs: [["TEST0", "12.0"], ["TEST1", "1"]],
-          markPxs: [[["TEST0", "3.0"], ["TEST1", "14"]]],
-          externalPerpPxs: [["TEST0", "5.0"], ["TEST1", "6"]],
+          oraclePxs: [
+            ["TEST0", "12.0"],
+            ["TEST1", "1"],
+          ],
+          markPxs: [
+            [
+              ["TEST0", "3.0"],
+              ["TEST1", "14"],
+            ],
+          ],
+          externalPerpPxs: [
+            ["TEST0", "5.0"],
+            ["TEST1", "6"],
+          ],
         },
       },
       { setFundingMultipliers: [["TEST0", "1"]] },
-      { setFundingInterestRates: [["TEST0", "0.005"], ["TEST1", "-0.005"]] },
+      {
+        setFundingInterestRates: [
+          ["TEST0", "0.005"],
+          ["TEST1", "-0.005"],
+        ],
+      },
       { haltTrading: { coin: "TEST0", isHalted: true } },
       { setMarginTableIds: [["TEST0", 1]] },
       {
@@ -164,14 +178,21 @@ runTest({
       {
         setSubDeployers: {
           dex: "test",
-          subDeployers: [{
-            variant: "setOracle",
-            user: "0x0000000000000000000000000000000000000000",
-            allowed: true,
-          }],
+          subDeployers: [
+            {
+              variant: "setOracle",
+              user: "0x0000000000000000000000000000000000000000",
+              allowed: true,
+            },
+          ],
         },
       },
-      { setMarginModes: [["TEST0", "noCross"], ["TEST1", "strictIsolated"]] },
+      {
+        setMarginModes: [
+          ["TEST0", "noCross"],
+          ["TEST1", "strictIsolated"],
+        ],
+      },
       { setFeeScale: { dex: "test", scale: "2.5" } },
       { setGrowthModes: [["TEST0", true]] },
       {
@@ -195,14 +216,13 @@ runTest({
       { disableDex: "test" },
     ];
 
-    await Promise.all(params.map((p) =>
-      assertRejects(
-        async () => {
+    await Promise.all(
+      params.map((p) =>
+        assertRejects(async () => {
           await exchClient.perpDeploy(p);
-        },
-        ApiRequestError,
-      )
-    ));
+        }, ApiRequestError),
+      ),
+    );
 
     schemaCoverage(paramsSchema, params);
   },

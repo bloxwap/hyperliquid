@@ -1,5 +1,5 @@
-import { type UserFillsByTimeParameters, UserFillsByTimeRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type UserFillsByTimeParameters, UserFillsByTimeRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -28,8 +28,6 @@ runTest({
     const data = await Promise.all(params.map((p) => client.userFillsByTime(p)));
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data, [
-      "#/items/properties/twapId/defined",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/items/properties/twapId/defined"]);
   },
 });

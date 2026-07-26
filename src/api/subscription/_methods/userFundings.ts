@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -83,8 +83,8 @@ export type UserFundingsParameters = Omit<v.InferInput<typeof UserFundingsReques
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { userFundings } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { userFundings } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -104,9 +104,14 @@ export function userFundings(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(UserFundingsRequest, { type: "userFundings", ...params });
-  return config.transport.subscribe<UserFundingsEvent>(payload.type, payload, (e) => {
-    if (e.detail.user === payload.user) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<UserFundingsEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.user === payload.user) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

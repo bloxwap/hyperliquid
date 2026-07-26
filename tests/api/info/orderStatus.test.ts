@@ -1,5 +1,5 @@
-import { type OrderStatusParameters, OrderStatusRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type OrderStatusParameters, OrderStatusRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -38,7 +38,8 @@ runTest({
       { user: "0x563C175E6f11582f65D6d9E360A618699DEe14a9", oid: 27378915177 }, // order.status = reduceOnlyRejected
 
       { user: "0x563C175E6f11582f65D6d9E360A618699DEe14a9", oid: 15548036277 }, // order.order.cloid = null
-      { // order.order.cloid = hex
+      {
+        // order.order.cloid = hex
         user: "0x563C175E6f11582f65D6d9E360A618699DEe14a9",
         oid: "0xd4bb069b673a48161bca56cfc88deb6b",
       },

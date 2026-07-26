@@ -74,7 +74,9 @@ async function signMultiSigOuter(args: {
     domain: {
       name: "HyperliquidSignTransaction",
       version: "1",
-      chainId: parseInt(wrapper.signatureChainId),
+      // `signatureChainId` is a `0x`-prefixed hex string, so radix 16 is the only correct base here:
+      // radix 10 would parse it as `0` and silently sign under the wrong EIP-712 domain.
+      chainId: parseInt(wrapper.signatureChainId, 16),
       verifyingContract: "0x0000000000000000000000000000000000000000",
     },
     types: MULTI_SIG_TYPES,
@@ -100,8 +102,8 @@ async function signMultiSigOuter(args: {
  *
  * @example
  * ```ts
- * import { signMultiSigL1 } from "@nktkas/hyperliquid/signing";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { signMultiSigL1 } from "@bloxwap/hyperliquid/signing";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
  * const signers = [
  *   privateKeyToAccount("0x..."),
@@ -124,9 +126,9 @@ async function signMultiSigOuter(args: {
  * @example
  * \- Full cycle of signing and sending a multi-sig L1 action to the Hyperliquid API
  * ```ts
- * import { canonicalize, signMultiSigL1 } from "@nktkas/hyperliquid/signing";
- * import { CancelRequest } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { canonicalize, signMultiSigL1 } from "@bloxwap/hyperliquid/signing";
+ * import { CancelRequest } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
  * const signers = [
  *   privateKeyToAccount("0x..."),
@@ -185,19 +187,24 @@ export async function signMultiSigL1(args: {
   // --- Resolve leader (outer signer) address ---------------
   const outerSigner = await getWalletAddress(args.signers[0]);
 
+  // --- Hash the inner payload (identical for every signer) -
+  const innerActionHash = createL1ActionHash({
+    action: [args.multiSigUser.toLowerCase(), outerSigner.toLowerCase(), args.action],
+    nonce: args.nonce,
+    vaultAddress: args.vaultAddress,
+    expiresAfter: args.expiresAfter,
+  });
+
   // --- Collect inner signatures from all signers -----------
-  const innerSignatures = await Promise.all(args.signers.map((signer) =>
-    signL1Inner({
-      signer,
-      action: args.action,
-      multiSigUser: args.multiSigUser,
-      outerSigner,
-      nonce: args.nonce,
-      isTestnet: args.isTestnet,
-      vaultAddress: args.vaultAddress,
-      expiresAfter: args.expiresAfter,
-    })
-  ));
+  const innerSignatures = await Promise.all(
+    args.signers.map((signer) =>
+      signL1Inner({
+        signer,
+        actionHash: innerActionHash,
+        isTestnet: args.isTestnet,
+      }),
+    ),
+  );
 
   // --- Build wrapper ---------------------------------------
   const wrapper: MultiSigAction = {
@@ -238,9 +245,9 @@ export async function signMultiSigL1(args: {
  *
  * @example
  * ```ts
- * import { signMultiSigUserSigned } from "@nktkas/hyperliquid/signing";
- * import { ApproveAgentTypes } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { signMultiSigUserSigned } from "@bloxwap/hyperliquid/signing";
+ * import { ApproveAgentTypes } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
  * const signers = [
  *   privateKeyToAccount("0x..."),
@@ -269,9 +276,9 @@ export async function signMultiSigL1(args: {
  * @example
  * \- Full cycle of signing and sending a multi-sig user-signed action to the Hyperliquid API
  * ```ts
- * import { signMultiSigUserSigned } from "@nktkas/hyperliquid/signing";
- * import { ApproveAgentTypes } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { signMultiSigUserSigned } from "@bloxwap/hyperliquid/signing";
+ * import { ApproveAgentTypes } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
  * const signers = [
  *   privateKeyToAccount("0x..."),
@@ -313,16 +320,11 @@ export async function signMultiSigUserSigned(args: {
   /** The multi-signature account address. */
   multiSigUser: `0x${string}`;
   /** The action payload (must include `signatureChainId`, `hyperliquidChain`, and `nonce` or `time`). */
-  action:
-    & {
-      signatureChainId: `0x${string}`;
-      hyperliquidChain: "Mainnet" | "Testnet";
-      [key: string]: unknown;
-    }
-    & (
-      | { nonce: number; time?: never }
-      | { time: number; nonce?: never }
-    );
+  action: {
+    signatureChainId: `0x${string}`;
+    hyperliquidChain: "Mainnet" | "Testnet";
+    [key: string]: unknown;
+  } & ({ nonce: number; time?: never } | { time: number; nonce?: never });
   /** Action serialized into the outer multi-sig payload; defaults to `action`. */
   payloadAction?: Record<string, unknown>;
   /** [EIP-712](https://eips.ethereum.org/EIPS/eip-712) type definitions. */
@@ -332,15 +334,17 @@ export async function signMultiSigUserSigned(args: {
   const outerSigner = await getWalletAddress(args.signers[0]);
 
   // --- Collect inner signatures from all signers -----------
-  const innerSignatures = await Promise.all(args.signers.map((signer) =>
-    signUserSignedInner({
-      signer,
-      action: args.action,
-      types: args.types,
-      multiSigUser: args.multiSigUser,
-      outerSigner,
-    })
-  ));
+  const innerSignatures = await Promise.all(
+    args.signers.map((signer) =>
+      signUserSignedInner({
+        signer,
+        action: args.action,
+        types: args.types,
+        multiSigUser: args.multiSigUser,
+        outerSigner,
+      }),
+    ),
+  );
 
   // --- Build wrapper ---------------------------------------
   const wrapper: MultiSigAction = {

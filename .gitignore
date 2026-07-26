@@ -1,0 +1,8 @@
+# Dependencies (root install, plus the pinned TypeScript 7 gate under .dev/ts7).
+node_modules/
+
+# Output of `bun run build`.
+dist/
+
+# Output of `bun test --coverage`.
+coverage/

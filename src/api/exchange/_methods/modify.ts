@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -99,20 +99,20 @@ export type ModifyRequest = v.InferOutput<typeof ModifyRequest>;
  */
 export type ModifyResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -157,11 +157,11 @@ export type ModifySuccessResponse = ExcludeErrorResponse<ModifyResponse>;
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { modify } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { modify } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await modify({ transport, wallet }, {
@@ -184,9 +184,6 @@ export function modify(
   params: ModifyParameters,
   opts?: ModifyOptions,
 ): Promise<ModifySuccessResponse> {
-  const action = canonicalize(
-    ModifyActionSchema,
-    parse(ModifyActionSchema, { type: "modify", ...params }),
-  );
+  const action = canonicalize(ModifyActionSchema, parse(ModifyActionSchema, { type: "modify", ...params }));
   return executeL1Action(config, action, opts);
 }

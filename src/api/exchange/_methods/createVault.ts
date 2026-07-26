@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -46,25 +46,27 @@ export type CreateVaultRequest = v.InferOutput<typeof CreateVaultRequest>;
  * Response for creating a vault.
  * @see null
  */
-export type CreateVaultResponse = {
-  /** Successful status. */
-  status: "ok";
-  /** Response details. */
-  response: {
-    /** Type of response. */
-    type: "createVault";
-    /**
-     * Vault address.
-     * @pattern ^0x[a-fA-F0-9]{40}$
-     */
-    data: `0x${string}`;
-  };
-} | {
-  /** Error status. */
-  status: "err";
-  /** Error message. */
-  response: string;
-};
+export type CreateVaultResponse =
+  | {
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "createVault";
+        /**
+         * Vault address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        data: `0x${string}`;
+      };
+    }
+  | {
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -110,11 +112,11 @@ export type CreateVaultSuccessResponse = ExcludeErrorResponse<CreateVaultRespons
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { createVault } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { createVault } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * const data = await createVault({ transport, wallet }, {
@@ -138,10 +140,10 @@ export function createVault(
   return executeL1Action(
     {
       ...config,
-      nonceManager: async (addr) =>
+      nonceManager: async (addr: string): Promise<number> =>
         // Patch action.nonce in-place so the body matches the envelope nonce.
-        action.nonce =
-          await (config.nonceManager?.(addr) ?? globalNonceManager.getNonce(`${addr}:${config.transport.isTestnet}`)),
+        (action.nonce = await (config.nonceManager?.(addr) ??
+          globalNonceManager.getNonce(`${addr}:${config.transport.isTestnet}`))),
     },
     action,
     opts,

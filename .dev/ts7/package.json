@@ -1,0 +1,18 @@
+{
+  "name": "@bloxwap/hyperliquid-ts7-gate",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency manifest for the TypeScript 7 type-check gate. Installed with `bun install`; nothing in this directory is published. The repo root package.json remains the source of truth for the library itself.",
+  "devDependencies": {
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@jsr/nktkas__rews": "4.1.0",
+    "@jsr/noble__hashes": "2.2.0",
+    "@jsr/std__async": "1.5.0",
+    "@jsr/std__msgpack": "1.0.3",
+    "@jsr/valibot__valibot": "1.4.2",
+    "decimal.js": "^10.6.0"
+  }
+}

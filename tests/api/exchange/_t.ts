@@ -1,25 +1,33 @@
-// deno-lint-ignore-file no-import-prefix
+/**
+ * Shared helpers for live Exchange API tests.
+ * @module
+ */
 
+import { describe, test } from "bun:test";
 import {
   ExchangeClient,
   type ExchangeMultiSigConfig,
   type ExchangeSingleWalletConfig,
   HttpTransport,
   InfoClient,
-} from "@nktkas/hyperliquid";
-import { getWalletAddress } from "@nktkas/hyperliquid/signing";
-import { formatPrice, formatSize, SymbolConverter } from "@nktkas/hyperliquid/utils";
-import "jsr:@std/dotenv@^0.225.5/load";
-import { generatePrivateKey, privateKeyToAccount } from "npm:viem@2/accounts";
+} from "@bloxwap/hyperliquid";
+import { getWalletAddress } from "@bloxwap/hyperliquid/signing";
+import { formatPrice, formatSize, SymbolConverter } from "@bloxwap/hyperliquid/utils";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { OFFLINE } from "../../_offline.ts";
+import { createTestContext, type TestContext } from "../../_testContext.ts";
 
 // ============================================================
 // Arguments
 // ============================================================
 
 const WAIT = 5000;
-const OFFLINE = Deno.args.includes("--offline");
 
-const PRIVATE_KEY = Deno.env.get("PRIVATE_KEY") as `0x${string}` | undefined;
+/** Generous per-test budget: every case pays the rate-limit delay plus several testnet round trips. */
+const TIMEOUT = 120_000;
+
+// Bun loads `.env` on startup, so no dotenv shim is needed here.
+const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}` | undefined;
 const MAIN_WALLET = PRIVATE_KEY ? privateKeyToAccount(PRIVATE_KEY) : undefined;
 
 // ============================================================
@@ -29,37 +37,58 @@ const MAIN_WALLET = PRIVATE_KEY ? privateKeyToAccount(PRIVATE_KEY) : undefined;
 const transport = new HttpTransport({ isTestnet: true, timeout: 30_000 });
 const infoClient = new InfoClient({ transport });
 
-// These are only consumed by network tests, which are skipped via `ignore: OFFLINE`, so the unused values are safe.
+// These are only consumed by network tests, which are skipped in offline mode, so the unused values are safe.
 export const symbolConverter = OFFLINE
-  ? undefined as unknown as SymbolConverter
+  ? (undefined as unknown as SymbolConverter)
   : await SymbolConverter.create({ transport });
 export const allMids = OFFLINE
-  ? undefined as unknown as Awaited<ReturnType<typeof infoClient.allMids>>
+  ? (undefined as unknown as Awaited<ReturnType<typeof infoClient.allMids>>)
   : await infoClient.allMids();
 
 // ============================================================
 // Test
 // ============================================================
 
+/**
+ * Runs an exchange action test once per client flavour (single-wallet and multi-sig).
+ *
+ * Each flavour is its own `bun:test` case inside a `describe` named after the action, so a failure
+ * names the flavour that broke. Skipped when offline or when no `PRIVATE_KEY` is configured.
+ *
+ * @param options Test options.
+ * @param options.name Name of the exchange action under test.
+ * @param options.skipMultiSig Runs only the single-wallet flavour when `true`.
+ * @param options.codeTestFn Test body; receives a test context and a temporary funded client.
+ */
 export function runTest(options: {
   name: string;
   skipMultiSig?: boolean;
   codeTestFn: (
-    t: Deno.TestContext,
+    t: TestContext,
     exchClient: ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>,
   ) => Promise<void>;
 }): void {
   const { name, skipMultiSig, codeTestFn } = options;
 
-  const clientTypes = skipMultiSig ? ["user"] as const : ["user", "multisig"] as const;
+  const clientTypes = skipMultiSig ? (["user"] as const) : (["user", "multisig"] as const);
 
-  Deno.test(name, { ignore: OFFLINE || !MAIN_WALLET }, async (t) => {
-    await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits
-
+  describe.skipIf(OFFLINE || !MAIN_WALLET)(name, () => {
     for (const clientType of clientTypes) {
-      const exchClient = await createTempExchangeClient(clientType);
-      await t.step(clientType, async (t) => await codeTestFn(t, exchClient));
-      await cleanupTempExchangeClient(exchClient);
+      test(
+        clientType,
+        async () => {
+          await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits
+
+          const exchClient = await createTempExchangeClient(clientType);
+          try {
+            await codeTestFn(createTestContext([name, clientType]), exchClient);
+          } finally {
+            // Always reclaim the temporary account's funds, even when the assertions fail.
+            await cleanupTempExchangeClient(exchClient);
+          }
+        },
+        TIMEOUT,
+      );
     }
   });
 }
@@ -68,6 +97,7 @@ export function runTest(options: {
 // Helpers
 // ============================================================
 
+/** Funds a throwaway testnet account and returns a client for it, optionally as a multi-sig user. */
 export async function createTempExchangeClient(
   type: "user" | "multisig",
 ): Promise<ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>> {
@@ -101,12 +131,14 @@ export async function createTempExchangeClient(
   }
 }
 
+/** Cancels every open order/TWAP, flattens positions, and sweeps the remaining funds back to the main wallet. */
 export async function cleanupTempExchangeClient(
   tempClient: ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>,
 ): Promise<void> {
-  const tempUser = "multiSigUser" in tempClient.config_
-    ? tempClient.config_.multiSigUser
-    : await getWalletAddress(tempClient.config_.wallet);
+  const tempUser =
+    "multiSigUser" in tempClient.config_
+      ? tempClient.config_.multiSigUser
+      : await getWalletAddress(tempClient.config_.wallet);
 
   const webData2 = await infoClient.webData2({ user: tempUser });
 
@@ -123,42 +155,48 @@ export async function cleanupTempExchangeClient(
   }
 
   // Close all positions
-  await Promise.all(webData2.clearinghouseState.assetPositions.map(async (pos) => {
-    const id = symbolConverter.getAssetId(pos.position.coin)!;
-    const szDecimals = symbolConverter.getSzDecimals(pos.position.coin)!;
-    const px = Number(pos.position.entryPx) * (pos.position.positionValue.startsWith("-") ? 1.05 : 0.95);
-    await tempClient.order({
-      orders: [{
-        a: id,
-        b: false,
-        p: formatPrice(px, szDecimals),
-        s: "0", // full position size
-        r: true,
-        t: { limit: { tif: "Gtc" } },
-      }],
-      grouping: "na",
-    }).catch(() => undefined);
-  }));
+  await Promise.all(
+    webData2.clearinghouseState.assetPositions.map(async (pos) => {
+      const id = symbolConverter.getAssetId(pos.position.coin)!;
+      const szDecimals = symbolConverter.getSzDecimals(pos.position.coin)!;
+      const px = Number(pos.position.entryPx) * (pos.position.positionValue.startsWith("-") ? 1.05 : 0.95);
+      await tempClient
+        .order({
+          orders: [
+            {
+              a: id,
+              b: false,
+              p: formatPrice(px, szDecimals),
+              s: "0", // full position size
+              r: true,
+              t: { limit: { tif: "Gtc" } },
+            },
+          ],
+          grouping: "na",
+        })
+        .catch(() => undefined);
+    }),
+  );
 
   // Withdraw all funds back to main account
-  await infoClient.clearinghouseState({ user: tempUser })
-    .then(async (state) => {
-      await tempClient.usdSend({ destination: MAIN_WALLET!.address, amount: state.withdrawable })
-        .catch(() => undefined);
-    });
-  await infoClient.spotClearinghouseState({ user: tempUser })
-    .then(async (state) => {
-      const usdcBalance = Number(state.balances.find((b) => b.coin === "USDC")?.total ?? "0");
-      if (usdcBalance > 0) {
-        await tempClient.spotSend({
+  await infoClient.clearinghouseState({ user: tempUser }).then(async (state) => {
+    await tempClient.usdSend({ destination: MAIN_WALLET!.address, amount: state.withdrawable }).catch(() => undefined);
+  });
+  await infoClient.spotClearinghouseState({ user: tempUser }).then(async (state) => {
+    const usdcBalance = Number(state.balances.find((b) => b.coin === "USDC")?.total ?? "0");
+    if (usdcBalance > 0) {
+      await tempClient
+        .spotSend({
           destination: MAIN_WALLET!.address,
           token: "USDC:0xeb62eee3685fc4c43992febcd9e75443",
           amount: usdcBalance,
-        }).catch(() => undefined);
-      }
-    });
+        })
+        .catch(() => undefined);
+    }
+  });
 }
 
+/** Tops the account up and places one order, returning everything a test needs to reference it later. */
 export async function openOrder(
   client: ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>,
   type: "market" | "limit",
@@ -198,23 +236,24 @@ export async function openOrder(
 
   // Place order
   const result = await client.order({
-    orders: [{
-      a: id,
-      b: side === "buy",
-      p: executionPx,
-      s: sz,
-      r: false,
-      t: { limit: { tif: "Gtc" } },
-      c: "0x17a5a40306205a0c6d60c7264153781c",
-    }],
+    orders: [
+      {
+        a: id,
+        b: side === "buy",
+        p: executionPx,
+        s: sz,
+        r: false,
+        t: { limit: { tif: "Gtc" } },
+        c: "0x17a5a40306205a0c6d60c7264153781c",
+      },
+    ],
     grouping: "na",
   });
 
   // Extract order info
-  const [order] = result.response.data.statuses as (
+  const [order] = result.response.data.statuses as
     | { resting: { oid: number; cloid: `0x${string}` } }[]
-    | { filled: { oid: number; cloid: `0x${string}` } }[]
-  );
+    | { filled: { oid: number; cloid: `0x${string}` } }[];
   return {
     a: id,
     b: side === "buy",
@@ -228,6 +267,7 @@ export async function openOrder(
   };
 }
 
+/** Tops the account up and starts a TWAP order, returning its identifiers. */
 export async function createTWAP(
   client: ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>,
   symbol = "SOL",
@@ -268,17 +308,18 @@ export async function createTWAP(
   };
 }
 
+/** Sends USDC from the main wallet to the client's perp balance. */
 export async function topUpPerp(
   client: ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>,
   amount: string,
 ): Promise<void> {
   const mainExchClient = new ExchangeClient({ wallet: MAIN_WALLET!, transport });
-  const tempUser = "multiSigUser" in client.config_
-    ? client.config_.multiSigUser
-    : await getWalletAddress(client.config_.wallet);
+  const tempUser =
+    "multiSigUser" in client.config_ ? client.config_.multiSigUser : await getWalletAddress(client.config_.wallet);
   await mainExchClient.usdSend({ destination: tempUser, amount });
 }
 
+/** Sends a spot token from the main wallet to the client's spot balance. */
 export async function topUpSpot(
   client: ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>,
   token: "USDC" | "HYPE",
@@ -290,9 +331,8 @@ export async function topUpSpot(
   } as const;
 
   const mainExchClient = new ExchangeClient({ wallet: MAIN_WALLET!, transport });
-  const tempUser = "multiSigUser" in client.config_
-    ? client.config_.multiSigUser
-    : await getWalletAddress(client.config_.wallet);
+  const tempUser =
+    "multiSigUser" in client.config_ ? client.config_.multiSigUser : await getWalletAddress(client.config_.wallet);
   await mainExchClient.spotSend({
     destination: tempUser,
     token: `${token}:${tokenAddresses[token]}`,
@@ -300,12 +340,14 @@ export async function topUpSpot(
   });
 }
 
+/** Approves a fresh agent wallet for the given principal and returns a client signing as that agent. */
 export async function createAgentExchangeClient(
   principalClient: ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>,
 ): Promise<{ agentExch: ExchangeClient<ExchangeSingleWalletConfig>; principal: `0x${string}` }> {
-  const principal = "multiSigUser" in principalClient.config_
-    ? principalClient.config_.multiSigUser
-    : await getWalletAddress(principalClient.config_.wallet);
+  const principal =
+    "multiSigUser" in principalClient.config_
+      ? principalClient.config_.multiSigUser
+      : await getWalletAddress(principalClient.config_.wallet);
 
   const agentAccount = privateKeyToAccount(generatePrivateKey());
   await principalClient.approveAgent({ agentAddress: agentAccount.address, agentName: null });

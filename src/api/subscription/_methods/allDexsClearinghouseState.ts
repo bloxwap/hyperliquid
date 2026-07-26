@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -65,8 +65,8 @@ export type AllDexsClearinghouseStateParameters = Omit<v.InferInput<typeof AllDe
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { allDexsClearinghouseState } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { allDexsClearinghouseState } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -89,9 +89,14 @@ export function allDexsClearinghouseState(
     type: "allDexsClearinghouseState",
     ...params,
   });
-  return config.transport.subscribe<AllDexsClearinghouseStateEvent>(payload.type, payload, (e) => {
-    if (e.detail.user === payload.user) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<AllDexsClearinghouseStateEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.user === payload.user) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

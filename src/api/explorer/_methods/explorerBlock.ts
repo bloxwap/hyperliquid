@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -60,8 +60,8 @@ import type { ExplorerConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { explorerBlock } from "@nktkas/hyperliquid/api/explorer";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { explorerBlock } from "@bloxwap/hyperliquid/api/explorer";
  *
  * const transport = new WebSocketTransport({ url: "wss://rpc.hyperliquid.xyz/ws" }); // only `WebSocketTransport` supports this API
  *
@@ -79,7 +79,13 @@ export function explorerBlock(
   onError?: (error: TransportError) => void,
 ): Promise<ISubscription> {
   const payload = parse(ExplorerBlockRequest, { type: "explorerBlock" });
-  return config.transport.subscribe<ExplorerBlockEvent>("explorerBlock_", payload, (e) => { // Internal duck channel as it does not have its own channel
-    listener(e.detail);
-  }, { onError });
+  return config.transport.subscribe<ExplorerBlockEvent>(
+    "explorerBlock_",
+    payload,
+    (e) => {
+      // Internal duck channel as it does not have its own channel
+      listener(e.detail);
+    },
+    { onError },
+  );
 }

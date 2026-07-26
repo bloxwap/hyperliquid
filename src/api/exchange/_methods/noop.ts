@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -40,20 +40,20 @@ export type NoopRequest = v.InferOutput<typeof NoopRequest>;
  */
 export type NoopResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -101,11 +101,11 @@ export type NoopSuccessResponse = ExcludeErrorResponse<NoopResponse>;
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { noop } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { noop } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await noop(
@@ -116,14 +116,7 @@ export type NoopSuccessResponse = ExcludeErrorResponse<NoopResponse>;
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#invalidate-pending-nonce-noop
  */
-export function noop(
-  config: ExchangeConfig,
-  params: NoopParameters,
-  opts?: NoopOptions,
-): Promise<NoopSuccessResponse> {
-  const action = canonicalize(
-    NoopActionSchema,
-    parse(NoopActionSchema, { type: "noop" }),
-  );
+export function noop(config: ExchangeConfig, params: NoopParameters, opts?: NoopOptions): Promise<NoopSuccessResponse> {
+  const action = canonicalize(NoopActionSchema, parse(NoopActionSchema, { type: "noop" }));
   return executeL1Action({ ...config, nonceManager: () => params.nonce }, action, opts);
 }

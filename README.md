@@ -1,10 +1,9 @@
 # Hyperliquid API TypeScript SDK
 
-[![npm](https://img.shields.io/npm/v/@nktkas/hyperliquid?color=blue)](https://www.npmjs.com/package/@nktkas/hyperliquid)
-[![jsr](https://jsr.io/badges/@nktkas/hyperliquid)](https://jsr.io/@nktkas/hyperliquid)
-[![Downloads](https://img.shields.io/npm/dm/@nktkas/hyperliquid.svg)](https://www.npmjs.com/package/@nktkas/hyperliquid)
-[![coveralls](https://img.shields.io/coverallsCoverage/github/nktkas/hyperliquid)](https://coveralls.io/github/nktkas/hyperliquid)
-[![bundlephobia](https://img.shields.io/bundlephobia/minzip/@nktkas/hyperliquid)](https://bundlephobia.com/package/@nktkas/hyperliquid)
+[![npm](https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue)](https://www.npmjs.com/package/@bloxwap/hyperliquid)
+[![Downloads](https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg)](https://www.npmjs.com/package/@bloxwap/hyperliquid)
+[![coveralls](https://img.shields.io/coverallsCoverage/github/bloxwap/hyperliquid)](https://coveralls.io/github/bloxwap/hyperliquid)
+[![bundlephobia](https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid)](https://bundlephobia.com/package/@bloxwap/hyperliquid)
 
 A community-supported [Hyperliquid API](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api) SDK for all
 major JS runtimes, written in TypeScript.
@@ -15,20 +14,23 @@ major JS runtimes, written in TypeScript.
 - 🧪 **Tested**: Good code coverage and type relevance.
 - 📦 **Minimal dependencies**: A few small trusted dependencies.
 - 🌐 **Cross-Environment Support**: Compatible with all major JS runtimes.
-- 🔧 **Integratable**: Easy to use with wallet providers ([viem](https://github.com/wevm/viem) or
-  [ethers](https://github.com/ethers-io/ethers.js)).
+- 🔧 **Integratable**: Easy to use with [viem](https://github.com/wevm/viem) accounts — local (private key) or JSON-RPC
+  (browser wallet).
 
 ## Installation
 
 ```sh
-# Node.js 22.12+ / React Native 0.86+
-npm i @nktkas/hyperliquid
-
-# Deno 1.23+ 
-deno add jsr:@nktkas/hyperliquid
-
 # Bun 1.3.3+
-bun add @nktkas/hyperliquid
+bun add @bloxwap/hyperliquid
+
+# Node.js 22.12+ / React Native 0.86+
+npm i @bloxwap/hyperliquid
+
+# pnpm
+pnpm add @bloxwap/hyperliquid
+
+# yarn
+yarn add @bloxwap/hyperliquid
 ```
 
 > React Native needs polyfills for the `fastAssetCtxs` subscription and for versions below 0.86 — see the
@@ -40,7 +42,7 @@ bun add @nktkas/hyperliquid
 
 ```ts
 // 1. Import module
-import { HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
 
 // 2. Set up client with transport
 const transport = new HttpTransport();
@@ -62,7 +64,7 @@ const book = await info.l2Book({ coin: "BTC" });
 
 ```ts
 // 1. Import modules
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
 
 // 2. Set up client with wallet and transport
@@ -97,7 +99,7 @@ await exchange.withdraw3({ destination: "0x...", amount: "1" });
 
 ```ts
 // 1. Import module
-import { SubscriptionClient, WebSocketTransport } from "@nktkas/hyperliquid";
+import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
 
 // 2. Set up client with transport
 const transport = new WebSocketTransport();
@@ -137,17 +139,17 @@ comes from Hyperliquid, not the SDK.
 
 ## Star History
 
-<a href="https://www.star-history.com/#nktkas/hyperliquid&type=date&legend=top-left">
+<a href="https://www.star-history.com/#bloxwap/hyperliquid&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nktkas/hyperliquid&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=nktkas/hyperliquid&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=nktkas/hyperliquid&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=bloxwap/hyperliquid&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=bloxwap/hyperliquid&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=bloxwap/hyperliquid&type=date&legend=top-left" />
  </picture>
 </a>
 
 ## License
 
-**@nktkas/hyperliquid** is licensed under the [MIT License](LICENSE).
+**@bloxwap/hyperliquid** is licensed under the [MIT License](LICENSE).
 
 Copyright © 2024-present [nktkas](https://github.com/nktkas) and
-[contributors](https://github.com/nktkas/hyperliquid/graphs/contributors).
+[contributors](https://github.com/bloxwap/hyperliquid/graphs/contributors).

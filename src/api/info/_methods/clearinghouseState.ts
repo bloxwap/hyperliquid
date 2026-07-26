@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -97,22 +97,24 @@ export type ClearinghouseStateResponse = {
        */
       szi: string;
       /** Leverage details. */
-      leverage: {
-        /** Leverage type. */
-        type: "isolated";
-        /** Leverage value used. */
-        value: number;
-        /**
-         * Amount of USD used (1 = $1).
-         * @pattern ^-?[0-9]+(\.[0-9]+)?$
-         */
-        rawUsd: string;
-      } | {
-        /** Leverage type. */
-        type: "cross";
-        /** Leverage value used. */
-        value: number;
-      };
+      leverage:
+        | {
+            /** Leverage type. */
+            type: "isolated";
+            /** Leverage value used. */
+            value: number;
+            /**
+             * Amount of USD used (1 = $1).
+             * @pattern ^-?[0-9]+(\.[0-9]+)?$
+             */
+            rawUsd: string;
+          }
+        | {
+            /** Leverage type. */
+            type: "cross";
+            /** Leverage value used. */
+            value: number;
+          };
       /**
        * Average entry price.
        * @pattern ^[0-9]+(\.[0-9]+)?$
@@ -192,8 +194,8 @@ export type ClearinghouseStateParameters = Omit<v.InferInput<typeof Clearinghous
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { clearinghouseState } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { clearinghouseState } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -34,10 +34,7 @@ export const SendAssetRequest = /* @__PURE__ */ (() => {
       /** Amount to send (not in wei). */
       amount: UnsignedDecimal,
       /** Source sub-account address ("" for main account). */
-      fromSubAccount: v.optional(
-        v.union([v.literal(""), Address]),
-        "",
-      ),
+      fromSubAccount: v.optional(v.union([v.literal(""), Address]), ""),
       /** Nonce (timestamp in ms) used to prevent replay attacks. */
       nonce: UnsignedInteger,
     }),
@@ -62,20 +59,20 @@ export type SendAssetRequest = v.InferOutput<typeof SendAssetRequest>;
  */
 export type SendAssetResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -92,10 +89,7 @@ import {
 
 /** Schema for action fields (excludes request-level system fields). */
 const SendAssetActionSchema = /* @__PURE__ */ (() => {
-  return v.omit(
-    v.object(SendAssetRequest.entries.action.entries),
-    ["signatureChainId", "hyperliquidChain", "nonce"],
-  );
+  return v.omit(v.object(SendAssetRequest.entries.action.entries), ["signatureChainId", "hyperliquidChain", "nonce"]);
 })();
 
 /** Action parameters for the {@linkcode sendAsset} function. */
@@ -139,11 +133,11 @@ export const SendAssetTypes = {
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { sendAsset } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { sendAsset } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await sendAsset({ transport, wallet }, {
@@ -162,9 +156,6 @@ export function sendAsset(
   params: SendAssetParameters,
   opts?: SendAssetOptions,
 ): Promise<SendAssetSuccessResponse> {
-  const action = canonicalize(
-    SendAssetActionSchema,
-    parse(SendAssetActionSchema, { type: "sendAsset", ...params }),
-  );
+  const action = canonicalize(SendAssetActionSchema, parse(SendAssetActionSchema, { type: "sendAsset", ...params }));
   return executeUserSignedAction(config, action, SendAssetTypes, opts);
 }

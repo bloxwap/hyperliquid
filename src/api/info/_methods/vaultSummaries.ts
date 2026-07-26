@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -67,8 +67,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { vaultSummaries } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { vaultSummaries } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -77,10 +77,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see null
  */
-export function vaultSummaries(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<VaultSummariesResponse> {
+export function vaultSummaries(config: InfoConfig, signal?: AbortSignal): Promise<VaultSummariesResponse> {
   const request = parse(VaultSummariesRequest, {
     type: "vaultSummaries",
   });

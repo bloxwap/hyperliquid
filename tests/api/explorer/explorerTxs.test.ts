@@ -1,4 +1,4 @@
-import type { ExplorerTxsEvent } from "@nktkas/hyperliquid/api/explorer";
+import type { ExplorerTxsEvent } from "@bloxwap/hyperliquid/api/explorer";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { collectEventsOverTime, runSubscriptionTest } from "./_t.ts";
@@ -13,8 +13,6 @@ runSubscriptionTest({
       await client.explorerTxs(cb);
     }, 10_000);
 
-    schemaCoverage(responseSchema, data, [
-      "#/items/properties/error/defined",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/items/properties/error/defined"]);
   },
 });

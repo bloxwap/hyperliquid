@@ -1,5 +1,5 @@
-import { type SetDisplayNameParameters, SetDisplayNameRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type SetDisplayNameParameters, SetDisplayNameRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,9 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(v.object(SetDisplayNameRequest.e
 runTest({
   name: "setDisplayName",
   codeTestFn: async (_t, exchClient) => {
-    const params: SetDisplayNameParameters[] = [
-      { displayName: "" },
-    ];
+    const params: SetDisplayNameParameters[] = [{ displayName: "" }];
 
     const data = await Promise.all(params.map((p) => exchClient.setDisplayName(p)));
 

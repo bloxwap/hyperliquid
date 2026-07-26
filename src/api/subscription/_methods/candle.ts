@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -87,8 +87,8 @@ export type CandleParameters = Omit<v.InferInput<typeof CandleRequest>, "type">;
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { candle } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { candle } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -108,9 +108,14 @@ export function candle(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(CandleRequest, { type: "candle", ...params });
-  return config.transport.subscribe<CandleEvent>(payload.type, payload, (e) => {
-    if (e.detail.s === payload.coin && e.detail.i === payload.interval) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<CandleEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.s === payload.coin && e.detail.i === payload.interval) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

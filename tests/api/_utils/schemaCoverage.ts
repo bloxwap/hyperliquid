@@ -46,7 +46,9 @@
  * @module
  */
 
-import Ajv from "npm:ajv@8";
+// Ajv v8 is CJS with an `__esModule` marker, so the default import already is the class:
+// no `Ajv.default` indirection under Bun's/TypeScript's ESM interop.
+import Ajv from "ajv";
 
 // ============================================================
 // Types & Interfaces
@@ -109,7 +111,7 @@ interface IgnoreMatcher {
 /** Internal context threaded through recursive coverage checking. */
 interface CoverageContext {
   /** Ajv instance for branch matching validation. */
-  ajv: InstanceType<typeof Ajv.default>;
+  ajv: InstanceType<typeof Ajv>;
   /** Top-level definitions for $ref resolution. */
   defs?: Record<string, JsonSchema>;
   /** Matcher for paths to skip during coverage checking. */
@@ -151,25 +153,23 @@ export class SchemaCoverageError extends Error {
  * @throws {Error} If samples are empty or fail schema validation
  * @throws {SchemaCoverageError} If coverage issues are found
  */
-export function schemaCoverage(
-  schema: JsonSchema,
-  samples: unknown[],
-  ignorePaths: string[] = [],
-): void {
+export function schemaCoverage(schema: JsonSchema, samples: unknown[], ignorePaths: string[] = []): void {
   if (samples.length === 0) {
     throw new Error("Samples array must not be empty");
   }
 
   // Validate all samples against the schema
-  const ajv = new Ajv.default({ strict: false, allErrors: true });
+  const ajv = new Ajv({ strict: false, allErrors: true });
   const validate = ajv.compile(schema);
 
   for (let i = 0; i < samples.length; i++) {
     if (!validate(samples[i])) {
       throw new Error(
         `Sample at index ${i} failed validation:\n` +
-          JSON.stringify(samples[i], null, 2) + "\n\n" +
-          "Errors:\n" + JSON.stringify(filterAjvErrors(validate.errors ?? []), null, 2),
+          JSON.stringify(samples[i], null, 2) +
+          "\n\n" +
+          "Errors:\n" +
+          JSON.stringify(filterAjvErrors(validate.errors ?? []), null, 2),
       );
     }
   }
@@ -199,12 +199,7 @@ export function schemaCoverage(
  *
  * @return Array of coverage issues found
  */
-function checkCoverage(
-  schema: JsonSchema,
-  samples: unknown[],
-  path: string,
-  ctx: CoverageContext,
-): CoverageIssue[] {
+function checkCoverage(schema: JsonSchema, samples: unknown[], path: string, ctx: CoverageContext): CoverageIssue[] {
   if (ctx.ignorePaths.has(path)) return [];
 
   // Resolve $ref
@@ -290,9 +285,7 @@ function handleComposition(
     if (nonNullBranches.length === 1 && nonNullSamples.length > 0) {
       // Single non-null branch: recurse directly
       const originalIndex = branches.indexOf(nonNullBranches[0]);
-      issues.push(
-        ...checkCoverage(nonNullBranches[0], nonNullSamples, `${path}/${keyword}/${originalIndex}`, ctx),
-      );
+      issues.push(...checkCoverage(nonNullBranches[0], nonNullSamples, `${path}/${keyword}/${originalIndex}`, ctx));
     } else if (nonNullBranches.length > 1 && nonNullSamples.length > 0) {
       // Multiple non-null branches: check each is covered
       for (const branch of nonNullBranches) {
@@ -335,12 +328,7 @@ function handleComposition(
 }
 
 /** Handles allOf schemas - recurses into each sub-schema. */
-function handleAllOf(
-  schemas: JsonSchema[],
-  samples: unknown[],
-  path: string,
-  ctx: CoverageContext,
-): CoverageIssue[] {
+function handleAllOf(schemas: JsonSchema[], samples: unknown[], path: string, ctx: CoverageContext): CoverageIssue[] {
   const issues: CoverageIssue[] = [];
   for (let i = 0; i < schemas.length; i++) {
     issues.push(...checkCoverage(schemas[i], samples, `${path}/allOf/${i}`, ctx));
@@ -353,12 +341,7 @@ function handleAllOf(
 // ============================================================
 
 /** Handles enum schemas - checks all values are covered. */
-function handleEnum(
-  values: unknown[],
-  samples: unknown[],
-  path: string,
-  ctx: CoverageContext,
-): CoverageIssue[] {
+function handleEnum(values: unknown[], samples: unknown[], path: string, ctx: CoverageContext): CoverageIssue[] {
   const issues: CoverageIssue[] = [];
   const sampleSet = new Set(samples.map((s) => JSON.stringify(s)));
 
@@ -383,12 +366,7 @@ function handleEnum(
 // ============================================================
 
 /** Handles object schemas - checks all properties are covered. */
-function handleObject(
-  schema: JsonSchema,
-  samples: unknown[],
-  path: string,
-  ctx: CoverageContext,
-): CoverageIssue[] {
+function handleObject(schema: JsonSchema, samples: unknown[], path: string, ctx: CoverageContext): CoverageIssue[] {
   const issues: CoverageIssue[] = [];
   const properties = schema.properties;
   if (!properties) return issues;
@@ -402,9 +380,7 @@ function handleObject(
 
     if (requiredSet.has(key)) {
       // Required property: collect values and recurse
-      const propSamples = objects
-        .filter((obj) => key in obj)
-        .map((obj) => obj[key]);
+      const propSamples = objects.filter((obj) => key in obj).map((obj) => obj[key]);
 
       if (propSamples.length > 0) {
         issues.push(...checkCoverage(propSchema, propSamples, propPath, ctx));
@@ -434,9 +410,7 @@ function handleObject(
       }
 
       // Recurse into present values
-      const presentSamples = objects
-        .filter((obj) => key in obj)
-        .map((obj) => obj[key]);
+      const presentSamples = objects.filter((obj) => key in obj).map((obj) => obj[key]);
 
       if (presentSamples.length > 0) {
         issues.push(...checkCoverage(propSchema, presentSamples, propPath, ctx));
@@ -452,12 +426,7 @@ function handleObject(
 // ============================================================
 
 /** Handles array schemas - checks items and non-emptiness. */
-function handleArray(
-  schema: JsonSchema,
-  samples: unknown[],
-  path: string,
-  ctx: CoverageContext,
-): CoverageIssue[] {
+function handleArray(schema: JsonSchema, samples: unknown[], path: string, ctx: CoverageContext): CoverageIssue[] {
   const issues: CoverageIssue[] = [];
   const arrays = samples.filter(Array.isArray);
 
@@ -502,9 +471,7 @@ function handleTuple(
     const itemPath = `${path}/items/${i}`;
     if (ctx.ignorePaths.has(itemPath)) continue;
 
-    const itemSamples = arrays
-      .filter((arr) => arr.length > i)
-      .map((arr) => arr[i]);
+    const itemSamples = arrays.filter((arr) => arr.length > i).map((arr) => arr[i]);
 
     if (itemSamples.length > 0) {
       issues.push(...checkCoverage(tupleItems[i], itemSamples, itemPath, ctx));
@@ -573,12 +540,7 @@ function handleNullableTypeArray(
 // ============================================================
 
 /** Handles if/then/else - checks both conditional paths are covered. */
-function handleIfThenElse(
-  schema: JsonSchema,
-  samples: unknown[],
-  path: string,
-  ctx: CoverageContext,
-): CoverageIssue[] {
+function handleIfThenElse(schema: JsonSchema, samples: unknown[], path: string, ctx: CoverageContext): CoverageIssue[] {
   const issues: CoverageIssue[] = [];
 
   const matchesIf = samples.filter((s) => matchesBranch(schema.if!, s, ctx));
@@ -630,7 +592,10 @@ function createIgnoreMatcher(patterns: string[]): IgnoreMatcher {
   const wildcards: RegExp[] = [];
   for (const pattern of patterns) {
     if (pattern.includes("*")) {
-      const source = pattern.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+      const source = pattern
+        .split("*")
+        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+        .join(".*");
       wildcards.push(new RegExp(`^${source}$`));
     } else {
       exact.add(pattern);
@@ -664,7 +629,10 @@ function filterAjvErrors(errors: { instancePath: string; schemaPath: string; key
     // Count /properties/ segments in the sub-path to determine how many instancePath segments to strip,
     // so all errors from the same anyOf validation are grouped together.
     const depth = m[4] ? (m[4].match(/\/properties\//g) ?? []).length : 0;
-    const base = error.instancePath.split("/").slice(0, depth ? -depth : undefined).join("/");
+    const base = error.instancePath
+      .split("/")
+      .slice(0, depth ? -depth : undefined)
+      .join("/");
     const key = `${base}||${m[1]}/${m[2]}`;
 
     if (!groups.has(key)) groups.set(key, new Map());

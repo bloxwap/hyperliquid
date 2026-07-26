@@ -1,4 +1,4 @@
-# @nktkas/hyperliquid
+# @bloxwap/hyperliquid
 
 A community-supported [Hyperliquid API](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api) SDK for all
 major JS runtimes, written in TypeScript.
@@ -7,26 +7,30 @@ major JS runtimes, written in TypeScript.
 
 {% tabs %}
 
-{% tab title="Node.js 22.12+" %}
-
-```sh
-npm i @nktkas/hyperliquid
-```
-
-{% endtab %}
-
 {% tab title="Bun 1.3.3+" %}
 
 ```sh
-bun add @nktkas/hyperliquid
+bun add @bloxwap/hyperliquid
 ```
 
 {% endtab %}
 
-{% tab title="Deno 1.23+" %}
+{% tab title="Node.js 22.12+" %}
 
 ```sh
-deno add jsr:@nktkas/hyperliquid
+npm i @bloxwap/hyperliquid
+```
+
+{% endtab %}
+
+{% tab title="pnpm / yarn" %}
+
+```sh
+pnpm add @bloxwap/hyperliquid
+```
+
+```sh
+yarn add @bloxwap/hyperliquid
 ```
 
 {% endtab %}
@@ -34,7 +38,7 @@ deno add jsr:@nktkas/hyperliquid
 {% tab title="React Native 0.86+" %}
 
 ```sh
-npm i @nktkas/hyperliquid
+npm i @bloxwap/hyperliquid
 ```
 
 The `fastAssetCtxs` subscription additionally needs `DecompressionStream`, Web Streams, and `TextDecoder`, none of which
@@ -72,7 +76,7 @@ npm i react-native-url-polyfill
 import "react-native-url-polyfill/auto";
 ```
 
-Import every polyfill before `@nktkas/hyperliquid` (e.g. at the top of `index.js`).
+Import every polyfill before `@bloxwap/hyperliquid` (e.g. at the top of `index.js`).
 
 {% endtab %}
 
@@ -87,7 +91,7 @@ Import every polyfill before `@nktkas/hyperliquid` (e.g. at the top of `index.js
 Read market data, account state, order book. [Learn more](clients.md#info-endpoint)
 
 ```ts
-import { HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
 
 const transport = new HttpTransport();
 const client = new InfoClient({ transport });
@@ -102,7 +106,7 @@ const mids = await client.allMids();
 Place orders, transfer funds, manage accounts. [Learn more](clients.md#exchange-endpoint)
 
 ```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
 
 const wallet = privateKeyToAccount("0x...");
@@ -130,7 +134,7 @@ await client.order({
 Receive real-time updates via WebSocket. [Learn more](clients.md#websocket-subscriptions)
 
 ```ts
-import { SubscriptionClient, WebSocketTransport } from "@nktkas/hyperliquid";
+import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
 
 const transport = new WebSocketTransport();
 const client = new SubscriptionClient({ transport });
@@ -147,7 +151,7 @@ await client.allMids((data) => {
 Look up blocks, transactions, and addresses. [Learn more](clients.md#explorer-endpoint)
 
 ```ts
-import { ExplorerClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExplorerClient, HttpTransport } from "@bloxwap/hyperliquid";
 
 const transport = new HttpTransport();
 const client = new ExplorerClient({ transport });

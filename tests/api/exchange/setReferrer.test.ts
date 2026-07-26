@@ -1,5 +1,5 @@
-import { type SetReferrerParameters, SetReferrerRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type SetReferrerParameters, SetReferrerRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,9 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(v.object(SetReferrerRequest.entr
 runTest({
   name: "setReferrer",
   codeTestFn: async (_t, exchClient) => {
-    const params: SetReferrerParameters[] = [
-      { code: "TEST" },
-    ];
+    const params: SetReferrerParameters[] = [{ code: "TEST" }];
 
     const data = await Promise.all(params.map((p) => exchClient.setReferrer(p)));
 

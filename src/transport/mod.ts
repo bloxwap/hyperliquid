@@ -6,7 +6,7 @@
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
  *
  * const transport = new HttpTransport();
  * ```

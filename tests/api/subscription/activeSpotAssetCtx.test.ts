@@ -2,8 +2,8 @@ import {
   type ActiveSpotAssetCtxEvent,
   type ActiveSpotAssetCtxParameters,
   ActiveSpotAssetCtxRequest,
-} from "@nktkas/hyperliquid/api/subscription";
-import * as v from "@valibot/valibot";
+} from "@bloxwap/hyperliquid/api/subscription";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -17,10 +17,7 @@ runTest({
   name: "activeSpotAssetCtx",
   mode: "api",
   fn: async (_t, client) => {
-    const params: ActiveSpotAssetCtxParameters[] = [
-      { coin: "@107" },
-      { coin: "@27" },
-    ];
+    const params: ActiveSpotAssetCtxParameters[] = [{ coin: "@107" }, { coin: "@27" }];
 
     const data = await collectEventsOverTime<ActiveSpotAssetCtxEvent>(async (cb) => {
       await Promise.all(params.map((p) => client.activeSpotAssetCtx(p, cb)));

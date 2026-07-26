@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -59,8 +59,8 @@ import type { SubscriptionConfig, SubscriptionOptions } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { fastAssetCtxs } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { fastAssetCtxs } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -81,9 +81,35 @@ export function fastAssetCtxs(
   // The server pushes each update as a base64 + raw DEFLATE (RFC 1951) compressed JSON string (assumed to be valid).
   // Decompress sequentially so events reach the listener in arrival order.
   let queue = Promise.resolve();
-  return config.transport.subscribe<string>(payload.type, payload, (e) => {
-    queue = queue.then(async () => listener(await decompress(e.detail)));
-  }, options);
+  return config.transport.subscribe<string>(
+    payload.type,
+    payload,
+    (e) => {
+      // `deliver` never rejects, so a failing event cannot poison the chain. Chaining a rejected
+      // promise would skip every subsequent `.then` callback, silently dropping all later updates
+      // for the life of the subscription.
+      queue = queue.then(() => deliver(e.detail, listener));
+    },
+    options,
+  );
+}
+
+/**
+ * Decompresses one frame and hands it to the listener, absorbing any failure.
+ *
+ * A decompression failure or a throwing listener affects only its own event: the returned promise
+ * always fulfills, keeping the sequential queue alive for later updates.
+ *
+ * The error is reported to the console rather than through `options.onError`, because that callback
+ * is terminal by contract — it fires at most once and means the subscription has ended — whereas one
+ * bad frame or one throwing listener callback does not end the stream.
+ */
+async function deliver(data: string, listener: (data: FastAssetCtxsEvent) => void): Promise<void> {
+  try {
+    listener(await decompress(data));
+  } catch (error) {
+    console.error("fastAssetCtxs: failed to deliver an event, continuing with the next one:", error);
+  }
 }
 
 /** Decode a base64 + raw DEFLATE (RFC 1951) payload into a {@linkcode FastAssetCtxsEvent}. */

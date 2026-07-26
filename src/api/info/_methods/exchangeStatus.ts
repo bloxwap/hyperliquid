@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -46,8 +46,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { exchangeStatus } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { exchangeStatus } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -56,10 +56,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see null
  */
-export function exchangeStatus(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<ExchangeStatusResponse> {
+export function exchangeStatus(config: InfoConfig, signal?: AbortSignal): Promise<ExchangeStatusResponse> {
   const request = parse(ExchangeStatusRequest, {
     type: "exchangeStatus",
   });

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -54,10 +54,12 @@ export type TwapCancelResponse = {
     /** Specific data. */
     data: {
       /** Status of the cancel attempt, indicating success or an error message. */
-      status: "success" | {
-        /** Error message. */
-        error: string;
-      };
+      status:
+        | "success"
+        | {
+            /** Error message. */
+            error: string;
+          };
     };
   };
 };
@@ -105,11 +107,11 @@ export type TwapCancelSuccessResponse = ExcludeErrorResponse<TwapCancelResponse>
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { twapCancel } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { twapCancel } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await twapCancel({ transport, wallet }, {
@@ -125,9 +127,6 @@ export function twapCancel(
   params: TwapCancelParameters,
   opts?: TwapCancelOptions,
 ): Promise<TwapCancelSuccessResponse> {
-  const action = canonicalize(
-    TwapCancelActionSchema,
-    parse(TwapCancelActionSchema, { type: "twapCancel", ...params }),
-  );
+  const action = canonicalize(TwapCancelActionSchema, parse(TwapCancelActionSchema, { type: "twapCancel", ...params }));
   return executeL1Action(config, action, opts);
 }

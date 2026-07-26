@@ -6,18 +6,18 @@
  * - Clients: {@link InfoClient}, {@link ExchangeClient}, {@link SubscriptionClient}, {@link ExplorerClient}
  *
  * For tree-shakeable, low-level access you can import request methods directly from:
- * - `@nktkas/hyperliquid/api/info`
- * - `@nktkas/hyperliquid/api/exchange`
- * - `@nktkas/hyperliquid/api/subscription`
- * - `@nktkas/hyperliquid/api/explorer`
+ * - `@bloxwap/hyperliquid/api/info`
+ * - `@bloxwap/hyperliquid/api/exchange`
+ * - `@bloxwap/hyperliquid/api/subscription`
+ * - `@bloxwap/hyperliquid/api/explorer`
  *
  * Extra utilities are available in:
- * - `@nktkas/hyperliquid/utils` (formatting, symbol conversion)
- * - `@nktkas/hyperliquid/signing` (low-level signing helpers)
+ * - `@bloxwap/hyperliquid/utils` (formatting, symbol conversion)
+ * - `@bloxwap/hyperliquid/signing` (low-level signing helpers)
  *
  * @example Quick start
  * ```ts
- * import { HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+ * import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
  *
  * const transport = new HttpTransport();
  * const info = new InfoClient({ transport });

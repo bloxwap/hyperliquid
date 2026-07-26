@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -129,43 +129,43 @@ export type OrderResponse = {
       /** Array of statuses for each placed order. */
       statuses: (
         | {
-          /** Resting order status. */
-          resting: {
-            /** Order ID. */
-            oid: number;
-            /**
-             * Client Order ID.
-             * @pattern ^0x[a-fA-F0-9]{32}$
-             */
-            cloid?: `0x${string}`;
-          };
-        }
+            /** Resting order status. */
+            resting: {
+              /** Order ID. */
+              oid: number;
+              /**
+               * Client Order ID.
+               * @pattern ^0x[a-fA-F0-9]{32}$
+               */
+              cloid?: `0x${string}`;
+            };
+          }
         | {
-          /** Filled order status. */
-          filled: {
-            /**
-             * Total size filled.
-             * @pattern ^[0-9]+(\.[0-9]+)?$
-             */
-            totalSz: string;
-            /**
-             * Average price of fill.
-             * @pattern ^[0-9]+(\.[0-9]+)?$
-             */
-            avgPx: string;
-            /** Order ID. */
-            oid: number;
-            /**
-             * Client Order ID.
-             * @pattern ^0x[a-fA-F0-9]{32}$
-             */
-            cloid?: `0x${string}`;
-          };
-        }
+            /** Filled order status. */
+            filled: {
+              /**
+               * Total size filled.
+               * @pattern ^[0-9]+(\.[0-9]+)?$
+               */
+              totalSz: string;
+              /**
+               * Average price of fill.
+               * @pattern ^[0-9]+(\.[0-9]+)?$
+               */
+              avgPx: string;
+              /** Order ID. */
+              oid: number;
+              /**
+               * Client Order ID.
+               * @pattern ^0x[a-fA-F0-9]{32}$
+               */
+              cloid?: `0x${string}`;
+            };
+          }
         | {
-          /** Error message. */
-          error: string;
-        }
+            /** Error message. */
+            error: string;
+          }
         | "waitingForFill"
         | "waitingForTrigger"
       )[];
@@ -216,11 +216,11 @@ export type OrderSuccessResponse = ExcludeErrorResponse<OrderResponse>;
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { order } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { order } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * const data = await order({ transport, wallet }, {
@@ -245,9 +245,6 @@ export function order(
   params: OrderParameters,
   opts?: OrderOptions,
 ): Promise<OrderSuccessResponse> {
-  const action = canonicalize(
-    OrderActionSchema,
-    parse(OrderActionSchema, { type: "order", ...params }),
-  );
+  const action = canonicalize(OrderActionSchema, parse(OrderActionSchema, { type: "order", ...params }));
   return executeL1Action(config, action, opts);
 }

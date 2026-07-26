@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -24,56 +24,56 @@ export type OutcomeMetaUpdatesEvent = {
   /** Array of metadata update events. */
   updates: (
     | {
-      /** Outcome created event. */
-      outcomeCreated: {
-        /** Outcome identifier. */
-        outcome: number;
-        /** Name of the outcome. */
-        name: string;
-        /** Description of the outcome. */
-        description: string;
-        /** Array of side specifications for this outcome. */
-        sideSpecs: {
-          /** Name of the side. */
+        /** Outcome created event. */
+        outcomeCreated: {
+          /** Outcome identifier. */
+          outcome: number;
+          /** Name of the outcome. */
           name: string;
-          /** Token identifier for this side. */
-          token?: number;
-        }[];
-        /** Quote token for this outcome. */
-        quoteToken: string;
-      };
-    }
+          /** Description of the outcome. */
+          description: string;
+          /** Array of side specifications for this outcome. */
+          sideSpecs: {
+            /** Name of the side. */
+            name: string;
+            /** Token identifier for this side. */
+            token?: number;
+          }[];
+          /** Quote token for this outcome. */
+          quoteToken: string;
+        };
+      }
     | {
-      /** Outcome settled event. */
-      outcomeSettled: {
-        /** Outcome identifier. */
-        outcome: number;
-      };
-    }
+        /** Outcome settled event. */
+        outcomeSettled: {
+          /** Outcome identifier. */
+          outcome: number;
+        };
+      }
     | {
-      /** Question updated event. */
-      questionUpdated: {
-        /** Question identifier. */
-        question: number;
-        /** Name of the question. */
-        name: string;
-        /** Description of the question. */
-        description: string;
-        /** Fallback outcome identifier. */
-        fallbackOutcome: number;
-        /** Array of named outcome identifiers. */
-        namedOutcomes: number[];
-        /** Array of settled named outcome identifiers. */
-        settledNamedOutcomes: number[];
-      };
-    }
+        /** Question updated event. */
+        questionUpdated: {
+          /** Question identifier. */
+          question: number;
+          /** Name of the question. */
+          name: string;
+          /** Description of the question. */
+          description: string;
+          /** Fallback outcome identifier. */
+          fallbackOutcome: number;
+          /** Array of named outcome identifiers. */
+          namedOutcomes: number[];
+          /** Array of settled named outcome identifiers. */
+          settledNamedOutcomes: number[];
+        };
+      }
     | {
-      /** Question settled event. */
-      questionSettled: {
-        /** Question identifier. */
-        question: number;
-      };
-    }
+        /** Question settled event. */
+        questionSettled: {
+          /** Question identifier. */
+          question: number;
+        };
+      }
   )[];
 };
 
@@ -98,8 +98,8 @@ import type { SubscriptionConfig, SubscriptionOptions } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { outcomeMetaUpdates } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { outcomeMetaUpdates } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -117,7 +117,12 @@ export function outcomeMetaUpdates(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(OutcomeMetaUpdatesRequest, { type: "outcomeMetaUpdates" });
-  return config.transport.subscribe<OutcomeMetaUpdatesEvent>(payload.type, payload, (e) => {
-    listener(e.detail);
-  }, options);
+  return config.transport.subscribe<OutcomeMetaUpdatesEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      listener(e.detail);
+    },
+    options,
+  );
 }

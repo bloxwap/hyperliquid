@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -49,8 +49,8 @@ export type IsVipParameters = Omit<v.InferInput<typeof IsVipRequest>, "type">;
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { isVip } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { isVip } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -61,11 +61,7 @@ export type IsVipParameters = Omit<v.InferInput<typeof IsVipRequest>, "type">;
  *
  * @see null
  */
-export function isVip(
-  config: InfoConfig,
-  params: IsVipParameters,
-  signal?: AbortSignal,
-): Promise<IsVipResponse> {
+export function isVip(config: InfoConfig, params: IsVipParameters, signal?: AbortSignal): Promise<IsVipResponse> {
   const request = parse(IsVipRequest, {
     type: "isVip",
     ...params,

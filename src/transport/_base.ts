@@ -74,7 +74,7 @@ export interface ISubscription {
  *
  * @example
  * ```ts
- * import { HttpTransport, TransportError } from "@nktkas/hyperliquid";
+ * import { HttpTransport, TransportError } from "@bloxwap/hyperliquid";
  *
  * const transport = new HttpTransport();
  * try {

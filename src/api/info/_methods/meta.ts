@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -84,8 +84,8 @@ export type MetaParameters = Omit<v.InferInput<typeof MetaRequest>, "type">;
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { meta } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { meta } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -94,15 +94,8 @@ export type MetaParameters = Omit<v.InferInput<typeof MetaRequest>, "type">;
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perpetuals-metadata-universe-and-margin-tables
  */
-export function meta(
-  config: InfoConfig,
-  params?: MetaParameters,
-  signal?: AbortSignal,
-): Promise<MetaResponse>;
-export function meta(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<MetaResponse>;
+export function meta(config: InfoConfig, params?: MetaParameters, signal?: AbortSignal): Promise<MetaResponse>;
+export function meta(config: InfoConfig, signal?: AbortSignal): Promise<MetaResponse>;
 export function meta(
   config: InfoConfig,
   paramsOrSignal?: MetaParameters | AbortSignal,

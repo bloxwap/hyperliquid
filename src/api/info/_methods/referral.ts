@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -56,45 +56,18 @@ export type ReferralResponse = {
    */
   builderRewards: string;
   /** Current state of the referrer. */
-  referrerState: {
-    /** Referrer is ready to receive rewards. */
-    stage: "ready";
-    /** Referral program details. */
-    data: {
-      /** Assigned referral code. */
-      code: string;
-      /** Total number of referrals. */
-      nReferrals: number;
-      /** Summary of each referral state. */
-      referralStates: {
-        /**
-         * Cumulative traded volume.
-         * @pattern ^[0-9]+(\.[0-9]+)?$
-         */
-        cumVlm: string;
-        /**
-         * Total fees rewarded to the referred user since referral.
-         * @pattern ^[0-9]+(\.[0-9]+)?$
-         */
-        cumRewardedFeesSinceReferred: string;
-        /**
-         * Total fees rewarded to the referrer from referred trades.
-         * @pattern ^[0-9]+(\.[0-9]+)?$
-         */
-        cumFeesRewardedToReferrer: string;
-        /** Timestamp when the referred user joined (in ms since epoch). */
-        timeJoined: number;
-        /**
-         * Address of the referred user.
-         * @pattern ^0x[a-fA-F0-9]{40}$
-         */
-        user: `0x${string}`;
-        /** Mapping of token IDs to referral reward states. */
-        tokenToState: [
-          /** Token identifier. */
-          tokenId: number,
-          /** Referral reward state. */
-          state: {
+  referrerState:
+    | {
+        /** Referrer is ready to receive rewards. */
+        stage: "ready";
+        /** Referral program details. */
+        data: {
+          /** Assigned referral code. */
+          code: string;
+          /** Total number of referrals. */
+          nReferrals: number;
+          /** Summary of each referral state. */
+          referralStates: {
             /**
              * Cumulative traded volume.
              * @pattern ^[0-9]+(\.[0-9]+)?$
@@ -110,25 +83,55 @@ export type ReferralResponse = {
              * @pattern ^[0-9]+(\.[0-9]+)?$
              */
             cumFeesRewardedToReferrer: string;
-          },
-        ][];
-      }[];
-    };
-  } | {
-    /** Referrer needs to create a referral code. */
-    stage: "needToCreateCode";
-  } | {
-    /** Referrer must complete a trade before earning rewards. */
-    stage: "needToTrade";
-    /** Required trading volume details for activation. */
-    data: {
-      /**
-       * Required trading volume.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      required: string;
-    };
-  };
+            /** Timestamp when the referred user joined (in ms since epoch). */
+            timeJoined: number;
+            /**
+             * Address of the referred user.
+             * @pattern ^0x[a-fA-F0-9]{40}$
+             */
+            user: `0x${string}`;
+            /** Mapping of token IDs to referral reward states. */
+            tokenToState: [
+              /** Token identifier. */
+              tokenId: number,
+              /** Referral reward state. */
+              state: {
+                /**
+                 * Cumulative traded volume.
+                 * @pattern ^[0-9]+(\.[0-9]+)?$
+                 */
+                cumVlm: string;
+                /**
+                 * Total fees rewarded to the referred user since referral.
+                 * @pattern ^[0-9]+(\.[0-9]+)?$
+                 */
+                cumRewardedFeesSinceReferred: string;
+                /**
+                 * Total fees rewarded to the referrer from referred trades.
+                 * @pattern ^[0-9]+(\.[0-9]+)?$
+                 */
+                cumFeesRewardedToReferrer: string;
+              },
+            ][];
+          }[];
+        };
+      }
+    | {
+        /** Referrer needs to create a referral code. */
+        stage: "needToCreateCode";
+      }
+    | {
+        /** Referrer must complete a trade before earning rewards. */
+        stage: "needToTrade";
+        /** Required trading volume details for activation. */
+        data: {
+          /**
+           * Required trading volume.
+           * @pattern ^[0-9]+(\.[0-9]+)?$
+           */
+          required: string;
+        };
+      };
   /** History of referral rewards. */
   rewardHistory: {
     /**
@@ -202,8 +205,8 @@ export type ReferralParameters = Omit<v.InferInput<typeof ReferralRequest>, "typ
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { referral } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { referral } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

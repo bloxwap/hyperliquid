@@ -17,8 +17,9 @@ assignees: nktkas
 
 **Environment**
 
-- `@nktkas/hyperliquid` version:
-- Runtime environment and its version: <!-- Node.js / Deno / Bun / Web -->
+- `@bloxwap/hyperliquid` version:
+- Runtime environment and its version: <!-- e.g. Node.js 22.12+ (minimum supported) / Bun / React Native / browser -->
+- Package manager: <!-- bun / npm / pnpm / yarn -->
 
 **Additional Context (optional)**
 

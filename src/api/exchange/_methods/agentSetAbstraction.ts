@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -50,20 +50,20 @@ export type AgentSetAbstractionRequest = v.InferOutput<typeof AgentSetAbstractio
  */
 export type AgentSetAbstractionResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -87,9 +87,7 @@ const AgentSetAbstractionActionSchema = /* @__PURE__ */ (() => {
 export type AgentSetAbstractionParameters = Omit<v.InferInput<typeof AgentSetAbstractionActionSchema>, "type">;
 
 /** Request options for the {@linkcode agentSetAbstraction} function. */
-export type AgentSetAbstractionOptions = ExtractRequestOptions<
-  v.InferInput<typeof AgentSetAbstractionRequest>
->;
+export type AgentSetAbstractionOptions = ExtractRequestOptions<v.InferInput<typeof AgentSetAbstractionRequest>>;
 
 /** Successful variant of {@linkcode AgentSetAbstractionResponse} without errors. */
 export type AgentSetAbstractionSuccessResponse = ExcludeErrorResponse<AgentSetAbstractionResponse>;
@@ -112,11 +110,11 @@ export type AgentSetAbstractionSuccessResponse = ExcludeErrorResponse<AgentSetAb
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { agentSetAbstraction } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { agentSetAbstraction } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await agentSetAbstraction({ transport, wallet }, {

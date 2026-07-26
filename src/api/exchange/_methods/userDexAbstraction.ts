@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -48,20 +48,20 @@ export type UserDexAbstractionRequest = v.InferOutput<typeof UserDexAbstractionR
  */
 export type UserDexAbstractionResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -78,19 +78,18 @@ import {
 
 /** Schema for action fields (excludes request-level system fields). */
 const UserDexAbstractionActionSchema = /* @__PURE__ */ (() => {
-  return v.omit(
-    v.object(UserDexAbstractionRequest.entries.action.entries),
-    ["signatureChainId", "hyperliquidChain", "nonce"],
-  );
+  return v.omit(v.object(UserDexAbstractionRequest.entries.action.entries), [
+    "signatureChainId",
+    "hyperliquidChain",
+    "nonce",
+  ]);
 })();
 
 /** Action parameters for the {@linkcode userDexAbstraction} function. */
 export type UserDexAbstractionParameters = Omit<v.InferInput<typeof UserDexAbstractionActionSchema>, "type">;
 
 /** Request options for the {@linkcode userDexAbstraction} function. */
-export type UserDexAbstractionOptions = ExtractRequestOptions<
-  v.InferInput<typeof UserDexAbstractionRequest>
->;
+export type UserDexAbstractionOptions = ExtractRequestOptions<v.InferInput<typeof UserDexAbstractionRequest>>;
 
 /** Successful variant of {@linkcode UserDexAbstractionResponse} without errors. */
 export type UserDexAbstractionSuccessResponse = ExcludeErrorResponse<UserDexAbstractionResponse>;
@@ -123,11 +122,11 @@ export const UserDexAbstractionTypes = {
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userDexAbstraction } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userDexAbstraction } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await userDexAbstraction({ transport, wallet }, {

@@ -351,34 +351,22 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example [viem](https://viem.sh/docs/clients/wallet#local-accounts-private-key-mnemonic-etc)
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
-   *
-   * const client = new hl.ExchangeClient({ transport, wallet });
-   * ```
-   *
-   * @example [ethers.js](https://docs.ethers.org/v6/api/wallet/#Wallet)
-   * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { ethers } from "npm:ethers";
-   *
-   * const wallet = new ethers.Wallet("0x...");
-   * const transport = new hl.HttpTransport();
    *
    * const client = new hl.ExchangeClient({ transport, wallet });
    * ```
    *
    * @example Multi-sig
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
-   * import { ethers } from "npm:ethers";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
    * const signer1 = privateKeyToAccount("0x...");
-   * const signer2 = new ethers.Wallet("0x...");
+   * const signer2 = privateKeyToAccount("0x...");
    * // ... and more signers
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
@@ -410,10 +398,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -445,8 +433,8 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
    * const agentWallet = privateKeyToAccount("0x..."); // approved agent's private key
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
@@ -487,10 +475,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -521,10 +509,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example Basic usage
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -532,10 +520,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * ```
    * @example With expiration timestamp
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -548,10 +536,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#approve-an-api-wallet
    */
-  approveAgent(
-    params: ApproveAgentParameters,
-    opts?: ApproveAgentOptions,
-  ): Promise<ApproveAgentSuccessResponse> {
+  approveAgent(params: ApproveAgentParameters, opts?: ApproveAgentOptions): Promise<ApproveAgentSuccessResponse> {
     return approveAgent(this.config_, params, opts);
   }
 
@@ -570,10 +555,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -604,10 +589,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -641,10 +626,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -667,10 +652,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#modify-multiple-orders
    */
-  batchModify(
-    params: BatchModifyParameters,
-    opts?: BatchModifyOptions,
-  ): Promise<BatchModifySuccessResponse> {
+  batchModify(params: BatchModifyParameters, opts?: BatchModifyOptions): Promise<BatchModifySuccessResponse> {
     return batchModify(this.config_, params, opts);
   }
 
@@ -689,10 +671,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -701,10 +683,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see null
    */
-  borrowLend(
-    params: BorrowLendParameters,
-    opts?: BorrowLendOptions,
-  ): Promise<BorrowLendSuccessResponse> {
+  borrowLend(params: BorrowLendParameters, opts?: BorrowLendOptions): Promise<BorrowLendSuccessResponse> {
     return borrowLend(this.config_, params, opts);
   }
 
@@ -723,10 +702,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -735,10 +714,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#cancel-order-s
    */
-  cancel(
-    params: CancelParameters,
-    opts?: CancelOptions,
-  ): Promise<CancelSuccessResponse> {
+  cancel(params: CancelParameters, opts?: CancelOptions): Promise<CancelSuccessResponse> {
     return cancel(this.config_, params, opts);
   }
 
@@ -757,10 +733,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -773,10 +749,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#cancel-order-s-by-cloid
    */
-  cancelByCloid(
-    params: CancelByCloidParameters,
-    opts?: CancelByCloidOptions,
-  ): Promise<CancelByCloidSuccessResponse> {
+  cancelByCloid(params: CancelByCloidParameters, opts?: CancelByCloidOptions): Promise<CancelByCloidSuccessResponse> {
     return cancelByCloid(this.config_, params, opts);
   }
 
@@ -795,10 +768,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -807,10 +780,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#deposit-into-staking
    */
-  cDeposit(
-    params: CDepositParameters,
-    opts?: CDepositOptions,
-  ): Promise<CDepositSuccessResponse> {
+  cDeposit(params: CDepositParameters, opts?: CDepositOptions): Promise<CDepositSuccessResponse> {
     return cDeposit(this.config_, params, opts);
   }
 
@@ -828,10 +798,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -840,9 +810,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#claim-rewards
    */
-  claimRewards(
-    opts?: ClaimRewardsOptions,
-  ): Promise<ClaimRewardsSuccessResponse> {
+  claimRewards(opts?: ClaimRewardsOptions): Promise<ClaimRewardsSuccessResponse> {
     return claimRewards(this.config_, opts);
   }
 
@@ -861,10 +829,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example Convert to multi-sig
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -878,10 +846,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example Convert to single-sig
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -912,10 +880,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -946,10 +914,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -962,10 +930,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see null
    */
-  createVault(
-    params: CreateVaultParameters,
-    opts?: CreateVaultOptions,
-  ): Promise<CreateVaultSuccessResponse> {
+  createVault(params: CreateVaultParameters, opts?: CreateVaultOptions): Promise<CreateVaultSuccessResponse> {
     return createVault(this.config_, params, opts);
   }
 
@@ -984,10 +949,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example Jail self
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -996,10 +961,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example Unjail self
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1008,10 +973,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see null
    */
-  cSignerAction(
-    params: CSignerActionParameters,
-    opts?: CSignerActionOptions,
-  ): Promise<CSignerActionSuccessResponse> {
+  cSignerAction(params: CSignerActionParameters, opts?: CSignerActionOptions): Promise<CSignerActionSuccessResponse> {
     return cSignerAction(this.config_, params, opts);
   }
 
@@ -1030,10 +992,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1074,10 +1036,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1086,10 +1048,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#withdraw-from-staking
    */
-  cWithdraw(
-    params: CWithdrawParameters,
-    opts?: CWithdrawOptions,
-  ): Promise<CWithdrawSuccessResponse> {
+  cWithdraw(params: CWithdrawParameters, opts?: CWithdrawOptions): Promise<CWithdrawSuccessResponse> {
     return cWithdraw(this.config_, params, opts);
   }
 
@@ -1108,10 +1067,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1120,10 +1079,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/dual-block-architecture
    */
-  evmUserModify(
-    params: EvmUserModifyParameters,
-    opts?: EvmUserModifyOptions,
-  ): Promise<EvmUserModifySuccessResponse> {
+  evmUserModify(params: EvmUserModifyParameters, opts?: EvmUserModifyOptions): Promise<EvmUserModifySuccessResponse> {
     return evmUserModify(this.config_, params, opts);
   }
 
@@ -1142,10 +1098,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example Finalize from an EOA-deployed contract
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1176,10 +1132,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1214,10 +1170,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1252,10 +1208,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1286,10 +1242,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1308,10 +1264,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#modify-an-order
    */
-  modify(
-    params: ModifyParameters,
-    opts?: ModifyOptions,
-  ): Promise<ModifySuccessResponse> {
+  modify(params: ModifyParameters, opts?: ModifyOptions): Promise<ModifySuccessResponse> {
     return modify(this.config_, params, opts);
   }
 
@@ -1330,10 +1283,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1354,10 +1307,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#place-an-order
    */
-  order(
-    params: OrderParameters,
-    opts?: OrderOptions,
-  ): Promise<OrderSuccessResponse> {
+  order(params: OrderParameters, opts?: OrderOptions): Promise<OrderSuccessResponse> {
     return order(this.config_, params, opts);
   }
 
@@ -1376,10 +1326,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1388,10 +1338,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#invalidate-pending-nonce-noop
    */
-  noop(
-    params: NoopParameters,
-    opts?: NoopOptions,
-  ): Promise<NoopSuccessResponse> {
+  noop(params: NoopParameters, opts?: NoopOptions): Promise<NoopSuccessResponse> {
     return noop(this.config_, params, opts);
   }
 
@@ -1410,10 +1357,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1435,10 +1382,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-3-deployer-actions
    */
-  perpDeploy(
-    params: PerpDeployParameters,
-    opts?: PerpDeployOptions,
-  ): Promise<PerpDeploySuccessResponse> {
+  perpDeploy(params: PerpDeployParameters, opts?: PerpDeployOptions): Promise<PerpDeploySuccessResponse> {
     return perpDeploy(this.config_, params, opts);
   }
 
@@ -1457,10 +1401,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1491,10 +1435,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1525,10 +1469,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1541,16 +1485,14 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params?: ScheduleCancelParameters,
     opts?: ScheduleCancelOptions,
   ): Promise<ScheduleCancelSuccessResponse>;
-  scheduleCancel(
-    opts?: ScheduleCancelOptions,
-  ): Promise<ScheduleCancelSuccessResponse>;
+  scheduleCancel(opts?: ScheduleCancelOptions): Promise<ScheduleCancelSuccessResponse>;
   scheduleCancel(
     paramsOrOpts?: ScheduleCancelParameters | ScheduleCancelOptions,
     maybeOpts?: ScheduleCancelOptions,
   ): Promise<ScheduleCancelSuccessResponse> {
     const isFirstArgParams = paramsOrOpts && "time" in paramsOrOpts;
     const params = isFirstArgParams ? paramsOrOpts : {};
-    const opts = isFirstArgParams ? maybeOpts : paramsOrOpts as ScheduleCancelOptions;
+    const opts = isFirstArgParams ? maybeOpts : (paramsOrOpts as ScheduleCancelOptions);
     return scheduleCancel(this.config_, params, opts);
   }
 
@@ -1571,10 +1513,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1589,10 +1531,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#send-asset
    */
-  sendAsset(
-    params: SendAssetParameters,
-    opts?: SendAssetOptions,
-  ): Promise<SendAssetSuccessResponse> {
+  sendAsset(params: SendAssetParameters, opts?: SendAssetOptions): Promise<SendAssetSuccessResponse> {
     return sendAsset(this.config_, params, opts);
   }
 
@@ -1611,10 +1550,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1654,10 +1593,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1688,10 +1627,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1700,10 +1639,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see null
    */
-  setReferrer(
-    params: SetReferrerParameters,
-    opts?: SetReferrerOptions,
-  ): Promise<SetReferrerSuccessResponse> {
+  setReferrer(params: SetReferrerParameters, opts?: SetReferrerOptions): Promise<SetReferrerSuccessResponse> {
     return setReferrer(this.config_, params, opts);
   }
 
@@ -1722,10 +1658,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1744,10 +1680,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/deploying-hip-1-and-hip-2-assets
    */
-  spotDeploy(
-    params: SpotDeployParameters,
-    opts?: SpotDeployOptions,
-  ): Promise<SpotDeploySuccessResponse> {
+  spotDeploy(params: SpotDeployParameters, opts?: SpotDeployOptions): Promise<SpotDeploySuccessResponse> {
     return spotDeploy(this.config_, params, opts);
   }
 
@@ -1766,10 +1699,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1782,10 +1715,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#core-spot-transfer
    */
-  spotSend(
-    params: SpotSendParameters,
-    opts?: SpotSendOptions,
-  ): Promise<SpotSendSuccessResponse> {
+  spotSend(params: SpotSendParameters, opts?: SpotSendOptions): Promise<SpotSendSuccessResponse> {
     return spotSend(this.config_, params, opts);
   }
 
@@ -1804,10 +1734,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1816,10 +1746,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see null
    */
-  spotUser(
-    params: SpotUserParameters,
-    opts?: SpotUserOptions,
-  ): Promise<SpotUserSuccessResponse> {
+  spotUser(params: SpotUserParameters, opts?: SpotUserOptions): Promise<SpotUserSuccessResponse> {
     return spotUser(this.config_, params, opts);
   }
 
@@ -1840,10 +1767,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1874,10 +1801,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1908,10 +1835,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1947,10 +1874,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -1985,10 +1912,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2001,10 +1928,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#delegate-or-undelegate-stake-from-validator
    */
-  tokenDelegate(
-    params: TokenDelegateParameters,
-    opts?: TokenDelegateOptions,
-  ): Promise<TokenDelegateSuccessResponse> {
+  tokenDelegate(params: TokenDelegateParameters, opts?: TokenDelegateOptions): Promise<TokenDelegateSuccessResponse> {
     return tokenDelegate(this.config_, params, opts);
   }
 
@@ -2023,10 +1947,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2057,10 +1981,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2069,10 +1993,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#cancel-a-twap-order
    */
-  twapCancel(
-    params: TwapCancelParameters,
-    opts?: TwapCancelOptions,
-  ): Promise<TwapCancelSuccessResponse> {
+  twapCancel(params: TwapCancelParameters, opts?: TwapCancelOptions): Promise<TwapCancelSuccessResponse> {
     return twapCancel(this.config_, params, opts);
   }
 
@@ -2091,10 +2012,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2112,10 +2033,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#place-a-twap-order
    */
-  twapOrder(
-    params: TwapOrderParameters,
-    opts?: TwapOrderOptions,
-  ): Promise<TwapOrderSuccessResponse> {
+  twapOrder(params: TwapOrderParameters, opts?: TwapOrderOptions): Promise<TwapOrderSuccessResponse> {
     return twapOrder(this.config_, params, opts);
   }
 
@@ -2134,10 +2052,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2168,10 +2086,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2202,10 +2120,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2236,10 +2154,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2248,10 +2166,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#core-usdc-transfer
    */
-  usdSend(
-    params: UsdSendParameters,
-    opts?: UsdSendOptions,
-  ): Promise<UsdSendSuccessResponse> {
+  usdSend(params: UsdSendParameters, opts?: UsdSendOptions): Promise<UsdSendSuccessResponse> {
     return usdSend(this.config_, params, opts);
   }
 
@@ -2272,10 +2187,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2306,10 +2221,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example Split outcome
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2321,10 +2236,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#merge-question
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#negate-outcome
    */
-  userOutcome(
-    params: UserOutcomeParameters,
-    opts?: UserOutcomeOptions,
-  ): Promise<UserOutcomeSuccessResponse> {
+  userOutcome(params: UserOutcomeParameters, opts?: UserOutcomeOptions): Promise<UserOutcomeSuccessResponse> {
     return userOutcome(this.config_, params, opts);
   }
 
@@ -2345,10 +2257,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2379,10 +2291,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2413,10 +2325,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2447,10 +2359,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2481,10 +2393,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2497,10 +2409,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see null
    */
-  vaultModify(
-    params: VaultModifyParameters,
-    opts?: VaultModifyOptions,
-  ): Promise<VaultModifySuccessResponse> {
+  vaultModify(params: VaultModifyParameters, opts?: VaultModifyOptions): Promise<VaultModifySuccessResponse> {
     return vaultModify(this.config_, params, opts);
   }
 
@@ -2519,10 +2428,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2535,10 +2444,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#deposit-or-withdraw-from-a-vault
    */
-  vaultTransfer(
-    params: VaultTransferParameters,
-    opts?: VaultTransferOptions,
-  ): Promise<VaultTransferSuccessResponse> {
+  vaultTransfer(params: VaultTransferParameters, opts?: VaultTransferOptions): Promise<VaultTransferSuccessResponse> {
     return vaultTransfer(this.config_, params, opts);
   }
 
@@ -2557,10 +2463,10 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
-   * import { privateKeyToAccount } from "npm:viem/accounts";
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
    *
-   * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+   * const wallet = privateKeyToAccount("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
@@ -2569,10 +2475,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#initiate-a-withdrawal-request
    */
-  withdraw3(
-    params: Withdraw3Parameters,
-    opts?: Withdraw3Options,
-  ): Promise<Withdraw3SuccessResponse> {
+  withdraw3(params: Withdraw3Parameters, opts?: Withdraw3Options): Promise<Withdraw3SuccessResponse> {
     return withdraw3(this.config_, params, opts);
   }
 }

@@ -4,17 +4,17 @@ The SDK is organized into modular entry points so bundlers can eliminate unused 
 
 ## Entry points
 
-| Entry point                                    | Contains                                                                                                                  |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `@nktkas/hyperliquid`                          | [Transports](../transports.md), [clients](../clients.md), [error classes](../error-handling.md)                           |
-| [`@nktkas/hyperliquid/signing`](../signing.md) | Signing functions, wallet utilities                                                                                       |
-| [`@nktkas/hyperliquid/utils`](../utilities.md) | `formatPrice`, `formatSize`, `SymbolConverter`                                                                            |
-| `@nktkas/hyperliquid/api/info`                 | [Info methods](https://nktkas.gitbook.io/hyperliquid/api-reference/info-methods), individually importable                 |
-| `@nktkas/hyperliquid/api/exchange`             | [Exchange methods](https://nktkas.gitbook.io/hyperliquid/api-reference/exchange-methods), individually importable         |
-| `@nktkas/hyperliquid/api/subscription`         | [Subscription methods](https://nktkas.gitbook.io/hyperliquid/api-reference/subscription-methods), individually importable |
-| `@nktkas/hyperliquid/api/explorer`             | [Explorer methods](https://nktkas.gitbook.io/hyperliquid/api-reference/explorer-methods), individually importable         |
+| Entry point                                     | Contains                                                                                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `@bloxwap/hyperliquid`                          | [Transports](../transports.md), [clients](../clients.md), [error classes](../error-handling.md)                           |
+| [`@bloxwap/hyperliquid/signing`](../signing.md) | Signing functions, wallet utilities                                                                                       |
+| [`@bloxwap/hyperliquid/utils`](../utilities.md) | `formatPrice`, `formatSize`, `SymbolConverter`                                                                            |
+| `@bloxwap/hyperliquid/api/info`                 | [Info methods](https://nktkas.gitbook.io/hyperliquid/api-reference/info-methods), individually importable                 |
+| `@bloxwap/hyperliquid/api/exchange`             | [Exchange methods](https://nktkas.gitbook.io/hyperliquid/api-reference/exchange-methods), individually importable         |
+| `@bloxwap/hyperliquid/api/subscription`         | [Subscription methods](https://nktkas.gitbook.io/hyperliquid/api-reference/subscription-methods), individually importable |
+| `@bloxwap/hyperliquid/api/explorer`             | [Explorer methods](https://nktkas.gitbook.io/hyperliquid/api-reference/explorer-methods), individually importable         |
 
-Each entry point has independent dependencies — e.g., importing `@nktkas/hyperliquid/utils` doesn't pull in signing or
+Each entry point has independent dependencies — e.g., importing `@bloxwap/hyperliquid/utils` doesn't pull in signing or
 validation code.
 
 ## Direct method imports
@@ -27,8 +27,8 @@ Each method accepts the same config as its client as the first argument:
 Info methods use [`InfoClient`](../clients.md#info-endpoint) config:
 
 ```ts
-import { HttpTransport } from "@nktkas/hyperliquid";
-import { allMids } from "@nktkas/hyperliquid/api/info";
+import { HttpTransport } from "@bloxwap/hyperliquid";
+import { allMids } from "@bloxwap/hyperliquid/api/info";
 
 const transport = new HttpTransport();
 const result = await allMids({ transport });
@@ -37,8 +37,8 @@ const result = await allMids({ transport });
 Exchange methods use [`ExchangeClient`](../clients.md#exchange-endpoint) config:
 
 ```ts
-import { HttpTransport } from "@nktkas/hyperliquid";
-import { order } from "@nktkas/hyperliquid/api/exchange";
+import { HttpTransport } from "@bloxwap/hyperliquid";
+import { order } from "@bloxwap/hyperliquid/api/exchange";
 import { privateKeyToAccount } from "viem/accounts";
 
 const transport = new HttpTransport();
@@ -63,8 +63,8 @@ await order(
 Subscription methods use [`SubscriptionClient`](../clients.md#websocket-subscriptions) config:
 
 ```ts
-import { WebSocketTransport } from "@nktkas/hyperliquid";
-import { allMids } from "@nktkas/hyperliquid/api/subscription";
+import { WebSocketTransport } from "@bloxwap/hyperliquid";
+import { allMids } from "@bloxwap/hyperliquid/api/subscription";
 
 const transport = new WebSocketTransport();
 const subscription = await allMids({ transport }, (data) => {
@@ -75,8 +75,8 @@ const subscription = await allMids({ transport }, (data) => {
 Explorer methods use [`ExplorerClient`](../clients.md#explorer-endpoint) config:
 
 ```ts
-import { HttpTransport } from "@nktkas/hyperliquid";
-import { blockDetails } from "@nktkas/hyperliquid/api/explorer";
+import { HttpTransport } from "@bloxwap/hyperliquid";
+import { blockDetails } from "@bloxwap/hyperliquid/api/explorer";
 
 const transport = new HttpTransport();
 const block = await blockDetails({ transport }, { height: 123 });

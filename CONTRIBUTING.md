@@ -1,4 +1,4 @@
-# Contributing to @nktkas/hyperliquid
+# Contributing to @bloxwap/hyperliquid
 
 Welcome, and thank you for taking time in contributing to SDK! You can contribute to SDK in different ways:
 
@@ -10,26 +10,79 @@ Welcome, and thank you for taking time in contributing to SDK! You can contribut
 
 If you want to read or modify the SDK code, set up your development environment as follows:
 
-1. Install [Deno](https://deno.com).
-2. Use [VSCode Deno LSP](https://marketplace.visualstudio.com/items?itemName=denoland.vscode-deno) or a
-   [similar extension](https://docs.deno.com/runtime/getting_started/setup_your_environment/) if you are using a
-   different editor.
+1. Install [Bun](https://bun.com).
+2. Install the dependencies:
+
+   ```bash
+   bun install
+   ```
+
+3. Install the [Biome extension](https://biomejs.dev/guides/editors/first-party-extensions/) for your editor so
+   formatting and linting match CI as you type.
+
+The package `exports` point straight at the TypeScript sources, so there is no build step during development. Only
+publishing needs one (`bun run build`, which writes `dist/`).
+
+## Commands
+
+Every task in this repo runs through Bun. There is no other toolchain.
+
+| Command                        | What it does                                                         |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `bun install`                  | Install dependencies.                                                |
+| `bun run check`                | Format, lint, TypeScript 5 + 7 types, JSDoc sync, export sync.       |
+| `bun test tests/`              | Full test suite; the online tests need network and credentials.      |
+| `HL_OFFLINE=1 bun test tests/` | Offline gate: skips every live-endpoint test. This is what CI runs.  |
+| `bun run perf`                 | Performance suite; writes a report to `tests/perf/results/`.         |
+| `bun run perf:gate`            | Zero-performance-regression gate (see below).                        |
+| `bun run build`                | Emit the publishable package into `dist/`.                           |
+
+`bun run check` is a bundle of narrower scripts (`check:format`, `check:lint`, `check:types`, `check:ts7`,
+`check:jsdoc`, `check:export`) — run one directly when you only want to re-check that dimension. `bun run format` and
+`bun run lint` are the `--write` variants of the first two.
 
 ## Testing
 
 ```bash
-deno test -A
+bun test tests/
 ```
 
 Optional: Set `PRIVATE_KEY` env for complete tests. Required testnet balance: ~100 usdc-perps, ~3 usdc-spot, ~0.0000001
 hype-spot.
 
+Without a key — or without network — run only the tests that never touch live endpoints:
+
+```bash
+HL_OFFLINE=1 bun test tests/
+```
+
+`HL_OFFLINE=1` (equivalently `bun run test:offline`) is the switch to use. A `--offline` argv flag is also honored, but
+`bun test` does not forward extra arguments to test files reliably, so prefer the env var.
+
+## Performance
+
+**This project enforces a zero performance regression policy.** A change may keep performance the same or improve it —
+never regress it. `bun run perf:gate` is what enforces that: it runs the suite in `tests/perf/`, compares the result
+against the committed baseline at `tests/perf/results/baseline.json`, and exits non-zero when any scenario got
+materially slower. The same gate runs on every pull request.
+
+```bash
+bun run perf                          # measure and print the table
+bun run perf:gate                     # measure, compare to baseline, fail on regression
+bun run .dev/perf/gate.ts --record    # re-record the baseline
+```
+
+Re-record the baseline only when you intentionally changed what a scenario measures, and do it in the same commit as
+that change. If the gate flaps on a busy machine, widen the band with `--threshold <pct>` rather than skipping the gate.
+
 ## Coding Guidelines
 
-- **Style**: After making all changes, run: `deno task check`
+- **Style**: After making all changes, run: `bun run check` (format, lint, TypeScript 5, TypeScript 7, doc/export sync).
+- **Performance**: Zero-regression policy — if you touch a hot path, run `bun run perf:gate` before opening a PR.
 - **Dependencies**: Use small and easily auditable dependencies (e.g.
-  [@noble/hashes](https://www.npmjs.com/package/@noble/hashes) or [@std](https://jsr.io/@std)).
-- **Testing**: Write tests for any new functionality.
+  [@noble/hashes](https://www.npmjs.com/package/@noble/hashes) or [valibot](https://valibot.dev/)).
+- **Testing**: Write tests for any new functionality. Keep the offline gate green: a test that needs a live endpoint
+  must skip itself when `HL_OFFLINE=1`.
 - **Docs**: Update or add JSDoc comments where appropriate.
 
 ## Common Tasks
@@ -43,7 +96,7 @@ hype-spot.
    `src/api/[group]/mod.ts`.
 4. Add the matching wrapper method to the client in `src/api/[group]/client.ts`.
 5. Create a test at `tests/api/[group]/[methodName].test.ts` (use patterns from other tests) and run it.
-6. Run the `deno task check` command and fix any errors that are reported.
+6. Run the `bun run check` command and fix any errors that are reported.
 
 ### Update API schemas/types
 

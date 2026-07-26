@@ -6,8 +6,8 @@
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { clearinghouseState } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { clearinghouseState } from "@bloxwap/hyperliquid/api/info";
  * //       ^^^^^^^^^^^^^^^^^^
  * //       same name as in `InfoClient`
  *

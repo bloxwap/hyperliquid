@@ -1,0 +1,118 @@
+{
+  // Formatter and linter, replacing `deno fmt` / `deno lint` after the migration to Bun.
+  //
+  // The formatter settings reproduce the previous Deno style exactly (120 columns, 2-space indent,
+  // double quotes, always-semicolons, trailing commas) so the migration diff stays reviewable.
+  //
+  // The linter starts from Biome's `recommended` preset and then re-enables the extra rules the old
+  // `deno.json` opted into. Where Biome's defaults disagree with an established, reviewed idiom in
+  // this codebase, the rule is turned off HERE with a reason rather than by rewriting working
+  // signing/transport code — the old suppressions lived in `deno-lint-ignore` comments, which Biome
+  // does not read, so switching linters must not silently become a refactor of cryptographic code.
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": false,
+    "clientKind": "git",
+    "useIgnoreFile": false
+  },
+  "files": {
+    "includes": ["**", "!**/node_modules", "!dist", "!coverage", "!.dev/ts7/node_modules", "!.dev/ts7/tsconfig.json"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "jsxQuoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always",
+      "bracketSpacing": true,
+      "quoteProperties": "asNeeded"
+    }
+  },
+  "json": {
+    "formatter": {
+      "trailingCommas": "none"
+    },
+    "parser": {
+      "allowComments": true
+    }
+  },
+  "assist": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+
+      // --- Carried over from the old deno.json lint config ------------------
+      "suspicious": {
+        "noDoubleEquals": "error", // was: eqeqeq
+        "noSelfCompare": "error", // was: no-self-compare
+        "noSparseArray": "error", // was: no-sparse-arrays
+
+        // `any` is used deliberately and sparingly: runtime shims in transport/_polyfills.ts must
+        // describe APIs that may not exist on the platform, and a few generic event boundaries
+        // cannot be expressed without it. Deno suppressed these per-file with deno-lint-ignore.
+        "noExplicitAny": "off",
+
+        // src/transport/websocket/_events.ts merges an interface with a class to give a typed
+        // EventTarget an accurate `addEventListener` overload set. That is the standard way to type
+        // a custom event emitter, and it is intentional here.
+        "noUnsafeDeclarationMerging": "off",
+
+        // `(resolve = res, reject = rej)` in the Promise.withResolvers shim, and a handful of
+        // `while ((x = next()))` loops. Terse, local, and idiomatic in this codebase.
+        "noAssignInExpressions": "off"
+      },
+      "style": {
+        "noInferrableTypes": "error", // was: no-inferrable-types
+        "useDefaultParameterLast": "error", // was: default-param-last
+        "useThrowOnlyError": "error", // was: no-throw-literal
+
+        // The canonicalize walker and the schema matchers index into records immediately after an
+        // `in` check, where the non-null assertion is provably safe and the alternative is a second
+        // lookup on a hot path. Deno's no-non-null-asserted-optional-chain (which this codebase DID
+        // enable) targets the genuinely unsafe `?.!` form; plain `!` was always allowed.
+        "noNonNullAssertion": "off"
+      },
+      "complexity": {
+        "noUselessRename": "error", // was: no-useless-rename
+
+        // Same Promise.withResolvers shim as above.
+        "noCommaOperator": "off"
+      },
+
+      // Stands in for Deno's explicit-function-return-type + explicit-module-boundary-types, which
+      // this codebase enabled and which its house style still follows. Enforced on src/ only; test
+      // and tooling callbacks are exempted in the override below.
+      "nursery": {
+        "useExplicitType": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      // Tests and dev tooling print to stdout by design, and annotating every inline callback in a
+      // benchmark or fixture adds noise without protecting a published API surface.
+      "includes": [".dev/**/*.ts", "tests/**/*.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          },
+          "nursery": {
+            "useExplicitType": "off"
+          }
+        }
+      }
+    }
+  ]
+}

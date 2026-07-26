@@ -1,5 +1,5 @@
-import { type MetaAndAssetCtxsParameters, MetaAndAssetCtxsRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type MetaAndAssetCtxsParameters, MetaAndAssetCtxsRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,11 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(MetaAndAssetCtxsRequest, ["type"
 runTest({
   name: "metaAndAssetCtxs",
   codeTestFn: async (_t, client) => {
-    const params: MetaAndAssetCtxsParameters[] = [
-      {},
-      { dex: "gato" },
-      { dex: "meng" },
-    ];
+    const params: MetaAndAssetCtxsParameters[] = [{}, { dex: "gato" }, { dex: "meng" }];
 
     const data = await Promise.all(params.map((p) => client.metaAndAssetCtxs(p)));
 

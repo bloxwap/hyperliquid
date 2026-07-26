@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -93,8 +93,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { validatorSummaries } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { validatorSummaries } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -103,10 +103,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see null
  */
-export function validatorSummaries(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<ValidatorSummariesResponse> {
+export function validatorSummaries(config: InfoConfig, signal?: AbortSignal): Promise<ValidatorSummariesResponse> {
   const request = parse(ValidatorSummariesRequest, {
     type: "validatorSummaries",
   });

@@ -10,8 +10,6 @@ runTest({
   codeTestFn: async (_t, client) => {
     const data = await Promise.all([client.exchangeStatus()]);
 
-    schemaCoverage(responseSchema, data, [
-      "#/properties/specialStatuses/defined",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/properties/specialStatuses/defined"]);
   },
 });

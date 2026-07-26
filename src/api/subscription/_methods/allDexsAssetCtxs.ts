@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -53,8 +53,8 @@ import type { SubscriptionConfig, SubscriptionOptions } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { allDexsAssetCtxs } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { allDexsAssetCtxs } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -74,7 +74,12 @@ export function allDexsAssetCtxs(
   const payload = parse(AllDexsAssetCtxsRequest, {
     type: "allDexsAssetCtxs",
   });
-  return config.transport.subscribe<AllDexsAssetCtxsEvent>(payload.type, payload, (e) => {
-    listener(e.detail);
-  }, options);
+  return config.transport.subscribe<AllDexsAssetCtxsEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      listener(e.detail);
+    },
+    options,
+  );
 }

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -33,43 +33,46 @@ export type DelegatorHistoryResponse = {
    */
   hash: `0x${string}`;
   /** Details of the update. */
-  delta: {
-    /** Delegation operation details. */
-    delegate: {
-      /**
-       * Address of the validator receiving or losing delegation.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      validator: `0x${string}`;
-      /**
-       * Amount of tokens being delegated or undelegated.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-      /** Whether this is an undelegation operation. */
-      isUndelegate: boolean;
-    };
-  } | {
-    /** Deposit details. */
-    cDeposit: {
-      /**
-       * Amount of tokens being deposited.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-    };
-  } | {
-    /** Withdrawal details. */
-    withdrawal: {
-      /**
-       * Amount of tokens being withdrawn.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      amount: string;
-      /** Phase of the withdrawal process. */
-      phase: "initiated" | "finalized";
-    };
-  };
+  delta:
+    | {
+        /** Delegation operation details. */
+        delegate: {
+          /**
+           * Address of the validator receiving or losing delegation.
+           * @pattern ^0x[a-fA-F0-9]{40}$
+           */
+          validator: `0x${string}`;
+          /**
+           * Amount of tokens being delegated or undelegated.
+           * @pattern ^[0-9]+(\.[0-9]+)?$
+           */
+          amount: string;
+          /** Whether this is an undelegation operation. */
+          isUndelegate: boolean;
+        };
+      }
+    | {
+        /** Deposit details. */
+        cDeposit: {
+          /**
+           * Amount of tokens being deposited.
+           * @pattern ^[0-9]+(\.[0-9]+)?$
+           */
+          amount: string;
+        };
+      }
+    | {
+        /** Withdrawal details. */
+        withdrawal: {
+          /**
+           * Amount of tokens being withdrawn.
+           * @pattern ^[0-9]+(\.[0-9]+)?$
+           */
+          amount: string;
+          /** Phase of the withdrawal process. */
+          phase: "initiated" | "finalized";
+        };
+      };
 }[];
 
 // ============================================================
@@ -95,8 +98,8 @@ export type DelegatorHistoryParameters = Omit<v.InferInput<typeof DelegatorHisto
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { delegatorHistory } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { delegatorHistory } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

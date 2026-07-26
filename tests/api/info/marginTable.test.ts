@@ -1,5 +1,5 @@
-import { type MarginTableParameters, MarginTableRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type MarginTableParameters, MarginTableRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,9 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(MarginTableRequest, ["type"]));
 runTest({
   name: "marginTable",
   codeTestFn: async (_t, client) => {
-    const params: MarginTableParameters[] = [
-      { id: 1 },
-    ];
+    const params: MarginTableParameters[] = [{ id: 1 }];
 
     const data = await Promise.all(params.map((p) => client.marginTable(p)));
 

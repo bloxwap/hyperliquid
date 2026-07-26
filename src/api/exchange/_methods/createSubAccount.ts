@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -40,25 +40,27 @@ export type CreateSubAccountRequest = v.InferOutput<typeof CreateSubAccountReque
  * Response for creating a sub-account.
  * @see null
  */
-export type CreateSubAccountResponse = {
-  /** Successful status. */
-  status: "ok";
-  /** Response details. */
-  response: {
-    /** Type of response. */
-    type: "createSubAccount";
-    /**
-     * Sub-account address.
-     * @pattern ^0x[a-fA-F0-9]{40}$
-     */
-    data: `0x${string}`;
-  };
-} | {
-  /** Error status. */
-  status: "err";
-  /** Error message. */
-  response: string;
-};
+export type CreateSubAccountResponse =
+  | {
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "createSubAccount";
+        /**
+         * Sub-account address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        data: `0x${string}`;
+      };
+    }
+  | {
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -103,11 +105,11 @@ export type CreateSubAccountSuccessResponse = ExcludeErrorResponse<CreateSubAcco
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { createSubAccount } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { createSubAccount } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * const data = await createSubAccount({ transport, wallet }, {

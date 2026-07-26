@@ -1,4 +1,4 @@
-import { type CandleSnapshotParameters, CandleSnapshotRequest } from "@nktkas/hyperliquid/api/info";
+import { type CandleSnapshotParameters, CandleSnapshotRequest } from "@bloxwap/hyperliquid/api/info";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";

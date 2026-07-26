@@ -2,9 +2,9 @@ import {
   type NotificationEvent,
   type NotificationParameters,
   NotificationRequest,
-} from "@nktkas/hyperliquid/api/subscription";
-import { getWalletAddress } from "@nktkas/hyperliquid/signing";
-import * as v from "@valibot/valibot";
+} from "@bloxwap/hyperliquid/api/subscription";
+import { getWalletAddress } from "@bloxwap/hyperliquid/signing";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";

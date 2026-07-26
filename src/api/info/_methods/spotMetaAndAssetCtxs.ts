@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -49,8 +49,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { spotMetaAndAssetCtxs } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { spotMetaAndAssetCtxs } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -59,10 +59,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-asset-contexts
  */
-export function spotMetaAndAssetCtxs(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<SpotMetaAndAssetCtxsResponse> {
+export function spotMetaAndAssetCtxs(config: InfoConfig, signal?: AbortSignal): Promise<SpotMetaAndAssetCtxsResponse> {
   const request = parse(SpotMetaAndAssetCtxsRequest, {
     type: "spotMetaAndAssetCtxs",
   });

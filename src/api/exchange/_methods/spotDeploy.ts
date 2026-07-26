@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -162,20 +162,20 @@ export type SpotDeployRequest = v.InferOutput<typeof SpotDeployRequest>;
  */
 export type SpotDeployResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -196,9 +196,12 @@ const SpotDeployActionSchema = /* @__PURE__ */ (() => {
 })();
 
 /** Action parameters for the {@linkcode spotDeploy} function. */
-export type SpotDeployParameters = v.InferInput<typeof SpotDeployActionSchema> extends infer T
-  ? T extends unknown ? { [K in Exclude<keyof T, "type">]: T[K] } : never
-  : never;
+export type SpotDeployParameters =
+  v.InferInput<typeof SpotDeployActionSchema> extends infer T
+    ? T extends unknown
+      ? { [K in Exclude<keyof T, "type">]: T[K] }
+      : never
+    : never;
 
 /** Request options for the {@linkcode spotDeploy} function. */
 export type SpotDeployOptions = ExtractRequestOptions<v.InferInput<typeof SpotDeployRequest>>;
@@ -222,11 +225,11 @@ export type SpotDeploySuccessResponse = ExcludeErrorResponse<SpotDeployResponse>
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { spotDeploy } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { spotDeploy } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await spotDeploy({ transport, wallet }, {
@@ -249,9 +252,6 @@ export function spotDeploy(
   params: SpotDeployParameters,
   opts?: SpotDeployOptions,
 ): Promise<SpotDeploySuccessResponse> {
-  const action = canonicalize(
-    SpotDeployActionSchema,
-    parse(SpotDeployActionSchema, { type: "spotDeploy", ...params }),
-  );
+  const action = canonicalize(SpotDeployActionSchema, parse(SpotDeployActionSchema, { type: "spotDeploy", ...params }));
   return executeL1Action(config, action, opts);
 }

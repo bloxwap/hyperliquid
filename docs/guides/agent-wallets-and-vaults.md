@@ -12,7 +12,7 @@ An agent wallet signs trades on behalf of your master account.
 Approve it once, then use the agent's private key for all subsequent requests:
 
 ```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { createWalletClient, custom } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";

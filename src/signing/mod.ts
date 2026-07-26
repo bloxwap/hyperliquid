@@ -4,8 +4,6 @@
  */
 
 export {
-  type AbstractEthersV5Signer,
-  type AbstractEthersV6Signer,
   type AbstractViemJsonRpcAccount,
   type AbstractViemLocalAccount,
   type AbstractWallet,

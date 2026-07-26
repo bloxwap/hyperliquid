@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -53,8 +53,8 @@ export type AllMidsParameters = Omit<v.InferInput<typeof AllMidsRequest>, "type"
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { allMids } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { allMids } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -63,15 +63,8 @@ export type AllMidsParameters = Omit<v.InferInput<typeof AllMidsRequest>, "type"
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-mids-for-all-coins
  */
-export function allMids(
-  config: InfoConfig,
-  params?: AllMidsParameters,
-  signal?: AbortSignal,
-): Promise<AllMidsResponse>;
-export function allMids(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<AllMidsResponse>;
+export function allMids(config: InfoConfig, params?: AllMidsParameters, signal?: AbortSignal): Promise<AllMidsResponse>;
+export function allMids(config: InfoConfig, signal?: AbortSignal): Promise<AllMidsResponse>;
 export function allMids(
   config: InfoConfig,
   paramsOrSignal?: AllMidsParameters | AbortSignal,

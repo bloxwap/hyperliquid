@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -50,20 +50,20 @@ export type SpotSendRequest = v.InferOutput<typeof SpotSendRequest>;
  */
 export type SpotSendResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -80,10 +80,7 @@ import {
 
 /** Schema for action fields (excludes request-level system fields). */
 const SpotSendActionSchema = /* @__PURE__ */ (() => {
-  return v.omit(
-    v.object(SpotSendRequest.entries.action.entries),
-    ["signatureChainId", "hyperliquidChain", "time"],
-  );
+  return v.omit(v.object(SpotSendRequest.entries.action.entries), ["signatureChainId", "hyperliquidChain", "time"]);
 })();
 
 /** Action parameters for the {@linkcode spotSend} function. */
@@ -122,11 +119,11 @@ export const SpotSendTypes = {
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { spotSend } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { spotSend } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await spotSend({ transport, wallet }, {
@@ -143,9 +140,6 @@ export function spotSend(
   params: SpotSendParameters,
   opts?: SpotSendOptions,
 ): Promise<SpotSendSuccessResponse> {
-  const action = canonicalize(
-    SpotSendActionSchema,
-    parse(SpotSendActionSchema, { type: "spotSend", ...params }),
-  );
+  const action = canonicalize(SpotSendActionSchema, parse(SpotSendActionSchema, { type: "spotSend", ...params }));
   return executeUserSignedAction(config, action, SpotSendTypes, opts);
 }

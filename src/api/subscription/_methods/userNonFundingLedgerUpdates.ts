@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -65,8 +65,8 @@ export type UserNonFundingLedgerUpdatesParameters = Omit<
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { userNonFundingLedgerUpdates } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { userNonFundingLedgerUpdates } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -86,9 +86,14 @@ export function userNonFundingLedgerUpdates(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(UserNonFundingLedgerUpdatesRequest, { type: "userNonFundingLedgerUpdates", ...params });
-  return config.transport.subscribe<UserNonFundingLedgerUpdatesEvent>(payload.type, payload, (e) => {
-    if (e.detail.user === payload.user) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<UserNonFundingLedgerUpdatesEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.user === payload.user) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

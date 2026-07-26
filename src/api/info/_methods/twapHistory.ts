@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -37,15 +37,17 @@ export type TwapHistoryResponse = {
    * - `"terminated"`: Terminated.
    * - `"error"`: An error occurred.
    */
-  status: {
-    /** Status of the TWAP order. */
-    status: "finished" | "activated" | "terminated";
-  } | {
-    /** Status of the TWAP order. */
-    status: "error";
-    /** Error message. */
-    description: string;
-  };
+  status:
+    | {
+        /** Status of the TWAP order. */
+        status: "finished" | "activated" | "terminated";
+      }
+    | {
+        /** Status of the TWAP order. */
+        status: "error";
+        /** Error message. */
+        description: string;
+      };
   /** ID of the TWAP. */
   twapId?: number;
 }[];
@@ -73,8 +75,8 @@ export type TwapHistoryParameters = Omit<v.InferInput<typeof TwapHistoryRequest>
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { twapHistory } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { twapHistory } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

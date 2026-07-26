@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -49,8 +49,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { maxMarketOrderNtls } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { maxMarketOrderNtls } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -59,10 +59,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see null
  */
-export function maxMarketOrderNtls(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<MaxMarketOrderNtlsResponse> {
+export function maxMarketOrderNtls(config: InfoConfig, signal?: AbortSignal): Promise<MaxMarketOrderNtlsResponse> {
   const request = parse(MaxMarketOrderNtlsRequest, {
     type: "maxMarketOrderNtls",
   });

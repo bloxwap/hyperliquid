@@ -1,0 +1,51 @@
+{
+  // TypeScript 7 forward-compatibility gate for the library sources.
+  //
+  // The repo type-checks with TypeScript 5 (`bun run check:types`), because the JS compiler API
+  // that `ts-json-schema-generator` needs exists only in 5.x — TypeScript 7 ships as a native
+  // binary with no JS API. This config runs TypeScript 7 over `src/` as a SECOND gate, so the
+  // published surface is known to compile under the compiler downstream consumers will move to.
+  //
+  // WHY THIS LIVES IN `.dev/ts7/` RATHER THAN THE REPO ROOT:
+  // the two compiler versions cannot share one `node_modules/typescript`. Pinning 7.0.2 here,
+  // beside its own `package.json`, keeps it away from the root install's 5.x.
+  //
+  // Everything is driven by Bun: `bun install` materializes `node_modules` from `package.json`,
+  // and `bunx tsc` runs the pinned compiler. See the `check:ts7` script in the root package.json.
+  //
+  // `@std/*` packages live only on JSR, which mirrors them to npm under `@jsr/*`; the source
+  // specifiers therefore need an explicit mapping to those declaration files. `decimal.js` is
+  // mapped too: the sources live outside this directory, so normal upward `node_modules`
+  // resolution would never reach the install here.
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": [],
+
+    // Sources import each other with explicit `.ts` extensions (Deno style).
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+
+    "strict": true,
+    "isolatedModules": true,
+    "useDefineForClassFields": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Third-party JSR declarations are not our gate; only our own sources are.
+    "skipLibCheck": true,
+
+    // TypeScript 7 removed `baseUrl`; `paths` targets resolve relative to this file's directory.
+    "paths": {
+      "@nktkas/rews": ["./node_modules/@jsr/nktkas__rews/_dist/mod.d.ts"],
+      "@noble/hashes/sha3.js": ["./node_modules/@jsr/noble__hashes/_dist/src/sha3.d.ts"],
+      "@noble/hashes/utils.js": ["./node_modules/@jsr/noble__hashes/_dist/src/utils.d.ts"],
+      "@std/async/unstable-semaphore": ["./node_modules/@jsr/std__async/_dist/unstable_semaphore.d.ts"],
+      "@std/msgpack/encode": ["./node_modules/@jsr/std__msgpack/_dist/encode.d.ts"],
+      "@valibot/valibot": ["./node_modules/@jsr/valibot__valibot/_dist/src/index.d.ts"],
+      "decimal.js": ["./node_modules/decimal.js/decimal.d.ts"]
+    }
+  },
+  "include": ["../../src/**/*.ts"]
+}

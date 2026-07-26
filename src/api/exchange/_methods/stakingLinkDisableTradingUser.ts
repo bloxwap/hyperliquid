@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -48,20 +48,20 @@ export type StakingLinkDisableTradingUserRequest = v.InferOutput<typeof StakingL
  */
 export type StakingLinkDisableTradingUserResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -78,10 +78,11 @@ import {
 
 /** Schema for action fields (excludes request-level system fields). */
 const StakingLinkDisableTradingUserActionSchema = /* @__PURE__ */ (() => {
-  return v.omit(
-    v.object(StakingLinkDisableTradingUserRequest.entries.action.entries),
-    ["signatureChainId", "hyperliquidChain", "nonce"],
-  );
+  return v.omit(v.object(StakingLinkDisableTradingUserRequest.entries.action.entries), [
+    "signatureChainId",
+    "hyperliquidChain",
+    "nonce",
+  ]);
 })();
 
 /** Action parameters for the {@linkcode stakingLinkDisableTradingUser} function. */
@@ -96,9 +97,7 @@ export type StakingLinkDisableTradingUserOptions = ExtractRequestOptions<
 >;
 
 /** Successful variant of {@linkcode StakingLinkDisableTradingUserResponse} without errors. */
-export type StakingLinkDisableTradingUserSuccessResponse = ExcludeErrorResponse<
-  StakingLinkDisableTradingUserResponse
->;
+export type StakingLinkDisableTradingUserSuccessResponse = ExcludeErrorResponse<StakingLinkDisableTradingUserResponse>;
 
 /** EIP-712 types for the {@linkcode stakingLinkDisableTradingUser} function. */
 export const StakingLinkDisableTradingUserTypes = {
@@ -127,11 +126,11 @@ export const StakingLinkDisableTradingUserTypes = {
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { stakingLinkDisableTradingUser } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { stakingLinkDisableTradingUser } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await stakingLinkDisableTradingUser({ transport, wallet }, {

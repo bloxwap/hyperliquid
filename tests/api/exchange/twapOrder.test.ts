@@ -1,6 +1,6 @@
-import { type TwapOrderParameters, TwapOrderRequest } from "@nktkas/hyperliquid/api/exchange";
-import { formatSize } from "@nktkas/hyperliquid/utils";
-import * as v from "@valibot/valibot";
+import { type TwapOrderParameters, TwapOrderRequest } from "@bloxwap/hyperliquid/api/exchange";
+import { formatSize } from "@bloxwap/hyperliquid/utils";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";

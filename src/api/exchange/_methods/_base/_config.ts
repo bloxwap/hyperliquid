@@ -80,6 +80,5 @@ interface BaseOptions {
 
 /** Extract request options from a request type (excludes action, nonce, signature). */
 export type ExtractRequestOptions<T extends { action: Record<string, unknown> }> = Prettify<
-  & BaseOptions
-  & Omit<T, "action" | "nonce" | "signature">
+  BaseOptions & Omit<T, "action" | "nonce" | "signature">
 >;

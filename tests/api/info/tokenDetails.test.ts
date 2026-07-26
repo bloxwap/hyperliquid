@@ -1,5 +1,5 @@
-import { type TokenDetailsParameters, TokenDetailsRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type TokenDetailsParameters, TokenDetailsRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -21,8 +21,6 @@ runTest({
     const data = await Promise.all(params.map((p) => client.tokenDetails(p)));
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data, [
-      "#/properties/genesis/anyOf/0/properties/blacklistUsers/array",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/properties/genesis/anyOf/0/properties/blacklistUsers/array"]);
   },
 });

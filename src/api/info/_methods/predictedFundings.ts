@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -61,8 +61,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { predictedFundings } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { predictedFundings } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -71,10 +71,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-predicted-funding-rates-for-different-venues
  */
-export function predictedFundings(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<PredictedFundingsResponse> {
+export function predictedFundings(config: InfoConfig, signal?: AbortSignal): Promise<PredictedFundingsResponse> {
   const request = parse(PredictedFundingsRequest, {
     type: "predictedFundings",
   });

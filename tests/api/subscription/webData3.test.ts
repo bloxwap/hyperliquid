@@ -1,5 +1,5 @@
-import { type WebData3Event, type WebData3Parameters, WebData3Request } from "@nktkas/hyperliquid/api/subscription";
-import * as v from "@valibot/valibot";
+import { type WebData3Event, type WebData3Parameters, WebData3Request } from "@bloxwap/hyperliquid/api/subscription";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";

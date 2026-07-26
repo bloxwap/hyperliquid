@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -45,20 +45,20 @@ export type SpotUserRequest = v.InferOutput<typeof SpotUserRequest>;
  */
 export type SpotUserResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -103,11 +103,11 @@ export type SpotUserSuccessResponse = ExcludeErrorResponse<SpotUserResponse>;
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { spotUser } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { spotUser } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await spotUser({ transport, wallet }, {
@@ -122,9 +122,6 @@ export function spotUser(
   params: SpotUserParameters,
   opts?: SpotUserOptions,
 ): Promise<SpotUserSuccessResponse> {
-  const action = canonicalize(
-    SpotUserActionSchema,
-    parse(SpotUserActionSchema, { type: "spotUser", ...params }),
-  );
+  const action = canonicalize(SpotUserActionSchema, parse(SpotUserActionSchema, { type: "spotUser", ...params }));
   return executeL1Action(config, action, opts);
 }

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -64,8 +64,8 @@ export type ClearinghouseStateParameters = Omit<v.InferInput<typeof Clearinghous
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { clearinghouseState } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { clearinghouseState } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -89,9 +89,14 @@ export function clearinghouseState(
     ...params,
     dex: params.dex ?? "", // Same value as in response
   });
-  return config.transport.subscribe<ClearinghouseStateEvent>(payload.type, payload, (e) => {
-    if (e.detail.user === payload.user && e.detail.dex === payload.dex) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<ClearinghouseStateEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.user === payload.user && e.detail.dex === payload.dex) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }
