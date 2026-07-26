@@ -15,10 +15,14 @@
  *
  * The headline statistic is the **median** (`p50`) per-op time, not the mean: benchmark
  * noise on a developer machine is one-sided (scheduler preemption, GC, thermal), so the
- * mean drifts upward with outliers while the median stays put. `rme` (relative margin of
- * error, 95% CI) is reported so the comparator can tell a real change from jitter.
+ * mean drifts upward with outliers while the median stays put. `rme` — the Student-t 95%
+ * margin of the sample MEAN — is reported as a sampling-noise magnitude. Note it describes
+ * the mean while `nsPerUnit` is the median: the comparator uses it as a noise scale inside
+ * a deliberately conservative heuristic, not as a confidence interval.
  * @module
  */
+
+import { createHash } from "node:crypto";
 
 /** Extra scenario-specific numbers recorded alongside timing (e.g. `maxInFlight`). */
 export type ExtraMetrics = Record<string, number>;
@@ -79,13 +83,55 @@ export interface ScenarioResult {
   stddev: number;
   /** Relative margin of error of the mean at 95% confidence, as a percentage of the mean. */
   rme: number;
+  /**
+   * Fingerprint of the scenario definition and workload code (see {@linkcode scenarioFingerprint}).
+   * Optional so schema-1 reports recorded before fingerprints existed still load.
+   */
+  fingerprint?: string;
   /** Scenario-specific metrics from the final measured sample. */
   extra?: ExtraMetrics;
 }
 
+/**
+ * Deterministic fingerprint of a scenario's definition and workload code.
+ *
+ * Hashes everything the registry knows about the measurement that is NOT a measured value:
+ * identity fields, sampling parameters (with defaults applied), and the source text of
+ * `run`/`setup`/`teardown`. Editing a scenario's code or inline workload parameters (e.g.
+ * a fixture-size argument at the call site) changes the fingerprint, so the regression
+ * gate can refuse to compare unequal workloads.
+ *
+ * Blind spot, by design: edits inside imported helper/fixture modules that keep the call
+ * sites unchanged (e.g. `_fixtures.ts` producing a different payload at the same size) do
+ * not change the fingerprint — the hash covers the scenario registry, not the module graph.
+ */
+export function scenarioFingerprint(def: Scenario): string {
+  const hash = createHash("sha256");
+  hash.update(
+    JSON.stringify({
+      name: def.name,
+      group: def.group,
+      description: def.description,
+      iterations: def.iterations ?? 1,
+      samples: def.samples ?? 15,
+      warmupSamples: def.warmupSamples ?? 3,
+      unitsPerIteration: def.unitsPerIteration ?? 1,
+      unit: def.unit ?? "op",
+    }),
+  );
+  hash.update(def.run.toString());
+  hash.update(def.setup?.toString() ?? "");
+  hash.update(def.teardown?.toString() ?? "");
+  return hash.digest("hex").slice(0, 16);
+}
+
 /** A complete run: environment metadata plus every scenario result. */
 export interface PerfReport {
-  /** Report format version. Bump when the shape changes so old baselines fail loudly. */
+  /**
+   * Report format version. Bump when the shape changes so old baselines fail loudly.
+   * Additive OPTIONAL fields (e.g. `ScenarioResult.fingerprint`) do not bump the version:
+   * old reports load as-is, and the comparator treats the absent field as "unknown".
+   */
   schema: 1;
   meta: {
     /** Git commit the measurements describe. */
@@ -97,6 +143,12 @@ export interface PerfReport {
     os: string;
     /** ISO-8601 timestamp. */
     date: string;
+    /**
+     * Fingerprint of the perf suite's source files (scenarios, fixtures, helpers,
+     * harness) — the workload-equality gate. Optional so schema-1 reports recorded before
+     * fingerprints existed still load; the comparator treats absence explicitly.
+     */
+    suiteFingerprint?: string;
     /** Optional free-text label, e.g. `"baseline"` or `"post-fix"`. */
     label?: string;
   };
@@ -205,6 +257,7 @@ export async function runScenario(def: Scenario): Promise<ScenarioResult> {
     max: sorted[sorted.length - 1],
     stddev,
     rme,
+    fingerprint: scenarioFingerprint(def),
     ...(lastExtra ? { extra: lastExtra } : {}),
   };
 }

@@ -44,8 +44,9 @@ bun test tests/perf/
 Each scenario runs discarded warmup samples, then measured ones; a sample times `iterations` calls of the body and
 divides. The headline statistic is the **median** per-unit time, because benchmark noise on a developer machine is
 one-sided (scheduler preemption, GC, thermal) — the mean drifts upward with outliers while the median stays put. `rme`
-(relative margin of error at 95% confidence) is reported so the gate can tell a real change from jitter: a scenario only
-counts as regressed when the slowdown exceeds the threshold **plus** both runs' margins of error.
+(the Student-t 95% margin of the sample *mean*) is reported as a sampling-noise magnitude. The gate aggregates paired
+rounds with a median ± max-deviation band, and a scenario only counts as regressed when the whole band clears the
+threshold plus both sides' margins — an intentionally conservative heuristic, not a confidence interval.
 
 Timings are normalized per *unit* (order, level, mid, frame, request…), so a batch scenario is directly comparable to
 its single-item counterpart.
@@ -119,8 +120,13 @@ symptoms have the same cause; a fix that isolates listener errors per message re
   success payload.
 - The test wallet is a viem local account from the well-known test key also used by `tests/signing/`.
 - Baselines are machine-specific. `results/baseline.json` must be recorded on the machine that runs the gate; a baseline
-  from another CPU or runtime turns every comparison into noise. `compare.ts` prints a warning when the two reports'
-  environments differ.
+  from another CPU or runtime turns every comparison into noise. `compare.ts` and `gate.ts` refuse to compare reports
+  from different environments — a hard error, overridable with `--allow-environment-mismatch`.
+- Every report carries a **suite fingerprint**: a hash of the suite's source files (`scenarios/*.ts`, `_fixtures.ts`,
+  `_helpers.ts`, `_harness.ts`). The gate fails closed when it differs between the two revisions — a PR that edits
+  anything under `tests/perf` changes the workload being compared and is flagged for explicit review rather than waved
+  through. Reports recorded before fingerprinting trip a presence-parity check; `--allow-unfingerprinted-base` is the
+  documented transition grace, and the fix is to re-record the baseline / merge a fingerprinted base.
 - [`results/baseline.txt`](results/baseline.txt), `results/baseline_bench.log` and `results/baseline_test.log` are
   historical artifacts: the pre-fix output of the original Deno `bench`/`test` suite this harness replaced. They are kept
   as evidence of the pre-fix numbers and are not read by any tooling.
