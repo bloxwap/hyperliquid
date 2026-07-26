@@ -44,6 +44,9 @@ export type UserTwapSliceFillsByTimeParameters = Omit<v.InferInput<typeof UserTw
 /**
  * Request user TWAP slice fills by time.
  *
+ * The response is capped per request for a given time range.
+ * To fetch a larger range, use {@linkcode userTwapSliceFillsByTimeAll}, which paginates automatically.
+ *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.

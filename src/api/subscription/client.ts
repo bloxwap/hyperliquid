@@ -1092,6 +1092,7 @@ export type {
   TwapStatesParameters as TwapStatesWsParameters,
 } from "./_methods/twapStates.ts";
 export type {
+  UnknownUserEvent as UnknownUserWsEvent,
   UserEventsEvent as UserEventsWsEvent,
   UserEventsParameters as UserEventsWsParameters,
 } from "./_methods/userEvents.ts";

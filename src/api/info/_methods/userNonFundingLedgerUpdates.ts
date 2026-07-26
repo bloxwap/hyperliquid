@@ -422,6 +422,9 @@ export type UserNonFundingLedgerUpdatesParameters = Omit<
 /**
  * Request user non-funding ledger updates.
  *
+ * The response is capped per request for a given time range.
+ * To fetch a larger range, use {@linkcode userNonFundingLedgerUpdatesAll}, which paginates automatically.
+ *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.

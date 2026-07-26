@@ -58,6 +58,9 @@ export type FundingHistoryParameters = Omit<v.InferInput<typeof FundingHistoryRe
 /**
  * Request funding history.
  *
+ * Returns at most 500 records per response.
+ * To fetch a larger range, use {@linkcode fundingHistoryAll}, which paginates automatically.
+ *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.

@@ -23,6 +23,32 @@ const client = new InfoClient({ transport });
 const book = await client.l2Book({ coin: "ETH" });
 ```
 
+### Pagination of time-ranged endpoints
+
+Time-ranged responses are capped server-side: at most 500 elements for most endpoints
+([docs](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#pagination)), 2000 fills for
+`userFillsByTime`. The `*All` helpers page through a range for you — since `startTime` is inclusive, each follow-up
+request starts at the last returned timestamp and the helper discards the overlap, so a page capped in the middle of a
+same-millisecond cluster is neither skipped nor duplicated:
+
+```ts
+// Every fill in the range, not just the first 2000
+const fills = await client.userFillsByTimeAll({
+  user: "0x...",
+  startTime: Date.now() - 1000 * 60 * 60 * 24 * 30,
+});
+
+// Bound the number of requests with `maxPages` (default 100, must be a positive integer)
+const funding = await client.fundingHistoryAll({ coin: "ETH", startTime: 0 }, { maxPages: 10 });
+```
+
+Helpers exist for `userFillsByTime`, `userTwapSliceFillsByTime`, `fundingHistory`, `userNonFundingLedgerUpdates`, and
+`candleSnapshot`. Server-side availability windows still apply and are not pagination caps: only the 10000 most recent
+fills and the most recent 5000 candles exist at all, so `candleSnapshotAll` walks until exhaustion within that window
+and cannot reach older history. `historicalOrders` (at most 2000 most recent orders) takes no time range and cannot be
+paginated. `userFillsByTimeAll` rejects `reversed: true`: the walk moves forward from `startTime` and needs ascending
+pages.
+
 ## Exchange endpoint
 
 `ExchangeClient` requires a wallet for [signing](signing.md#wallet-compatibility) and works with any transport. See all
@@ -281,6 +307,41 @@ const sub2 = await client.allMids((data) => console.log("B:", data.mids));
 await sub1.unsubscribe(); // removes listener A, subscription stays active
 await sub2.unsubscribe(); // removes listener B, channel closed
 ```
+
+### Stability contract for server-extensible events
+
+Hyperliquid extends its API server-side without notice: new event variants, new ledger entry types, new enum values.
+This SDK never validates incoming WebSocket frames or REST responses against a schema, so such a change can never
+throw at runtime or corrupt neighboring data — at worst, a value arrives that the current type definitions do not
+name yet.
+
+How each kind of union is typed against that:
+
+- **`UserEventsEvent`** (the `userEvents` subscription) is treated as **server-extensible**. The union ends in an
+  opaque `UnknownUserEvent` catch-all, so a variant added server-side before this SDK names it still type-checks and
+  reaches your listener with its raw payload untouched. The catch-all is deliberately opaque: an index signature
+  would merge into every `"fills" in event` narrowing and erase the known variants' types. Known variants keep full
+  narrowing; the catch-all only surfaces in the final `else`:
+
+  ```ts
+  const sub = await client.userEvents({ user: "0x..." }, (event) => {
+    if ("fills" in event) {
+      event.fills; // UserFillsResponse — fully narrowed
+    } else if ("funding" in event) {
+      event.funding; // fully narrowed
+    } else {
+      // event: UnknownUserEvent — a variant this SDK version does not know.
+      // Inspect the raw payload with Object.entries(event) or a cast.
+    }
+  });
+  ```
+
+- **Value-discriminated unions stay strict**: the ledger `delta` union (`userNonFundingLedgerUpdates`), the TWAP
+  `status` union (`twapHistory` / `userTwapHistory`), and the `OrderProcessingStatus` enum (`historicalOrders`,
+  `orderUpdates`) are closed unions. TypeScript cannot admit a catch-all member into a `delta.type === "deposit"`-style
+  narrowing without degrading every known variant's fields to `unknown`, so these types trade forward-compatibility
+  for precise narrowing. Because nothing is validated at runtime, a new server-side variant simply arrives untyped —
+  keep a `default` branch in `switch` statements over them and upgrade the SDK to pick up new members.
 
 ## Explorer endpoint
 

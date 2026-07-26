@@ -78,6 +78,9 @@ export type HistoricalOrdersParameters = Omit<v.InferInput<typeof HistoricalOrde
 /**
  * Request user historical orders.
  *
+ * Returns at most 2000 most recent historical orders; the endpoint accepts no time range,
+ * so it cannot be paginated.
+ *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
