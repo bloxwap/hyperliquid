@@ -1,8 +1,12 @@
 import { ApiRequestError } from "@bloxwap/hyperliquid";
-import { type OrderParameters, OrderRequest } from "@bloxwap/hyperliquid/api/exchange";
+import { type OrderParameters, OrderRequest, order } from "@bloxwap/hyperliquid/api/exchange";
 import { formatPrice, formatSize } from "@bloxwap/hyperliquid/utils";
 import * as v from "valibot";
-import { assertRejects } from "@jsr/std__assert";
+import { describe, test } from "bun:test";
+import { assertRejects, assertThrows } from "@jsr/std__assert";
+import { ValidationError } from "@bloxwap/hyperliquid";
+import type { IRequestTransport } from "@bloxwap/hyperliquid";
+import { privateKeyToAccount } from "viem/accounts";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -123,4 +127,20 @@ runTest({
       "#/properties/response/properties/data/properties/statuses/items/anyOf/2", // "waitingForFill"
     ]);
   },
+});
+
+// ============================================================
+// Offline: an empty orders array is rejected before sending (the server rejects empty batches)
+// ============================================================
+
+describe("order (offline)", () => {
+  test("empty orders array fails validation before sending", () => {
+    const wallet = privateKeyToAccount("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    const transport: IRequestTransport = {
+      isTestnet: true,
+      request: () => Promise.reject(new Error("must not be sent")),
+    };
+
+    assertThrows(() => order({ transport, wallet }, { orders: [] }), ValidationError, "Invalid length");
+  });
 });

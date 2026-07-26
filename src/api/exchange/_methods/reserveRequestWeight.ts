@@ -17,7 +17,7 @@ export const ReserveRequestWeightRequest = /* @__PURE__ */ (() => {
       /** Type of action. */
       type: v.literal("reserveRequestWeight"),
       /** Amount of request weight to reserve. */
-      weight: v.pipe(UnsignedInteger, v.maxValue(1844674407370955)), // Truncated max uint64 / 1000
+      weight: v.pipe(UnsignedInteger, v.maxValue(1844674407370955)), // Truncated max uint64 / 10000
     }),
     /** Nonce (timestamp in ms) used to prevent replay attacks. */
     nonce: UnsignedInteger,

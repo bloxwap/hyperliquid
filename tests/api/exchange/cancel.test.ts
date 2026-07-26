@@ -1,5 +1,10 @@
-import { type CancelParameters, CancelRequest } from "@bloxwap/hyperliquid/api/exchange";
+import { type CancelParameters, CancelRequest, cancel } from "@bloxwap/hyperliquid/api/exchange";
 import * as v from "valibot";
+import { describe, test } from "bun:test";
+import { assertThrows } from "@jsr/std__assert";
+import { ValidationError } from "@bloxwap/hyperliquid";
+import type { IRequestTransport } from "@bloxwap/hyperliquid";
+import { privateKeyToAccount } from "viem/accounts";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -37,4 +42,20 @@ runTest({
       data.map((d) => d.result),
     );
   },
+});
+
+// ============================================================
+// Offline: an empty cancels array is rejected before sending (the server rejects empty batches)
+// ============================================================
+
+describe("cancel (offline)", () => {
+  test("empty cancels array fails validation before sending", () => {
+    const wallet = privateKeyToAccount("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    const transport: IRequestTransport = {
+      isTestnet: true,
+      request: () => Promise.reject(new Error("must not be sent")),
+    };
+
+    assertThrows(() => cancel({ transport, wallet }, { cancels: [] }), ValidationError, "Invalid length");
+  });
 });

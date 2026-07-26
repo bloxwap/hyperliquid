@@ -11,8 +11,15 @@ const ConvertToMultiSigUserRequestSignersSchema = /* @__PURE__ */ (() => {
   return v.nullable(
     /** Multi-signature configuration. */
     v.object({
-      /** List of authorized user addresses. */
-      authorizedUsers: v.array(Address),
+      /**
+       * List of authorized user addresses.
+       * Sorted (after lowercasing by the `Address` schema) so that signatures match the Python SDK
+       * regardless of input order.
+       */
+      authorizedUsers: v.pipe(
+        v.array(Address),
+        v.transform((users) => [...users].sort()),
+      ),
       /** Minimum number of signatures required. */
       threshold: v.pipe(UnsignedInteger, v.minValue(1), v.maxValue(10)),
     }),

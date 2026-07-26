@@ -429,6 +429,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   /**
    * Request candlestick snapshots.
    *
+   * Only the most recent 5000 candles are available.
+   *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
    * @return Array of candlestick data points.
@@ -796,6 +798,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
 
   /**
    * Request L2 order book.
+   *
+   * Returns at most 20 levels per side.
    *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
@@ -1830,6 +1834,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   /**
    * Request array of user fills.
    *
+   * Returns at most 2000 most recent fills.
+   *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
    * @return Array of user trade fills.
@@ -1855,6 +1861,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
 
   /**
    * Request array of user fills by time.
+   *
+   * Returns at most 2000 fills per response; only the 10000 most recent fills are available.
+   * To paginate, use the last returned timestamp as the next startTime.
    *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.

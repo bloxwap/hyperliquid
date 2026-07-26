@@ -120,6 +120,27 @@ export const SpotDeployRequest = /* @__PURE__ */ (() => {
       v.object({
         /** Type of action. */
         type: v.literal("spotDeploy"),
+        /** Enable aligned quote token parameters. */
+        enableAlignedQuoteToken: v.object({
+          /** The token ID to convert to an aligned quote token. */
+          token: UnsignedInteger,
+        }),
+      }),
+      v.object({
+        /** Type of action. */
+        type: v.literal("spotDeploy"),
+        /**
+         * Disable aligned quote token parameters.
+         * Must be sent after `disableQuoteToken`.
+         */
+        disableAlignedQuoteToken: v.object({
+          /** Token identifier to disable as aligned quote token. */
+          token: UnsignedInteger,
+        }),
+      }),
+      v.object({
+        /** Type of action. */
+        type: v.literal("spotDeploy"),
         /**
          * Request link of a HyperCore spot token to an ERC-20 contract on the HyperEVM.
          * Must be sent by the spot deployer. The link is finalized by the EVM deployer via {@link finalizeEvmContract}.

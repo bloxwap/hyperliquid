@@ -59,8 +59,14 @@ export const UnsignedInteger = /* @__PURE__ */ (() => {
 export type UnsignedInteger = v.InferOutput<typeof UnsignedInteger>;
 
 /**
- * Normalize a decimal string: drop redundant leading and trailing zeros and collapse negative zero.
- * A string that is not a well-formed decimal is returned unchanged.
+ * Normalize a decimal string: expand exponent notation, drop redundant leading and trailing
+ * zeros, and collapse negative zero. A string that is not a well-formed decimal is returned
+ * unchanged (and is later rejected by the decimal regex).
+ *
+ * Exponent expansion is an exact string rewrite — it only relocates the decimal point and never
+ * emits more precision than the input digits carry. For number inputs the digits come from
+ * `String(number)`, the shortest round-trip representation, so no invented precision either
+ * (e.g. `1e-8` becomes `"0.00000001"`, matching the Python SDK's `float_to_wire`).
  *
  * @example
  * ```ts ignore
@@ -68,11 +74,14 @@ export type UnsignedInteger = v.InferOutput<typeof UnsignedInteger>;
  * normalizeDecimalString("1.2000"); // => "1.2"
  * normalizeDecimalString(".5");     // => "0.5"
  * normalizeDecimalString("-0.0");   // => "0"
+ * normalizeDecimalString("1e-8");   // => "0.00000001"
+ * normalizeDecimalString("1.23e-7");// => "0.000000123"
+ * normalizeDecimalString("1.5e+3"); // => "1500"
  * normalizeDecimalString("1.0.0");  // => "1.0.0" (not a decimal — unchanged)
  * ```
  */
 function normalizeDecimalString(value: string): string {
-  const match = value.match(/^(-?)([0-9]*)(?:\.([0-9]*))?$/);
+  const match = expandExponentNotation(value).match(/^(-?)([0-9]*)(?:\.([0-9]*))?$/);
   if (!match) return value;
   const [, sign, intRaw, fracRaw = ""] = match;
   if (intRaw === "" && fracRaw === "") return value;
@@ -85,6 +94,22 @@ function normalizeDecimalString(value: string): string {
 
   const body = frac === "" ? int : `${int}.${frac}`;
   return sign === "-" && body !== "0" ? `-${body}` : body;
+}
+
+/**
+ * Expand exponent notation (e.g. `"1e-8"`, `"1.5E+3"`) to plain decimal digits.
+ * A string that is not exponent notation is returned unchanged.
+ */
+function expandExponentNotation(value: string): string {
+  const match = value.match(/^(-?)([0-9]+)(?:\.([0-9]+))?[eE]([+-]?[0-9]+)$/);
+  if (!match) return value;
+  const [, sign, intPart, fracPart = "", expPart] = match;
+
+  const digits = intPart + fracPart;
+  const point = intPart.length + Number(expPart); // decimal point position relative to `digits` start
+  if (point <= 0) return `${sign}0.${"0".repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${"0".repeat(point - digits.length)}`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
 }
 
 // ============================================================

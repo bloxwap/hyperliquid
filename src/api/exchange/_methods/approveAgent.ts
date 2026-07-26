@@ -22,7 +22,7 @@ export const ApproveAgentRequest = /* @__PURE__ */ (() => {
       hyperliquidChain: v.picklist(["Mainnet", "Testnet"]),
       /** Agent address. */
       agentAddress: Address,
-      /** Agent name (min 1 and max 16 characters) or empty string for unnamed agent. */
+      /** Agent name (min 1 and max 16 characters) or empty string for unnamed agent (omitted from the posted action when empty). */
       agentName: v.nullish(
         v.pipe(
           v.string(),
@@ -85,6 +85,7 @@ export type ApproveAgentResponse =
 
 import { parse } from "../../../_base.ts";
 import { canonicalize } from "../../../signing/mod.ts";
+import type { IRequestTransport } from "../../../transport/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
@@ -176,5 +177,46 @@ export function approveAgent(
     ApproveAgentActionSchema,
     parse(ApproveAgentActionSchema, { type: "approveAgent", ...params }),
   );
-  return executeUserSignedAction(config, action, ApproveAgentTypes, opts);
+  // Python SDK parity: an unnamed agent is signed with `agentName: ""` (the EIP-712 string field
+  // cannot be omitted), but the key itself is dropped from the posted action.
+  if (action.agentName !== "") {
+    return executeUserSignedAction(config, action, ApproveAgentTypes, opts);
+  }
+  return executeUserSignedAction(
+    { ...config, transport: omitUnnamedAgentName(config.transport) },
+    action,
+    ApproveAgentTypes,
+    { ...opts, toMultiSigPayloadAction: omitAgentName },
+  );
+}
+
+/** Returns the action without the `agentName` key. */
+function omitAgentName(action: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const { agentName: _, ...rest } = action;
+  return rest;
+}
+
+/**
+ * Wraps a transport so the posted approveAgent action omits `agentName` (an unnamed agent is
+ * signed with `agentName: ""`, but the server expects the key to be absent from the wire action).
+ *
+ * Only the plain action shape is handled here; the multi-sig wrapper instead receives an
+ * already-stripped payload action via `toMultiSigPayloadAction`, because the outer signature
+ * commits to a hash of the wrapper as posted.
+ */
+function omitUnnamedAgentName(transport: IRequestTransport): IRequestTransport {
+  return {
+    isTestnet: transport.isTestnet,
+    request<T>(endpoint: "info" | "exchange", payload: unknown, signal?: AbortSignal): Promise<T> {
+      const posted =
+        isRecord(payload) && isRecord(payload.action) && payload.action.type === "approveAgent"
+          ? { ...payload, action: omitAgentName(payload.action) }
+          : payload;
+      return transport.request(endpoint, posted, signal);
+    },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
