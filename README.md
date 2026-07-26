@@ -1,12 +1,19 @@
-# Hyperliquid API TypeScript SDK
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./.github/hyperliquid-light.svg">
+    <img alt="Hyperliquid" src="./.github/hyperliquid-dark.svg">
+  </picture>
+  <br>
+  A community-supported <a href="https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api">Hyperliquid API</a>
+  SDK for all major JavaScript runtimes, written in TypeScript.
+</p>
 
-[![npm](https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue)](https://www.npmjs.com/package/@bloxwap/hyperliquid)
-[![Downloads](https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg)](https://www.npmjs.com/package/@bloxwap/hyperliquid)
-[![Coverage Status](https://coveralls.io/repos/github/bloxwap/hyperliquid/badge.svg?branch=main)](https://coveralls.io/github/bloxwap/hyperliquid?branch=main)
-[![bundlephobia](https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid)](https://bundlephobia.com/package/@bloxwap/hyperliquid)
-
-A community-supported [Hyperliquid API](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api) SDK for all
-major JS runtimes, written in TypeScript.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue"></a>
+  <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg"></a>
+  <a href="https://coveralls.io/github/bloxwap/hyperliquid?branch=main"><img alt="Coverage status" src="https://coveralls.io/repos/github/bloxwap/hyperliquid/badge.svg?branch=main"></a>
+  <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid"></a>
+</p>
 
 ## Features
 
