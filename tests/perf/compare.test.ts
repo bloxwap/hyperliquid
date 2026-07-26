@@ -582,3 +582,134 @@ test("structurally broken reports throw instead of passing (fail-closed)", () =>
   assertEquals(result.failures, []);
   assert(!isFailure(result));
 });
+
+test("structural validator covers meta shape, identity strings, percentiles, and stddev", () => {
+  const valid = () => report("base-1", [{ name: "scenario", nsPerUnit: 100 }]);
+  const withMeta = (mutate: (meta: Record<string, unknown>) => void): PerfReport => {
+    const r = valid();
+    mutate(r.meta as unknown as Record<string, unknown>);
+    return r;
+  };
+  const withScenario = (mutate: (scenario: Record<string, unknown>) => void): PerfReport => {
+    const r = valid();
+    mutate(r.scenarios[0] as unknown as Record<string, unknown>);
+    return r;
+  };
+  const expectThrow = (r: PerfReport, message: string): void => {
+    assertThrows(() => compareReports(r, valid(), 10), Error, message);
+  };
+
+  // The full probe from the review: meta {commit: null, dirty: "no", os: null, date:
+  // "garbage"} and scenario {group: null, description: 42, unit: {}, p50: NaN, …} — it
+  // used to return isFailure=false and then crash renderComparison on commit.slice.
+  const probe = withMeta((m) => {
+    m.commit = null;
+    m.dirty = "no";
+    m.os = null;
+    m.date = "garbage";
+  });
+  probe.scenarios[0] = {
+    ...probe.scenarios[0],
+    ...({ group: null, description: 42, unit: {} } as unknown as PerfReport["scenarios"][number]),
+  };
+  assertThrows(() => compareReports(probe, valid(), 10), Error, "meta.commit");
+  // …and renderComparison never gets a chance to throw, because validation threw first.
+
+  expectThrow(
+    withMeta((m) => (m.commit = null)),
+    "meta.commit must be a non-empty string",
+  );
+  expectThrow(
+    withMeta((m) => (m.dirty = "no")),
+    "meta.dirty must be a boolean",
+  );
+  expectThrow(
+    withMeta((m) => (m.os = null)),
+    "meta.os must be a non-empty string",
+  );
+  expectThrow(
+    withMeta((m) => (m.date = "garbage")),
+    "meta.date must be a valid date string",
+  );
+  expectThrow(
+    withScenario((s) => (s.group = null)),
+    "group must be a non-empty string",
+  );
+  expectThrow(
+    withScenario((s) => (s.description = 42)),
+    "description must be a non-empty string",
+  );
+  expectThrow(
+    withScenario((s) => (s.unit = {})),
+    "unit must be a non-empty string",
+  );
+  expectThrow(
+    withScenario((s) => (s.p50 = Number.NaN)),
+    "p50 must be finite",
+  );
+  expectThrow(
+    withScenario((s) => (s.p75 = Number.POSITIVE_INFINITY)),
+    "p75 must be finite",
+  );
+  expectThrow(
+    withScenario((s) => (s.p99 = -9)),
+    "min <= p50 <= p75 <= p99 <= max",
+  );
+  expectThrow(
+    withScenario((s) => (s.stddev = -1)),
+    "stddev must be finite and non-negative",
+  );
+
+  // A valid report passes validation and renders without throwing.
+  const ok = compareReports(valid(), valid(), 10);
+  assertEquals(ok.failures, []);
+  assert(!isFailure(ok));
+  const rendered = renderComparison(valid(), valid(), ok, 10);
+  assert(rendered.includes("scenario"), `valid report must render:\n${rendered}`);
+});
+
+test("a contaminated round masking a majority regression fails closed", () => {
+  // base 100/100/100 vs head 120/120/1, threshold 10, rme 0: the median is +20% but the
+  // max-deviation band spans [-99%, +14300%] — the whole-band rule would wave two
+  // agreeing regressions through as "unchanged".
+  const result = comparePairedReports(
+    roundsOf("base", "scenario", [100, 100, 100], 0),
+    roundsOf("head", "scenario", [120, 120, 1], 0),
+    10,
+  );
+
+  assert(isFailure(result));
+  assertEquals(result.comparisons.length, 0); // no verdict — the measurement is not trusted
+  assertEquals(result.failures.length, 1);
+  assert(result.failures[0].includes('"scenario"'), `scenario named: ${result.failures[0]}`);
+  assert(result.failures[0].includes("inconclusive"), `inconclusive: ${result.failures[0]}`);
+  assert(result.failures[0].includes("rerun"), `rerun instruction: ${result.failures[0]}`);
+});
+
+test("a contaminated round masking a majority improvement fails closed too", () => {
+  // Mirror image: base 100/100/100 vs head 80/80/1000 — two rounds agree on -20%, one
+  // 10x outlier hides it. An inconclusive measurement fails regardless of direction.
+  const result = comparePairedReports(
+    roundsOf("base", "scenario", [100, 100, 100], 0),
+    roundsOf("head", "scenario", [80, 80, 1000], 0),
+    10,
+  );
+
+  assert(isFailure(result));
+  assertEquals(result.comparisons.length, 0);
+  assert(result.failures[0].includes("inconclusive"), `inconclusive: ${result.failures[0]}`);
+});
+
+test("a majority regression the band would wave through is still a regression", () => {
+  // base 100/100/100 vs head 130/130/105: two rounds regress +26% (past the 10% floor),
+  // the third quiet round (+5%) widens the band below the floor. The majority decides.
+  const result = comparePairedReports(
+    roundsOf("base", "scenario", [100, 100, 100], 0),
+    roundsOf("head", "scenario", [130, 130, 105], 0),
+    10,
+  );
+
+  assertEquals(result.failures, []);
+  assertEquals(result.comparisons[0].verdict, "regression");
+  assert(isFailure(result));
+});

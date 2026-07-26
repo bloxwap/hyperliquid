@@ -53,12 +53,23 @@
  * change = (e^m − 1)·100,   band = [ (e^{m−w} − 1)·100, (e^{m+w} − 1)·100 ]
  * ```
  *
- * Verdicts:
+ * Verdicts (MAJORITY rule, with a fail-closed inconclusive case):
  *
- * - **regression** only when the WHOLE band sits above the noise floor — the lower bound
- *   exceeds `threshold + median(rme_base) + median(rme_head)`;
- * - **improvement** only when the upper bound is below `−threshold`;
- * - otherwise **unchanged**.
+ * - each round is checked against the verdict lines on its own: `r_i > ln(1 + tol/100)`
+ *   for regression — tol being `threshold + median(rme_base) + median(rme_head)`, the
+ *   noise floor — and `r_i < ln(1 − threshold/100)` for improvement. A MAJORITY of rounds
+ *   agreeing past a line decides the verdict (2 of 3; the single round when n = 1, which
+ *   reproduces the one-round gate semantics). Requiring the whole band to clear the line
+ *   instead would let one quiet round wave a consistent regression through — the median
+ *   ± max-deviation band is retained for DISPLAY;
+ * - FAIL-CLOSED exception: when the spread is extreme (`w > ln 2` — the band spans more
+ *   than a 2x factor around the median, a 4x total range) AND a majority agrees on a
+ *   verdict, the measurement is too noisy to trust either answer: one contaminated round
+ *   is masking the majority (e.g. head 120/120/1 vs base 100/100/100: two rounds regress
+ *   +20%, but the band spans [−99%, +14300%]). The scenario FAILS with the spread named
+ *   and a rerun instruction — an inconclusive measurement must not wave a real
+ *   regression through. With no majority agreement there is nothing to mask, so a lone
+ *   outlier round (head 100/100/1000) still degrades to "unchanged", not a failure.
  *
  * A single contaminated round (a neighbour VM stealing CPU for one run) inflates `w`
  * instead of shifting `m`, so it widens the band into an "unchanged" verdict rather than
@@ -95,10 +106,13 @@
  * The estimate is only as good as the pairing, so malformed input FAILS the gate
  * (collected in `failures`, surfaced by `renderFailure` and `isFailure`) instead of
  * silently degrading. Before any of that, every report passes structural validation
- * (`assertReportStructure`): schema, meta shape, unique non-empty scenario names,
- * finite-positive costs, positive-integer sampling parameters, non-negative margins —
- * violations THROW (exit 2 in the CLI), because a report whose numbers are 0/NaN/missing
- * would turn the ratios into NaN and fall through to "unchanged" (a fail-open). Then:
+ * (`assertReportStructure`): schema and full meta shape (commit, dirty, os, date, cpu,
+ * runtime), unique non-empty scenario names, non-empty identity strings, finite-positive
+ * costs, positive-integer sampling parameters, finite ORDERED percentiles
+ * (min ≤ p50 ≤ p75 ≤ p99 ≤ max, as the harness produces them), non-negative stddev and
+ * margins — violations THROW (exit 2 in the CLI), because a report whose numbers are
+ * 0/NaN/missing would turn the ratios into NaN and fall through to "unchanged" (a
+ * fail-open). Then:
  *
  * - every round of a side must measure the same scenario set — a round that omits a
  *   scenario would otherwise shrink that scenario's estimate to fewer pairs, destroying
@@ -221,6 +235,13 @@ function signedPct(pct: number): string {
 const IDENTITY_FIELDS = ["group", "unit", "description", "samples", "iterations", "unitsPerIteration"] as const;
 
 /**
+ * Spread cap for a conclusive paired measurement, in log space: a band wider than a 2x
+ * factor around the median (a 4x total range) cannot localize the ratio at all — if a
+ * majority of rounds still agrees on a verdict, one contaminated round is masking it.
+ */
+const INCONCLUSIVE_HALF_WIDTH = Math.log(2);
+
+/**
  * Structural validation of one report — fails CLOSED on input that cannot produce
  * meaningful numbers.
  *
@@ -246,6 +267,18 @@ function assertReportStructure(report: PerfReport, side: string, round: number):
   }
   if (typeof meta.runtime !== "string" || meta.runtime.length === 0) {
     throw new Error(`${where}: meta.runtime must be a non-empty string, got ${JSON.stringify(meta?.runtime)}.`);
+  }
+  if (typeof meta.commit !== "string" || meta.commit.length === 0) {
+    throw new Error(`${where}: meta.commit must be a non-empty string, got ${JSON.stringify(meta?.commit)}.`);
+  }
+  if (typeof meta.dirty !== "boolean") {
+    throw new Error(`${where}: meta.dirty must be a boolean, got ${JSON.stringify(meta.dirty)}.`);
+  }
+  if (typeof meta.os !== "string" || meta.os.length === 0) {
+    throw new Error(`${where}: meta.os must be a non-empty string, got ${JSON.stringify(meta.os)}.`);
+  }
+  if (typeof meta.date !== "string" || Number.isNaN(Date.parse(meta.date))) {
+    throw new Error(`${where}: meta.date must be a valid date string, got ${JSON.stringify(meta.date)}.`);
   }
   if (meta.label !== undefined && (typeof meta.label !== "string" || meta.label.length === 0)) {
     throw new Error(`${where}: meta.label must be a non-empty string when present, got ${JSON.stringify(meta.label)}.`);
@@ -275,6 +308,11 @@ function assertReportStructure(report: PerfReport, side: string, round: number):
     }
     seen.add(scenario.name);
     const at = `${where}, scenario ${JSON.stringify(scenario.name)}`;
+    for (const field of ["group", "unit", "description"] as const) {
+      if (typeof scenario[field] !== "string" || (scenario[field] as string).length === 0) {
+        throw new Error(`${at}: ${field} must be a non-empty string, got ${JSON.stringify(scenario[field])}.`);
+      }
+    }
     for (const field of ["nsPerUnit", "unitsPerSec"] as const) {
       if (!Number.isFinite(scenario[field]) || (scenario[field] as number) <= 0) {
         throw new Error(`${at}: ${field} must be finite and positive, got ${JSON.stringify(scenario[field])}.`);
@@ -284,6 +322,29 @@ function assertReportStructure(report: PerfReport, side: string, round: number):
       if (!Number.isInteger(scenario[field]) || (scenario[field] as number) <= 0) {
         throw new Error(`${at}: ${field} must be a positive integer, got ${JSON.stringify(scenario[field])}.`);
       }
+    }
+    // Percentiles come from one sorted sample list in the harness, so they must be finite
+    // and ordered; a violation means the file was not produced by this harness.
+    for (const field of ["min", "p50", "p75", "p99", "max"] as const) {
+      if (!Number.isFinite(scenario[field])) {
+        throw new Error(`${at}: ${field} must be finite, got ${JSON.stringify(scenario[field])}.`);
+      }
+    }
+    if (
+      !(
+        scenario.min <= scenario.p50 &&
+        scenario.p50 <= scenario.p75 &&
+        scenario.p75 <= scenario.p99 &&
+        scenario.p99 <= scenario.max
+      )
+    ) {
+      throw new Error(
+        `${at}: percentiles must satisfy min <= p50 <= p75 <= p99 <= max, ` +
+          `got ${[scenario.min, scenario.p50, scenario.p75, scenario.p99, scenario.max].join(" / ")}.`,
+      );
+    }
+    if (!Number.isFinite(scenario.stddev) || scenario.stddev < 0) {
+      throw new Error(`${at}: stddev must be finite and non-negative, got ${JSON.stringify(scenario.stddev)}.`);
     }
     if (!Number.isFinite(scenario.rme) || scenario.rme < 0) {
       throw new Error(`${at}: rme must be finite and non-negative, got ${JSON.stringify(scenario.rme)}.`);
@@ -585,9 +646,33 @@ export function comparePairedReports(
     const upperPct = (Math.exp(m + w) - 1) * 100;
     const tolerancePct = thresholdPct + median(pairs.map((p) => p.base.rme)) + median(pairs.map((p) => p.head.rme));
 
+    // Verdict by MAJORITY of rounds (see the module doc): with n = 3, two rounds must
+    // clear a verdict line on their own; with n = 1 the single round decides. The median
+    // ± max-deviation band above is retained for display, not for the verdict.
+    const regressionLine = Math.log(1 + tolerancePct / 100);
+    const improvementLine = Math.log(1 - thresholdPct / 100);
+    const majority = Math.floor(pairs.length / 2) + 1;
+    const regressRounds = logRatios.filter((r) => r > regressionLine).length;
+    const improveRounds = logRatios.filter((r) => r < improvementLine).length;
+    const majorityVerdict =
+      regressRounds >= majority ? "regression" : improveRounds >= majority ? "improvement" : undefined;
+
+    // Fail closed on an inconclusive measurement: an extreme spread (the band spans more
+    // than a 2x factor around the median) that MASKS a majority agreement means one
+    // contaminated round is hiding the signal — the gate cannot be trusted either way.
+    if (w > INCONCLUSIVE_HALF_WIDTH && majorityVerdict !== undefined) {
+      failures.push(
+        `scenario ${JSON.stringify(name)} is inconclusive: ` +
+          `${majorityVerdict === "regression" ? regressRounds : improveRounds} of ${pairs.length} rounds agree on ` +
+          `${majorityVerdict}, but the spread is extreme (band [${signedPct(lowerPct)}, ${signedPct(upperPct)}]) — ` +
+          `the measurement is too noisy to trust; rerun the gate instead of waving it through.`,
+      );
+      continue;
+    }
+
     // Representative pair for the table: the actual round whose log-ratio is the median
-    // (for even n, the closest round to it), so the displayed baseline/current always
-    // reproduce deltaPct and the band. A single round is a real pair and shows its values.
+    // (always one of the rounds — paired mode requires an odd count), so the displayed
+    // baseline/current always reproduce deltaPct and the band.
     let best = 0;
     for (let i = 1; i < pairs.length; i++) {
       if (Math.abs(logRatios[i] - m) < Math.abs(logRatios[best] - m)) best = i;
@@ -605,7 +690,7 @@ export function comparePairedReports(
       tolerancePct,
       rounds: pairs.length,
       representativeRound: best + 1,
-      verdict: lowerPct > tolerancePct ? "regression" : upperPct < -thresholdPct ? "improvement" : "unchanged",
+      verdict: majorityVerdict ?? "unchanged",
     });
   }
 
