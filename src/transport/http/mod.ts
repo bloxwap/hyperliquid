@@ -7,8 +7,9 @@
  *
  * ```text
  * HttpTransport.request():
+ *   rateLimit? ◄─ token bucket waits for the request's weight (opt-in; disabled by default)
  *   controller ◄─ timeout / user signal / fetchOptions.signal
- *    └─► fetch ┬─► non-OK or non-JSON body ─► HttpRequestError(response, detail)
+ *    └─► fetch ┬─► non-OK or non-JSON body ─► HttpRequestError; 429 ─► HttpRateLimitError
  *              └─► parse JSON ─► T
  *     catch: classify by reference ─► finally: cancel timer, detach
  * ```
@@ -28,6 +29,8 @@
 
 import { type IRequestTransport, TransportError } from "../_base.ts";
 import * as abort from "../_abort.ts";
+import { redactSignature } from "../_redact.ts";
+import { TokenBucketRateLimiter } from "./_rateLimiter.ts";
 
 /** Configuration options for the HTTP transport layer. */
 export interface HttpTransportOptions {
@@ -54,6 +57,29 @@ export interface HttpTransportOptions {
    */
   exchangeTimeout?: number | null;
   /**
+   * Opt-in client-side rate limiter, paced to Hyperliquid's REST weight budget.
+   *
+   * When set, every request acquires its weight from a token bucket before sending and WAITS
+   * (async) while the bucket is empty, instead of failing with HTTP 429 after the fact. Weights
+   * follow the server rules: `1 + floor(batchLength / 40)` for exchange batches — the batch
+   * length is read from the action's `orders`/`cancels`/`modifies` array — and the documented
+   * minimum of 1 for every other request. The server's per-endpoint info/explorer weights
+   * (2–60) are not tabulated; `refillPerMinute` is the knob for info-heavy workloads.
+   *
+   * The wait happens before the request timeout is armed, so deliberate throttling never trips
+   * {@linkcode HttpTransportOptions.timeout}.
+   *
+   * Default: `undefined` (no client-side limiting)
+   *
+   * @example
+   * ```ts
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   *
+   * const transport = new HttpTransport({ rateLimit: { capacity: 1200, refillPerMinute: 1200 } });
+   * ```
+   */
+  rateLimit?: HttpRateLimitOptions;
+  /**
    * Custom API URL for `info` and `exchange` requests.
    *
    * Default: `https://api.hyperliquid.xyz` for mainnet, `https://api.hyperliquid-testnet.xyz` for testnet.
@@ -67,6 +93,22 @@ export interface HttpTransportOptions {
   rpcUrl?: string | URL;
   /** A custom {@link https://developer.mozilla.org/en-US/docs/Web/API/RequestInit | RequestInit} that is merged with a fetch request. */
   fetchOptions?: Omit<RequestInit, "body" | "method">;
+}
+
+/** Configuration for the HTTP transport's opt-in client-side rate limiter. */
+export interface HttpRateLimitOptions {
+  /**
+   * Maximum burst size, in weight units. The bucket starts full.
+   *
+   * Default: `1200` (Hyperliquid's per-IP REST budget)
+   */
+  capacity?: number;
+  /**
+   * Steady-state refill rate, in weight units per minute.
+   *
+   * Default: `1200` (Hyperliquid's per-IP REST budget)
+   */
+  refillPerMinute?: number;
 }
 
 /** Mainnet API URL. */
@@ -99,7 +141,15 @@ export const TESTNET_RPC_URL = "https://rpc.hyperliquid-testnet.xyz";
 export class HttpRequestError extends TransportError {
   /** The HTTP response that caused the error. */
   response?: Response;
-  /** The original request payload that triggered the error, if available. */
+  /** The HTTP status code of the response, when one was received. */
+  status?: number;
+  /**
+   * The original request payload that triggered the error, if available.
+   *
+   * A signed payload (`{ action, signature, nonce }`) is stored as a COPY with the `signature`
+   * replaced by `"0x<redacted>"`, so logging or forwarding the error cannot leak it; the object
+   * sent to the server is never mutated.
+   */
   request?: unknown;
 
   /**
@@ -128,7 +178,51 @@ export class HttpRequestError extends TransportError {
     super(message, errorOptions);
     this.name = "HttpRequestError";
     this.response = response;
-    this.request = request;
+    this.status = response?.status;
+    this.request = redactSignature(request);
+  }
+}
+
+/**
+ * Error thrown when an HTTP request fails with a `429 Too Many Requests` response.
+ *
+ * Extends {@linkcode HttpRequestError}, so existing `instanceof HttpRequestError` checks keep
+ * matching; catch this subclass specifically to back off instead of surfacing a failure. Hyperliquid
+ * answers rate-limit violations with 429 and ultimately bans repeat offenders' IPs, so backing off
+ * on this error matters — or enable the transport's {@linkcode HttpTransportOptions.rateLimit} to
+ * pace requests before they ever reach the limit.
+ *
+ * @example
+ * ```ts
+ * import { HttpRateLimitError, HttpTransport } from "@bloxwap/hyperliquid";
+ *
+ * const transport = new HttpTransport();
+ * try {
+ *   await transport.request("info", { type: "allMids" });
+ * } catch (error) {
+ *   if (error instanceof HttpRateLimitError) {
+ *     const waitSeconds = error.retryAfter ?? 1;
+ *     // back off, then retry
+ *   }
+ * }
+ * ```
+ */
+export class HttpRateLimitError extends HttpRequestError {
+  /**
+   * Seconds the server asked to wait before retrying, parsed from the `Retry-After` response
+   * header; `undefined` when the header is absent or unparseable.
+   */
+  retryAfter?: number;
+
+  /**
+   * Creates an HTTP 429 error.
+   *
+   * Accepts the same options as {@linkcode HttpRequestError}.
+   */
+  constructor(options?: ErrorOptions & { detail?: string; response?: Response; request?: unknown }) {
+    super(options);
+    this.name = "HttpRateLimitError";
+    this.retryAfter = parseRetryAfter(options?.response?.headers.get("Retry-After") ?? null);
   }
 }
 
@@ -164,6 +258,8 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   rpcUrl: string | URL;
   /** A custom {@link https://developer.mozilla.org/en-US/docs/Web/API/RequestInit | RequestInit} that is merged with a fetch request. */
   fetchOptions: Omit<RequestInit, "body" | "method">;
+  /** Opt-in token-bucket rate limiter; `null` keeps requests unthrottled (the default). */
+  private readonly _rateLimit: TokenBucketRateLimiter | null;
   /** Memoized endpoint URLs, keyed by base and endpoint; mutating `apiUrl`/`rpcUrl` simply misses the cache. */
   private readonly _urlCache = new Map<string, URL>();
 
@@ -174,6 +270,10 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
     this.apiUrl = options?.apiUrl ?? (this.isTestnet ? TESTNET_API_URL : MAINNET_API_URL);
     this.rpcUrl = options?.rpcUrl ?? (this.isTestnet ? TESTNET_RPC_URL : MAINNET_RPC_URL);
     this.fetchOptions = options?.fetchOptions ?? {};
+    this._rateLimit =
+      options?.rateLimit === undefined
+        ? null
+        : new TokenBucketRateLimiter(options.rateLimit.capacity ?? 1200, options.rateLimit.refillPerMinute ?? 1200);
   }
 
   /**
@@ -186,7 +286,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
    * @return A promise that resolves with the parsed JSON response body.
    *
-   * @throws {HttpRequestError} When the HTTP request fails.
+   * @throws {HttpRequestError} When the HTTP request fails ({@linkcode HttpRateLimitError} on a 429 response).
    *
    * @example
    * ```ts
@@ -197,6 +297,11 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
    * ```
    */
   async request<T>(endpoint: "info" | "exchange" | "explorer", payload: unknown, signal?: AbortSignal): Promise<T> {
+    // Opt-in rate limiting, ahead of any timeout wiring: a throttled request waits here for its
+    // weight, so deliberate pacing never trips the request timeout. `null` costs one branch.
+    const rateLimit = this._rateLimit;
+    if (rateLimit !== null) await rateLimit.acquire(requestWeight(endpoint, payload));
+
     // One controller per request: the timeout timer and all user signals relay into it,
     // and `finally` detaches everything, so no listener or timer outlives the request.
     const controller = new AbortController();
@@ -240,7 +345,9 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) {
         const clone = response.clone();
         const body = await response.text().catch(() => undefined); // releases connection, clone stays readable
-        throw new HttpRequestError({
+        // 429 gets its own subclass so callers can back off programmatically.
+        const ErrorClass = clone.status === 429 ? HttpRateLimitError : HttpRequestError;
+        throw new ErrorClass({
           response: clone,
           detail: body ? truncate(body) : undefined,
           request: payload,
@@ -298,6 +405,39 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
 function truncate(text: string, limit = 1024): string {
   if (text.length <= limit) return text;
   return `${text.slice(0, limit)}… (${text.length} chars total)`;
+}
+
+/**
+ * Weight of a request under Hyperliquid's REST rate limits: `1 + floor(batchLength / 40)` for
+ * exchange batches — the batch length read from the action's `orders`/`cancels`/`modifies`
+ * array — and 1 for everything else. The server's per-endpoint info/explorer weights (2–60) are
+ * deliberately not tabulated; actions without such a batch — including multi-sig wrappers, which
+ * nest the real action one level down — cost the documented minimum of 1.
+ *
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits
+ */
+function requestWeight(endpoint: "info" | "exchange" | "explorer", payload: unknown): number {
+  if (endpoint !== "exchange" || typeof payload !== "object" || payload === null) return 1;
+  const action = (payload as { action?: unknown }).action;
+  if (typeof action !== "object" || action === null) return 1;
+  for (const key of ["orders", "cancels", "modifies"] as const) {
+    const batch = (action as Record<string, unknown>)[key];
+    if (Array.isArray(batch)) return 1 + Math.floor(batch.length / 40);
+  }
+  return 1;
+}
+
+/**
+ * Parses a `Retry-After` header value into seconds, supporting both the delay-seconds and
+ * HTTP-date forms; returns `undefined` when the header is absent or unparseable.
+ */
+function parseRetryAfter(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds);
+  const date = Date.parse(value);
+  if (!Number.isNaN(date)) return Math.max(0, (date - Date.now()) / 1000);
+  return undefined;
 }
 
 /** Resolves an endpoint against a base URL without dropping the base path or query. */

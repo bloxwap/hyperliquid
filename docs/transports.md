@@ -94,6 +94,39 @@ const transport = new HttpTransport({
 
 Pass `null` to disable the timeout for exchange requests only. Like `timeout`, the field is mutable on the instance.
 
+### Rate limiting
+
+Hyperliquid budgets REST requests at **1200 weight per minute per IP**; going over yields HTTP 429, and repeated
+violations get the IP banned. An exchange request costs `1 + floor(batchLength / 40)` — unbatched actions cost 1, a
+batch of 40–79 orders (or cancels) costs 2, 80–119 costs 3. Info endpoints cost 2–60 weight and explorer requests 40
+(see [Rate limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits) for the full table).
+
+`rateLimit` opts `HttpTransport` into a client-side token bucket paced to that budget: every request acquires its
+weight before sending and **waits** while the bucket is empty instead of failing with a 429 after the fact:
+
+```ts
+import { HttpTransport } from "@bloxwap/hyperliquid";
+
+const transport = new HttpTransport({
+  rateLimit: { capacity: 1200, refillPerMinute: 1200 }, // the defaults, shown for clarity
+});
+```
+
+- The exchange batch weight is read from the action's `orders`/`cancels`/`modifies` array; every other request counts
+  as the documented minimum of 1. The per-endpoint info/explorer weights are not tabulated — if your workload polls
+  info endpoints heavily, lower `refillPerMinute` accordingly.
+- The wait happens before the request timeout is armed, so throttling never trips `timeout` / `exchangeTimeout`.
+- The limiter is off by default; without `rateLimit` the transport never delays a request client-side.
+
+Two server-side complements:
+
+- A 429 that still gets through throws [`HttpRateLimitError`](error-handling.md#httpratelimiterror) — an
+  `HttpRequestError` subclass carrying `status` and, when the server sends a `Retry-After` header, a `retryAfter`
+  hint in seconds.
+- The [`userRateLimit`](clients.md) info method reports the server's own view of your used vs. allowed weight. The
+  client-side bucket is a local approximation (other processes and machines share the same IP budget); the endpoint
+  is the truth.
+
 ## WebSocket
 
 `WebSocketTransport` opens one connection and reuses it, shaving a little latency off each request and allows using the

@@ -209,6 +209,9 @@ export type OrderSuccessResponse = ExcludeErrorResponse<OrderResponse>;
  *
  * Signing: L1 Action.
  *
+ * Rate limit: this batched action costs `1 + floor(orders.length / 40)` weight of the shared
+ * per-IP REST budget (1200 weight/minute) — a batch of 40+ orders costs 2 weight, 80+ costs 3.
+ *
  * @param config General configuration for Exchange API requests.
  * @param params Parameters specific to the API request.
  * @param opts Request execution options.

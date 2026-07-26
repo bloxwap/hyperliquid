@@ -17,18 +17,25 @@ Error
    ├─ ApiRequestError
    └─ TransportError
       ├─ HttpRequestError
+      │  └─ HttpRateLimitError
       └─ WebSocketRequestError
 ```
 
-| Class                   | Thrown from                                      | Inspect                   |
-| ----------------------- | ------------------------------------------------ | ------------------------- |
-| `ValidationError`       | Schema parsing, before any network I/O           | `message`, `cause.issues` |
-| `FormatError`           | `formatPrice` / `formatSize`, before network I/O | `message`                 |
-| `AbstractWalletError`   | Signing layer (viem / custom adapter)            | `cause`                   |
-| `CanonicalizeError`     | `canonicalize()` helper during low-level signing | `message`                 |
-| `ApiRequestError`       | Hyperliquid API returned an error response       | `message`, `response`     |
-| `HttpRequestError`      | `fetch` failed or returned non-2xx / non-JSON    | `response`, `cause`       |
-| `WebSocketRequestError` | WebSocket operation failed                       | `message`, `cause`        |
+| Class                   | Thrown from                                      | Inspect                         |
+| ----------------------- | ------------------------------------------------ | ------------------------------- |
+| `ValidationError`       | Schema parsing, before any network I/O           | `message`, `cause.issues`       |
+| `FormatError`           | `formatPrice` / `formatSize`, before network I/O | `message`                       |
+| `AbstractWalletError`   | Signing layer (viem / custom adapter)            | `cause`                         |
+| `CanonicalizeError`     | `canonicalize()` helper during low-level signing | `message`                       |
+| `ApiRequestError`       | Hyperliquid API returned an error response       | `message`, `response`           |
+| `HttpRequestError`      | `fetch` failed or returned non-2xx / non-JSON    | `response`, `status`, `cause`   |
+| `HttpRateLimitError`    | Server answered 429 (rate limited)               | `status`, `retryAfter`, `cause` |
+| `WebSocketRequestError` | WebSocket operation failed                       | `message`, `cause`              |
+
+Both transport errors also carry a `request` field with the original request payload. If that payload is signed
+(`{ action, signature, nonce }`), the error holds a **copy** with `signature` replaced by `"0x<redacted>"`, so logging
+or forwarding errors to telemetry never leaks the signature (it reveals trading intent, though never keys). The object
+actually sent to the server is never mutated.
 
 ## `ValidationError`
 
@@ -146,8 +153,8 @@ try {
 
 Thrown by `HttpTransport` when `fetch` itself rejects, or when the server returns a non-2xx / non-JSON response. When
 the server did respond, `response` is a [`Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response) object —
-you can read its status and body. For network-level failures (DNS, connection reset, offline), `response` is `undefined`
-and the underlying cause is in `cause`.
+you can read its status and body — and `status` mirrors the HTTP status code. For network-level failures (DNS,
+connection reset, offline), both are `undefined` and the underlying cause is in `cause`.
 
 ```ts
 import { HttpRequestError } from "@bloxwap/hyperliquid";
@@ -157,7 +164,7 @@ try {
 } catch (error) {
   if (error instanceof HttpRequestError) {
     if (error.response) {
-      console.error(error.response.status);       // HTTP status
+      console.error(error.status);                // HTTP status
       console.error(await error.response.text()); // response body
     } else {
       console.error(error.cause); // network-level reason
@@ -166,10 +173,39 @@ try {
 }
 ```
 
+The `request` field holds the original request payload — with a signed payload's `signature` replaced by
+`"0x<redacted>"`, as described [above](#class-hierarchy).
+
+### `HttpRateLimitError`
+
+Thrown by `HttpTransport` when the server answers `429 Too Many Requests` — the request exceeded Hyperliquid's REST
+weight budget (1200 weight/minute per IP; repeated violations get the IP banned). It extends `HttpRequestError`, so
+existing `instanceof HttpRequestError` checks keep working; catch the subclass to back off instead of failing.
+`retryAfter` carries the server's
+[`Retry-After`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After) value in seconds, when sent.
+
+```ts
+import { HttpRateLimitError } from "@bloxwap/hyperliquid";
+
+try {
+  await client.allMids();
+} catch (error) {
+  if (error instanceof HttpRateLimitError) {
+    const waitMs = (error.retryAfter ?? 1) * 1000; // seconds the server asked to wait, or a default
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    // retry the request
+  }
+}
+```
+
+To keep from reaching the limit at all, pace requests client-side with the transport's
+[`rateLimit`](transports.md#rate-limiting) option.
+
 ### `WebSocketRequestError`
 
 Thrown by `WebSocketTransport` when the WebSocket connection cannot be used, or when a request or subscription receives
-an error response. The underlying cause (if any) is in `cause`.
+an error response. The underlying cause (if any) is in `cause`, and the `request` field holds the original request
+payload — with a signed payload's `signature` replaced by `"0x<redacted>"`, as described [above](#class-hierarchy).
 
 ```ts
 import { WebSocketRequestError } from "@bloxwap/hyperliquid";

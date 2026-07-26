@@ -9,6 +9,7 @@ import { ReconnectingWebSocket } from "./_reconnectingSocket.ts";
 import * as abort from "../_abort.ts";
 import { TransportError } from "../_base.ts";
 import { Promise_ } from "../_polyfills.ts";
+import { redactSignature } from "../_redact.ts";
 import type { HyperliquidEventTarget, PostResponse, SubscribeUnsubscribeResponse } from "./_events.ts";
 import { isSubset, normalize, requestToId, specificity } from "./_id.ts";
 
@@ -35,7 +36,13 @@ import { isSubset, normalize, requestToId, specificity } from "./_id.ts";
  * ```
  */
 export class WebSocketRequestError extends TransportError {
-  /** The original request payload that triggered the error, if available. */
+  /**
+   * The original request payload that triggered the error, if available.
+   *
+   * A signed payload (`{ action, signature, nonce }`) is stored as a COPY with the `signature`
+   * replaced by `"0x<redacted>"`, so logging or forwarding the error cannot leak it; the object
+   * sent to the server is never mutated.
+   */
   request?: unknown;
 
   /**
@@ -46,7 +53,7 @@ export class WebSocketRequestError extends TransportError {
   constructor(message?: string, options?: ErrorOptions & { request?: unknown }) {
     super(message, options);
     this.name = "WebSocketRequestError";
-    this.request = options?.request;
+    this.request = redactSignature(options?.request);
   }
 }
 

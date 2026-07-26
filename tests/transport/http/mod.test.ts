@@ -4,10 +4,11 @@
  * @module
  */
 
-import { describe, test } from "bun:test";
+import { afterEach, beforeEach, describe, test } from "bun:test";
 import { getEventListeners } from "node:events";
 import { assert, assertEquals, assertIsError, assertRejects } from "@jsr/std__assert";
-import { HttpRequestError, HttpTransport } from "@bloxwap/hyperliquid";
+import { FakeTime } from "@jsr/std__testing/time";
+import { HttpRateLimitError, HttpRequestError, HttpTransport } from "@bloxwap/hyperliquid";
 
 // =============================================================================
 // Helpers
@@ -38,6 +39,33 @@ function jsonResponse(body: unknown = {}): Response {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/** Persistent mock for global fetch (restored manually), counting the requests it answers. */
+function stubFetch(handler: (input: FetchArgs[0], init?: FetchArgs[1]) => Response | Promise<Response>): {
+  calls: number;
+  restore: () => void;
+} {
+  const originalFetch = globalThis.fetch;
+  const stub = {
+    calls: 0,
+    restore: () => {
+      globalThis.fetch = originalFetch;
+    },
+  };
+  globalThis.fetch = Object.assign(
+    async (...args: FetchArgs): Promise<Response> => {
+      stub.calls++;
+      return await handler(...args);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  return stub;
+}
+
+/** Waits until queued promise reactions have settled. */
+async function flush(): Promise<void> {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
 }
 
 // =============================================================================
@@ -403,6 +431,166 @@ describe("HttpTransport", () => {
 
       mockFetch(hangUntilAbort);
       await assertRejects(() => transport.request("exchange", {}), HttpRequestError, "Request timed out after 5 ms");
+    });
+  });
+
+  describe("429 rate limit responses", () => {
+    test("429 throws HttpRateLimitError carrying status and retryAfter", async () => {
+      mockFetch(() => new Response("Too Many Requests", { status: 429, headers: { "Retry-After": "30" } }));
+
+      const transport = new HttpTransport();
+      const error = await assertRejects(() => transport.request("info", {}), HttpRateLimitError);
+      assert(error instanceof HttpRequestError); // existing instanceof checks keep matching
+      assertEquals(error.status, 429);
+      assertEquals(error.retryAfter, 30);
+    });
+
+    test("429 without a Retry-After header leaves retryAfter undefined", async () => {
+      mockFetch(() => new Response("", { status: 429 }));
+
+      const transport = new HttpTransport();
+      const error = await assertRejects(() => transport.request("info", {}), HttpRateLimitError);
+      assertEquals(error.retryAfter, undefined);
+    });
+
+    test("Retry-After in HTTP-date form is converted to seconds", async () => {
+      const date = new Date(Date.now() + 30_000).toUTCString();
+      mockFetch(() => new Response("", { status: 429, headers: { "Retry-After": date } }));
+
+      const transport = new HttpTransport();
+      const error = await assertRejects(() => transport.request("info", {}), HttpRateLimitError);
+      assert(error.retryAfter !== undefined && error.retryAfter > 0 && error.retryAfter <= 30);
+    });
+
+    test("non-429 errors keep status on plain HttpRequestError", async () => {
+      mockFetch(() => new Response("", { status: 500 }));
+
+      const transport = new HttpTransport();
+      const error = await assertRejects(() => transport.request("info", {}), HttpRequestError);
+      assert(!(error instanceof HttpRateLimitError));
+      assertEquals(error.status, 500);
+    });
+  });
+
+  describe("request payload redaction", () => {
+    const signedPayload = {
+      action: { type: "order", orders: [{ a: 0, b: true }] },
+      signature: { r: `0x${"1".repeat(64)}`, s: `0x${"2".repeat(64)}`, v: 27 as const },
+      nonce: 12345,
+    };
+
+    test("error carries a redacted copy; the sent request keeps the real signature", async () => {
+      let sentBody: Record<string, unknown> | undefined;
+      mockFetch((_req, init) => {
+        sentBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+        return new Response("error body", { status: 500 });
+      });
+
+      const transport = new HttpTransport();
+      const error = await assertRejects(() => transport.request("exchange", signedPayload), HttpRequestError);
+
+      const redacted = error.request as Record<string, unknown>;
+      assertEquals(redacted.signature, "0x<redacted>");
+      assertEquals(redacted.action, signedPayload.action);
+      assertEquals(redacted.nonce, 12345);
+
+      // The wire kept the real signature, and the caller's object was never mutated.
+      assertEquals(sentBody?.signature, signedPayload.signature);
+      assertEquals(signedPayload.signature, { r: `0x${"1".repeat(64)}`, s: `0x${"2".repeat(64)}`, v: 27 });
+    });
+
+    test("payloads without a signature pass through by reference", async () => {
+      mockFetch(() => new Response("", { status: 500 }));
+
+      const transport = new HttpTransport();
+      const payload = { type: "allMids" };
+      const error = await assertRejects(() => transport.request("info", payload), HttpRequestError);
+      assert(error.request === payload);
+    });
+  });
+
+  describe("rateLimit", () => {
+    // The npm build of `@std/testing/time` drops the `[Symbol.dispose]` member the Deno version
+    // declares, so the clock is installed and restored through hooks instead of a `using` binding.
+    let time: FakeTime;
+
+    beforeEach(() => {
+      time = new FakeTime();
+    });
+
+    afterEach(() => {
+      time.restore();
+    });
+
+    test("waits for weight before sending instead of throwing", async () => {
+      const stub = stubFetch(() => jsonResponse());
+      try {
+        const transport = new HttpTransport({ rateLimit: { capacity: 1, refillPerMinute: 60 } }); // 1 weight/second
+
+        await transport.request("info", {}); // consumes the only token
+        assertEquals(stub.calls, 1);
+
+        const pending = transport.request("info", {}); // bucket empty: waits, no fetch yet
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        time.tick(1_000); // one token refilled
+        await pending;
+        assertEquals(stub.calls, 2);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("exchange batches cost 1 + floor(batchLength / 40) weight", async () => {
+      const stub = stubFetch(() => jsonResponse());
+      try {
+        const transport = new HttpTransport({ rateLimit: { capacity: 2, refillPerMinute: 60 } }); // 1 weight/second
+
+        // 41 orders cost 2 weight: the whole bucket.
+        await transport.request("exchange", { action: { type: "order", orders: Array.from({ length: 41 }) } });
+        assertEquals(stub.calls, 1);
+
+        const pending = transport.request("info", {});
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        time.tick(1_000);
+        await pending;
+        assertEquals(stub.calls, 2);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("throttled waits never trip the request timeout", async () => {
+      const stub = stubFetch(() => jsonResponse());
+      try {
+        const transport = new HttpTransport({ timeout: 100, rateLimit: { capacity: 1, refillPerMinute: 60 } });
+
+        await transport.request("info", {});
+        const pending = transport.request("info", {}); // waits 1 s, far beyond the 100 ms timeout
+        await flush();
+
+        time.tick(1_000);
+        await pending; // resolves: the timeout starts only once the request goes out
+        assertEquals(stub.calls, 2);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("disabled by default: requests are never delayed client-side", async () => {
+      const stub = stubFetch(() => jsonResponse());
+      try {
+        const transport = new HttpTransport();
+
+        await transport.request("info", {});
+        await transport.request("exchange", { action: { type: "order", orders: Array.from({ length: 100 }) } });
+        assertEquals(stub.calls, 2); // both sent without ticking the clock
+      } finally {
+        stub.restore();
+      }
     });
   });
 });
