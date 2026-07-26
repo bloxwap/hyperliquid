@@ -14,3 +14,6 @@ coverage/
 # a funded key must never be committable.
 .env
 .env.*
+
+# macOS Finder metadata.
+.DS_Store

@@ -3,6 +3,7 @@
  *
  * This module re-exports utilities for:
  * - Formatting prices and sizes according to Hyperliquid's {@link https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/tick-and-lot-size | tick and lot size rules}.
+ * - Converting floats to their wire strings ({@linkcode floatToWire}), mirroring the Python SDK's `float_to_wire`.
  * - Converting human-readable asset symbols to Hyperliquid asset IDs ({@link SymbolConverter}).
  *
  * @example Formatting values for an order
