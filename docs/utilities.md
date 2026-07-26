@@ -168,6 +168,33 @@ for an order on that pair.
 
 Outcome markets carry no `szDecimals` metadata, so `getSzDecimals` always returns `5` for them.
 
+### Round a price to a valid tick
+
+`formatPrice` always truncates. When the rounding *direction* matters — a maker order that must not cross the spread,
+or a taker order that should — use `roundPrice`, which picks the direction from the order side:
+
+```ts
+converter.roundPrice("BTC", "buy", "97123.456");  // "97123" — never pays more than requested
+converter.roundPrice("BTC", "sell", "97123.456"); // "97124" — never sells for less than requested
+converter.roundPrice("BTC", "buy", "97123.456", { aggressive: true }); // "97124" — taker: flips both directions
+```
+
+The default is maker-safe: a buy rounds **down**, a sell rounds **up**, so the rounded price is never more aggressive
+than the one you asked for. `aggressive: true` inverts both for taker-style orders that trade up to one tick for a
+better fill probability. A price already on the tick grid is returned unchanged, and all math is exact decimal
+arithmetic — no floating-point artifacts.
+
+`getTickSize` returns the tick itself at a given price level (it steps with the price magnitude, so the price
+argument matters):
+
+```ts
+converter.getTickSize("BTC", "97123.4");      // "1"          — perp, szDecimals=5
+converter.getTickSize("PURR/USDC", "0.0001"); // "0.00000001" — spot, 8-decimal ceiling
+```
+
+Both accept every name format `getSzDecimals` accepts (perp, `BASE/QUOTE`, `DEX:ASSET`, outcome slug), return
+`undefined` for unknown coins, and throw `FormatError` for a non-positive or unparsable price.
+
 ### Spot pair IDs
 
 The `a` field on an order is one identifier. Info endpoints and subscriptions (`l2Book`, `trades`, `candleSnapshot`, …)

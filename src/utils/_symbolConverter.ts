@@ -9,6 +9,93 @@ import {
   type SpotMetaResponse,
 } from "../api/info/mod.ts";
 import type { IRequestTransport } from "../transport/mod.ts";
+import { type DecimalParts, FormatError, stripTrailingZeros, toDecimal, toFixed } from "./_decimal.ts";
+
+/**
+ * Parse a string or number into finite, strictly positive decimal parts.
+ *
+ * @throws {FormatError} If the value is unparsable, not finite, or not greater than 0.
+ */
+function toPriceDecimal(value: string | number): DecimalParts {
+  const parts = toDecimal(value, "price");
+  // A tick grid is only defined for positive prices (formatPrice allows negatives, but
+  // "buy"/"sell" rounding direction is meaningless at or below zero).
+  if (parts.sign < 0 || parts.digits === "") {
+    throw new FormatError(`Invalid price: ${String(value)} must be greater than 0`);
+  }
+  return parts;
+}
+
+/**
+ * Base-10 exponent of the tick size at price level `d`, combining the
+ * {@link https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/tick-and-lot-size | tick rules}
+ * exactly as `formatPrice` enforces them:
+ * - 5 significant figures → with the most significant digit at `10^(d.exp - 1)`, the last
+ *   significant digit sits at `10^(d.exp - 5)`;
+ * - at most `maxDecimals` decimal places → the tick cannot be finer than `10^(-maxDecimals)`;
+ * - integer prices are exempt from the significant-figure cap, so the tick never exceeds `10^0`
+ *   (above 99999 every integer is valid, whatever the significant-figure count).
+ */
+function tickExponent(d: DecimalParts, maxDecimals: number): number {
+  return Math.min(Math.max(d.exp - 5, -maxDecimals), 0);
+}
+
+/** Increment a string of ASCII digits by one; the result may grow a digit ("999" → "1000"). */
+function incrementDigits(digits: string): string {
+  const chars = digits.split("");
+  let i = chars.length;
+  while (i-- > 0) {
+    if (chars[i] === "9") {
+      chars[i] = "0";
+    } else {
+      chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
+      return chars.join("");
+    }
+  }
+  return `1${chars.join("")}`;
+}
+
+/**
+ * Round a positive decimal to the `10^tickExp` grid: toward zero when `roundUp` is false,
+ * away from zero when true. Since the grid unit is a power of ten, "divide by the tick, round,
+ * multiply back" reduces to truncating the digit string at a position — plus a string increment
+ * for the upward case — with no arbitrary-precision division and no floats.
+ *
+ * Digit `i` of the normalized form has place value `10^(d.exp - 1 - i)`, so the digits at
+ * indices below `keep = d.exp - tickExp` are exactly the ones at or above the grid unit.
+ */
+function roundToTick(d: DecimalParts, tickExp: number, roundUp: boolean): DecimalParts {
+  const keep = d.exp - tickExp;
+
+  // Already an exact multiple of the tick: rounding is the identity.
+  if (keep >= d.digits.length) return d;
+
+  // Every significant digit is finer than the tick: down collapses to zero, up lands on one tick.
+  if (keep <= 0) {
+    return roundUp ? { sign: d.sign, digits: "1", exp: tickExp + 1 } : { sign: d.sign, digits: "", exp: 0 };
+  }
+
+  if (!roundUp) {
+    return { sign: d.sign, digits: stripTrailingZeros(d.digits.slice(0, keep)), exp: d.exp };
+  }
+
+  const bumped = incrementDigits(d.digits.slice(0, keep));
+  if (bumped.length > keep) {
+    // The increment carried past the most significant digit: the result is the next power of ten.
+    return { sign: d.sign, digits: "1", exp: d.exp + 1 };
+  }
+  return { sign: d.sign, digits: stripTrailingZeros(bumped), exp: d.exp };
+}
+
+/** Options for {@link SymbolConverter.roundPrice}. */
+export interface RoundPriceOptions {
+  /**
+   * Rounding mode: `false` (default) rounds the conservative maker way — a buy down, a sell up, so the
+   * rounded price is never more aggressive than requested. `true` flips both directions for taker-style
+   * orders where fill probability matters more than the half-tick given up.
+   */
+  aggressive?: boolean;
+}
 
 /**
  * Mutable snapshot of the four lookup maps, built privately by {@link SymbolConverter._reload}
@@ -420,5 +507,107 @@ export class SymbolConverter {
    */
   getSymbolBySpotPairId(pairId: string): string | undefined {
     return this._spotPairIdToName.get(pairId);
+  }
+
+  /**
+   * Get the tick size (smallest valid price increment) for a coin at a given price level, per the
+   * {@link https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/tick-and-lot-size | tick rules}:
+   * - Maximum 5 significant figures
+   * - Maximum 6 (perp) or 8 (spot) - `szDecimals` decimal places
+   * - Integer prices are exempt from the significant-figure cap, so the tick is never larger than `1`
+   *
+   * The tick is constant within each power-of-ten decade and steps with the price magnitude, so the
+   * price argument matters: the tick at `0.0001` differs from the tick at `12345`.
+   *
+   * Accepts the same name formats as {@link SymbolConverter.getSzDecimals} and likewise returns
+   * `undefined` for an unknown coin (a spot pair ID like `"@107"` is unknown here — use `"HYPE/USDC"`).
+   *
+   * @param name The coin (e.g., "BTC", "HYPE/USDC", "test:ABC").
+   * @param price The price level at which to measure the tick (as string or number).
+   * @return Tick size as a decimal string (e.g., "1", "0.0001"), or `undefined` for an unknown coin.
+   *
+   * @throws {FormatError} If the price is not a valid finite number greater than 0.
+   *
+   * @example
+   * ```ts
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
+   *
+   * const transport = new HttpTransport(); // or `WebSocketTransport`
+   * const converter = await SymbolConverter.create({ transport });
+   *
+   * converter.getTickSize("BTC", "97123.4"); // → "1" (perp, szDecimals=5)
+   * converter.getTickSize("PURR/USDC", "0.0001"); // → "0.00000001" (spot, 8-decimal ceiling)
+   * converter.getTickSize("BTC", "123456"); // → "1" (integers bypass the sig-fig cap)
+   * ```
+   */
+  getTickSize(name: string, price: number | string): string | undefined {
+    const szDecimals = this._nameToSzDecimals.get(name);
+    if (szDecimals === undefined) return undefined;
+
+    const d = toPriceDecimal(price);
+    // Spot markets carry a spot pair ID; everything else (perps, builder dexs, outcomes) uses the perp formula.
+    const maxDecimals = Math.max((this._nameToSpotPairId.has(name) ? 8 : 6) - szDecimals, 0);
+
+    // 10^tickExp in the normalized form: a single "1" digit at exponent tickExp + 1.
+    return toFixed({ sign: 1, digits: "1", exp: tickExponent(d, maxDecimals) + 1 });
+  }
+
+  /**
+   * Round a price to a valid tick for a coin, choosing the rounding direction by order side.
+   *
+   * Unlike {@link formatPrice} — which always truncates — this helper guarantees a direction:
+   * - Default (maker-safe): rounds **against** the trade direction, so the rounded price is never more
+   *   aggressive than requested. A **buy rounds DOWN** (never pays more) and a **sell rounds UP**
+   *   (never sells for less); the order stays on your side of the spread.
+   * - `aggressive: true` (taker): flips both directions — a **buy rounds UP** and a **sell rounds DOWN** —
+   *   trading up to one tick of price for a better chance to cross the spread and fill immediately.
+   *
+   * A price already on the tick grid is returned unchanged. All math is exact string arithmetic
+   * (the tick is a power of ten, so rounding is digit truncation or a one-digit increment),
+   * so no floating-point artifacts can appear.
+   *
+   * Accepts the same name formats as {@link SymbolConverter.getSzDecimals} and likewise returns
+   * `undefined` for an unknown coin.
+   *
+   * @param name The coin (e.g., "BTC", "HYPE/USDC", "test:ABC").
+   * @param side Order side: "buy" or "sell".
+   * @param price The price to round (as string or number).
+   * @param opts See {@link RoundPriceOptions}.
+   * @return Rounded price as a decimal string, or `undefined` for an unknown coin.
+   *
+   * @throws {FormatError} If the price is not a valid finite number greater than 0, or rounds to 0.
+   *
+   * @example
+   * ```ts
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
+   *
+   * const transport = new HttpTransport(); // or `WebSocketTransport`
+   * const converter = await SymbolConverter.create({ transport });
+   *
+   * converter.roundPrice("BTC", "buy", "97123.456"); // → "97123" (never pays more)
+   * converter.roundPrice("BTC", "sell", "97123.456"); // → "97124" (never sells for less)
+   * converter.roundPrice("BTC", "buy", "97123.456", { aggressive: true }); // → "97124" (taker)
+   * converter.roundPrice("BTC", "buy", "97123"); // → "97123" (already on the tick)
+   * ```
+   */
+  roundPrice(name: string, side: "buy" | "sell", price: number | string, opts?: RoundPriceOptions): string | undefined {
+    const szDecimals = this._nameToSzDecimals.get(name);
+    if (szDecimals === undefined) return undefined;
+
+    const d = toPriceDecimal(price);
+    // Spot markets carry a spot pair ID; everything else (perps, builder dexs, outcomes) uses the perp formula.
+    const maxDecimals = Math.max((this._nameToSpotPairId.has(name) ? 8 : 6) - szDecimals, 0);
+
+    // Maker-safe default rounds against the trade direction (buy down, sell up); aggressive flips both.
+    const roundUp = side === "buy" ? (opts?.aggressive ?? false) : !(opts?.aggressive ?? false);
+    const result = roundToTick(d, tickExponent(d, maxDecimals), roundUp);
+
+    if (result.digits === "") {
+      throw new FormatError("Price is too small and was rounded to 0");
+    }
+
+    return toFixed(result);
   }
 }
