@@ -318,16 +318,64 @@ export class WebSocketDispatcher {
     const pending = this._posts.get(detail.id);
     if (!pending) return;
 
-    if (detail.response.type === "error") {
-      pending.reject(
-        new WebSocketRequestError(detail.response.payload, {
-          request: payloadSnapshot(pending.frame, typeof pending.id === "number"),
-        }),
-      );
-    } else {
-      const data = detail.response.type === "info" ? detail.response.payload.data : detail.response.payload;
-      pending.resolve(data);
+    // The response frame is a trusted contract, but a frame that breaks it must reject the
+    // request with a descriptive error — never resolve `undefined` (upstream nktkas#50: an
+    // `undefined` resolution surfaced as a TypeError deep in the exchange client) and never
+    // throw out of this listener (the guarded dispatch would swallow the throw and the
+    // request would hang until the timeout).
+    const response = detail.response as { type?: unknown; payload?: unknown } | null | undefined;
+    const malformed = (): WebSocketRequestError =>
+      new WebSocketRequestError(`Malformed post response: ${JSON.stringify(detail)}`, {
+        request: payloadSnapshot(pending.frame, typeof pending.id === "number"),
+      });
+
+    if (typeof response !== "object" || response === null || typeof response.type !== "string") {
+      pending.reject(malformed());
+      return;
     }
+
+    if (response.type === "error") {
+      const message = typeof response.payload === "string" ? response.payload : malformed().message;
+      pending.reject(
+        new WebSocketRequestError(message, { request: payloadSnapshot(pending.frame, typeof pending.id === "number") }),
+      );
+      return;
+    }
+    if (response.type === "info") {
+      const payload = response.payload as { data?: unknown } | null | undefined;
+      if (typeof payload === "object" && payload !== null && payload.data !== undefined) {
+        pending.resolve(payload.data);
+      } else {
+        pending.reject(malformed());
+      }
+      return;
+    }
+    if (response.type === "action") {
+      // The payload resolved with is itself an envelope ({status, response}): validate the
+      // nested level too, so a payload without a usable inner response cannot hand
+      // `undefined` to the exchange client one level deeper (same nktkas#50 class).
+      const payload = response.payload as { status?: unknown; response?: unknown } | null | undefined;
+      const inner = typeof payload === "object" && payload !== null ? payload.response : undefined;
+      const innerUsable =
+        typeof inner === "string" ||
+        (typeof inner === "object" && inner !== null && typeof (inner as { type?: unknown }).type === "string");
+      if (
+        typeof payload === "object" &&
+        payload !== null &&
+        (payload.status === "ok" || payload.status === "err") &&
+        innerUsable
+      ) {
+        pending.resolve(payload);
+      } else {
+        pending.reject(malformed());
+      }
+      return;
+    }
+    pending.reject(
+      new WebSocketRequestError(`Unknown post response type "${response.type}"`, {
+        request: payloadSnapshot(pending.frame, typeof pending.id === "number"),
+      }),
+    );
   }
 
   private _handleErrorEvent(detail: string): void {

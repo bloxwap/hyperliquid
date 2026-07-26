@@ -76,6 +76,9 @@ export interface ReconnectingWebSocketOptions {
   /**
    * Delay before reconnection in ms, or a function of the attempt number (0-based).
    *
+   * Skipped for the first retry after a clean close (code 1000 — e.g. Hyperliquid's
+   * routine "Expired" connection rotation), which reconnects immediately.
+   *
    * Default: exponential backoff `2 ** attempt * 150` capped at 10s, with equal jitter.
    */
   reconnectionDelay?: number | ((attempt: number) => number);
@@ -412,26 +415,67 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
    */
   private _handleClosed(event: CloseEvent, cause?: unknown): void {
     const options = this.reconnectOptions;
+    // Captured at entry, before any user hook or close dispatch runs: a hook or close
+    // listener that calls reconnect() (or close(), via _terminate) bumps the connect
+    // generation synchronously, and every step below then knows the connection plan it
+    // computed belongs to a superseded attempt.
+    const generation = this._connectGeneration;
+
+    // The retry limit involves no user hook: terminate with the signal already aborted
+    // when the final close (dispatched by _terminate) reaches listeners.
+    if (this._retryCount >= options.maxRetries) {
+      this._terminate(new ReconnectingWebSocketError("RECONNECTION_LIMIT", cause ?? event), event);
+      return;
+    }
 
     let failure: ReconnectingWebSocketError | undefined;
     let delay = 0;
-    if (this._retryCount >= options.maxRetries) {
-      failure = new ReconnectingWebSocketError("RECONNECTION_LIMIT", cause ?? event);
-    } else {
+    let declined = false;
+    try {
+      declined = !options.shouldReconnect(event, this._retryCount);
+    } catch (error) {
+      failure = new ReconnectingWebSocketError("UNKNOWN_ERROR", error);
+    }
+    // A hook that reconnected (or terminated) the instance superseded this connection
+    // plan: skip the retry/termination computed here — terminating now would drop the
+    // replacement socket without closing it. The old connection's close still reaches
+    // consumers exactly once, and before the replacement can open: the request
+    // dispatcher rejects its in-flight requests now instead of replaying their frames
+    // on the new socket.
+    if (this._connectGeneration !== generation || this._abortController.signal.aborted) {
+      if (!this._abortController.signal.aborted) this._dispatchClose(event);
+      return;
+    }
+
+    if (failure === undefined && declined) {
+      failure = new ReconnectingWebSocketError("RECONNECTION_DECLINED", event);
+    } else if (
+      failure === undefined &&
+      // A clean close is a routine endpoint rotation (Hyperliquid rotates connections
+      // with 1000 "Expired"), not a failure: the first retry of a streak is immediate
+      // (delay stays 0) and reconnectionDelay is not consulted at all — a throwing
+      // callback must not break the rotation path. Later attempts keep the configured
+      // backoff, so a server that keeps closing cleanly is not hammered. No `error`
+      // event accompanies a clean close, so this path stays quiet.
+      !(event.code === 1000 && this._retryCount === 0)
+    ) {
       try {
-        if (!options.shouldReconnect(event, this._retryCount)) {
-          failure = new ReconnectingWebSocketError("RECONNECTION_DECLINED", event);
-        } else {
-          delay =
-            typeof options.reconnectionDelay === "function"
-              ? options.reconnectionDelay(this._retryCount)
-              : options.reconnectionDelay;
-        }
+        delay =
+          typeof options.reconnectionDelay === "function"
+            ? options.reconnectionDelay(this._retryCount)
+            : options.reconnectionDelay;
       } catch (error) {
         failure = new ReconnectingWebSocketError("UNKNOWN_ERROR", error);
       }
+      // Same supersede check after the delay hook, with the same exactly-once close dispatch.
+      if (this._connectGeneration !== generation || this._abortController.signal.aborted) {
+        if (!this._abortController.signal.aborted) this._dispatchClose(event);
+        return;
+      }
     }
 
+    // Termination paths keep their ordering: the signal is already aborted when the
+    // final close (dispatched by _terminate) reaches listeners.
     if (failure !== undefined) {
       this._terminate(failure, event);
       return;
@@ -439,8 +483,10 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
 
     this._retryCount++;
     this._dispatchClose(event);
-    // A close listener may have terminated the instance (e.g. transport.close()).
+    // A close listener may have terminated the instance (e.g. transport.close()) or already
+    // reconnected it: the pending retry belongs to a superseded connection plan.
     if (this._abortController.signal.aborted) return;
+    if (this._connectGeneration !== generation) return;
     this._retryTimer = setTimeout(() => {
       this._retryTimer = undefined;
       void this._connect();
@@ -688,14 +734,21 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
       this._connectionTimer = undefined;
       clearTimeout(this._stableTimer);
       this._stableTimer = undefined;
-      // Consumers observe the drop exactly like a server close, except it never counts as a retry.
-      this._dispatchClose(new CloseEvent_("close", { code: code ?? 1000, reason: reason ?? "", wasClean: true }));
-      if (this._abortController.signal.aborted) return; // a close listener terminated the instance
+      // Close before dispatching the synthetic close: a close listener that terminates the
+      // instance (e.g. transport.close()) aborts the rest of this method, and the abandoned
+      // socket must not be left open when that happens.
       try {
         socket.close(code, reason);
       } catch {
         // Already closing/closed.
       }
+      // Consumers observe the drop exactly like a server close, except it never counts as a retry.
+      const generation = this._connectGeneration;
+      this._dispatchClose(new CloseEvent_("close", { code: code ?? 1000, reason: reason ?? "", wasClean: true }));
+      if (this._abortController.signal.aborted) return; // a close listener terminated the instance
+      // A close listener may have reconnected already; connecting here too would orphan
+      // the socket that reconnect just created.
+      if (this._connectGeneration !== generation) return;
     }
 
     void this._connect();

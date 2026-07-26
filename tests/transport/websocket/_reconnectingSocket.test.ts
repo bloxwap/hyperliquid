@@ -6,13 +6,15 @@
  */
 
 import { afterEach, beforeEach, describe, test } from "bun:test";
-import { assert, assertEquals, assertFalse, assertInstanceOf } from "@jsr/std__assert";
+import { assert, assertEquals, assertFalse, assertInstanceOf, assertRejects } from "@jsr/std__assert";
 import { FakeTime } from "@jsr/std__testing/time";
 import {
   ReconnectingWebSocket,
   ReconnectingWebSocketError,
   type ReconnectingWebSocketOptions,
 } from "../../../src/transport/websocket/_reconnectingSocket.ts";
+import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
+import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
 import { drain } from "./_mock.ts";
 
 // =============================================================================
@@ -317,6 +319,167 @@ describe("ReconnectingWebSocket", () => {
       assertEquals(ws.readyState, ReconnectingWebSocket.OPEN);
       ws.close();
     });
+
+    test("retries without bound by default (maxRetries: Infinity)", async () => {
+      const ws = createSocket();
+
+      // Far beyond any reasonable attempt cap: a default-configured socket must never
+      // silently stop reconnecting.
+      for (let i = 0; i < 30; i++) {
+        lastSocket().serverClose();
+        await drain();
+        assertFalse(ws.terminationSignal.aborted);
+      }
+      assertEquals(FakeWebSocket.instances.length, 31);
+      ws.close();
+    });
+
+    test("a clean 1000 close reconnects immediately, skipping the configured delay", async () => {
+      const ws = createSocket("ws://localhost/ws", { reconnectionDelay: 60_000 });
+      lastSocket().serverOpen();
+
+      let errors = 0;
+      ws.addEventListener("error", () => errors++);
+
+      // Hyperliquid's routine connection rotation: code 1000, reason "Expired".
+      lastSocket().serverClose(1000, "Expired");
+      await drain();
+
+      // Immediate first retry despite the 60s delay, and no error-path noise.
+      assertEquals(FakeWebSocket.instances.length, 2);
+      assertEquals(errors, 0);
+      ws.close();
+    });
+
+    test("a repeated clean close falls back to the configured backoff", async () => {
+      const ws = createSocket("ws://localhost/ws", { reconnectionDelay: 60_000 });
+
+      lastSocket().serverClose(1000, "Expired");
+      await drain();
+      assertEquals(FakeWebSocket.instances.length, 2); // first retry: immediate
+
+      lastSocket().serverClose(1000, "Expired");
+      await drain();
+      // Second failure of the streak: the 60s delay applies, no hot reconnect loop.
+      assertEquals(FakeWebSocket.instances.length, 2);
+      assertEquals(ws.retryCount, 2);
+      ws.close();
+    });
+
+    test("close() during a pending retry permanently stops reconnection", async () => {
+      const ws = createSocket("ws://localhost/ws", { reconnectionDelay: 60_000 });
+      lastSocket().serverClose(); // retry pending on the 60s timer
+
+      ws.close();
+      assert(ws.terminationSignal.aborted);
+
+      await drain();
+      assertEquals(FakeWebSocket.instances.length, 1); // the pending retry was cancelled
+    });
+
+    test("a shouldReconnect hook that calls reconnect() does not duplicate the connection", async () => {
+      const ws = createSocket("ws://localhost/ws", {
+        shouldReconnect: () => {
+          ws.reconnect();
+          return true;
+        },
+      });
+      lastSocket().serverOpen();
+
+      lastSocket().serverClose(1001);
+      await drain();
+
+      // Closed original plus exactly one new attempt: the hook's reconnect supersedes
+      // the retry the close handler computed.
+      assertEquals(FakeWebSocket.instances.length, 2);
+      assertEquals(FakeWebSocket.instances[0].readyState, 3);
+      assertEquals(lastSocket().readyState, 0);
+      ws.close();
+    });
+
+    test("a reconnectionDelay hook that calls reconnect() does not duplicate the connection", async () => {
+      const ws = createSocket("ws://localhost/ws", {
+        reconnectionDelay: () => {
+          ws.reconnect();
+          return 0;
+        },
+      });
+      lastSocket().serverOpen();
+
+      lastSocket().serverClose(1001);
+      await drain();
+
+      assertEquals(FakeWebSocket.instances.length, 2);
+      assertEquals(FakeWebSocket.instances[0].readyState, 3);
+      assertEquals(lastSocket().readyState, 0);
+      ws.close();
+    });
+
+    test("a clean 1000 close never invokes reconnectionDelay on the first retry", async () => {
+      let calls = 0;
+      const ws = createSocket("ws://localhost/ws", {
+        reconnectionDelay: () => {
+          calls++;
+          throw new Error("must not be consulted for a routine rotation");
+        },
+      });
+      lastSocket().serverOpen();
+
+      lastSocket().serverClose(1000, "Expired");
+      await drain();
+
+      assertEquals(calls, 0); // the throwing callback cannot break the rotation path
+      assertEquals(FakeWebSocket.instances.length, 2); // reconnected immediately
+      assertFalse(ws.terminationSignal.aborted);
+      ws.close();
+    });
+
+    test("a shouldReconnect hook that reconnects and declines leaves the replacement live", async () => {
+      const ws = createSocket("ws://localhost/ws", {
+        shouldReconnect: () => {
+          ws.reconnect();
+          return false;
+        },
+      });
+      lastSocket().serverOpen();
+      const original = lastSocket();
+
+      lastSocket().serverClose(1001);
+      await drain();
+
+      // The hook's reconnect supersedes the decline: terminating here would strand the
+      // replacement socket it just created.
+      assertEquals(FakeWebSocket.instances.length, 2);
+      assertEquals(original.readyState, 3);
+      assertFalse(ws.terminationSignal.aborted);
+
+      lastSocket().serverOpen();
+      assertEquals(ws.readyState, ReconnectingWebSocket.OPEN);
+      ws.close();
+    });
+
+    test("a reconnectionDelay hook that reconnects and throws leaves the replacement live", async () => {
+      const ws = createSocket("ws://localhost/ws", {
+        reconnectionDelay: () => {
+          ws.reconnect();
+          throw new Error("boom");
+        },
+      });
+      lastSocket().serverOpen();
+      const original = lastSocket();
+
+      lastSocket().serverClose(1001);
+      await drain();
+
+      // No duplicate, no unclosed orphan, no termination.
+      assertEquals(FakeWebSocket.instances.length, 2);
+      assertEquals(original.readyState, 3);
+      assertFalse(ws.terminationSignal.aborted);
+
+      lastSocket().serverOpen();
+      assertEquals(ws.readyState, ReconnectingWebSocket.OPEN);
+      ws.close();
+    });
   });
 
   describe("permanent termination", () => {
@@ -468,6 +631,145 @@ describe("ReconnectingWebSocket", () => {
 
       ws.reconnect();
       assertEquals(FakeWebSocket.instances.length, 1);
+    });
+
+    test("called from a close listener does not create duplicate sockets", async () => {
+      const ws = createSocket();
+      lastSocket().serverOpen();
+
+      // A manual reconnect during the auto-reconnect dispatch: the retry the close
+      // handler is about to schedule must be superseded, not doubled.
+      ws.addEventListener("close", () => ws.reconnect(), { once: true });
+
+      lastSocket().serverClose(1001);
+      await drain(); // the manual _connect() and any stale retry timer both run
+
+      assertEquals(FakeWebSocket.instances.length, 2);
+      ws.close();
+    });
+
+    test("close() inside its close dispatch still closes the abandoned socket", async () => {
+      const ws = createSocket();
+      lastSocket().serverOpen();
+      const original = lastSocket();
+
+      // Terminating during the synthetic close must not strand the socket reconnect() dropped.
+      ws.addEventListener("close", () => ws.close(), { once: true });
+
+      ws.reconnect(4001, "refresh");
+
+      assert(ws.terminationSignal.aborted);
+      assertEquals(original.readyState, 3); // CLOSED
+      assertEquals(original.closeCalls, [{ code: 4001, reason: "refresh" }]);
+
+      await drain();
+      assertEquals(FakeWebSocket.instances.length, 1); // terminated: no new connection
+    });
+
+    test("a close listener that calls reconnect() during the synthetic close does not duplicate the connection", async () => {
+      const ws = createSocket();
+      lastSocket().serverOpen();
+
+      // The listener's reconnect supersedes the outer reconnect's own _connect().
+      ws.addEventListener("close", () => ws.reconnect(), { once: true });
+
+      ws.reconnect();
+      await drain();
+
+      // Closed original plus exactly one CONNECTING attempt, not two.
+      assertEquals(FakeWebSocket.instances.length, 2);
+      assertEquals(FakeWebSocket.instances[0].readyState, 3);
+      assertEquals(lastSocket().readyState, 0);
+      ws.close();
+    });
+  });
+
+  describe("dispatcher integration", () => {
+    /** Wraps `ws` in the real dispatcher stack; returns the dispatcher. */
+    function dispatcherOn(ws: ReconnectingWebSocket): WebSocketDispatcher {
+      return new WebSocketDispatcher(ws, new HyperliquidEventTarget(ws), 10_000);
+    }
+
+    test("a shouldReconnect hook that calls reconnect() rejects in-flight requests before the replacement opens", async () => {
+      const ws = createSocket("ws://localhost/ws", {
+        shouldReconnect: () => {
+          ws.reconnect();
+          return true;
+        },
+      });
+      const dispatcher = dispatcherOn(ws);
+      lastSocket().serverOpen();
+      const original = lastSocket();
+
+      // An in-flight exchange post: a signed frame, sent and never answered.
+      const postPromise = dispatcher.request("post", { type: "action", payload: { signed: "0xdeadbeef" } });
+      assertEquals(original.sent.length, 1);
+
+      let closes = 0;
+      ws.addEventListener("close", () => closes++);
+
+      const rejection = assertRejects(() => postPromise, WebSocketRequestError, "WebSocket connection closed");
+      original.serverClose(1001);
+      await drain();
+
+      // The old connection's close was dispatched exactly once, so the dispatcher
+      // rejected the pending post instead of leaving it for the replacement.
+      assertEquals(closes, 1);
+      await rejection;
+      assertEquals(FakeWebSocket.instances.length, 2);
+
+      // The replacement opens to an empty queue: the signed frame is NOT replayed.
+      lastSocket().serverOpen();
+      assertEquals(lastSocket().sent.length, 0);
+      ws.close();
+    });
+
+    test("a reconnectionDelay hook that calls reconnect() rejects in-flight requests before the replacement opens", async () => {
+      const ws = createSocket("ws://localhost/ws", {
+        reconnectionDelay: () => {
+          ws.reconnect();
+          return 0;
+        },
+      });
+      const dispatcher = dispatcherOn(ws);
+      lastSocket().serverOpen();
+      const original = lastSocket();
+
+      const postPromise = dispatcher.request("post", { type: "action", payload: { signed: "0xdeadbeef" } });
+      assertEquals(original.sent.length, 1);
+
+      let closes = 0;
+      ws.addEventListener("close", () => closes++);
+
+      const rejection = assertRejects(() => postPromise, WebSocketRequestError, "WebSocket connection closed");
+      original.serverClose(1001);
+      await drain();
+
+      assertEquals(closes, 1);
+      await rejection;
+      assertEquals(FakeWebSocket.instances.length, 2);
+
+      lastSocket().serverOpen();
+      assertEquals(lastSocket().sent.length, 0);
+      ws.close();
+    });
+
+    test("a normal server close rejects an in-flight request exactly once", async () => {
+      const ws = createSocket();
+      const dispatcher = dispatcherOn(ws);
+      lastSocket().serverOpen();
+
+      const postPromise = dispatcher.request("post", { foo: "bar" });
+
+      let closes = 0;
+      ws.addEventListener("close", () => closes++);
+
+      lastSocket().serverClose(1001);
+      await assertRejects(() => postPromise, WebSocketRequestError, "WebSocket connection closed");
+      await drain();
+
+      assertEquals(closes, 1); // no real/synthetic double dispatch
+      ws.close();
     });
   });
 });

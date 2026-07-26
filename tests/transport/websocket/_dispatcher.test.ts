@@ -68,8 +68,9 @@ describe("WebSocketDispatcher", () => {
         const promise = requester.request("post", { test: "action" });
         const sent = getLastSent(socket);
 
-        socket.mockMessage(RESPONSES.action(sent.id as number, { action: "DoAction" }));
-        assertEquals(await promise, { action: "DoAction" });
+        const payload = { status: "ok", response: { type: "order", data: { statuses: ["filled"] } } };
+        socket.mockMessage(RESPONSES.action(sent.id as number, payload));
+        assertEquals(await promise, payload);
       });
 
       test("rejects on error response", async () => {
@@ -121,6 +122,109 @@ describe("WebSocketDispatcher", () => {
 
         socket.mockMessage(RESPONSES.errorChannel(`too many pending post requests id=${sent.id}`));
         await assertRejects(() => promise, WebSocketRequestError, "too many pending post requests");
+      });
+
+      test("ignores a response with an unknown id", async () => {
+        const { socket, requester } = createRequester();
+
+        const promise = requester.request("post", { foo: "bar" });
+        const sent = getLastSent(socket);
+
+        // Not ours: neither settles the pending request nor disturbs its later match.
+        socket.mockMessage(RESPONSES.info(999_999, "stray"));
+        socket.mockMessage(RESPONSES.info(sent.id as number, "mine"));
+        assertEquals(await promise, "mine");
+      });
+
+      test("rejects a response without a `response` field instead of hanging", async () => {
+        const { socket, requester } = createRequester();
+
+        const promise = requester.request("post", { test: true });
+        const sent = getLastSent(socket);
+
+        // Previously `detail.response.type` threw out of the guarded listener and the
+        // request hung until the timeout.
+        socket.mockMessage({ channel: "post", data: { id: sent.id } });
+        await assertRejects(() => promise, WebSocketRequestError, "Malformed post response");
+      });
+
+      test("an info response without data rejects instead of resolving undefined (upstream nktkas#50)", async () => {
+        const { socket, requester } = createRequester();
+
+        const promise = requester.request("post", { test: true });
+        const sent = getLastSent(socket);
+
+        // The upstream bug class: the request resolved `undefined`, surfacing as a
+        // confusing TypeError deep in the exchange client instead of a rejection.
+        socket.mockMessage({
+          channel: "post",
+          data: { id: sent.id, response: { type: "info", payload: { type: "allMids" } } },
+        });
+        await assertRejects(() => promise, WebSocketRequestError, "Malformed post response");
+      });
+
+      test("rejects an action response without a payload instead of resolving undefined", async () => {
+        const { socket, requester } = createRequester();
+
+        const promise = requester.request("post", { test: true });
+        const sent = getLastSent(socket);
+
+        socket.mockMessage({ channel: "post", data: { id: sent.id, response: { type: "action" } } });
+        await assertRejects(() => promise, WebSocketRequestError, "Malformed post response");
+      });
+
+      test("rejects an action payload whose nested response is missing", async () => {
+        const { socket, requester } = createRequester();
+
+        const promise = requester.request("post", { test: true });
+        const sent = getLastSent(socket);
+
+        // The payload exists but carries no usable inner {status, response}: resolving it
+        // would hand `undefined` to the exchange client one level deeper (nktkas#50 class).
+        socket.mockMessage({
+          channel: "post",
+          data: { id: sent.id, response: { type: "action", payload: { status: "ok" } } },
+        });
+        await assertRejects(() => promise, WebSocketRequestError, "Malformed post response");
+      });
+
+      test("rejects an action payload whose nested response has the wrong shape", async () => {
+        const { socket, requester } = createRequester();
+
+        const promise = requester.request("post", { test: true });
+        const sent = getLastSent(socket);
+
+        socket.mockMessage({
+          channel: "post",
+          data: { id: sent.id, response: { type: "action", payload: { status: "ok", response: 42 } } },
+        });
+        await assertRejects(() => promise, WebSocketRequestError, "Malformed post response");
+      });
+
+      test("rejects a response with an unknown type", async () => {
+        const { socket, requester } = createRequester();
+
+        const promise = requester.request("post", { test: true });
+        const sent = getLastSent(socket);
+
+        socket.mockMessage({
+          channel: "post",
+          data: { id: sent.id, response: { type: "mystery", payload: { data: "x" } } },
+        });
+        await assertRejects(() => promise, WebSocketRequestError, 'Unknown post response type "mystery"');
+      });
+
+      test("rejects an error response whose payload is not a string", async () => {
+        const { socket, requester } = createRequester();
+
+        const promise = requester.request("post", { test: true });
+        const sent = getLastSent(socket);
+
+        socket.mockMessage({
+          channel: "post",
+          data: { id: sent.id, response: { type: "error", payload: { code: 1 } } },
+        });
+        await assertRejects(() => promise, WebSocketRequestError, "Malformed post response");
       });
     });
 
