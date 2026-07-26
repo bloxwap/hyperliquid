@@ -3,7 +3,7 @@
  * @module
  */
 
-import type { GenericSchema } from "@valibot/valibot";
+import type { GenericSchema } from "valibot";
 import { HyperliquidError } from "../_base.ts";
 
 /** Thrown when canonicalization fails due to schema/data key mismatch. */
@@ -25,8 +25,8 @@ export class CanonicalizeError extends HyperliquidError {
  *
  * @example
  * ```ts
- * import { canonicalize } from "@nktkas/hyperliquid/signing";
- * import { CancelRequest } from "@nktkas/hyperliquid/api/exchange";
+ * import { canonicalize } from "@bloxwap/hyperliquid/signing";
+ * import { CancelRequest } from "@bloxwap/hyperliquid/api/exchange";
  *
  * const action = canonicalize(CancelRequest.entries.action, {
  *   type: "cancel",
@@ -110,27 +110,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function reorderObject(entries: Record<string, SchemaNode>, value: Record<string, unknown>): Record<string, unknown> {
   // --- Reject extra keys not in schema ---------------------
-  for (const key of Object.keys(value)) {
+  for (const key in value) {
     if (!(key in entries)) {
       throw new CanonicalizeError(`Key "${key}" exists in data but not in schema`);
     }
   }
 
-  // --- Reject missing required keys ------------------------
-  for (const key of Object.keys(entries)) {
-    if (!(key in value)) {
-      const t = entries[key].type;
-      if (t !== "optional" && t !== "nullable" && t !== "nullish") {
-        throw new CanonicalizeError(`Required key "${key}" exists in schema but not in data`);
-      }
-    }
-  }
-
-  // --- Build reordered result ------------------------------
+  // --- Build reordered result (missing required keys are detected in the same pass)
   const result: Record<string, unknown> = {};
   for (const key of Object.keys(entries)) {
     if (key in value) {
       result[key] = walk(entries[key], value[key]);
+    } else {
+      const t = entries[key].type;
+      if (t !== "optional" && t !== "nullable" && t !== "nullish") {
+        throw new CanonicalizeError(`Required key "${key}" exists in schema but not in data`);
+      }
     }
   }
   return result;
@@ -143,39 +138,47 @@ function matchVariantOption(
 ): SchemaNode | undefined {
   const discriminatorValue = value[discriminatorKey];
 
-  const matching: SchemaNode[] = [];
+  // Track matches without an array: the common cases are 0 or 1 literal matches
+  let firstMatch: SchemaNode | undefined;
+  let extraMatches: SchemaNode[] | undefined;
   for (const option of options) {
     if (option.type === "object" && option.entries && discriminatorKey in option.entries) {
       const keySchema = option.entries[discriminatorKey];
       if (keySchema.type === "literal" && keySchema.literal === discriminatorValue) {
-        matching.push(option);
+        if (firstMatch === undefined) {
+          firstMatch = option;
+        } else {
+          (extraMatches ??= [firstMatch]).push(option);
+        }
       }
     }
   }
 
-  if (matching.length === 1) return matching[0];
-  if (matching.length > 1) return matchByStructure(matching, value);
-
-  return undefined;
+  if (extraMatches === undefined) return firstMatch; // 0 or 1 match
+  return matchByStructure(extraMatches, value); // ambiguous: disambiguate structurally
 }
 
-function matchByStructure(
-  options: readonly SchemaNode[],
-  value: Record<string, unknown>,
-): SchemaNode | undefined {
-  const dataKeys = new Set(Object.keys(value));
-
+function matchByStructure(options: readonly SchemaNode[], value: Record<string, unknown>): SchemaNode | undefined {
   for (const option of options) {
-    if (option.type === "object" && option.entries) {
-      if ([...dataKeys].every((k) => k in option.entries!)) {
-        const allRequired = Object.keys(option.entries).every((k) => {
-          if (dataKeys.has(k)) return true;
-          const t = option.entries![k].type;
-          return t === "optional" || t === "nullable" || t === "nullish";
-        });
-        if (allRequired) return option;
+    if (option.type !== "object" || !option.entries) continue;
+
+    // Every data key must be declared in the option
+    let allKnown = true;
+    for (const key in value) {
+      if (!(key in option.entries)) {
+        allKnown = false;
+        break;
       }
     }
+    if (!allKnown) continue;
+
+    // Every required option key must be present in data
+    const allRequired = Object.keys(option.entries).every((k) => {
+      if (k in value) return true;
+      const t = option.entries![k].type;
+      return t === "optional" || t === "nullable" || t === "nullish";
+    });
+    if (allRequired) return option;
   }
 
   return undefined;

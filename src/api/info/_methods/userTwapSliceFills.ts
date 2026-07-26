@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -55,8 +55,8 @@ export type UserTwapSliceFillsParameters = Omit<v.InferInput<typeof UserTwapSlic
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userTwapSliceFills } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userTwapSliceFills } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

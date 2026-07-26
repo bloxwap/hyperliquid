@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -264,20 +264,20 @@ export type PerpDeployRequest = v.InferOutput<typeof PerpDeployRequest>;
  */
 export type PerpDeployResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -298,9 +298,12 @@ const PerpDeployActionSchema = /* @__PURE__ */ (() => {
 })();
 
 /** Action parameters for the {@linkcode perpDeploy} function. */
-export type PerpDeployParameters = v.InferInput<typeof PerpDeployActionSchema> extends infer T
-  ? T extends unknown ? { [K in Exclude<keyof T, "type">]: T[K] } : never
-  : never;
+export type PerpDeployParameters =
+  v.InferInput<typeof PerpDeployActionSchema> extends infer T
+    ? T extends unknown
+      ? { [K in Exclude<keyof T, "type">]: T[K] }
+      : never
+    : never;
 
 /** Request options for the {@linkcode perpDeploy} function. */
 export type PerpDeployOptions = ExtractRequestOptions<v.InferInput<typeof PerpDeployRequest>>;
@@ -324,11 +327,11 @@ export type PerpDeploySuccessResponse = ExcludeErrorResponse<PerpDeployResponse>
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { perpDeploy } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { perpDeploy } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await perpDeploy({ transport, wallet }, {
@@ -354,9 +357,6 @@ export function perpDeploy(
   params: PerpDeployParameters,
   opts?: PerpDeployOptions,
 ): Promise<PerpDeploySuccessResponse> {
-  const action = canonicalize(
-    PerpDeployActionSchema,
-    parse(PerpDeployActionSchema, { type: "perpDeploy", ...params }),
-  );
+  const action = canonicalize(PerpDeployActionSchema, parse(PerpDeployActionSchema, { type: "perpDeploy", ...params }));
   return executeL1Action(config, action, opts);
 }

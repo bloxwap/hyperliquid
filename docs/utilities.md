@@ -1,6 +1,6 @@
 # Utilities
 
-Helpers from `@nktkas/hyperliquid/utils` that keep order payloads compatible with Hyperliquid's tick, lot, and asset
+Helpers from `@bloxwap/hyperliquid/utils` that keep order payloads compatible with Hyperliquid's tick, lot, and asset
 rules.
 
 ## Three invariants you have to honor (by Hyperliquid)
@@ -23,9 +23,8 @@ Hyperliquid's tick and lot size rules constrain every order price to three condi
 
 Use `formatPrice` — it applies both rules with exact decimal arithmetic, so arbitrary-precision inputs survive intact:
 
-<!-- deno-fmt-ignore -->
 ```ts
-import { formatPrice } from "@nktkas/hyperliquid/utils";
+import { formatPrice } from "@bloxwap/hyperliquid/utils";
 
 formatPrice("97123.456789", 0);            // "97123"       — perp, szDecimals=0
 formatPrice("1.23456789", 5);              // "1.2"         — perp, szDecimals=5
@@ -58,9 +57,8 @@ rounds instead of truncating, ignores the significant-figures ceiling and has is
 The lot-size rule is the simpler of the two: an order's size may not carry more decimal places than the asset's
 `szDecimals`. Use `formatSize` to truncate the string to fit:
 
-<!-- deno-fmt-ignore -->
 ```ts
-import { formatSize } from "@nktkas/hyperliquid/utils";
+import { formatSize } from "@bloxwap/hyperliquid/utils";
 
 formatSize("1.23456789", 5);  // "1.23456"
 formatSize("0.123456789", 2); // "0.12"
@@ -98,8 +96,8 @@ fetches the metadata once and exposes the lookups as plain methods.
 resolves into a ready-to-use instance:
 
 ```ts
-import { HttpTransport } from "@nktkas/hyperliquid";
-import { SymbolConverter } from "@nktkas/hyperliquid/utils";
+import { HttpTransport } from "@bloxwap/hyperliquid";
+import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
 
 const transport = new HttpTransport();
 const converter = await SymbolConverter.create({ transport });
@@ -113,7 +111,6 @@ for the common case.
 
 `getAssetId` takes the symbol in whichever format its market uses:
 
-<!-- deno-fmt-ignore -->
 ```ts
 converter.getAssetId("BTC");       // 0       — perpetual
 converter.getAssetId("HYPE/USDC"); // 10107   — spot market
@@ -137,7 +134,7 @@ The accepted formats follow the asset-ID ranges one-for-one:
 `getSzDecimals` returns the same precision that `formatPrice` and `formatSize` need.
 
 ```ts
-import { formatPrice, formatSize } from "@nktkas/hyperliquid/utils";
+import { formatPrice, formatSize } from "@bloxwap/hyperliquid/utils";
 
 const szDecimals = converter.getSzDecimals("BTC")!; // 5
 
@@ -164,7 +161,6 @@ converter.getSpotPairId("PURR/USDC"); // "PURR/USDC"  — legacy pair
 Round-trip back to the symbol with `getSymbolBySpotPairId`, useful when you receive a subscription event and want a
 human-readable label:
 
-<!-- deno-fmt-ignore -->
 ```ts
 converter.getSymbolBySpotPairId("@107");      // "HYPE/USDC"
 converter.getSymbolBySpotPairId("PURR/USDC"); // "PURR/USDC"
@@ -215,7 +211,6 @@ const converter = await SymbolConverter.create({
 
 Builder DEX assets use the `"DEX:ASSET"` naming convention:
 
-<!-- deno-fmt-ignore -->
 ```ts
 converter.getAssetId("test:ABC");    // 110000
 converter.getSzDecimals("test:ABC"); // 0
@@ -233,10 +228,9 @@ actually trade there — the default `SymbolConverter.create()` is one round-tri
 
 All three invariants in one flow — resolve the asset ID, read `szDecimals`, format price and size, submit the order:
 
-<!-- deno-fmt-ignore -->
 ```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
-import { formatPrice, formatSize, SymbolConverter } from "@nktkas/hyperliquid/utils";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
+import { formatPrice, formatSize, SymbolConverter } from "@bloxwap/hyperliquid/utils";
 import { privateKeyToAccount } from "viem/accounts";
 
 const wallet = privateKeyToAccount("0x...");

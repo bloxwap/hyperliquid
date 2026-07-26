@@ -1,7 +1,7 @@
-import { ApiRequestError } from "@nktkas/hyperliquid";
-import { type UsdClassTransferParameters, UsdClassTransferRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
-import { assertRejects } from "jsr:@std/assert@1";
+import { ApiRequestError } from "@bloxwap/hyperliquid";
+import { type UsdClassTransferParameters, UsdClassTransferRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
+import { assertRejects } from "@jsr/std__assert";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -44,6 +44,9 @@ runTest({
     const data = [perpToSpot, spotToPerp];
 
     schemaCoverage(paramsSchema, [...data.map((d) => d.params), subAccountParams]);
-    schemaCoverage(responseSchema, data.map((d) => d.result));
+    schemaCoverage(
+      responseSchema,
+      data.map((d) => d.result),
+    );
   },
 });

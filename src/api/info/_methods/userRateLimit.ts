@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -61,8 +61,8 @@ export type UserRateLimitParameters = Omit<v.InferInput<typeof UserRateLimitRequ
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userRateLimit } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userRateLimit } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

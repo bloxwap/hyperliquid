@@ -1,29 +1,35 @@
-// deno-lint-ignore-file no-import-prefix
-
 /**
  * Tests for HttpTransport against a mocked global fetch: URL routing,
  * error wrapping, fetch options merging, and abort/timeout handling.
  * @module
  */
 
+import { describe, test } from "bun:test";
 import { getEventListeners } from "node:events";
-import { assert, assertEquals, assertIsError, assertRejects } from "jsr:@std/assert@1";
-import { HttpRequestError, HttpTransport } from "@nktkas/hyperliquid";
+import { assert, assertEquals, assertIsError, assertRejects } from "@jsr/std__assert";
+import { HttpRequestError, HttpTransport } from "@bloxwap/hyperliquid";
 
 // =============================================================================
 // Helpers
 // =============================================================================
 
+/** Arguments the runtime's `fetch` is called with (Bun widens the init type with its own options). */
+type FetchArgs = Parameters<typeof globalThis.fetch>;
+
 /** One-time mock for global fetch. */
-function mockFetch(handler: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>): void {
+function mockFetch(handler: (input: FetchArgs[0], init?: FetchArgs[1]) => Response | Promise<Response>): void {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (...args) => {
-    try {
-      return await handler(...args);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  };
+  // `Object.assign` carries Bun's extra `fetch.preconnect` over, so the global keeps its declared shape.
+  globalThis.fetch = Object.assign(
+    async (...args: FetchArgs): Promise<Response> => {
+      try {
+        return await handler(...args);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+    { preconnect: originalFetch.preconnect },
+  );
 }
 
 /** Returns a successful JSON response. */
@@ -57,13 +63,13 @@ const URL_EXPECTATIONS = {
 // Tests
 // =============================================================================
 
-Deno.test("HttpTransport", async (t) => {
-  await t.step("URL routing", async (t) => {
-    await t.step("mainnet (default)", async (t) => {
+describe("HttpTransport", () => {
+  describe("URL routing", () => {
+    describe("mainnet (default)", () => {
       const transport = new HttpTransport();
 
       for (const endpoint of ENDPOINTS) {
-        await t.step(`${endpoint}`, async () => {
+        test(`${endpoint}`, async () => {
           mockFetch((req) => {
             assertEquals(new Request(req).url, URL_EXPECTATIONS.mainnet[endpoint]);
             return jsonResponse();
@@ -73,11 +79,11 @@ Deno.test("HttpTransport", async (t) => {
       }
     });
 
-    await t.step("testnet (isTestnet: true)", async (t) => {
+    describe("testnet (isTestnet: true)", () => {
       const transport = new HttpTransport({ isTestnet: true });
 
       for (const endpoint of ENDPOINTS) {
-        await t.step(`${endpoint}`, async () => {
+        test(`${endpoint}`, async () => {
           mockFetch((req) => {
             assertEquals(new Request(req).url, URL_EXPECTATIONS.testnet[endpoint]);
             return jsonResponse();
@@ -87,7 +93,7 @@ Deno.test("HttpTransport", async (t) => {
       }
     });
 
-    await t.step("custom URLs", async () => {
+    test("custom URLs", async () => {
       const transport = new HttpTransport({
         apiUrl: "https://custom-api.example.com",
         rpcUrl: "https://custom-rpc.example.com",
@@ -106,7 +112,7 @@ Deno.test("HttpTransport", async (t) => {
       await transport.request("explorer", {});
     });
 
-    await t.step("custom URL with path and query keeps both", async () => {
+    test("custom URL with path and query keeps both", async () => {
       const transport = new HttpTransport({ apiUrl: "https://proxy.example.com/hl?key=secret" });
 
       mockFetch((req) => {
@@ -117,8 +123,8 @@ Deno.test("HttpTransport", async (t) => {
     });
   });
 
-  await t.step("request()", async (t) => {
-    await t.step("success response", async () => {
+  describe("request()", () => {
+    test("success response", async () => {
       mockFetch((_req, init) => {
         assertEquals(init?.method, "POST");
         assertEquals(new Headers(init?.headers).get("Content-Type"), "application/json");
@@ -130,22 +136,22 @@ Deno.test("HttpTransport", async (t) => {
       assertEquals(result, { data: "test" });
     });
 
-    await t.step("error responses", async (t) => {
-      await t.step("non-200 status throws HttpRequestError", async () => {
+    describe("error responses", () => {
+      test("non-200 status throws HttpRequestError", async () => {
         mockFetch(() => new Response("", { status: 500 }));
 
         const transport = new HttpTransport();
         await assertRejects(() => transport.request("info", {}), HttpRequestError);
       });
 
-      await t.step("invalid Content-Type throws HttpRequestError", async () => {
+      test("invalid Content-Type throws HttpRequestError", async () => {
         mockFetch(() => new Response("", { status: 200, headers: { "Content-Type": "text/html" } }));
 
         const transport = new HttpTransport();
         await assertRejects(() => transport.request("info", {}), HttpRequestError);
       });
 
-      await t.step("invalid JSON in 2xx response throws HttpRequestError with readable response", async () => {
+      test("invalid JSON in 2xx response throws HttpRequestError with readable response", async () => {
         mockFetch(() => new Response("not json", { status: 200, headers: { "Content-Type": "application/json" } }));
 
         const transport = new HttpTransport();
@@ -154,7 +160,7 @@ Deno.test("HttpTransport", async (t) => {
         assertEquals(await error.response.text(), "not json");
       });
 
-      await t.step("error message truncates large response bodies", async () => {
+      test("error message truncates large response bodies", async () => {
         mockFetch(() => new Response("x".repeat(5000), { status: 500 }));
 
         const transport = new HttpTransport();
@@ -164,7 +170,7 @@ Deno.test("HttpTransport", async (t) => {
         assertEquals(await error.response?.text(), "x".repeat(5000)); // full body stays readable
       });
 
-      await t.step("error carries the original request payload", async () => {
+      test("error carries the original request payload", async () => {
         mockFetch(() => new Response("", { status: 500 }));
 
         const transport = new HttpTransport();
@@ -172,7 +178,7 @@ Deno.test("HttpTransport", async (t) => {
         assertEquals(error.request, { type: "test" });
       });
 
-      await t.step("response body is readable on error", async () => {
+      test("response body is readable on error", async () => {
         mockFetch(() => new Response("error body", { status: 500 }));
 
         const transport = new HttpTransport();
@@ -182,7 +188,7 @@ Deno.test("HttpTransport", async (t) => {
         assertEquals(await error.response.text(), "error body");
       });
 
-      await t.step("unknown error wraps in HttpRequestError", async () => {
+      test("unknown error wraps in HttpRequestError", async () => {
         mockFetch(() => {
           throw new Error("network error");
         });
@@ -194,8 +200,8 @@ Deno.test("HttpTransport", async (t) => {
     });
   });
 
-  await t.step("fetchOptions", async (t) => {
-    await t.step("headers as object", async () => {
+  describe("fetchOptions", () => {
+    test("headers as object", async () => {
       mockFetch((_req, init) => {
         const headers = new Headers(init?.headers);
         assertEquals(headers.get("Content-Type"), "application/json");
@@ -209,7 +215,7 @@ Deno.test("HttpTransport", async (t) => {
       await transport.request("info", {});
     });
 
-    await t.step("headers as Headers instance", async () => {
+    test("headers as Headers instance", async () => {
       mockFetch((_req, init) => {
         const headers = new Headers(init?.headers);
         assertEquals(headers.get("Content-Type"), "application/json");
@@ -223,25 +229,31 @@ Deno.test("HttpTransport", async (t) => {
       await transport.request("info", {});
     });
 
-    await t.step("headers as array joins duplicate keys", async () => {
+    test("headers as array joins duplicate keys", async () => {
       mockFetch((_req, init) => {
         assertEquals(new Headers(init?.headers).get("X-Multi"), "a, b");
         return jsonResponse();
       });
 
       const transport = new HttpTransport({
-        fetchOptions: { headers: [["X-Multi", "a"], ["X-Multi", "b"]] },
+        fetchOptions: {
+          headers: [
+            ["X-Multi", "a"],
+            ["X-Multi", "b"],
+          ],
+        },
       });
       await transport.request("info", {});
     });
   });
 
-  await t.step("AbortSignal", async (t) => {
-    await t.step("internal timeout triggers TimeoutError", async () => {
-      mockFetch((_req, init) =>
-        new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
-        })
+  describe("AbortSignal", () => {
+    test("internal timeout triggers TimeoutError", async () => {
+      mockFetch(
+        (_req, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+          }),
       );
 
       const transport = new HttpTransport({ timeout: 1 });
@@ -251,7 +263,7 @@ Deno.test("HttpTransport", async (t) => {
       assertEquals(error.cause.name, "TimeoutError");
     });
 
-    await t.step("user signal is respected", async () => {
+    test("user signal is respected", async () => {
       class CustomAbortError extends Error {}
 
       const transport = new HttpTransport();
@@ -261,11 +273,12 @@ Deno.test("HttpTransport", async (t) => {
       assertIsError(error.cause, CustomAbortError);
     });
 
-    await t.step("in-flight abort rejects with 'Request aborted'", async () => {
-      mockFetch((_req, init) =>
-        new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
-        })
+    test("in-flight abort rejects with 'Request aborted'", async () => {
+      mockFetch(
+        (_req, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+          }),
       );
 
       const controller = new AbortController();
@@ -278,11 +291,12 @@ Deno.test("HttpTransport", async (t) => {
       assertEquals(error.cause.name, "AbortError");
     });
 
-    await t.step("timeout: 0 aborts immediately with TimeoutError", async () => {
-      mockFetch((_req, init) =>
-        new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
-        })
+    test("timeout: 0 aborts immediately with TimeoutError", async () => {
+      mockFetch(
+        (_req, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+          }),
       );
 
       const transport = new HttpTransport({ timeout: 0 });
@@ -291,7 +305,7 @@ Deno.test("HttpTransport", async (t) => {
       assertEquals(error.cause.name, "TimeoutError");
     });
 
-    await t.step("timeout: null disables internal timeout", async () => {
+    test("timeout: null disables internal timeout", async () => {
       mockFetch(async () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
         return jsonResponse();
@@ -301,11 +315,12 @@ Deno.test("HttpTransport", async (t) => {
       await transport.request("info", {});
     });
 
-    await t.step("the timeout message reports the value the timer was armed with", async () => {
-      mockFetch((_req, init) =>
-        new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
-        })
+    test("the timeout message reports the value the timer was armed with", async () => {
+      mockFetch(
+        (_req, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+          }),
       );
 
       const transport = new HttpTransport({ timeout: 30 });
@@ -315,11 +330,12 @@ Deno.test("HttpTransport", async (t) => {
       await assertRejects(() => promise, HttpRequestError, "Request timed out after 30 ms");
     });
 
-    await t.step("fetchOptions.signal is respected", async () => {
-      mockFetch((_req, init) =>
-        new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
-        })
+    test("fetchOptions.signal is respected", async () => {
+      mockFetch(
+        (_req, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+          }),
       );
 
       const controller = new AbortController();
@@ -331,7 +347,7 @@ Deno.test("HttpTransport", async (t) => {
       assertIsError(error.cause, DOMException);
     });
 
-    await t.step("does not leak abort listeners on a long-lived user signal", async () => {
+    test("does not leak abort listeners on a long-lived user signal", async () => {
       const controller = new AbortController();
       const transport = new HttpTransport();
       for (let i = 0; i < 100; i++) {

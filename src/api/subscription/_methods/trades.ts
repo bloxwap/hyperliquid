@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -51,8 +51,8 @@ export type TradesParameters = Omit<v.InferInput<typeof TradesRequest>, "type">;
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { trades } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { trades } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -72,9 +72,14 @@ export function trades(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(TradesRequest, { type: "trades", ...params });
-  return config.transport.subscribe<TradesEvent>(payload.type, payload, (e) => {
-    if (e.detail[0]?.coin === payload.coin) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<TradesEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail[0]?.coin === payload.coin) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

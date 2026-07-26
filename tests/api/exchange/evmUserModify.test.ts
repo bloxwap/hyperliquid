@@ -1,5 +1,5 @@
-import { type EvmUserModifyParameters, EvmUserModifyRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type EvmUserModifyParameters, EvmUserModifyRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,10 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(v.object(EvmUserModifyRequest.en
 runTest({
   name: "evmUserModify",
   codeTestFn: async (_t, exchClient) => {
-    const params: EvmUserModifyParameters[] = [
-      { usingBigBlocks: true },
-      { usingBigBlocks: false },
-    ];
+    const params: EvmUserModifyParameters[] = [{ usingBigBlocks: true }, { usingBigBlocks: false }];
 
     const data = await Promise.all(params.map((p) => exchClient.evmUserModify(p)));
 

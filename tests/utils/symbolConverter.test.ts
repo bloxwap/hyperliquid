@@ -1,11 +1,15 @@
-// deno-lint-ignore-file no-import-prefix
+/**
+ * Tests for SymbolConverter: symbol/asset-id mapping for perps, spot pairs,
+ * builder dexs and outcome markets.
+ * @module
+ */
 
-import { assertEquals } from "jsr:@std/assert@1";
-import { HttpTransport, type IRequestTransport } from "@nktkas/hyperliquid";
-import { SymbolConverter } from "@nktkas/hyperliquid/utils";
-import type { OutcomeMetaResponse } from "@nktkas/hyperliquid/api/info";
-
-const OFFLINE = Deno.args.includes("--offline");
+import { beforeAll, describe, test } from "bun:test";
+import { assertEquals } from "@jsr/std__assert";
+import { HttpTransport, type IRequestTransport } from "@bloxwap/hyperliquid";
+import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
+import type { OutcomeMetaResponse } from "@bloxwap/hyperliquid/api/info";
+import { OFFLINE } from "../_offline.ts";
 
 // ============================================================
 // Helpers
@@ -152,69 +156,76 @@ const OUTCOME_META: OutcomeMetaResponse = {
 // Tests
 // ============================================================
 
-Deno.test("SymbolConverter", { ignore: OFFLINE }, async (t) => {
+describe.skipIf(OFFLINE)("SymbolConverter", () => {
   const transport = new HttpTransport();
-  const converter = await SymbolConverter.create({ transport });
 
-  await t.step("getAssetId()", async (t) => {
-    await t.step("perpetuals", () => {
+  // Loaded once for the whole group: `describe` bodies cannot await, and the mainnet metadata
+  // fetch is the same for every case below.
+  let converter: SymbolConverter;
+
+  beforeAll(async () => {
+    converter = await SymbolConverter.create({ transport });
+  });
+
+  describe("getAssetId()", () => {
+    test("perpetuals", () => {
       assertEquals(converter.getAssetId("BTC"), PERP_EXPECTATIONS.BTC.assetId);
       assertEquals(converter.getAssetId("ETH"), PERP_EXPECTATIONS.ETH.assetId);
     });
 
-    await t.step("spot", () => {
+    test("spot", () => {
       assertEquals(converter.getAssetId("PURR/USDC"), SPOT_EXPECTATIONS["PURR/USDC"].assetId);
       assertEquals(converter.getAssetId("HYPE/USDC"), SPOT_EXPECTATIONS["HYPE/USDC"].assetId);
     });
 
-    await t.step("non-existent returns undefined", () => {
+    test("non-existent returns undefined", () => {
       assertEquals(converter.getAssetId("NONEXISTENT"), undefined);
       assertEquals(converter.getAssetId("NONE/EXISTENT"), undefined);
     });
   });
 
-  await t.step("getSzDecimals()", async (t) => {
-    await t.step("perpetuals", () => {
+  describe("getSzDecimals()", () => {
+    test("perpetuals", () => {
       assertEquals(converter.getSzDecimals("BTC"), PERP_EXPECTATIONS.BTC.szDecimals);
       assertEquals(converter.getSzDecimals("ETH"), PERP_EXPECTATIONS.ETH.szDecimals);
     });
 
-    await t.step("spot", () => {
+    test("spot", () => {
       assertEquals(converter.getSzDecimals("PURR/USDC"), SPOT_EXPECTATIONS["PURR/USDC"].szDecimals);
       assertEquals(converter.getSzDecimals("HYPE/USDC"), SPOT_EXPECTATIONS["HYPE/USDC"].szDecimals);
     });
 
-    await t.step("non-existent returns undefined", () => {
+    test("non-existent returns undefined", () => {
       assertEquals(converter.getSzDecimals("NONEXISTENT"), undefined);
       assertEquals(converter.getSzDecimals("NONE/EXISTENT"), undefined);
     });
   });
 
-  await t.step("getSpotPairId()", async (t) => {
-    await t.step("existing pair", () => {
+  describe("getSpotPairId()", () => {
+    test("existing pair", () => {
       assertEquals(converter.getSpotPairId("PURR/USDC"), SPOT_EXPECTATIONS["PURR/USDC"].pairId);
       assertEquals(converter.getSpotPairId("HYPE/USDC"), SPOT_EXPECTATIONS["HYPE/USDC"].pairId);
     });
 
-    await t.step("non-existent returns undefined", () => {
+    test("non-existent returns undefined", () => {
       assertEquals(converter.getSpotPairId("NONE/EXISTENT"), undefined);
       assertEquals(converter.getSpotPairId("BTC"), undefined);
     });
   });
 
-  await t.step("getSymbolBySpotPairId()", async (t) => {
-    await t.step("existing pair id", () => {
+  describe("getSymbolBySpotPairId()", () => {
+    test("existing pair id", () => {
       assertEquals(converter.getSymbolBySpotPairId(SPOT_EXPECTATIONS["PURR/USDC"].pairId), "PURR/USDC");
       assertEquals(converter.getSymbolBySpotPairId(SPOT_EXPECTATIONS["HYPE/USDC"].pairId), "HYPE/USDC");
     });
 
-    await t.step("non-existent returns undefined", () => {
+    test("non-existent returns undefined", () => {
       assertEquals(converter.getSymbolBySpotPairId("@999999"), undefined);
       assertEquals(converter.getSymbolBySpotPairId("NONEXISTENT"), undefined);
     });
   });
 
-  await t.step("reload()", async () => {
+  test("reload()", async () => {
     const freshConverter = new SymbolConverter({ transport });
 
     // Before reload, mappings are empty
@@ -227,31 +238,31 @@ Deno.test("SymbolConverter", { ignore: OFFLINE }, async (t) => {
     assertEquals(after, PERP_EXPECTATIONS.BTC.assetId);
   });
 
-  await t.step("create({ dexs })", async (t) => {
+  describe("create({ dexs })", () => {
     const testnetTransport = new HttpTransport({ isTestnet: true });
 
-    await t.step("dexs: false excludes all dexs", async () => {
+    test("dexs: false excludes all dexs", async () => {
       const conv = await SymbolConverter.create({ transport: testnetTransport, dexs: false });
 
       assertEquals(conv.getAssetId("test:ABC"), undefined);
       assertEquals(conv.getAssetId("unit:ES"), undefined);
     });
 
-    await t.step("dexs: [] excludes all dexs", async () => {
+    test("dexs: [] excludes all dexs", async () => {
       const conv = await SymbolConverter.create({ transport: testnetTransport, dexs: [] });
 
       assertEquals(conv.getAssetId("test:ABC"), undefined);
       assertEquals(conv.getAssetId("unit:ES"), undefined);
     });
 
-    await t.step("dexs: [specific] includes only specified", async () => {
+    test("dexs: [specific] includes only specified", async () => {
       const conv = await SymbolConverter.create({ transport: testnetTransport, dexs: ["test"] });
 
       assertEquals(conv.getAssetId("test:ABC"), DEX_EXPECTATIONS["test:ABC"].assetId);
       assertEquals(conv.getAssetId("unit:ES"), undefined);
     });
 
-    await t.step("dexs: true includes all dexs", async () => {
+    test("dexs: true includes all dexs", async () => {
       const conv = await SymbolConverter.create({ transport: testnetTransport, dexs: true });
 
       assertEquals(conv.getAssetId("test:ABC"), DEX_EXPECTATIONS["test:ABC"].assetId);
@@ -260,39 +271,44 @@ Deno.test("SymbolConverter", { ignore: OFFLINE }, async (t) => {
   });
 });
 
-Deno.test("SymbolConverter outcome markets", async (t) => {
-  const converter = await SymbolConverter.create({ transport: createOutcomeTransport(OUTCOME_META) });
+describe("SymbolConverter outcome markets", () => {
+  // Fed by a stub transport, so this group stays runnable offline.
+  let converter: SymbolConverter;
 
-  await t.step("getAssetId()", async (t) => {
-    await t.step("recurring binary", () => {
+  beforeAll(async () => {
+    converter = await SymbolConverter.create({ transport: createOutcomeTransport(OUTCOME_META) });
+  });
+
+  describe("getAssetId()", () => {
+    test("recurring binary", () => {
       assertEquals(converter.getAssetId("btc-above-61720-yes-jun-08-0600"), 100002200);
       assertEquals(converter.getAssetId("btc-above-61720-no-jun-08-0600"), 100002201);
     });
 
-    await t.step("recurring bucket", () => {
+    test("recurring bucket", () => {
       assertEquals(converter.getAssetId("btc-price-range-jun-08-0600-below-60485-yes"), 100002220);
       assertEquals(converter.getAssetId("btc-price-range-jun-08-0600-60485-to-62954-yes"), 100002230);
       assertEquals(converter.getAssetId("btc-price-range-jun-08-0600-above-62954-yes"), 100002240);
     });
 
-    await t.step("sports", () => {
+    test("sports", () => {
       assertEquals(converter.getAssetId("nba-finals-game-3-san-antonio"), 100001700);
       assertEquals(converter.getAssetId("nba-finals-game-3-new-york"), 100001701);
     });
 
-    await t.step("categorical", () => {
+    test("categorical", () => {
       assertEquals(converter.getAssetId("2026-world-cup-champion-argentina-yes"), 100001730);
       assertEquals(converter.getAssetId("2026-world-cup-champion-argentina-no"), 100001731);
       assertEquals(converter.getAssetId("may-cpi-year-over-year-below-43-yes"), 100001010);
     });
 
-    await t.step("fallback outcomes are skipped", () => {
+    test("fallback outcomes are skipped", () => {
       assertEquals(converter.getAssetId("fallback"), undefined);
       assertEquals(converter.getAssetId("recurring-fallback"), undefined);
     });
   });
 
-  await t.step("getSzDecimals()", () => {
+  test("getSzDecimals()", () => {
     assertEquals(converter.getSzDecimals("nba-finals-game-3-san-antonio"), 5);
     assertEquals(converter.getSzDecimals("2026-world-cup-champion-argentina-yes"), 5);
   });

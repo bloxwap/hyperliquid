@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -95,20 +95,20 @@ export type UserOutcomeRequest = v.InferOutput<typeof UserOutcomeRequest>;
  */
 export type UserOutcomeResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -129,9 +129,12 @@ const UserOutcomeActionSchema = /* @__PURE__ */ (() => {
 })();
 
 /** Action parameters for the {@linkcode userOutcome} function. */
-export type UserOutcomeParameters = v.InferInput<typeof UserOutcomeActionSchema> extends infer T
-  ? T extends unknown ? { [K in Exclude<keyof T, "type">]: T[K] } : never
-  : never;
+export type UserOutcomeParameters =
+  v.InferInput<typeof UserOutcomeActionSchema> extends infer T
+    ? T extends unknown
+      ? { [K in Exclude<keyof T, "type">]: T[K] }
+      : never
+    : never;
 
 /** Request options for the {@linkcode userOutcome} function. */
 export type UserOutcomeOptions = ExtractRequestOptions<v.InferInput<typeof UserOutcomeRequest>>;
@@ -155,11 +158,11 @@ export type UserOutcomeSuccessResponse = ExcludeErrorResponse<UserOutcomeRespons
  *
  * @example Split outcome
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userOutcome } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userOutcome } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await userOutcome({ transport, wallet }, {

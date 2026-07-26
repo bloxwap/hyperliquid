@@ -1,5 +1,5 @@
-import { type AgentSendAssetParameters, AgentSendAssetRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type AgentSendAssetParameters, AgentSendAssetRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";

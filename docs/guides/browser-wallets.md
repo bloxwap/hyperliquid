@@ -4,14 +4,10 @@ The SDK works with browser extension wallets like MetaMask.
 
 ## Setup
 
-{% tabs %}
-
-{% tab title="viem" %}
-
-Connect via a [JSON-RPC Account](https://viem.sh/docs/clients/wallet#json-rpc-accounts):
+Connect via a viem [JSON-RPC Account](https://viem.sh/docs/clients/wallet#json-rpc-accounts):
 
 ```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { createWalletClient, custom } from "viem";
 import { arbitrum } from "viem/chains";
 
@@ -21,27 +17,6 @@ const wallet = createWalletClient({ account, chain: arbitrum, transport: custom(
 const transport = new HttpTransport();
 const client = new ExchangeClient({ transport, wallet });
 ```
-
-{% endtab %}
-
-{% tab title="ethers" %}
-
-Connect via a [BrowserProvider](https://docs.ethers.org/v6/api/providers/#BrowserProvider):
-
-```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
-import { BrowserProvider } from "ethers";
-
-const provider = new BrowserProvider(window.ethereum!);
-const wallet = await provider.getSigner();
-
-const transport = new HttpTransport();
-const client = new ExchangeClient({ transport, wallet });
-```
-
-{% endtab %}
-
-{% endtabs %}
 
 ## Signature prompts
 
@@ -54,7 +29,7 @@ To avoid repeated popups and hide unreadable L1 signatures from users, approve a
 for all subsequent trades:
 
 ```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { createWalletClient, custom } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";

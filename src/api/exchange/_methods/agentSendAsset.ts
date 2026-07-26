@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -30,10 +30,7 @@ export const AgentSendAssetRequest = /* @__PURE__ */ (() => {
       /** Amount to send (not in wei). */
       amount: UnsignedDecimal,
       /** Source sub-account address ("" for main account). */
-      fromSubAccount: v.optional(
-        v.union([v.literal(""), Address]),
-        "",
-      ),
+      fromSubAccount: v.optional(v.union([v.literal(""), Address]), ""),
       /** Nonce (timestamp in ms). Equal to the envelope nonce; injected by the SDK. */
       nonce: UnsignedInteger,
     }),
@@ -60,20 +57,20 @@ export type AgentSendAssetRequest = v.InferOutput<typeof AgentSendAssetRequest>;
  */
 export type AgentSendAssetResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -121,9 +118,9 @@ export type AgentSendAssetSuccessResponse = ExcludeErrorResponse<AgentSendAssetR
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { agentSendAsset } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { agentSendAsset } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
  * const agentWallet = privateKeyToAccount("0x..."); // approved agent's private key
  * const transport = new HttpTransport(); // or `WebSocketTransport`
@@ -151,10 +148,10 @@ export function agentSendAsset(
   return executeL1Action(
     {
       ...config,
-      nonceManager: async (addr) =>
+      nonceManager: async (addr: string): Promise<number> =>
         // Patch action.nonce in-place so the body matches the envelope nonce (server requires equality).
-        action.nonce =
-          await (config.nonceManager?.(addr) ?? globalNonceManager.getNonce(`${addr}:${config.transport.isTestnet}`)),
+        (action.nonce = await (config.nonceManager?.(addr) ??
+          globalNonceManager.getNonce(`${addr}:${config.transport.isTestnet}`))),
     },
     action,
     opts,

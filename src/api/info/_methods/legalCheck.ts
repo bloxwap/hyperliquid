@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -60,8 +60,8 @@ export type LegalCheckParameters = Omit<v.InferInput<typeof LegalCheckRequest>, 
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { legalCheck } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { legalCheck } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

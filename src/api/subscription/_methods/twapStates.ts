@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -69,8 +69,8 @@ export type TwapStatesParameters = Omit<v.InferInput<typeof TwapStatesRequest>, 
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { twapStates } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { twapStates } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -94,9 +94,14 @@ export function twapStates(
     ...params,
     dex: params.dex ?? "", // Same value as in response
   });
-  return config.transport.subscribe<TwapStatesEvent>(payload.type, payload, (e) => {
-    if (e.detail.user === payload.user && e.detail.dex === payload.dex) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<TwapStatesEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.user === payload.user && e.detail.dex === payload.dex) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

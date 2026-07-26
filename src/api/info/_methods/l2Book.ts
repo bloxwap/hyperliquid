@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -83,8 +83,8 @@ export type L2BookParameters = Omit<v.InferInput<typeof L2BookRequest>, "type">;
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { l2Book } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { l2Book } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -96,11 +96,7 @@ export type L2BookParameters = Omit<v.InferInput<typeof L2BookRequest>, "type">;
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#l2-book-snapshot
  */
-export function l2Book(
-  config: InfoConfig,
-  params: L2BookParameters,
-  signal?: AbortSignal,
-): Promise<L2BookResponse> {
+export function l2Book(config: InfoConfig, params: L2BookParameters, signal?: AbortSignal): Promise<L2BookResponse> {
   const request = parse(L2BookRequest, {
     type: "l2Book",
     ...params,

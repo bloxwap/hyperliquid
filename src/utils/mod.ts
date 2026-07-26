@@ -7,8 +7,8 @@
  *
  * @example Formatting values for an order
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { formatPrice, formatSize, SymbolConverter } from "@nktkas/hyperliquid/utils";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { formatPrice, formatSize, SymbolConverter } from "@bloxwap/hyperliquid/utils";
  *
  * const transport = new HttpTransport();
  * const converter = await SymbolConverter.create({ transport });

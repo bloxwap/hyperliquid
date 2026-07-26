@@ -1,5 +1,5 @@
-import { type UsdSendParameters, UsdSendRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type UsdSendParameters, UsdSendRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -14,9 +14,7 @@ const paramsSchema = valibotToJsonSchema(
 runTest({
   name: "usdSend",
   codeTestFn: async (_t, exchClient) => {
-    const params: UsdSendParameters[] = [
-      { destination: "0x0000000000000000000000000000000000000001", amount: "1" },
-    ];
+    const params: UsdSendParameters[] = [{ destination: "0x0000000000000000000000000000000000000001", amount: "1" }];
 
     const data = await Promise.all(params.map((p) => exchClient.usdSend(p)));
 

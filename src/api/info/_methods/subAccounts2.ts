@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -26,29 +26,31 @@ export type SubAccounts2Request = v.InferOutput<typeof SubAccounts2Request>;
  * Array of user sub-account or null if the user does not have any sub-accounts.
  * @see null
  */
-export type SubAccounts2Response = {
-  /** Sub-account name. */
-  name: string;
-  /**
-   * Sub-account address.
-   * @pattern ^0x[a-fA-F0-9]{40}$
-   */
-  subAccountUser: `0x${string}`;
-  /**
-   * Master account address.
-   * @pattern ^0x[a-fA-F0-9]{40}$
-   */
-  master: `0x${string}`;
-  /** DEX to clearinghouse state mapping. Always includes the main DEX (empty dex name). */
-  dexToClearinghouseState: [
-    /** DEX name (empty string for main dex). */
-    dex: string,
-    /** Clearinghouse state. */
-    state: ClearinghouseStateResponse,
-  ][];
-  /** Spot tokens clearinghouse state. */
-  spotState: SpotClearinghouseStateResponse;
-}[] | null;
+export type SubAccounts2Response =
+  | {
+      /** Sub-account name. */
+      name: string;
+      /**
+       * Sub-account address.
+       * @pattern ^0x[a-fA-F0-9]{40}$
+       */
+      subAccountUser: `0x${string}`;
+      /**
+       * Master account address.
+       * @pattern ^0x[a-fA-F0-9]{40}$
+       */
+      master: `0x${string}`;
+      /** DEX to clearinghouse state mapping. Always includes the main DEX (empty dex name). */
+      dexToClearinghouseState: [
+        /** DEX name (empty string for main dex). */
+        dex: string,
+        /** Clearinghouse state. */
+        state: ClearinghouseStateResponse,
+      ][];
+      /** Spot tokens clearinghouse state. */
+      spotState: SpotClearinghouseStateResponse;
+    }[]
+  | null;
 
 // ============================================================
 // Execution Logic
@@ -73,8 +75,8 @@ export type SubAccounts2Parameters = Omit<v.InferInput<typeof SubAccounts2Reques
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { subAccounts2 } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { subAccounts2 } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

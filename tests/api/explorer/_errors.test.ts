@@ -1,8 +1,12 @@
-// deno-lint-ignore-file no-import-prefix
+/**
+ * Tests for how the explorer request helpers surface server-side error envelopes.
+ * @module
+ */
 
-import { assertEquals, assertRejects } from "jsr:@std/assert@1";
-import type { IRequestTransport } from "@nktkas/hyperliquid";
-import { ApiRequestError, blockDetails } from "@nktkas/hyperliquid/api/explorer";
+import { describe, test } from "bun:test";
+import { assertEquals, assertRejects } from "@jsr/std__assert";
+import type { IRequestTransport } from "@bloxwap/hyperliquid";
+import { ApiRequestError, blockDetails } from "@bloxwap/hyperliquid/api/explorer";
 
 /** Creates a transport stub that resolves every request with the given response. */
 function transportWith(response: unknown): IRequestTransport<"explorer"> {
@@ -14,8 +18,8 @@ function transportWith(response: unknown): IRequestTransport<"explorer"> {
   };
 }
 
-Deno.test("explorer error responses", async (t) => {
-  await t.step("error response throws ApiRequestError with the server message", async () => {
+describe("explorer error responses", () => {
+  test("error response throws ApiRequestError with the server message", async () => {
     const transport = transportWith({ type: "error", message: "invalid block height: 0" });
 
     const error = await assertRejects(
@@ -26,17 +30,13 @@ Deno.test("explorer error responses", async (t) => {
     assertEquals(error.response, { type: "error", message: "invalid block height: 0" });
   });
 
-  await t.step("error response without message throws with a generic message", async () => {
+  test("error response without message throws with a generic message", async () => {
     const transport = transportWith({ type: "error" });
 
-    await assertRejects(
-      () => blockDetails({ transport }, { height: 1 }),
-      ApiRequestError,
-      "An unknown error occurred",
-    );
+    await assertRejects(() => blockDetails({ transport }, { height: 1 }), ApiRequestError, "An unknown error occurred");
   });
 
-  await t.step("successful response is returned as data", async () => {
+  test("successful response is returned as data", async () => {
     const data = { type: "blockDetails", blockDetails: { height: 1 } };
     const transport = transportWith(data);
 

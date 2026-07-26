@@ -1,5 +1,5 @@
-import { type AllMidsEvent, type AllMidsParameters, AllMidsRequest } from "@nktkas/hyperliquid/api/subscription";
-import * as v from "@valibot/valibot";
+import { type AllMidsEvent, type AllMidsParameters, AllMidsRequest } from "@bloxwap/hyperliquid/api/subscription";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -13,10 +13,7 @@ runTest({
   name: "allMids",
   mode: "api",
   fn: async (_t, client) => {
-    const params: AllMidsParameters[] = [
-      {},
-      { dex: "unit" },
-    ];
+    const params: AllMidsParameters[] = [{}, { dex: "unit" }];
 
     const data = await collectEventsOverTime<AllMidsEvent>(async (cb) => {
       await Promise.all(params.map((p) => client.allMids(p, cb)));

@@ -1,4 +1,4 @@
-import type { SpotAssetCtxsEvent } from "@nktkas/hyperliquid/api/subscription";
+import type { SpotAssetCtxsEvent } from "@bloxwap/hyperliquid/api/subscription";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { collectEventsOverTime, runTest } from "./_t.ts";

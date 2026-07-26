@@ -1,18 +1,21 @@
-// deno-lint-ignore-file no-import-prefix
-
 /**
  * Integration tests for WebSocketTransport against a local WebSocket server
  * speaking the happy-path Hyperliquid protocol.
  * @module
  */
 
+import { afterAll, beforeAll, describe, test } from "bun:test";
 import { getEventListeners } from "node:events";
-import { assert, assertEquals, assertLess, assertRejects } from "jsr:@std/assert@1";
-import { WebSocketRequestError, WebSocketTransport } from "@nktkas/hyperliquid";
+import type { Server, ServerWebSocket } from "bun";
+import { assert, assertEquals, assertLess, assertRejects } from "@jsr/std__assert";
+import { WebSocketRequestError, WebSocketTransport } from "@bloxwap/hyperliquid";
 
 // =============================================================================
 // Helpers
 // =============================================================================
+
+/** The test server carries no per-socket state. */
+type TestServer = Server<undefined>;
 
 /** WebSocketTransport that closes itself at the end of an `await using` block. */
 class DisposeWebSocketTransport extends WebSocketTransport {
@@ -32,18 +35,18 @@ function createTransport(url: string): DisposeWebSocketTransport {
 // =============================================================================
 
 /** Serves the happy-path Hyperliquid protocol on an ephemeral port. */
-function createTestServer(): { url: string } & AsyncDisposable {
-  const server = Deno.serve(
-    { port: 0, onListen: () => {} },
-    (request) => {
-      if (request.headers.get("upgrade") !== "websocket") {
-        return new Response(null, { status: 501 });
-      }
-
-      const { socket, response } = Deno.upgradeWebSocket(request);
-      socket.addEventListener("message", (e) => {
+function createTestServer(): TestServer {
+  return Bun.serve({
+    port: 0,
+    fetch(request, server): Response | undefined {
+      // `upgrade()` returning true means the response is owned by the WebSocket handler below.
+      if (server.upgrade(request)) return undefined;
+      return new Response(null, { status: 501 });
+    },
+    websocket: {
+      message(socket: ServerWebSocket, message: string | Buffer): void {
         const send = (payload: unknown) => socket.send(JSON.stringify(payload));
-        const data = JSON.parse(e.data);
+        const data = JSON.parse(message.toString());
 
         if (data.method === "post") {
           send({
@@ -68,43 +71,46 @@ function createTestServer(): { url: string } & AsyncDisposable {
             data: { method: "unsubscribe", subscription: data.subscription },
           });
         }
-      });
-      return response;
+      },
     },
-  );
-  return {
-    url: `ws://localhost:${server.addr.port}`,
-    async [Symbol.asyncDispose](): Promise<void> {
-      await server.shutdown();
-    },
-  };
+  });
 }
 
 // =============================================================================
 // Tests
 // =============================================================================
 
-Deno.test("WebSocketTransport", async (t) => {
-  await using server = createTestServer();
+describe("WebSocketTransport", () => {
+  let server: TestServer;
+  let url: string;
 
-  await t.step("request() sends request and receives response", async () => {
-    await using transport = createTransport(server.url);
+  beforeAll(() => {
+    server = createTestServer();
+    url = `ws://localhost:${server.port}`;
+  });
+
+  afterAll(async () => {
+    await server.stop(true);
+  });
+
+  test("request() sends request and receives response", async () => {
+    await using transport = createTransport(url);
     await transport.ready();
 
     const result = await transport.request("info", { key: "value" });
     assertEquals(result, "response:info");
   });
 
-  await t.step("request() wraps the exchange endpoint as an action envelope", async () => {
-    await using transport = createTransport(server.url);
+  test("request() wraps the exchange endpoint as an action envelope", async () => {
+    await using transport = createTransport(url);
     await transport.ready();
 
     const result = await transport.request("exchange", { key: "value" });
     assertEquals(result, "response:action");
   });
 
-  await t.step("subscription() subscribes, receives event, unsubscribes", async () => {
-    await using transport = createTransport(server.url);
+  test("subscription() subscribes, receives event, unsubscribes", async () => {
+    await using transport = createTransport(url);
     await transport.ready();
 
     const channel = "test-channel";
@@ -123,9 +129,9 @@ Deno.test("WebSocketTransport", async (t) => {
     await subscription.unsubscribe();
   });
 
-  await t.step("ready()", async (t) => {
-    await t.step("resolves immediately if already open", async () => {
-      await using transport = createTransport(server.url);
+  describe("ready()", () => {
+    test("resolves immediately if already open", async () => {
+      await using transport = createTransport(url);
       await transport.ready();
 
       const start = performance.now();
@@ -133,8 +139,8 @@ Deno.test("WebSocketTransport", async (t) => {
       assertLess(performance.now() - start, 20);
     });
 
-    await t.step("rejects if already aborted", async () => {
-      await using transport = createTransport(server.url);
+    test("rejects if already aborted", async () => {
+      await using transport = createTransport(url);
 
       const signal = AbortSignal.abort(new Error("Already aborted"));
       const error = await assertRejects(
@@ -145,23 +151,19 @@ Deno.test("WebSocketTransport", async (t) => {
       assertEquals(error.cause, signal.reason);
     });
 
-    await t.step("rejects if aborted later", async () => {
-      await using transport = createTransport(server.url);
+    test("rejects if aborted later", async () => {
+      await using transport = createTransport(url);
 
       const controller = new AbortController();
       const promise = transport.ready(controller.signal);
       controller.abort(new Error("Aborted later"));
 
-      const error = await assertRejects(
-        () => promise,
-        WebSocketRequestError,
-        "Waiting for the connection was aborted",
-      );
+      const error = await assertRejects(() => promise, WebSocketRequestError, "Waiting for the connection was aborted");
       assertEquals(error.cause, controller.signal.reason);
     });
 
-    await t.step("rejects if connection is closed", async () => {
-      await using transport = createTransport(server.url);
+    test("rejects if connection is closed", async () => {
+      await using transport = createTransport(url);
       transport.close();
 
       const error = await assertRejects(
@@ -172,8 +174,8 @@ Deno.test("WebSocketTransport", async (t) => {
       assertEquals(error.cause, transport.socket.terminationSignal.reason);
     });
 
-    await t.step("detaches its listeners once settled", async () => {
-      await using transport = createTransport(server.url);
+    test("detaches its listeners once settled", async () => {
+      await using transport = createTransport(url);
 
       const terminationBaseline = getEventListeners(transport.socket.terminationSignal, "abort").length;
       const openBaseline = getEventListeners(transport.socket, "open").length;
@@ -186,9 +188,9 @@ Deno.test("WebSocketTransport", async (t) => {
     });
   });
 
-  await t.step("close()", async (t) => {
-    await t.step("is idempotent", async () => {
-      await using transport = createTransport(server.url);
+  describe("close()", () => {
+    test("is idempotent", async () => {
+      await using transport = createTransport(url);
       await transport.ready();
 
       transport.close();
@@ -196,15 +198,19 @@ Deno.test("WebSocketTransport", async (t) => {
       assert(transport.socket.terminationSignal.aborted);
     });
 
-    await t.step("terminates when called from a close listener", async () => {
-      await using transport = createTransport(server.url);
+    test("terminates when called from a close listener", async () => {
+      await using transport = createTransport(url);
       await transport.ready();
 
       const { promise: dropped, resolve } = Promise.withResolvers<void>();
-      transport.socket.addEventListener("close", () => {
-        transport.close();
-        resolve();
-      }, { once: true });
+      transport.socket.addEventListener(
+        "close",
+        () => {
+          transport.close();
+          resolve();
+        },
+        { once: true },
+      );
 
       transport.socket.send('{"method":"drop"}');
       await dropped;

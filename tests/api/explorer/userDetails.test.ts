@@ -1,5 +1,5 @@
-import { type UserDetailsParameters, UserDetailsRequest } from "@nktkas/hyperliquid/api/explorer";
-import * as v from "@valibot/valibot";
+import { type UserDetailsParameters, UserDetailsRequest } from "@bloxwap/hyperliquid/api/explorer";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -13,9 +13,7 @@ runRequestTest({
   name: "userDetails",
   isTestnet: false,
   fn: async (_t, client) => {
-    const params: UserDetailsParameters[] = [
-      { user: "0x9150749C4cec13Dc7c1555D0d664F08d4d81Be83" },
-    ];
+    const params: UserDetailsParameters[] = [{ user: "0x9150749C4cec13Dc7c1555D0d664F08d4d81Be83" }];
 
     const data = await Promise.all(params.map((p) => client.userDetails(p)));
 

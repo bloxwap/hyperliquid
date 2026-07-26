@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -51,20 +51,20 @@ export type UserSetAbstractionRequest = v.InferOutput<typeof UserSetAbstractionR
  */
 export type UserSetAbstractionResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -81,10 +81,11 @@ import {
 
 /** Schema for action fields (excludes request-level system fields). */
 const UserSetAbstractionActionSchema = /* @__PURE__ */ (() => {
-  return v.omit(
-    v.object(UserSetAbstractionRequest.entries.action.entries),
-    ["signatureChainId", "hyperliquidChain", "nonce"],
-  );
+  return v.omit(v.object(UserSetAbstractionRequest.entries.action.entries), [
+    "signatureChainId",
+    "hyperliquidChain",
+    "nonce",
+  ]);
 })();
 
 /** Action parameters for the {@linkcode userSetAbstraction} function. */
@@ -132,11 +133,11 @@ function toMultiSigPayloadAction(action: Readonly<Record<string, unknown>>): Rec
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userSetAbstraction } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userSetAbstraction } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await userSetAbstraction({ transport, wallet }, {
@@ -156,10 +157,5 @@ export function userSetAbstraction(
     UserSetAbstractionActionSchema,
     parse(UserSetAbstractionActionSchema, { type: "userSetAbstraction", ...params }),
   );
-  return executeUserSignedAction(
-    config,
-    action,
-    UserSetAbstractionTypes,
-    { ...opts, toMultiSigPayloadAction },
-  );
+  return executeUserSignedAction(config, action, UserSetAbstractionTypes, { ...opts, toMultiSigPayloadAction });
 }

@@ -1,11 +1,21 @@
-import { HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+/**
+ * Shared helpers for live Info API tests.
+ * @module
+ */
+
+import { test } from "bun:test";
+import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
+import { OFFLINE } from "../../_offline.ts";
+import { createTestContext, type TestContext } from "../../_testContext.ts";
 
 // ============================================================
 // Arguments
 // ============================================================
 
 const WAIT = 5000;
-const OFFLINE = Deno.args.includes("--offline");
+
+/** Generous per-test budget: every case pays the rate-limit delay plus one or more testnet round trips. */
+const TIMEOUT = 120_000;
 
 // ============================================================
 // Preparation
@@ -24,18 +34,22 @@ const client = new InfoClient({ transport });
  * @param options Test options including name and test function
  * @param options.name Name of the test
  * @param options.ignore Whether to skip the test
- * @param options.codeTestFn Async function containing the test code, receives Deno.TestContext and shared InfoClient
+ * @param options.codeTestFn Async function containing the test code, receives a test context and shared InfoClient
  */
 export function runTest(options: {
   name: string;
   ignore?: boolean;
-  codeTestFn: (t: Deno.TestContext, client_: typeof client) => Promise<void>;
+  codeTestFn: (t: TestContext, client_: typeof client) => Promise<void>;
 }): void {
   const { name, ignore, codeTestFn } = options;
 
-  Deno.test(name, { ignore: OFFLINE || ignore }, async (t) => {
-    await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits
+  test.skipIf(OFFLINE || ignore === true)(
+    name,
+    async () => {
+      await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits
 
-    await codeTestFn(t, client);
-  });
+      await codeTestFn(createTestContext([name]), client);
+    },
+    TIMEOUT,
+  );
 }

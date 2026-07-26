@@ -1,5 +1,5 @@
-import { type BorrowLendReserveStateParameters, BorrowLendReserveStateRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type BorrowLendReserveStateParameters, BorrowLendReserveStateRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,9 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(BorrowLendReserveStateRequest, [
 runTest({
   name: "borrowLendReserveState",
   codeTestFn: async (_t, client) => {
-    const params: BorrowLendReserveStateParameters[] = [
-      { token: 0 },
-    ];
+    const params: BorrowLendReserveStateParameters[] = [{ token: 0 }];
 
     const data = await Promise.all(params.map((p) => client.borrowLendReserveState(p)));
 

@@ -1,5 +1,5 @@
-import { type UserVaultEquitiesParameters, UserVaultEquitiesRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type UserVaultEquitiesParameters, UserVaultEquitiesRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,9 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(UserVaultEquitiesRequest, ["type
 runTest({
   name: "userVaultEquities",
   codeTestFn: async (_t, client) => {
-    const params: UserVaultEquitiesParameters[] = [
-      { user: "0xe019d6167E7e324aEd003d94098496b6d986aB05" },
-    ];
+    const params: UserVaultEquitiesParameters[] = [{ user: "0xe019d6167E7e324aEd003d94098496b6d986aB05" }];
 
     const data = await Promise.all(params.map((p) => client.userVaultEquities(p)));
 

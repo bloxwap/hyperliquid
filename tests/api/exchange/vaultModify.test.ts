@@ -1,7 +1,7 @@
-import { ApiRequestError } from "@nktkas/hyperliquid";
-import { type VaultModifyParameters, VaultModifyRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
-import { assertRejects } from "jsr:@std/assert@1";
+import { ApiRequestError } from "@bloxwap/hyperliquid";
+import { type VaultModifyParameters, VaultModifyRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
+import { assertRejects } from "@jsr/std__assert";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
 import { runTest } from "./_t.ts";
@@ -36,15 +36,17 @@ runTest({
       },
     ];
 
-    await Promise.all(params.map((p) =>
-      assertRejects(
-        async () => {
-          await exchClient.vaultModify(p);
-        },
-        ApiRequestError,
-        "Only leader can perform this vault action",
-      )
-    ));
+    await Promise.all(
+      params.map((p) =>
+        assertRejects(
+          async () => {
+            await exchClient.vaultModify(p);
+          },
+          ApiRequestError,
+          "Only leader can perform this vault action",
+        ),
+      ),
+    );
 
     schemaCoverage(paramsSchema, params);
   },

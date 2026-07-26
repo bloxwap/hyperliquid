@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -97,11 +97,11 @@ export type CancelByCloidSuccessResponse = ExcludeErrorResponse<CancelByCloidRes
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { cancelByCloid } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { cancelByCloid } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await cancelByCloid({ transport, wallet }, {

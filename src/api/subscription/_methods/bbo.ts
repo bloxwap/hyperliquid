@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -87,8 +87,8 @@ export type BboParameters = Omit<v.InferInput<typeof BboRequest>, "type">;
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { bbo } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { bbo } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -108,9 +108,14 @@ export function bbo(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(BboRequest, { type: "bbo", ...params });
-  return config.transport.subscribe<BboEvent>(payload.type, payload, (e) => {
-    if (e.detail.coin === payload.coin) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<BboEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.coin === payload.coin) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

@@ -1,0 +1,87 @@
+{
+  "name": "@bloxwap/hyperliquid",
+  "version": "0.33.2",
+  "description": "Hyperliquid API SDK for all major JS runtimes, written in TypeScript.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": [
+    "api",
+    "library",
+    "sdk",
+    "javascript",
+    "typescript",
+    "cryptocurrency",
+    "trading",
+    "blockchain",
+    "exchange",
+    "web3",
+    "dex",
+    "hyperliquid"
+  ],
+  "homepage": "https://github.com/bloxwap/hyperliquid",
+  "bugs": {
+    "url": "https://github.com/bloxwap/hyperliquid/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bloxwap/hyperliquid.git"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "//exports": "Points at TypeScript sources: Bun consumes them directly, and self-referential imports (`@bloxwap/hyperliquid/...`) in tests, docs and JSDoc examples resolve without a build. The publishable package is emitted by `bun run build`, which writes dist/ with its own package.json whose exports point at .js/.d.ts.",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./signing": "./src/signing/mod.ts",
+    "./utils": "./src/utils/mod.ts",
+    "./api/exchange": "./src/api/exchange/mod.ts",
+    "./api/explorer": "./src/api/explorer/mod.ts",
+    "./api/info": "./src/api/info/mod.ts",
+    "./api/subscription": "./src/api/subscription/mod.ts"
+  },
+  "scripts": {
+    "//check": "Everything CI gates on.",
+    "check": "bun run check:format && bun run check:lint && bun run check:types && bun run check:ts7 && bun run check:jsdoc && bun run check:export",
+    "check:format": "biome format .",
+    "check:lint": "biome lint .",
+    "//check:types": "TypeScript 5 pass over sources and tests (the version the JS-API tooling pins).",
+    "check:types": "tsc --project tsconfig.json",
+    "//check:ts7": "Forward-compatibility gate: TypeScript 7 (native) over src/. See .dev/ts7/tsconfig.json.",
+    "check:ts7": "cd .dev/ts7 && bun install --frozen-lockfile && bunx tsc --project tsconfig.json",
+    "//check:jsdoc": "Verifies JSDoc on API methods stays in sync with the schemas.",
+    "check:jsdoc": "bun run .dev/jsdoc_sync_check.ts",
+    "//check:export": "Verifies every module is reachable from the package exports.",
+    "check:export": "bun run .dev/export_sync_check.ts",
+    "format": "biome format --write .",
+    "lint": "biome lint --write .",
+    "test": "bun test tests/",
+    "//test:offline": "Skips every test that needs live Hyperliquid endpoints. HL_OFFLINE is used rather than a `--offline` argv flag, which `bun test` does not forward to test files reliably.",
+    "test:offline": "HL_OFFLINE=1 bun test tests/",
+    "//perf": "Runs the performance suite and writes a machine-readable report.",
+    "perf": "bun run tests/perf/run.ts",
+    "//perf:gate": "Zero-regression gate: fails if any scenario got materially slower than the baseline.",
+    "perf:gate": "bun run .dev/perf/gate.ts",
+    "build": "bun run .dev/build/build.ts"
+  },
+  "dependencies": {
+    "@jsr/std__async": "^1.5.0",
+    "@jsr/std__msgpack": "^1.0.3",
+    "@nktkas/rews": "^4.1.0",
+    "@noble/hashes": "^2.2.0",
+    "decimal.js": "^10.6.0",
+    "valibot": "^1.4.2"
+  },
+  "//devDependencies": "`typescript` is pinned to 5.x on purpose: TypeScript 7's npm package ships only a native binary with no JS compiler API, and `ts-json-schema-generator` needs that API. TypeScript 7 is installed separately under .dev/ts7 and used solely as a type-check gate.",
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.5",
+    "@jsr/std__assert": "^1.0.19",
+    "@jsr/std__testing": "^1.0.19",
+    "@types/bun": "latest",
+    "@valibot/to-json-schema": "^1.7.1",
+    "ajv": "^8",
+    "ts-json-schema-generator": "^2",
+    "typescript": "^5.9.0",
+    "viem": "^2"
+  }
+}

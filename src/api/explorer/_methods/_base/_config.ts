@@ -7,9 +7,8 @@ import type { IRequestTransport, ISubscriptionTransport } from "../../../../tran
 
 /** Configuration for Explorer API requests. */
 export interface ExplorerConfig<
-  T extends IRequestTransport<"explorer"> | ISubscriptionTransport =
-    & IRequestTransport<"explorer">
-    & ISubscriptionTransport,
+  T extends IRequestTransport<"explorer"> | ISubscriptionTransport = IRequestTransport<"explorer"> &
+    ISubscriptionTransport,
 > {
   /** The transport used to connect to the Hyperliquid API. */
   transport: T;

@@ -225,7 +225,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    *
@@ -248,7 +248,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -258,10 +258,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-users-active-asset-data
    */
-  activeAssetData(
-    params: ActiveAssetDataParameters,
-    signal?: AbortSignal,
-  ): Promise<ActiveAssetDataResponse> {
+  activeAssetData(params: ActiveAssetDataParameters, signal?: AbortSignal): Promise<ActiveAssetDataResponse> {
     return activeAssetData(this.config_, params, signal);
   }
 
@@ -276,7 +273,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -286,9 +283,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-all-borrow-lend-reserve-states
    */
-  allBorrowLendReserveStates(
-    signal?: AbortSignal,
-  ): Promise<AllBorrowLendReserveStatesResponse> {
+  allBorrowLendReserveStates(signal?: AbortSignal): Promise<AllBorrowLendReserveStatesResponse> {
     return allBorrowLendReserveStates(this.config_, signal);
   }
 
@@ -304,7 +299,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -314,17 +309,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-mids-for-all-coins
    */
-  allMids(
-    params?: AllMidsParameters,
-    signal?: AbortSignal,
-  ): Promise<AllMidsResponse>;
-  allMids(
-    signal?: AbortSignal,
-  ): Promise<AllMidsResponse>;
-  allMids(
-    paramsOrSignal?: AllMidsParameters | AbortSignal,
-    maybeSignal?: AbortSignal,
-  ): Promise<AllMidsResponse> {
+  allMids(params?: AllMidsParameters, signal?: AbortSignal): Promise<AllMidsResponse>;
+  allMids(signal?: AbortSignal): Promise<AllMidsResponse>;
+  allMids(paramsOrSignal?: AllMidsParameters | AbortSignal, maybeSignal?: AbortSignal): Promise<AllMidsResponse> {
     const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
     const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
     return allMids(this.config_, params, signal);
@@ -341,7 +328,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -351,9 +338,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetuals-metadata-universe-and-margin-tables
    */
-  allPerpMetas(
-    signal?: AbortSignal,
-  ): Promise<AllPerpMetasResponse> {
+  allPerpMetas(signal?: AbortSignal): Promise<AllPerpMetasResponse> {
     return allPerpMetas(this.config_, signal);
   }
 
@@ -369,7 +354,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -379,10 +364,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-approved-builders-for-user
    */
-  approvedBuilders(
-    params: ApprovedBuildersParameters,
-    signal?: AbortSignal,
-  ): Promise<ApprovedBuildersResponse> {
+  approvedBuilders(params: ApprovedBuildersParameters, signal?: AbortSignal): Promise<ApprovedBuildersResponse> {
     return approvedBuilders(this.config_, params, signal);
   }
 
@@ -398,7 +380,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -427,7 +409,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -456,7 +438,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -470,10 +452,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#candle-snapshot
    */
-  candleSnapshot(
-    params: CandleSnapshotParameters,
-    signal?: AbortSignal,
-  ): Promise<CandleSnapshotResponse> {
+  candleSnapshot(params: CandleSnapshotParameters, signal?: AbortSignal): Promise<CandleSnapshotResponse> {
     return candleSnapshot(this.config_, params, signal);
   }
 
@@ -489,7 +468,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -499,10 +478,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-users-perpetuals-account-summary
    */
-  clearinghouseState(
-    params: ClearinghouseStateParameters,
-    signal?: AbortSignal,
-  ): Promise<ClearinghouseStateResponse> {
+  clearinghouseState(params: ClearinghouseStateParameters, signal?: AbortSignal): Promise<ClearinghouseStateResponse> {
     return clearinghouseState(this.config_, params, signal);
   }
 
@@ -518,7 +494,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -528,10 +504,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-delegations
    */
-  delegations(
-    params: DelegationsParameters,
-    signal?: AbortSignal,
-  ): Promise<DelegationsResponse> {
+  delegations(params: DelegationsParameters, signal?: AbortSignal): Promise<DelegationsResponse> {
     return delegations(this.config_, params, signal);
   }
 
@@ -547,7 +520,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -557,10 +530,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-history
    */
-  delegatorHistory(
-    params: DelegatorHistoryParameters,
-    signal?: AbortSignal,
-  ): Promise<DelegatorHistoryResponse> {
+  delegatorHistory(params: DelegatorHistoryParameters, signal?: AbortSignal): Promise<DelegatorHistoryResponse> {
     return delegatorHistory(this.config_, params, signal);
   }
 
@@ -576,7 +546,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -586,10 +556,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-rewards
    */
-  delegatorRewards(
-    params: DelegatorRewardsParameters,
-    signal?: AbortSignal,
-  ): Promise<DelegatorRewardsResponse> {
+  delegatorRewards(params: DelegatorRewardsParameters, signal?: AbortSignal): Promise<DelegatorRewardsResponse> {
     return delegatorRewards(this.config_, params, signal);
   }
 
@@ -605,7 +572,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -615,10 +582,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-summary
    */
-  delegatorSummary(
-    params: DelegatorSummaryParameters,
-    signal?: AbortSignal,
-  ): Promise<DelegatorSummaryResponse> {
+  delegatorSummary(params: DelegatorSummaryParameters, signal?: AbortSignal): Promise<DelegatorSummaryResponse> {
     return delegatorSummary(this.config_, params, signal);
   }
 
@@ -633,7 +597,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -643,9 +607,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  exchangeStatus(
-    signal?: AbortSignal,
-  ): Promise<ExchangeStatusResponse> {
+  exchangeStatus(signal?: AbortSignal): Promise<ExchangeStatusResponse> {
     return exchangeStatus(this.config_, signal);
   }
 
@@ -661,7 +623,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -671,10 +633,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  extraAgents(
-    params: ExtraAgentsParameters,
-    signal?: AbortSignal,
-  ): Promise<ExtraAgentsResponse> {
+  extraAgents(params: ExtraAgentsParameters, signal?: AbortSignal): Promise<ExtraAgentsResponse> {
     return extraAgents(this.config_, params, signal);
   }
 
@@ -690,7 +649,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -700,10 +659,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-open-orders-with-additional-frontend-info
    */
-  frontendOpenOrders(
-    params: FrontendOpenOrdersParameters,
-    signal?: AbortSignal,
-  ): Promise<FrontendOpenOrdersResponse> {
+  frontendOpenOrders(params: FrontendOpenOrdersParameters, signal?: AbortSignal): Promise<FrontendOpenOrdersResponse> {
     return frontendOpenOrders(this.config_, params, signal);
   }
 
@@ -719,7 +675,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -732,10 +688,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-historical-funding-rates
    */
-  fundingHistory(
-    params: FundingHistoryParameters,
-    signal?: AbortSignal,
-  ): Promise<FundingHistoryResponse> {
+  fundingHistory(params: FundingHistoryParameters, signal?: AbortSignal): Promise<FundingHistoryResponse> {
     return fundingHistory(this.config_, params, signal);
   }
 
@@ -750,7 +703,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -760,9 +713,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/priority-fees
    */
-  gossipPriorityAuctionStatus(
-    signal?: AbortSignal,
-  ): Promise<GossipPriorityAuctionStatusResponse> {
+  gossipPriorityAuctionStatus(signal?: AbortSignal): Promise<GossipPriorityAuctionStatusResponse> {
     return gossipPriorityAuctionStatus(this.config_, signal);
   }
 
@@ -777,7 +728,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -787,9 +738,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  gossipRootIps(
-    signal?: AbortSignal,
-  ): Promise<GossipRootIpsResponse> {
+  gossipRootIps(signal?: AbortSignal): Promise<GossipRootIpsResponse> {
     return gossipRootIps(this.config_, signal);
   }
 
@@ -805,7 +754,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -815,10 +764,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-historical-orders
    */
-  historicalOrders(
-    params: HistoricalOrdersParameters,
-    signal?: AbortSignal,
-  ): Promise<HistoricalOrdersResponse> {
+  historicalOrders(params: HistoricalOrdersParameters, signal?: AbortSignal): Promise<HistoricalOrdersResponse> {
     return historicalOrders(this.config_, params, signal);
   }
 
@@ -834,7 +780,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -844,10 +790,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  isVip(
-    params: IsVipParameters,
-    signal?: AbortSignal,
-  ): Promise<IsVipResponse> {
+  isVip(params: IsVipParameters, signal?: AbortSignal): Promise<IsVipResponse> {
     return isVip(this.config_, params, signal);
   }
 
@@ -863,7 +806,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -873,10 +816,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#l2-book-snapshot
    */
-  l2Book(
-    params: L2BookParameters,
-    signal?: AbortSignal,
-  ): Promise<L2BookResponse> {
+  l2Book(params: L2BookParameters, signal?: AbortSignal): Promise<L2BookResponse> {
     return l2Book(this.config_, params, signal);
   }
 
@@ -892,7 +832,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -902,10 +842,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  leadingVaults(
-    params: LeadingVaultsParameters,
-    signal?: AbortSignal,
-  ): Promise<LeadingVaultsResponse> {
+  leadingVaults(params: LeadingVaultsParameters, signal?: AbortSignal): Promise<LeadingVaultsResponse> {
     return leadingVaults(this.config_, params, signal);
   }
 
@@ -921,7 +858,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -931,10 +868,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  legalCheck(
-    params: LegalCheckParameters,
-    signal?: AbortSignal,
-  ): Promise<LegalCheckResponse> {
+  legalCheck(params: LegalCheckParameters, signal?: AbortSignal): Promise<LegalCheckResponse> {
     return legalCheck(this.config_, params, signal);
   }
 
@@ -949,7 +883,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -959,9 +893,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  liquidatable(
-    signal?: AbortSignal,
-  ): Promise<LiquidatableResponse> {
+  liquidatable(signal?: AbortSignal): Promise<LiquidatableResponse> {
     return liquidatable(this.config_, signal);
   }
 
@@ -977,7 +909,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -987,10 +919,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  marginTable(
-    params: MarginTableParameters,
-    signal?: AbortSignal,
-  ): Promise<MarginTableResponse> {
+  marginTable(params: MarginTableParameters, signal?: AbortSignal): Promise<MarginTableResponse> {
     return marginTable(this.config_, params, signal);
   }
 
@@ -1006,7 +935,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1016,10 +945,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#check-builder-fee-approval
    */
-  maxBuilderFee(
-    params: MaxBuilderFeeParameters,
-    signal?: AbortSignal,
-  ): Promise<MaxBuilderFeeResponse> {
+  maxBuilderFee(params: MaxBuilderFeeParameters, signal?: AbortSignal): Promise<MaxBuilderFeeResponse> {
     return maxBuilderFee(this.config_, params, signal);
   }
 
@@ -1034,7 +960,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1044,9 +970,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  maxMarketOrderNtls(
-    signal?: AbortSignal,
-  ): Promise<MaxMarketOrderNtlsResponse> {
+  maxMarketOrderNtls(signal?: AbortSignal): Promise<MaxMarketOrderNtlsResponse> {
     return maxMarketOrderNtls(this.config_, signal);
   }
 
@@ -1062,7 +986,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1072,17 +996,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perpetuals-metadata-universe-and-margin-tables
    */
-  meta(
-    params?: MetaParameters,
-    signal?: AbortSignal,
-  ): Promise<MetaResponse>;
-  meta(
-    signal?: AbortSignal,
-  ): Promise<MetaResponse>;
-  meta(
-    paramsOrSignal?: MetaParameters | AbortSignal,
-    maybeSignal?: AbortSignal,
-  ): Promise<MetaResponse> {
+  meta(params?: MetaParameters, signal?: AbortSignal): Promise<MetaResponse>;
+  meta(signal?: AbortSignal): Promise<MetaResponse>;
+  meta(paramsOrSignal?: MetaParameters | AbortSignal, maybeSignal?: AbortSignal): Promise<MetaResponse> {
     const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
     const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
     return meta(this.config_, params, signal);
@@ -1100,7 +1016,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1110,13 +1026,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perpetuals-asset-contexts-includes-mark-price-current-funding-open-interest-etc
    */
-  metaAndAssetCtxs(
-    params?: MetaAndAssetCtxsParameters,
-    signal?: AbortSignal,
-  ): Promise<MetaAndAssetCtxsResponse>;
-  metaAndAssetCtxs(
-    signal?: AbortSignal,
-  ): Promise<MetaAndAssetCtxsResponse>;
+  metaAndAssetCtxs(params?: MetaAndAssetCtxsParameters, signal?: AbortSignal): Promise<MetaAndAssetCtxsResponse>;
+  metaAndAssetCtxs(signal?: AbortSignal): Promise<MetaAndAssetCtxsResponse>;
   metaAndAssetCtxs(
     paramsOrSignal?: MetaAndAssetCtxsParameters | AbortSignal,
     maybeSignal?: AbortSignal,
@@ -1138,7 +1049,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1148,10 +1059,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-open-orders
    */
-  openOrders(
-    params: OpenOrdersParameters,
-    signal?: AbortSignal,
-  ): Promise<OpenOrdersResponse> {
+  openOrders(params: OpenOrdersParameters, signal?: AbortSignal): Promise<OpenOrdersResponse> {
     return openOrders(this.config_, params, signal);
   }
 
@@ -1167,7 +1075,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1177,10 +1085,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-order-status-by-oid-or-cloid
    */
-  orderStatus(
-    params: OrderStatusParameters,
-    signal?: AbortSignal,
-  ): Promise<OrderStatusResponse> {
+  orderStatus(params: OrderStatusParameters, signal?: AbortSignal): Promise<OrderStatusResponse> {
     return orderStatus(this.config_, params, signal);
   }
 
@@ -1195,7 +1100,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1205,9 +1110,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-outcome-metadata
    */
-  outcomeMeta(
-    signal?: AbortSignal,
-  ): Promise<OutcomeMetaResponse> {
+  outcomeMeta(signal?: AbortSignal): Promise<OutcomeMetaResponse> {
     return outcomeMeta(this.config_, signal);
   }
 
@@ -1223,7 +1126,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1233,10 +1136,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perp-annotation
    */
-  perpAnnotation(
-    params: PerpAnnotationParameters,
-    signal?: AbortSignal,
-  ): Promise<PerpAnnotationResponse> {
+  perpAnnotation(params: PerpAnnotationParameters, signal?: AbortSignal): Promise<PerpAnnotationResponse> {
     return perpAnnotation(this.config_, params, signal);
   }
 
@@ -1251,7 +1151,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1261,9 +1161,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perp-categories
    */
-  perpCategories(
-    signal?: AbortSignal,
-  ): Promise<PerpCategoriesResponse> {
+  perpCategories(signal?: AbortSignal): Promise<PerpCategoriesResponse> {
     return perpCategories(this.config_, signal);
   }
 
@@ -1278,7 +1176,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1288,9 +1186,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-concise-perp-annotations
    */
-  perpConciseAnnotations(
-    signal?: AbortSignal,
-  ): Promise<PerpConciseAnnotationsResponse> {
+  perpConciseAnnotations(signal?: AbortSignal): Promise<PerpConciseAnnotationsResponse> {
     return perpConciseAnnotations(this.config_, signal);
   }
 
@@ -1305,7 +1201,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1315,9 +1211,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-information-about-the-perp-deploy-auction
    */
-  perpDeployAuctionStatus(
-    signal?: AbortSignal,
-  ): Promise<PerpDeployAuctionStatusResponse> {
+  perpDeployAuctionStatus(signal?: AbortSignal): Promise<PerpDeployAuctionStatusResponse> {
     return perpDeployAuctionStatus(this.config_, signal);
   }
 
@@ -1333,7 +1227,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1343,10 +1237,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-builder-deployed-perp-market-limits
    */
-  perpDexLimits(
-    params: PerpDexLimitsParameters,
-    signal?: AbortSignal,
-  ): Promise<PerpDexLimitsResponse> {
+  perpDexLimits(params: PerpDexLimitsParameters, signal?: AbortSignal): Promise<PerpDexLimitsResponse> {
     return perpDexLimits(this.config_, params, signal);
   }
 
@@ -1361,7 +1252,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1371,9 +1262,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetual-dexs
    */
-  perpDexs(
-    signal?: AbortSignal,
-  ): Promise<PerpDexsResponse> {
+  perpDexs(signal?: AbortSignal): Promise<PerpDexsResponse> {
     return perpDexs(this.config_, signal);
   }
 
@@ -1389,7 +1278,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1399,10 +1288,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#get-perp-market-status
    */
-  perpDexStatus(
-    params: PerpDexStatusParameters,
-    signal?: AbortSignal,
-  ): Promise<PerpDexStatusResponse> {
+  perpDexStatus(params: PerpDexStatusParameters, signal?: AbortSignal): Promise<PerpDexStatusResponse> {
     return perpDexStatus(this.config_, params, signal);
   }
 
@@ -1418,7 +1304,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1432,9 +1318,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     params?: PerpsAtOpenInterestCapParameters,
     signal?: AbortSignal,
   ): Promise<PerpsAtOpenInterestCapResponse>;
-  perpsAtOpenInterestCap(
-    signal?: AbortSignal,
-  ): Promise<PerpsAtOpenInterestCapResponse>;
+  perpsAtOpenInterestCap(signal?: AbortSignal): Promise<PerpsAtOpenInterestCapResponse>;
   perpsAtOpenInterestCap(
     paramsOrSignal?: PerpsAtOpenInterestCapParameters | AbortSignal,
     maybeSignal?: AbortSignal,
@@ -1456,7 +1340,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1466,10 +1350,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-portfolio
    */
-  portfolio(
-    params: PortfolioParameters,
-    signal?: AbortSignal,
-  ): Promise<PortfolioResponse> {
+  portfolio(params: PortfolioParameters, signal?: AbortSignal): Promise<PortfolioResponse> {
     return portfolio(this.config_, params, signal);
   }
 
@@ -1484,7 +1365,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1494,9 +1375,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-predicted-funding-rates-for-different-venues
    */
-  predictedFundings(
-    signal?: AbortSignal,
-  ): Promise<PredictedFundingsResponse> {
+  predictedFundings(signal?: AbortSignal): Promise<PredictedFundingsResponse> {
     return predictedFundings(this.config_, signal);
   }
 
@@ -1512,7 +1391,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1522,10 +1401,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  preTransferCheck(
-    params: PreTransferCheckParameters,
-    signal?: AbortSignal,
-  ): Promise<PreTransferCheckResponse> {
+  preTransferCheck(params: PreTransferCheckParameters, signal?: AbortSignal): Promise<PreTransferCheckResponse> {
     return preTransferCheck(this.config_, params, signal);
   }
 
@@ -1541,7 +1417,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1551,10 +1427,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  recentTrades(
-    params: RecentTradesParameters,
-    signal?: AbortSignal,
-  ): Promise<RecentTradesResponse> {
+  recentTrades(params: RecentTradesParameters, signal?: AbortSignal): Promise<RecentTradesResponse> {
     return recentTrades(this.config_, params, signal);
   }
 
@@ -1570,7 +1443,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1580,10 +1453,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-referral-information
    */
-  referral(
-    params: ReferralParameters,
-    signal?: AbortSignal,
-  ): Promise<ReferralResponse> {
+  referral(params: ReferralParameters, signal?: AbortSignal): Promise<ReferralResponse> {
     return referral(this.config_, params, signal);
   }
 
@@ -1599,7 +1469,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1609,10 +1479,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-a-settled-outcome
    */
-  settledOutcome(
-    params: SettledOutcomeParameters,
-    signal?: AbortSignal,
-  ): Promise<SettledOutcomeResponse> {
+  settledOutcome(params: SettledOutcomeParameters, signal?: AbortSignal): Promise<SettledOutcomeResponse> {
     return settledOutcome(this.config_, params, signal);
   }
 
@@ -1628,7 +1495,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1657,7 +1524,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1667,10 +1534,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-the-spot-deploy-auction
    */
-  spotDeployState(
-    params: SpotDeployStateParameters,
-    signal?: AbortSignal,
-  ): Promise<SpotDeployStateResponse> {
+  spotDeployState(params: SpotDeployStateParameters, signal?: AbortSignal): Promise<SpotDeployStateResponse> {
     return spotDeployState(this.config_, params, signal);
   }
 
@@ -1685,7 +1549,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1695,9 +1559,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-metadata
    */
-  spotMeta(
-    signal?: AbortSignal,
-  ): Promise<SpotMetaResponse> {
+  spotMeta(signal?: AbortSignal): Promise<SpotMetaResponse> {
     return spotMeta(this.config_, signal);
   }
 
@@ -1712,7 +1574,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1722,9 +1584,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-asset-contexts
    */
-  spotMetaAndAssetCtxs(
-    signal?: AbortSignal,
-  ): Promise<SpotMetaAndAssetCtxsResponse> {
+  spotMetaAndAssetCtxs(signal?: AbortSignal): Promise<SpotMetaAndAssetCtxsResponse> {
     return spotMetaAndAssetCtxs(this.config_, signal);
   }
 
@@ -1739,7 +1599,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1749,9 +1609,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-the-spot-pair-deploy-auction
    */
-  spotPairDeployAuctionStatus(
-    signal?: AbortSignal,
-  ): Promise<SpotPairDeployAuctionStatusResponse> {
+  spotPairDeployAuctionStatus(signal?: AbortSignal): Promise<SpotPairDeployAuctionStatusResponse> {
     return spotPairDeployAuctionStatus(this.config_, signal);
   }
 
@@ -1767,7 +1625,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1777,10 +1635,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-subaccounts
    */
-  subAccounts(
-    params: SubAccountsParameters,
-    signal?: AbortSignal,
-  ): Promise<SubAccountsResponse> {
+  subAccounts(params: SubAccountsParameters, signal?: AbortSignal): Promise<SubAccountsResponse> {
     return subAccounts(this.config_, params, signal);
   }
 
@@ -1796,7 +1651,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1806,10 +1661,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  subAccounts2(
-    params: SubAccounts2Parameters,
-    signal?: AbortSignal,
-  ): Promise<SubAccounts2Response> {
+  subAccounts2(params: SubAccounts2Parameters, signal?: AbortSignal): Promise<SubAccounts2Response> {
     return subAccounts2(this.config_, params, signal);
   }
 
@@ -1825,7 +1677,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1835,10 +1687,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-a-token
    */
-  tokenDetails(
-    params: TokenDetailsParameters,
-    signal?: AbortSignal,
-  ): Promise<TokenDetailsResponse> {
+  tokenDetails(params: TokenDetailsParameters, signal?: AbortSignal): Promise<TokenDetailsResponse> {
     return tokenDetails(this.config_, params, signal);
   }
 
@@ -1854,7 +1703,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1864,10 +1713,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  twapHistory(
-    params: TwapHistoryParameters,
-    signal?: AbortSignal,
-  ): Promise<TwapHistoryResponse> {
+  twapHistory(params: TwapHistoryParameters, signal?: AbortSignal): Promise<TwapHistoryResponse> {
     return twapHistory(this.config_, params, signal);
   }
 
@@ -1883,7 +1729,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1893,10 +1739,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-abstraction-state
    */
-  userAbstraction(
-    params: UserAbstractionParameters,
-    signal?: AbortSignal,
-  ): Promise<UserAbstractionResponse> {
+  userAbstraction(params: UserAbstractionParameters, signal?: AbortSignal): Promise<UserAbstractionResponse> {
     return userAbstraction(this.config_, params, signal);
   }
 
@@ -1912,7 +1755,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1944,7 +1787,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1954,10 +1797,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-hip-3-dex-abstraction-state
    */
-  userDexAbstraction(
-    params: UserDexAbstractionParameters,
-    signal?: AbortSignal,
-  ): Promise<UserDexAbstractionResponse> {
+  userDexAbstraction(params: UserDexAbstractionParameters, signal?: AbortSignal): Promise<UserDexAbstractionResponse> {
     return userDexAbstraction(this.config_, params, signal);
   }
 
@@ -1973,7 +1813,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -1983,10 +1823,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-fees
    */
-  userFees(
-    params: UserFeesParameters,
-    signal?: AbortSignal,
-  ): Promise<UserFeesResponse> {
+  userFees(params: UserFeesParameters, signal?: AbortSignal): Promise<UserFeesResponse> {
     return userFees(this.config_, params, signal);
   }
 
@@ -2002,7 +1839,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2012,10 +1849,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-fills
    */
-  userFills(
-    params: UserFillsParameters,
-    signal?: AbortSignal,
-  ): Promise<UserFillsResponse> {
+  userFills(params: UserFillsParameters, signal?: AbortSignal): Promise<UserFillsResponse> {
     return userFills(this.config_, params, signal);
   }
 
@@ -2031,7 +1865,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2044,10 +1878,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-fills-by-time
    */
-  userFillsByTime(
-    params: UserFillsByTimeParameters,
-    signal?: AbortSignal,
-  ): Promise<UserFillsByTimeResponse> {
+  userFillsByTime(params: UserFillsByTimeParameters, signal?: AbortSignal): Promise<UserFillsByTimeResponse> {
     return userFillsByTime(this.config_, params, signal);
   }
 
@@ -2063,7 +1894,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2073,10 +1904,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-a-users-funding-history-or-non-funding-ledger-updates
    */
-  userFunding(
-    params: UserFundingParameters,
-    signal?: AbortSignal,
-  ): Promise<UserFundingResponse> {
+  userFunding(params: UserFundingParameters, signal?: AbortSignal): Promise<UserFundingResponse> {
     return userFunding(this.config_, params, signal);
   }
 
@@ -2092,7 +1920,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2121,7 +1949,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2131,10 +1959,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-user-rate-limits
    */
-  userRateLimit(
-    params: UserRateLimitParameters,
-    signal?: AbortSignal,
-  ): Promise<UserRateLimitResponse> {
+  userRateLimit(params: UserRateLimitParameters, signal?: AbortSignal): Promise<UserRateLimitResponse> {
     return userRateLimit(this.config_, params, signal);
   }
 
@@ -2150,7 +1975,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2160,10 +1985,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-role
    */
-  userRole(
-    params: UserRoleParameters,
-    signal?: AbortSignal,
-  ): Promise<UserRoleResponse> {
+  userRole(params: UserRoleParameters, signal?: AbortSignal): Promise<UserRoleResponse> {
     return userRole(this.config_, params, signal);
   }
 
@@ -2179,7 +2001,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2208,7 +2030,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2218,10 +2040,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-twap-slice-fills
    */
-  userTwapSliceFills(
-    params: UserTwapSliceFillsParameters,
-    signal?: AbortSignal,
-  ): Promise<UserTwapSliceFillsResponse> {
+  userTwapSliceFills(params: UserTwapSliceFillsParameters, signal?: AbortSignal): Promise<UserTwapSliceFillsResponse> {
     return userTwapSliceFills(this.config_, params, signal);
   }
 
@@ -2237,7 +2056,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2269,7 +2088,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2279,10 +2098,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-vault-deposits
    */
-  userVaultEquities(
-    params: UserVaultEquitiesParameters,
-    signal?: AbortSignal,
-  ): Promise<UserVaultEquitiesResponse> {
+  userVaultEquities(params: UserVaultEquitiesParameters, signal?: AbortSignal): Promise<UserVaultEquitiesResponse> {
     return userVaultEquities(this.config_, params, signal);
   }
 
@@ -2297,7 +2113,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2307,9 +2123,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  validatorL1Votes(
-    signal?: AbortSignal,
-  ): Promise<ValidatorL1VotesResponse> {
+  validatorL1Votes(signal?: AbortSignal): Promise<ValidatorL1VotesResponse> {
     return validatorL1Votes(this.config_, signal);
   }
 
@@ -2324,7 +2138,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2334,9 +2148,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  validatorSummaries(
-    signal?: AbortSignal,
-  ): Promise<ValidatorSummariesResponse> {
+  validatorSummaries(signal?: AbortSignal): Promise<ValidatorSummariesResponse> {
     return validatorSummaries(this.config_, signal);
   }
 
@@ -2352,7 +2164,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2362,10 +2174,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-details-for-a-vault
    */
-  vaultDetails(
-    params: VaultDetailsParameters,
-    signal?: AbortSignal,
-  ): Promise<VaultDetailsResponse> {
+  vaultDetails(params: VaultDetailsParameters, signal?: AbortSignal): Promise<VaultDetailsResponse> {
     return vaultDetails(this.config_, params, signal);
   }
 
@@ -2380,7 +2189,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2390,9 +2199,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  vaultSummaries(
-    signal?: AbortSignal,
-  ): Promise<VaultSummariesResponse> {
+  vaultSummaries(signal?: AbortSignal): Promise<VaultSummariesResponse> {
     return vaultSummaries(this.config_, signal);
   }
 
@@ -2410,7 +2217,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.InfoClient({ transport });
@@ -2420,10 +2227,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see null
    */
-  webData2(
-    params: WebData2Parameters,
-    signal?: AbortSignal,
-  ): Promise<WebData2Response> {
+  webData2(params: WebData2Parameters, signal?: AbortSignal): Promise<WebData2Response> {
     return webData2(this.config_, params, signal);
   }
 }

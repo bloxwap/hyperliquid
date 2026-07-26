@@ -1,6 +1,6 @@
 # Error handling
 
-Typed exceptions thrown by `@nktkas/hyperliquid` so you can route error handling by **class**.
+Typed exceptions thrown by `@bloxwap/hyperliquid` so you can route error handling by **class**.
 
 ## Class hierarchy
 
@@ -24,7 +24,7 @@ Error
 | ----------------------- | ------------------------------------------------ | ------------------------- |
 | `ValidationError`       | Schema parsing, before any network I/O           | `message`, `cause.issues` |
 | `FormatError`           | `formatPrice` / `formatSize`, before network I/O | `message`                 |
-| `AbstractWalletError`   | Signing layer (viem / ethers / custom adapter)   | `cause`                   |
+| `AbstractWalletError`   | Signing layer (viem / custom adapter)            | `cause`                   |
 | `CanonicalizeError`     | `canonicalize()` helper during low-level signing | `message`                 |
 | `ApiRequestError`       | Hyperliquid API returned an error response       | `message`, `response`     |
 | `HttpRequestError`      | `fetch` failed or returned non-2xx / non-JSON    | `response`, `cause`       |
@@ -36,9 +36,8 @@ Thrown when a client method's valibot schema rejects your payload — so it fire
 is always a [valibot `ValiError`](https://valibot.dev/api/ValiError/), and its `issues` array gives the exact path of
 every problem.
 
-<!-- deno-fmt-ignore -->
 ```ts
-import { ValidationError } from "@nktkas/hyperliquid";
+import { ValidationError } from "@bloxwap/hyperliquid";
 
 try {
   await client.order({ orders: [/* ... */], grouping: "na" });
@@ -56,7 +55,7 @@ Thrown by the [`formatPrice` and `formatSize`](utilities.md) helpers when a valu
 Hyperliquid price or size — the input is not a finite number, or truncation collapses it to `0`.
 
 ```ts
-import { FormatError, formatPrice } from "@nktkas/hyperliquid/utils";
+import { FormatError, formatPrice } from "@bloxwap/hyperliquid/utils";
 
 try {
   formatPrice("not a number", 0);
@@ -72,9 +71,8 @@ try {
 Thrown when Hyperliquid's API processed the request and returned an error response. The raw payload is attached as
 `response`, and `message` is its error text.
 
-<!-- deno-fmt-ignore -->
 ```ts
-import { ApiRequestError } from "@nktkas/hyperliquid";
+import { ApiRequestError } from "@bloxwap/hyperliquid";
 
 try {
   await client.order({ orders: [/* ... */], grouping: "na" });
@@ -89,11 +87,10 @@ try {
 ## `AbstractWalletError`
 
 Thrown from the signing layer when a wallet operation fails: signing EIP-712 typed data, reading the wallet address, or
-reading the chain id. The underlying wallet's own error (from viem, ethers, or a custom adapter) is attached as `cause`.
+reading the chain id. The underlying wallet's own error (from viem or a custom adapter) is attached as `cause`.
 
-<!-- deno-fmt-ignore -->
 ```ts
-import { AbstractWalletError } from "@nktkas/hyperliquid";
+import { AbstractWalletError } from "@bloxwap/hyperliquid";
 
 try {
   await client.order({ orders: [/* ... */], grouping: "na" });
@@ -112,8 +109,8 @@ field. You only hit this when you are building your own signed action; the built
 this path with their own payloads.
 
 ```ts
-import { CancelRequest } from "@nktkas/hyperliquid/api/exchange";
-import { canonicalize, CanonicalizeError } from "@nktkas/hyperliquid/signing";
+import { CancelRequest } from "@bloxwap/hyperliquid/api/exchange";
+import { canonicalize, CanonicalizeError } from "@bloxwap/hyperliquid/signing";
 
 try {
   const action = canonicalize(CancelRequest.entries.action, {
@@ -134,7 +131,7 @@ try {
 want a single branch that covers both `HttpRequestError` and `WebSocketRequestError`.
 
 ```ts
-import { TransportError } from "@nktkas/hyperliquid";
+import { TransportError } from "@bloxwap/hyperliquid";
 
 try {
   await client.allMids();
@@ -152,9 +149,8 @@ the server did respond, `response` is a [`Response`](https://developer.mozilla.o
 you can read its status and body. For network-level failures (DNS, connection reset, offline), `response` is `undefined`
 and the underlying cause is in `cause`.
 
-<!-- deno-fmt-ignore -->
 ```ts
-import { HttpRequestError } from "@nktkas/hyperliquid";
+import { HttpRequestError } from "@bloxwap/hyperliquid";
 
 try {
   await client.allMids();
@@ -175,9 +171,8 @@ try {
 Thrown by `WebSocketTransport` when the WebSocket connection cannot be used, or when a request or subscription receives
 an error response. The underlying cause (if any) is in `cause`.
 
-<!-- deno-fmt-ignore -->
 ```ts
-import { WebSocketRequestError } from "@nktkas/hyperliquid";
+import { WebSocketRequestError } from "@bloxwap/hyperliquid";
 
 try {
   await client.allMids();
@@ -198,7 +193,7 @@ default request timeout (10s) is built with `AbortSignal.timeout()`, and any `si
 `TransportError`.
 
 ```ts
-import { TransportError } from "@nktkas/hyperliquid";
+import { TransportError } from "@bloxwap/hyperliquid";
 
 try {
   await client.allMids();
@@ -227,8 +222,8 @@ import {
   TransportError,
   ValidationError,
   WebSocketRequestError,
-} from "@nktkas/hyperliquid";
-import { FormatError, formatPrice } from "@nktkas/hyperliquid/utils";
+} from "@bloxwap/hyperliquid";
+import { FormatError, formatPrice } from "@bloxwap/hyperliquid/utils";
 
 try {
   const price = formatPrice("65000.1", 3);

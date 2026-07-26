@@ -9,4 +9,4 @@ injection, cross-site scripting, etc.), please refer to the
 ## For Issues in this SDK
 
 If you found a security problem in this SDK itself, report it privately at
-https://github.com/nktkas/hyperliquid/security/advisories/new.
+https://github.com/bloxwap/hyperliquid/security/advisories/new.

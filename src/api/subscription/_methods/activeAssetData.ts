@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -54,8 +54,8 @@ export type ActiveAssetDataParameters = Omit<v.InferInput<typeof ActiveAssetData
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { activeAssetData } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { activeAssetData } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -75,9 +75,14 @@ export function activeAssetData(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(ActiveAssetDataRequest, { type: "activeAssetData", ...params });
-  return config.transport.subscribe<ActiveAssetDataEvent>(payload.type, payload, (e) => {
-    if (e.detail.coin === payload.coin && e.detail.user === payload.user) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<ActiveAssetDataEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.coin === payload.coin && e.detail.user === payload.user) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

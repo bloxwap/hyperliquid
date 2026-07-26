@@ -1,0 +1,28 @@
+name: Performance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Enforces the zero-performance-regression policy: `.dev/perf/gate.ts` runs the suite in tests/perf/ and compares it
+  # against the committed tests/perf/results/baseline.json, exiting non-zero when a scenario got materially slower.
+  #
+  # GitHub-hosted runners are shared, throttled and noisy, so absolute timings here are not comparable to a developer
+  # machine. Nothing in this job tries to make the runner quiet; the gate's own regression threshold is what keeps that
+  # noise from turning into false positives. If this job starts flapping, widen the threshold in the gate — do not add
+  # retries or drop the job.
+  perf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: canary
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Performance gate
+        run: bun run .dev/perf/gate.ts

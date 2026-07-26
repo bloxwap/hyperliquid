@@ -9,7 +9,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-  - package-ecosystem: "deno"
+  # Reads package.json + bun.lock. The `@jsr/*` dependencies resolve through the registry pinned in .npmrc.
+  - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"

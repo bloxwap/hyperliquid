@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -42,20 +42,20 @@ export type ReserveRequestWeightRequest = v.InferOutput<typeof ReserveRequestWei
  */
 export type ReserveRequestWeightResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -100,11 +100,11 @@ export type ReserveRequestWeightSuccessResponse = ExcludeErrorResponse<ReserveRe
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { reserveRequestWeight } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { reserveRequestWeight } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await reserveRequestWeight({ transport, wallet }, {

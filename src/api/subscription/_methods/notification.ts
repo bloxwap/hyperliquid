@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -54,8 +54,8 @@ export type NotificationParameters = Omit<v.InferInput<typeof NotificationReques
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { notification } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { notification } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -75,7 +75,12 @@ export function notification(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(NotificationRequest, { type: "notification", ...params });
-  return config.transport.subscribe<NotificationEvent>(payload.type, payload, (e) => {
-    listener(e.detail);
-  }, options);
+  return config.transport.subscribe<NotificationEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      listener(e.detail);
+    },
+    options,
+  );
 }

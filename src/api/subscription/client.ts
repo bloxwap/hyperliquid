@@ -90,7 +90,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    *
@@ -114,7 +114,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -147,7 +147,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -180,7 +180,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -212,7 +212,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -244,7 +244,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -277,7 +277,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -289,10 +289,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
-  allMids(
-    listener: (data: AllMidsEvent) => void,
-    options?: SubscriptionOptions,
-  ): Promise<ISubscription>;
+  allMids(listener: (data: AllMidsEvent) => void, options?: SubscriptionOptions): Promise<ISubscription>;
   allMids(
     params: AllMidsParameters,
     listener: (data: AllMidsEvent) => void,
@@ -305,8 +302,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
   ): Promise<ISubscription> {
     const isListenerFirst = typeof paramsOrListener === "function";
     const params = isListenerFirst ? {} : paramsOrListener;
-    const listener = isListenerFirst ? paramsOrListener : listenerOrOptions as (data: AllMidsEvent) => void;
-    const options = isListenerFirst ? listenerOrOptions as SubscriptionOptions | undefined : maybeOptions;
+    const listener = isListenerFirst ? paramsOrListener : (listenerOrOptions as (data: AllMidsEvent) => void);
+    const options = isListenerFirst ? (listenerOrOptions as SubscriptionOptions | undefined) : maybeOptions;
     return allMids(this.config_, params, listener, options);
   }
 
@@ -323,7 +320,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -335,10 +332,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
-  assetCtxs(
-    listener: (data: AssetCtxsEvent) => void,
-    options?: SubscriptionOptions,
-  ): Promise<ISubscription>;
+  assetCtxs(listener: (data: AssetCtxsEvent) => void, options?: SubscriptionOptions): Promise<ISubscription>;
   assetCtxs(
     params: AssetCtxsParameters,
     listener: (data: AssetCtxsEvent) => void,
@@ -351,8 +345,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
   ): Promise<ISubscription> {
     const isListenerFirst = typeof paramsOrListener === "function";
     const params = isListenerFirst ? {} : paramsOrListener;
-    const listener = isListenerFirst ? paramsOrListener : listenerOrOptions as (data: AssetCtxsEvent) => void;
-    const options = isListenerFirst ? listenerOrOptions as SubscriptionOptions | undefined : maybeOptions;
+    const listener = isListenerFirst ? paramsOrListener : (listenerOrOptions as (data: AssetCtxsEvent) => void);
+    const options = isListenerFirst ? (listenerOrOptions as SubscriptionOptions | undefined) : maybeOptions;
     return assetCtxs(this.config_, params, listener, options);
   }
 
@@ -369,7 +363,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -402,7 +396,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -435,7 +429,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -467,7 +461,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -479,10 +473,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
-  fastAssetCtxs(
-    listener: (data: FastAssetCtxsEvent) => void,
-    options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
+  fastAssetCtxs(listener: (data: FastAssetCtxsEvent) => void, options?: SubscriptionOptions): Promise<ISubscription> {
     return fastAssetCtxs(this.config_, listener, options);
   }
 
@@ -499,7 +490,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -532,7 +523,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -565,7 +556,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -598,7 +589,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -630,7 +621,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -661,7 +652,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -673,10 +664,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
-  spotAssetCtxs(
-    listener: (data: SpotAssetCtxsEvent) => void,
-    options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
+  spotAssetCtxs(listener: (data: SpotAssetCtxsEvent) => void, options?: SubscriptionOptions): Promise<ISubscription> {
     return spotAssetCtxs(this.config_, listener, options);
   }
 
@@ -693,7 +681,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -726,7 +714,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -759,7 +747,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -792,7 +780,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -825,7 +813,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -858,7 +846,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -891,7 +879,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -924,7 +912,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -957,7 +945,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -990,7 +978,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });
@@ -1023,7 +1011,7 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport();
    * const client = new hl.SubscriptionClient({ transport });

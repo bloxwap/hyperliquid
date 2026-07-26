@@ -1,5 +1,5 @@
-import { type AgentSetAbstractionParameters, AgentSetAbstractionRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type AgentSetAbstractionParameters, AgentSetAbstractionRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,9 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(v.object(AgentSetAbstractionRequ
 runTest({
   name: "agentSetAbstraction",
   codeTestFn: async (_t, exchClient) => {
-    const params: AgentSetAbstractionParameters[] = [
-      { abstraction: "u" },
-    ];
+    const params: AgentSetAbstractionParameters[] = [{ abstraction: "u" }];
 
     const data = await Promise.all(params.map((p) => exchClient.agentSetAbstraction(p)));
 

@@ -1,5 +1,5 @@
-import { type AllMidsParameters, AllMidsRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type AllMidsParameters, AllMidsRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,10 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(AllMidsRequest, ["type"]));
 runTest({
   name: "allMids",
   codeTestFn: async (_t, client) => {
-    const params: AllMidsParameters[] = [
-      {},
-      { dex: "gato" },
-    ];
+    const params: AllMidsParameters[] = [{}, { dex: "gato" }];
 
     const data = await Promise.all(params.map((p) => client.allMids(p)));
 

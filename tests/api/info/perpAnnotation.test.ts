@@ -1,5 +1,5 @@
-import { type PerpAnnotationParameters, PerpAnnotationRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type PerpAnnotationParameters, PerpAnnotationRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,15 +12,11 @@ const paramsSchema = valibotToJsonSchema(v.omit(PerpAnnotationRequest, ["type"])
 runTest({
   name: "perpAnnotation",
   codeTestFn: async (_t, client) => {
-    const params: PerpAnnotationParameters[] = [
-      { coin: "BTC" },
-    ];
+    const params: PerpAnnotationParameters[] = [{ coin: "BTC" }];
 
     const data = await Promise.all(params.map((p) => client.perpAnnotation(p)));
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data, [
-      "#/defined",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/defined"]);
   },
 });

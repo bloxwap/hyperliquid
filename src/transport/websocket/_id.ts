@@ -60,9 +60,11 @@ export function isSubset(subset: unknown, superset: unknown): boolean {
 
   // Arrays: must match element by element
   if (Array.isArray(subset)) {
-    return Array.isArray(superset) &&
+    return (
+      Array.isArray(superset) &&
       subset.length === superset.length &&
-      subset.every((item, i) => isSubset(item, superset[i]));
+      subset.every((item, i) => isSubset(item, superset[i]))
+    );
   }
 
   // Objects: all keys in subset must exist in superset with matching values

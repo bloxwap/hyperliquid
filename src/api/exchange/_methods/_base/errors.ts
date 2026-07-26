@@ -13,8 +13,7 @@ export { ApiRequestError };
 
 /** True if `value` has an `error` field of type string. */
 function hasErrorField(value: unknown): value is { error: string } {
-  return typeof value === "object" && value !== null &&
-    "error" in value && typeof value.error === "string";
+  return typeof value === "object" && value !== null && "error" in value && typeof value.error === "string";
 }
 
 /** Top-level error shape. */
@@ -22,8 +21,7 @@ type TopLevelError = { status: "err"; response: string };
 
 /** True if `r` matches `{ status: "err", response: string }`. */
 function isTopLevelError(r: unknown): r is TopLevelError {
-  return typeof r === "object" && r !== null &&
-    "status" in r && r.status === "err";
+  return typeof r === "object" && r !== null && "status" in r && r.status === "err";
 }
 
 /** Bulk error shape with array of statuses. */
@@ -64,7 +62,7 @@ function getErrorMessage(r: unknown): string | undefined {
   }
   if (isBulkError(r)) {
     const prefix = r.response.type;
-    const errors = r.response.data.statuses.flatMap((s, i) => hasErrorField(s) ? [`${prefix} ${i}: ${s.error}`] : []);
+    const errors = r.response.data.statuses.flatMap((s, i) => (hasErrorField(s) ? [`${prefix} ${i}: ${s.error}`] : []));
     if (errors.length > 0) return errors.join(", ");
   }
   if (isSingleError(r)) {
@@ -103,22 +101,26 @@ type ExcludeTopLevelError<T> = T extends { status: "err" } ? never : T;
 
 /** Filter out error variants from `response.data.statuses[]` array. */
 type ExcludeBulkError<T> = T extends { response: { data: { statuses: ReadonlyArray<infer S> } } }
-  ? Exclude<S, { error: unknown }> extends never ? never
-  : Prettify<
-    Omit<T, "response"> & {
-      response: Prettify<Omit<T["response"], "data"> & { data: { statuses: Array<Exclude<S, { error: unknown }>> } }>;
-    }
-  >
+  ? Exclude<S, { error: unknown }> extends never
+    ? never
+    : Prettify<
+        Omit<T, "response"> & {
+          response: Prettify<
+            Omit<T["response"], "data"> & { data: { statuses: Array<Exclude<S, { error: unknown }>> } }
+          >;
+        }
+      >
   : T;
 
 /** Filter out error variant from `response.data.status` single status. */
 type ExcludeSingleError<T> = T extends { response: { data: { status: infer S } } }
-  ? S extends { error: unknown } ? never
-  : Prettify<
-    Omit<T, "response"> & {
-      response: Prettify<Omit<T["response"], "data"> & { data: { status: Exclude<S, { error: unknown }> } }>;
-    }
-  >
+  ? S extends { error: unknown }
+    ? never
+    : Prettify<
+        Omit<T, "response"> & {
+          response: Prettify<Omit<T["response"], "data"> & { data: { status: Exclude<S, { error: unknown }> } }>;
+        }
+      >
   : T;
 
 /** Exclude all three Hyperliquid error response shapes from `T`. */

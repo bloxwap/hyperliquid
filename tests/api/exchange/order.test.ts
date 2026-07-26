@@ -1,8 +1,8 @@
-import { ApiRequestError } from "@nktkas/hyperliquid";
-import { type OrderParameters, OrderRequest } from "@nktkas/hyperliquid/api/exchange";
-import { formatPrice, formatSize } from "@nktkas/hyperliquid/utils";
-import * as v from "@valibot/valibot";
-import { assertRejects } from "jsr:@std/assert@1";
+import { ApiRequestError } from "@bloxwap/hyperliquid";
+import { type OrderParameters, OrderRequest } from "@bloxwap/hyperliquid/api/exchange";
+import { formatPrice, formatSize } from "@bloxwap/hyperliquid/utils";
+import * as v from "valibot";
+import { assertRejects } from "@jsr/std__assert";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -36,28 +36,32 @@ runTest({
       },
       // resting | limit | Alo | cloid
       {
-        orders: [{
-          a: id,
-          b: true,
-          p: pxDown,
-          s: sz,
-          r: false,
-          t: { limit: { tif: "Alo" } },
-          c: "0x17a5a40306205a0c6d60c7264153781c",
-        }],
+        orders: [
+          {
+            a: id,
+            b: true,
+            p: pxDown,
+            s: sz,
+            r: false,
+            t: { limit: { tif: "Alo" } },
+            c: "0x17a5a40306205a0c6d60c7264153781c",
+          },
+        ],
         grouping: "na",
       },
       // filled | limit | Ioc | cloid
       {
-        orders: [{
-          a: id,
-          b: true,
-          p: pxUp,
-          s: sz,
-          r: false,
-          t: { limit: { tif: "Ioc" } },
-          c: "0x27a5a40306205a0c6d60c7264153781c",
-        }],
+        orders: [
+          {
+            a: id,
+            b: true,
+            p: pxUp,
+            s: sz,
+            r: false,
+            t: { limit: { tif: "Ioc" } },
+            c: "0x27a5a40306205a0c6d60c7264153781c",
+          },
+        ],
         grouping: "na",
       },
       // filled | limit | FrontendMarket | b=false | builder
@@ -83,14 +87,16 @@ runTest({
       },
       // trigger | sl | isMarket=false | positionTpsl
       {
-        orders: [{
-          a: id,
-          b: false,
-          p: pxUp,
-          s: sz,
-          r: true,
-          t: { trigger: { isMarket: false, tpsl: "sl", triggerPx: pxDown } },
-        }],
+        orders: [
+          {
+            a: id,
+            b: false,
+            p: pxUp,
+            s: sz,
+            r: true,
+            t: { trigger: { isMarket: false, tpsl: "sl", triggerPx: pxDown } },
+          },
+        ],
         grouping: "positionTpsl",
       },
     ];

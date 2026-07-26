@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -26,12 +26,10 @@ export type UserDetailsRequest = v.InferOutput<typeof UserDetailsRequest>;
  *
  * Historical entries may use a positional action tuple.
  */
-type UserDetailsTransaction =
-  & Omit<ExplorerTransaction, "action">
-  & {
-    /** Action payload. */
-    action: ExplorerTransaction["action"] | unknown[];
-  };
+type UserDetailsTransaction = Omit<ExplorerTransaction, "action"> & {
+  /** Action payload. */
+  action: ExplorerTransaction["action"] | unknown[];
+};
 
 /**
  * Response array of user transaction details.
@@ -69,8 +67,8 @@ export type UserDetailsParameters = Omit<v.InferInput<typeof UserDetailsRequest>
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userDetails } from "@nktkas/hyperliquid/api/explorer";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userDetails } from "@bloxwap/hyperliquid/api/explorer";
  *
  * const transport = new HttpTransport(); // only `HttpTransport` supports this API
  *

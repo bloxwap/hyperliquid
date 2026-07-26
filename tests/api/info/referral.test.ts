@@ -1,5 +1,5 @@
-import { type ReferralParameters, ReferralRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type ReferralParameters, ReferralRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -23,8 +23,6 @@ runTest({
     const data = await Promise.all(params.map((p) => client.referral(p)));
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data, [
-      "#/properties/rewardHistory/array",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/properties/rewardHistory/array"]);
   },
 });

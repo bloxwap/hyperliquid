@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -48,20 +48,20 @@ export type UserPortfolioMarginRequest = v.InferOutput<typeof UserPortfolioMargi
  */
 export type UserPortfolioMarginResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -78,10 +78,11 @@ import {
 
 /** Schema for action fields (excludes request-level system fields). */
 const UserPortfolioMarginActionSchema = /* @__PURE__ */ (() => {
-  return v.omit(
-    v.object(UserPortfolioMarginRequest.entries.action.entries),
-    ["signatureChainId", "hyperliquidChain", "nonce"],
-  );
+  return v.omit(v.object(UserPortfolioMarginRequest.entries.action.entries), [
+    "signatureChainId",
+    "hyperliquidChain",
+    "nonce",
+  ]);
 })();
 
 /** Action parameters for the {@linkcode userPortfolioMargin} function. */
@@ -119,11 +120,11 @@ export const UserPortfolioMarginTypes = {
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userPortfolioMargin } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userPortfolioMargin } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await userPortfolioMargin({ transport, wallet }, {

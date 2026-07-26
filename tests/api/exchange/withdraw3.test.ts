@@ -1,5 +1,5 @@
-import { type Withdraw3Parameters, Withdraw3Request } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type Withdraw3Parameters, Withdraw3Request } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -16,9 +16,7 @@ runTest({
   codeTestFn: async (_t, exchClient) => {
     await topUpPerp(exchClient, "2");
 
-    const params: Withdraw3Parameters[] = [
-      { amount: "2", destination: "0x0000000000000000000000000000000000000001" },
-    ];
+    const params: Withdraw3Parameters[] = [{ amount: "2", destination: "0x0000000000000000000000000000000000000001" }];
 
     const data = await Promise.all(params.map((p) => exchClient.withdraw3(p)));
 

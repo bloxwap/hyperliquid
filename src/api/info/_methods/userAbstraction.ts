@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -24,11 +24,7 @@ export type UserAbstractionRequest = v.InferOutput<typeof UserAbstractionRequest
  * User abstraction state.
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-abstraction-state
  */
-export type UserAbstractionResponse =
-  | "unifiedAccount"
-  | "portfolioMargin"
-  | "disabled"
-  | "default";
+export type UserAbstractionResponse = "unifiedAccount" | "portfolioMargin" | "disabled" | "default";
 
 // ============================================================
 // Execution Logic
@@ -53,8 +49,8 @@ export type UserAbstractionParameters = Omit<v.InferInput<typeof UserAbstraction
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userAbstraction } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userAbstraction } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

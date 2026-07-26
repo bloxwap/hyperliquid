@@ -1,5 +1,5 @@
-import { type CDepositParameters, CDepositRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type CDepositParameters, CDepositRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -16,9 +16,7 @@ runTest({
   codeTestFn: async (_t, exchClient) => {
     await topUpSpot(exchClient, "HYPE", "0.00000001");
 
-    const params: CDepositParameters[] = [
-      { wei: 1 },
-    ];
+    const params: CDepositParameters[] = [{ wei: 1 }];
 
     const data = await Promise.all(params.map((p) => exchClient.cDeposit(p)));
 

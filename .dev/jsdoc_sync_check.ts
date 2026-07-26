@@ -1,16 +1,18 @@
-// deno-lint-ignore-file no-console
-
 /**
  * JSDoc Sync Checker
  *
  * Verifies that JSDoc comments in class methods (client.ts)
  * are synchronized with JSDoc comments in standalone functions (_methods/*.ts).
  *
- * Usage: deno run -A .dev/jsdoc_sync_check.ts
+ * Usage: bun run .dev/jsdoc_sync_check.ts
+ *
+ * @module
  */
 
-import ts from "npm:typescript@5";
-import * as path from "jsr:@std/path@1";
+import { readFileSync } from "node:fs";
+import * as path from "node:path";
+import process from "node:process";
+import ts from "typescript";
 
 // =============================================================================
 // TYPES
@@ -88,9 +90,7 @@ function getRawJSDocText(node: ts.Node, sourceFile: ts.SourceFile): string | und
 
 /** Clean JSDoc lines by removing leading asterisk prefixes */
 function cleanJSDocLines(rawText: string): string[] {
-  return rawText
-    .split("\n")
-    .map((line) => line.replace(/^\s*\*\s?/, ""));
+  return rawText.split("\n").map((line) => line.replace(/^\s*\*\s?/, ""));
 }
 
 /** Parse JSDoc text into structured data */
@@ -184,13 +184,8 @@ function parseFunctionJSDoc(filePath: string): Map<string, ParsedJSDoc> {
   const result = new Map<string, ParsedJSDoc>();
 
   try {
-    const sourceText = Deno.readTextFileSync(filePath);
-    const sourceFile = ts.createSourceFile(
-      filePath,
-      sourceText,
-      ts.ScriptTarget.Latest,
-      true,
-    );
+    const sourceText = readFileSync(filePath, "utf8");
+    const sourceFile = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true);
 
     // Find all exported function declarations
     ts.forEachChild(sourceFile, (node) => {
@@ -209,10 +204,15 @@ function parseFunctionJSDoc(filePath: string): Map<string, ParsedJSDoc> {
   return result;
 }
 
-/** Parse class method JSDoc from client file */
-function parseClassMethodsJSDoc(filePath: string): Map<string, ParsedJSDoc> {
-  const result = new Map<string, ParsedJSDoc>();
-  const sourceText = Deno.readTextFileSync(filePath);
+/**
+ * Parse class method JSDoc from client file.
+ *
+ * Methods with no JSDoc block at all map to `null` rather than being omitted. Omitting them is what would neuter the
+ * gate: a deleted JSDoc block would simply drop the method from the comparison set and the check would still pass.
+ */
+function parseClassMethodsJSDoc(filePath: string): Map<string, ParsedJSDoc | null> {
+  const result = new Map<string, ParsedJSDoc | null>();
+  const sourceText = readFileSync(filePath, "utf8");
   const sourceFile = ts.createSourceFile(
     filePath,
     sourceText,
@@ -246,9 +246,7 @@ function parseClassMethodsJSDoc(filePath: string): Map<string, ParsedJSDoc> {
       const targetMethod = overloads.length > 0 ? overloads[0] : methods[0];
 
       const rawJSDoc = getRawJSDocText(targetMethod, sourceFile);
-      if (rawJSDoc) {
-        result.set(methodName, parseJSDoc(rawJSDoc));
-      }
+      result.set(methodName, rawJSDoc ? parseJSDoc(rawJSDoc) : null);
     }
   });
 
@@ -288,11 +286,11 @@ function normalizeExample(example: string, isFunction: boolean, methodName: stri
 
   // Extract params from function/method call
   const pattern = isFunction
-    // Function pattern: functionName({ config }, params) or functionName({ config })
-    // The comma after config is optional (for methods without params)
-    ? new RegExp(`${methodName}\\s*\\(\\s*\\{[^}]*\\}\\s*(?:,\\s*([\\s\\S]*?))?\\s*\\)\\s*;?`)
-    // Method pattern: client.methodName(params) or client.methodName()
-    : new RegExp(`\\.${methodName}\\s*\\(\\s*([\\s\\S]*?)\\s*\\)\\s*;?`);
+    ? // Function pattern: functionName({ config }, params) or functionName({ config })
+      // The comma after config is optional (for methods without params)
+      new RegExp(`${methodName}\\s*\\(\\s*\\{[^}]*\\}\\s*(?:,\\s*([\\s\\S]*?))?\\s*\\)\\s*;?`)
+    : // Method pattern: client.methodName(params) or client.methodName()
+      new RegExp(`\\.${methodName}\\s*\\(\\s*([\\s\\S]*?)\\s*\\)\\s*;?`);
 
   const match = code.match(pattern);
   if (match) {
@@ -398,10 +396,7 @@ function compareJSDoc(
   }
 
   // Collect all tag names from both JSDoc
-  const allTagNames = new Set([
-    ...funcJSDoc.tags.keys(),
-    ...methodJSDoc.tags.keys(),
-  ]);
+  const allTagNames = new Set([...funcJSDoc.tags.keys(), ...methodJSDoc.tags.keys()]);
 
   // Compare each tag
   for (const tagName of allTagNames) {
@@ -444,9 +439,7 @@ function compareJSDoc(
     }
 
     // Universal comparison for all other tags
-    errors.push(
-      ...compareTagArrays(funcValues, methodValues, tagName, methodName, className, funcFilePath),
-    );
+    errors.push(...compareTagArrays(funcValues, methodValues, tagName, methodName, className, funcFilePath));
   }
 
   return errors;
@@ -457,7 +450,7 @@ function compareJSDoc(
 // =============================================================================
 
 function main(): void {
-  const projectRoot = Deno.cwd();
+  const projectRoot = process.cwd();
   const allErrors: SyncError[] = [];
 
   // Process each API endpoint
@@ -471,6 +464,18 @@ function main(): void {
     // Compare each method with its corresponding function
     for (const [methodName, methodJSDoc] of methodsJSDoc) {
       const funcFilePath = path.join(methodsDir, `${methodName}.ts`);
+
+      // An undocumented method cannot be "in sync" with anything, so report it without reading the function side.
+      if (methodJSDoc === null) {
+        allErrors.push({
+          methodName,
+          className: endpoint.className,
+          errorType: "method missing JSDoc",
+          details: `Method ${methodName} has no JSDoc comment`,
+          filePath: clientPath,
+        });
+        continue;
+      }
 
       // Parse function JSDoc from _methods/*.ts
       const funcJSDocMap = parseFunctionJSDoc(funcFilePath);
@@ -495,7 +500,7 @@ function main(): void {
   // Success - all JSDoc synchronized
   if (allErrors.length === 0) {
     console.log("All JSDoc comments are synchronized.");
-    Deno.exit(0);
+    process.exit(0);
   }
 
   // Print all errors
@@ -507,7 +512,7 @@ function main(): void {
   }
 
   console.log(`Found ${allErrors.length} error(s)`);
-  Deno.exit(1);
+  process.exit(1);
 }
 
 // Entry point

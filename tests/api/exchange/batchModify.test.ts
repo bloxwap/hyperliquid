@@ -1,5 +1,5 @@
-import { type BatchModifyParameters, BatchModifyRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type BatchModifyParameters, BatchModifyRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -17,17 +17,19 @@ runTest({
       (async () => {
         const order = await openOrder(exchClient, "limit");
         const params: BatchModifyParameters = {
-          modifies: [{
-            oid: order.oid,
-            order: {
-              a: order.a,
-              b: order.b,
-              p: order.p,
-              s: order.s,
-              r: false,
-              t: { limit: { tif: "Gtc" } },
+          modifies: [
+            {
+              oid: order.oid,
+              order: {
+                a: order.a,
+                b: order.b,
+                p: order.p,
+                s: order.s,
+                r: false,
+                t: { limit: { tif: "Gtc" } },
+              },
             },
-          }],
+          ],
         };
         return { params, result: await exchClient.batchModify(params) };
       })(),
@@ -35,18 +37,20 @@ runTest({
       (async () => {
         const order = await openOrder(exchClient, "limit");
         const params: BatchModifyParameters = {
-          modifies: [{
-            oid: order.cloid,
-            order: {
-              a: order.a,
-              b: order.b,
-              p: order.p,
-              s: order.s,
-              r: false,
-              t: { limit: { tif: "Alo" } },
-              c: order.cloid,
+          modifies: [
+            {
+              oid: order.cloid,
+              order: {
+                a: order.a,
+                b: order.b,
+                p: order.p,
+                s: order.s,
+                r: false,
+                t: { limit: { tif: "Alo" } },
+                c: order.cloid,
+              },
             },
-          }],
+          ],
         };
         return { params, result: await exchClient.batchModify(params) };
       })(),
@@ -54,18 +58,20 @@ runTest({
       (async () => {
         const order = await openOrder(exchClient, "limit");
         const params: BatchModifyParameters = {
-          modifies: [{
-            oid: order.cloid,
-            order: {
-              a: order.a,
-              b: order.b,
-              p: order.b ? order.pxUp : order.pxDown,
-              s: order.s,
-              r: false,
-              t: { limit: { tif: "Gtc" } },
-              c: order.cloid,
+          modifies: [
+            {
+              oid: order.cloid,
+              order: {
+                a: order.a,
+                b: order.b,
+                p: order.b ? order.pxUp : order.pxDown,
+                s: order.s,
+                r: false,
+                t: { limit: { tif: "Gtc" } },
+                c: order.cloid,
+              },
             },
-          }],
+          ],
           a: true,
         };
         return { params, result: await exchClient.batchModify(params) };
@@ -75,17 +81,19 @@ runTest({
     const ioc = await (async () => {
       const order = await openOrder(exchClient, "limit");
       const params: BatchModifyParameters = {
-        modifies: [{
-          oid: order.oid,
-          order: {
-            a: order.a,
-            b: order.b,
-            p: order.b ? order.pxUp : order.pxDown,
-            s: order.s,
-            r: false,
-            t: { limit: { tif: "Ioc" } },
+        modifies: [
+          {
+            oid: order.oid,
+            order: {
+              a: order.a,
+              b: order.b,
+              p: order.b ? order.pxUp : order.pxDown,
+              s: order.s,
+              r: false,
+              t: { limit: { tif: "Ioc" } },
+            },
           },
-        }],
+        ],
         a: true,
       };
       return { params, result: await exchClient.batchModify(params) };
@@ -94,17 +102,19 @@ runTest({
     const frontendMarket = await (async () => {
       const order = await openOrder(exchClient, "limit");
       const params: BatchModifyParameters = {
-        modifies: [{
-          oid: order.oid,
-          order: {
-            a: order.a,
-            b: order.b,
-            p: order.b ? order.pxUp : order.pxDown,
-            s: order.s,
-            r: false,
-            t: { limit: { tif: "FrontendMarket" } },
+        modifies: [
+          {
+            oid: order.oid,
+            order: {
+              a: order.a,
+              b: order.b,
+              p: order.b ? order.pxUp : order.pxDown,
+              s: order.s,
+              r: false,
+              t: { limit: { tif: "FrontendMarket" } },
+            },
           },
-        }],
+        ],
         a: true,
       };
       return { params, result: await exchClient.batchModify(params) };
@@ -113,17 +123,19 @@ runTest({
     const triggerTp = await (async () => {
       const order = await openOrder(exchClient, "limit");
       const params: BatchModifyParameters = {
-        modifies: [{
-          oid: order.oid,
-          order: {
-            a: order.a,
-            b: order.b,
-            p: order.p,
-            s: order.s,
-            r: false,
-            t: { trigger: { isMarket: true, triggerPx: order.pxUp, tpsl: "tp" } },
+        modifies: [
+          {
+            oid: order.oid,
+            order: {
+              a: order.a,
+              b: order.b,
+              p: order.p,
+              s: order.s,
+              r: false,
+              t: { trigger: { isMarket: true, triggerPx: order.pxUp, tpsl: "tp" } },
+            },
           },
-        }],
+        ],
         a: true,
       };
       return { params, result: await exchClient.batchModify(params) };
@@ -132,17 +144,19 @@ runTest({
     const triggerSl = await (async () => {
       const order = await openOrder(exchClient, "limit");
       const params: BatchModifyParameters = {
-        modifies: [{
-          oid: order.oid,
-          order: {
-            a: order.a,
-            b: order.b,
-            p: order.p,
-            s: order.s,
-            r: false,
-            t: { trigger: { isMarket: false, triggerPx: order.pxDown, tpsl: "sl" } },
+        modifies: [
+          {
+            oid: order.oid,
+            order: {
+              a: order.a,
+              b: order.b,
+              p: order.p,
+              s: order.s,
+              r: false,
+              t: { trigger: { isMarket: false, triggerPx: order.pxDown, tpsl: "sl" } },
+            },
           },
-        }],
+        ],
         a: true,
       };
       return { params, result: await exchClient.batchModify(params) };
@@ -150,10 +164,17 @@ runTest({
 
     const data = [restingGtc, restingAlo, filledGtc, ioc, frontendMarket, triggerTp, triggerSl];
 
-    schemaCoverage(paramsSchema, data.map((d) => d.params));
-    schemaCoverage(responseSchema, data.map((d) => d.result), [
-      "#/properties/response/properties/data/properties/statuses/items/anyOf/2", // "waitingForFill"
-      "#/properties/response/properties/data/properties/statuses/items/anyOf/3", // "waitingForTrigger"
-    ]);
+    schemaCoverage(
+      paramsSchema,
+      data.map((d) => d.params),
+    );
+    schemaCoverage(
+      responseSchema,
+      data.map((d) => d.result),
+      [
+        "#/properties/response/properties/data/properties/statuses/items/anyOf/2", // "waitingForFill"
+        "#/properties/response/properties/data/properties/statuses/items/anyOf/3", // "waitingForTrigger"
+      ],
+    );
   },
 });

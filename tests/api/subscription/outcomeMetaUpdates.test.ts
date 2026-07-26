@@ -1,4 +1,4 @@
-import type { OutcomeMetaUpdatesEvent } from "@nktkas/hyperliquid/api/subscription";
+import type { OutcomeMetaUpdatesEvent } from "@bloxwap/hyperliquid/api/subscription";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { type JsonSchema, typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { collectEventsOverTime, runTest } from "./_t.ts";
@@ -15,8 +15,6 @@ runTest({
       await client.outcomeMetaUpdates(cb);
     }, 10_000);
 
-    schemaCoverage(responseSchema, [data], [
-      "#/array",
-    ]);
+    schemaCoverage(responseSchema, [data], ["#/array"]);
   },
 });

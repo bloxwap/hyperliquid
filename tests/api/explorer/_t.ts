@@ -3,14 +3,19 @@
  * @module
  */
 
-import { ExplorerClient, HttpTransport, WebSocketTransport } from "@nktkas/hyperliquid";
+import { test } from "bun:test";
+import { ExplorerClient, HttpTransport, WebSocketTransport } from "@bloxwap/hyperliquid";
+import { OFFLINE } from "../../_offline.ts";
+import { createTestContext, type TestContext } from "../../_testContext.ts";
 
 // =============================================================================
 // Arguments
 // =============================================================================
 
 const WAIT = 5000;
-const OFFLINE = Deno.args.includes("--offline");
+
+/** Generous per-test budget: every case pays the rate-limit delay plus one or more testnet round trips. */
+const TIMEOUT = 120_000;
 
 // =============================================================================
 // Test
@@ -23,18 +28,22 @@ export function runRequestTest(options: {
   name: string;
   /** Uses the testnet RPC when true; defaults to `true`. */
   isTestnet?: boolean;
-  fn: (t: Deno.TestContext, client: ExplorerClient<HttpTransport>) => Promise<void>;
+  fn: (t: TestContext, client: ExplorerClient<HttpTransport>) => Promise<void>;
 }): void {
   const { name, isTestnet = true, fn } = options;
 
-  Deno.test(name, { ignore: OFFLINE }, async (t) => {
-    await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits
+  test.skipIf(OFFLINE)(
+    name,
+    async () => {
+      await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits
 
-    const transport = new HttpTransport({ isTestnet });
-    const client = new ExplorerClient({ transport });
+      const transport = new HttpTransport({ isTestnet });
+      const client = new ExplorerClient({ transport });
 
-    await fn(t, client);
-  });
+      await fn(createTestContext([name]), client);
+    },
+    TIMEOUT,
+  );
 }
 
 /**
@@ -42,22 +51,25 @@ export function runRequestTest(options: {
  */
 export function runSubscriptionTest(options: {
   name: string;
-  fn: (t: Deno.TestContext, client: ExplorerClient<WebSocketTransport>) => Promise<void>;
+  fn: (t: TestContext, client: ExplorerClient<WebSocketTransport>) => Promise<void>;
 }): void {
   const { name, fn } = options;
 
-  Deno.test(name, { ignore: OFFLINE }, async (t) => {
-    await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits
+  test.skipIf(OFFLINE)(
+    name,
+    async () => {
+      await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits
 
-    const transport = new WebSocketTransport({ url: "wss://rpc.hyperliquid-testnet.xyz/ws", isTestnet: true });
-    await transport.ready();
-    const client = new ExplorerClient({ transport });
+      const transport = new WebSocketTransport({ url: "wss://rpc.hyperliquid-testnet.xyz/ws", isTestnet: true });
+      await transport.ready();
+      const client = new ExplorerClient({ transport });
 
-    await fn(t, client)
-      .finally(() => {
+      await fn(createTestContext([name]), client).finally(() => {
         transport.close();
       });
-  });
+    },
+    TIMEOUT,
+  );
 }
 
 // =============================================================================

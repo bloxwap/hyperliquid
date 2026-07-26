@@ -1,5 +1,5 @@
-import { type CandleEvent, type CandleParameters, CandleRequest } from "@nktkas/hyperliquid/api/subscription";
-import * as v from "@valibot/valibot";
+import { type CandleEvent, type CandleParameters, CandleRequest } from "@bloxwap/hyperliquid/api/subscription";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";

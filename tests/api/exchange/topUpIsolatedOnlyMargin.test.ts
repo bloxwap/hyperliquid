@@ -1,8 +1,8 @@
 import {
   type TopUpIsolatedOnlyMarginParameters,
   TopUpIsolatedOnlyMarginRequest,
-} from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+} from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -22,9 +22,7 @@ runTest({
     await topUpPerp(exchClient, "30");
     await openOrder(exchClient, "market", "ANIME");
 
-    const params: TopUpIsolatedOnlyMarginParameters[] = [
-      { asset: id, leverage: "0.5" },
-    ];
+    const params: TopUpIsolatedOnlyMarginParameters[] = [{ asset: id, leverage: "0.5" }];
 
     const data = await Promise.all(params.map((p) => exchClient.topUpIsolatedOnlyMargin(p)));
 

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -24,104 +24,112 @@ export type ValidatorL1VotesResponse = {
   /** Timestamp when the vote expires (in ms since epoch). */
   expireTime: number;
   /** Type of the vote. */
-  action: {
-    /**
-     * Governance vote variant.
-     *
-     * FIXME: meaning unconfirmed.
-     */
-    D: string;
-  } | {
-    /**
-     * Governance vote variant.
-     *
-     * FIXME: meaning unconfirmed.
-     */
-    C: string[];
-  } | {
-    /** Outcome market governance action. */
-    O: {
-      /** Register tokens and a standalone outcome. */
-      registerTokensAndStandaloneOutcome: {
-        /** Quote token identifier. */
-        quoteToken: number;
-        /** Token name and description. */
-        nameAndDescription: [string, string];
-      };
-    } | {
-      /** Register tokens and a question. */
-      registerTokensAndQuestion: {
-        /** Quote token identifier. */
-        quoteToken: number;
-        /** Question name and description. */
-        questionNameAndDescription: [string, string];
-        /** Fallback name and description. */
-        fallbackNameAndDescription: [string, string];
-        /** Named outcomes (name and description). */
-        namedOutcomes: [string, string][];
-      };
-    } | {
-      /** Settle an outcome. */
-      settleOutcome: {
-        /** Outcome identifier. */
-        outcome: number;
+  action:
+    | {
         /**
-         * Settlement fraction.
-         * @pattern ^[0-9]+(\.[0-9]+)?$
+         * Governance vote variant.
+         *
+         * FIXME: meaning unconfirmed.
          */
-        settleFraction: string;
-        /** Settlement details. */
-        details: string;
+        D: string;
+      }
+    | {
+        /**
+         * Governance vote variant.
+         *
+         * FIXME: meaning unconfirmed.
+         */
+        C: string[];
+      }
+    | {
+        /** Outcome market governance action. */
+        O:
+          | {
+              /** Register tokens and a standalone outcome. */
+              registerTokensAndStandaloneOutcome: {
+                /** Quote token identifier. */
+                quoteToken: number;
+                /** Token name and description. */
+                nameAndDescription: [string, string];
+              };
+            }
+          | {
+              /** Register tokens and a question. */
+              registerTokensAndQuestion: {
+                /** Quote token identifier. */
+                quoteToken: number;
+                /** Question name and description. */
+                questionNameAndDescription: [string, string];
+                /** Fallback name and description. */
+                fallbackNameAndDescription: [string, string];
+                /** Named outcomes (name and description). */
+                namedOutcomes: [string, string][];
+              };
+            }
+          | {
+              /** Settle an outcome. */
+              settleOutcome: {
+                /** Outcome identifier. */
+                outcome: number;
+                /**
+                 * Settlement fraction.
+                 * @pattern ^[0-9]+(\.[0-9]+)?$
+                 */
+                settleFraction: string;
+                /** Settlement details. */
+                details: string;
+              };
+            }
+          | {
+              /** Settle a question across its named outcomes. */
+              settleQuestion: {
+                /** Question identifier. */
+                question: number;
+                /** Settlement fraction and details per outcome. */
+                settleFractionsAndDetails: [
+                  /** Outcome identifier. */
+                  outcome: number,
+                  /** Settlement fraction and details. */
+                  fractionAndDetails: [
+                    /**
+                     * Settlement fraction.
+                     * @pattern ^[0-9]+(\.[0-9]+)?$
+                     */
+                    settleFraction: string,
+                    /** Settlement details. */
+                    details: string,
+                  ],
+                ][];
+              };
+            };
+      }
+    | {
+        /** Token and treasury governance action. */
+        E: {
+          /** Token identifier. */
+          token: number;
+          /**
+           * Technical staker address.
+           * @pattern ^0x[a-fA-F0-9]{40}$
+           */
+          technicalStaker: `0x${string}`;
+          /**
+           * Treasury staker address.
+           * @pattern ^0x[a-fA-F0-9]{40}$
+           */
+          treasuryStaker: `0x${string}`;
+          /**
+           * Treasury EVM address.
+           * @pattern ^0x[a-fA-F0-9]{40}$
+           */
+          treasuryEvmAddress: `0x${string}`;
+          /**
+           * EVM rebalance contract address.
+           * @pattern ^0x[a-fA-F0-9]{40}$
+           */
+          evmRebalanceContract: `0x${string}`;
+        };
       };
-    } | {
-      /** Settle a question across its named outcomes. */
-      settleQuestion: {
-        /** Question identifier. */
-        question: number;
-        /** Settlement fraction and details per outcome. */
-        settleFractionsAndDetails: [
-          /** Outcome identifier. */
-          outcome: number,
-          /** Settlement fraction and details. */
-          fractionAndDetails: [
-            /**
-             * Settlement fraction.
-             * @pattern ^[0-9]+(\.[0-9]+)?$
-             */
-            settleFraction: string,
-            /** Settlement details. */
-            details: string,
-          ],
-        ][];
-      };
-    };
-  } | {
-    /** Token and treasury governance action. */
-    E: {
-      /** Token identifier. */
-      token: number;
-      /**
-       * Technical staker address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      technicalStaker: `0x${string}`;
-      /**
-       * Treasury staker address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      treasuryStaker: `0x${string}`;
-      /**
-       * Treasury EVM address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      treasuryEvmAddress: `0x${string}`;
-      /**
-       * EVM rebalance contract address.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      evmRebalanceContract: `0x${string}`;
-    };
-  };
   /**
    * List of validator addresses that cast this vote.
    * @pattern ^0x[a-fA-F0-9]{40}$
@@ -150,8 +158,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { validatorL1Votes } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { validatorL1Votes } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -160,10 +168,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see null
  */
-export function validatorL1Votes(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<ValidatorL1VotesResponse> {
+export function validatorL1Votes(config: InfoConfig, signal?: AbortSignal): Promise<ValidatorL1VotesResponse> {
   const request = parse(ValidatorL1VotesRequest, {
     type: "validatorL1Votes",
   });

@@ -4,10 +4,26 @@
  */
 
 import { keccak_256 } from "@noble/hashes/sha3.js";
-import { bytesToHex, concatBytes, hexToBytes } from "@noble/hashes/utils.js";
-import { encode as encodeMsgpack, type ValueType } from "@std/msgpack/encode";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { encode as encodeMsgpack, type ValueType } from "@jsr/std__msgpack/encode";
 import { type AbstractWallet, type Signature, signTypedData } from "./_abstractWallet.ts";
 import { trimSignature } from "./_multiSig.ts";
+
+/** EIP-712 domain for L1 (phantom-agent) signing. */
+const L1_DOMAIN = Object.freeze({
+  name: "Exchange",
+  version: "1",
+  chainId: 1337,
+  verifyingContract: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+});
+
+/** EIP-712 types for the L1 `Agent` message. */
+const L1_AGENT_TYPES = Object.freeze({
+  Agent: [
+    { name: "source", type: "string" },
+    { name: "connectionId", type: "bytes32" },
+  ],
+});
 
 /**
  * Creates a hash of the L1 action.
@@ -17,7 +33,7 @@ import { trimSignature } from "./_multiSig.ts";
  *
  * @example
  * ```ts
- * import { createL1ActionHash } from "@nktkas/hyperliquid/signing";
+ * import { createL1ActionHash } from "@bloxwap/hyperliquid/signing";
  *
  * const action = { type: "cancel", cancels: [{ a: 0, o: 12345 }] };
  * const nonce = Date.now();
@@ -38,13 +54,31 @@ export function createL1ActionHash(args: {
   const { action, nonce, vaultAddress, expiresAfter } = args;
 
   const actionBytes = encodeMsgpack(adjust(action as ValueType));
-  const nonceBytes = toUint64Bytes(nonce);
-  const vaultMarker = vaultAddress ? new Uint8Array([1]) : new Uint8Array([0]);
-  const vaultBytes = vaultAddress ? hexToBytes(vaultAddress.slice(2)) : new Uint8Array();
-  const expiresMarker = expiresAfter !== undefined ? new Uint8Array([0]) : new Uint8Array();
-  const expiresBytes = expiresAfter !== undefined ? toUint64Bytes(expiresAfter) : new Uint8Array();
 
-  const bytes = concatBytes(actionBytes, nonceBytes, vaultMarker, vaultBytes, expiresMarker, expiresBytes);
+  // Layout: actionBytes ‖ nonce(u64) ‖ vaultMarker ‖ vault(20) ‖ expiresMarker ‖ expires(u64)
+  const size = actionBytes.length + 9 + (vaultAddress ? 20 : 0) + (expiresAfter !== undefined ? 9 : 0);
+  const bytes = new Uint8Array(size);
+  const view = new DataView(bytes.buffer);
+
+  bytes.set(actionBytes, 0);
+  let offset = actionBytes.length;
+  view.setBigUint64(offset, BigInt(nonce));
+  offset += 8;
+
+  if (vaultAddress) {
+    bytes[offset] = 1;
+    bytes.set(hexToBytes(vaultAddress.slice(2)), offset + 1);
+    offset += 21;
+  } else {
+    bytes[offset] = 0;
+    offset += 1;
+  }
+
+  if (expiresAfter !== undefined) {
+    bytes[offset] = 0;
+    view.setBigUint64(offset + 1, BigInt(expiresAfter));
+  }
+
   return `0x${bytesToHex(keccak_256(bytes))}`;
 }
 
@@ -52,10 +86,36 @@ export function createL1ActionHash(args: {
  * Normalizes a value into a shape that `@std/msgpack` encodes the way Hyperliquid expects on the wire:
  * - drops `undefined` properties (otherwise the encoder throws)
  * - widens `number`s outside the int32 range to `BigInt` (otherwise they would be encoded as float64 instead of int64)
+ *
+ * Returns the ORIGINAL reference when a subtree needs no modification (the common case).
  */
 function adjust(value: ValueType): ValueType {
-  if (Array.isArray(value)) return value.map(adjust);
+  if (Array.isArray(value)) {
+    // Allocate a new array only if some element changes (holes are skipped, like `Array.prototype.map`)
+    let changed = false;
+    for (let i = 0; i < value.length; i++) {
+      if (!(i in value)) continue;
+      if (adjust(value[i]) !== value[i]) {
+        changed = true;
+        break;
+      }
+    }
+    return changed ? value.map(adjust) : value;
+  }
   if (typeof value === "object" && value !== null) {
+    // Fast path is limited to plain objects; exotic objects (e.g., `Uint8Array`) keep the legacy rebuild
+    const proto = Object.getPrototypeOf(value);
+    if (proto === Object.prototype || proto === null) {
+      let changed = false;
+      for (const key in value) {
+        const entry = value[key];
+        if (entry === undefined || adjust(entry) !== entry) {
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) return value;
+    }
     const result: Record<string, ValueType> = {};
     for (const key in value) {
       const entry = value[key];
@@ -63,19 +123,10 @@ function adjust(value: ValueType): ValueType {
     }
     return result;
   }
-  if (
-    typeof value === "number" && Number.isInteger(value) &&
-    (value >= 0x100000000 || value < -0x80000000)
-  ) {
+  if (typeof value === "number" && Number.isInteger(value) && (value >= 0x100000000 || value < -0x80000000)) {
     return BigInt(value);
   }
   return value;
-}
-
-function toUint64Bytes(n: bigint | number): Uint8Array {
-  const bytes = new Uint8Array(8);
-  new DataView(bytes.buffer).setBigUint64(0, BigInt(n));
-  return bytes;
 }
 
 /**
@@ -88,10 +139,10 @@ function toUint64Bytes(n: bigint | number): Uint8Array {
  *
  * @example
  * ```ts
- * import { signL1Action } from "@nktkas/hyperliquid/signing";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { signL1Action } from "@bloxwap/hyperliquid/signing";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // `viem` or `ethers` or any `AbstractWallet`
+ * const wallet = privateKeyToAccount("0x..."); // or any `AbstractWallet`
  *
  * const action = { type: "cancel", cancels: [{ a: 0, o: 12345 }] };
  * const nonce = Date.now();
@@ -102,11 +153,11 @@ function toUint64Bytes(n: bigint | number): Uint8Array {
  * @example
  * \- Full cycle of signing and sending an L1 action to the Hyperliquid API
  * ```ts
- * import { canonicalize, signL1Action } from "@nktkas/hyperliquid/signing";
- * import { CancelRequest } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { canonicalize, signL1Action } from "@bloxwap/hyperliquid/signing";
+ * import { CancelRequest } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // `viem` or `ethers` or any `AbstractWallet`
+ * const wallet = privateKeyToAccount("0x..."); // or any `AbstractWallet`
  *
  * //             For correct hashing, keys in the L1 action must be in
  * //             the same order as in the schema definition
@@ -148,20 +199,27 @@ export async function signL1Action<TAction extends Record<string, unknown> | unk
 }): Promise<Signature> {
   const { wallet, action, nonce, isTestnet = false, vaultAddress, expiresAfter } = args;
   const actionHash = createL1ActionHash({ action, nonce, vaultAddress, expiresAfter });
-  return await signTypedData({
+  return await signL1ActionHash({ wallet, actionHash, isTestnet });
+}
+
+/** Signs a precomputed L1 action hash as the `connectionId` of an `Agent` message. */
+function signL1ActionHash(args: {
+  /** Wallet to sign the hash. */
+  wallet: AbstractWallet;
+  /** The precomputed action hash. */
+  actionHash: `0x${string}`;
+  /**
+   * Indicates if the action is for the testnet.
+   *
+   * Default: `false`
+   */
+  isTestnet?: boolean;
+}): Promise<Signature> {
+  const { wallet, actionHash, isTestnet = false } = args;
+  return signTypedData({
     wallet,
-    domain: {
-      name: "Exchange",
-      version: "1",
-      chainId: 1337,
-      verifyingContract: "0x0000000000000000000000000000000000000000",
-    },
-    types: {
-      Agent: [
-        { name: "source", type: "string" },
-        { name: "connectionId", type: "bytes32" },
-      ],
-    },
+    domain: L1_DOMAIN,
+    types: L1_AGENT_TYPES,
     primaryType: "Agent",
     message: {
       source: isTestnet ? "b" : "a",
@@ -173,10 +231,11 @@ export async function signL1Action<TAction extends Record<string, unknown> | unk
 /**
  * Signs an inner per-signer contribution to a multi-sig L1 action.
  *
- * Signs `[multiSigUser, outerSigner, action]` with both addresses lowercased;
- * the returned signature is trimmed for inclusion in the multi-sig wrapper.
+ * Signs the precomputed hash of `[multiSigUser, outerSigner, action]` (identical for
+ * every signer, so the caller computes it once); the returned signature is trimmed
+ * for inclusion in the multi-sig wrapper.
  *
- * @param args The signer, action, and signing parameters.
+ * @param args The signer and signing parameters.
  * @return The trimmed ECDSA signature.
  *
  * @throws {AbstractWalletError} If signing fails.
@@ -184,36 +243,19 @@ export async function signL1Action<TAction extends Record<string, unknown> | unk
 export async function signL1Inner(args: {
   /** Inner signer (one of the multi-sig authorized users). */
   signer: AbstractWallet;
-  /** The action to be authorized. */
-  action: Record<string, unknown> | unknown[];
-  /** The multi-sig account address. */
-  multiSigUser: `0x${string}`;
-  /** The leader address (address of the wallet that signs the outer wrapper). */
-  outerSigner: `0x${string}`;
-  /** The current timestamp in ms. */
-  nonce: number;
+  /** Precomputed hash of `[multiSigUser, outerSigner, action]` (addresses lowercased) with the request nonce. */
+  actionHash: `0x${string}`;
   /**
    * Indicates if the action is for the testnet.
    *
    * Default: `false`
    */
   isTestnet?: boolean;
-  /** Optional vault address used in the action. */
-  vaultAddress?: `0x${string}`;
-  /** Optional expiration time of the action in ms since the epoch. */
-  expiresAfter?: number;
 }): Promise<Signature> {
-  const signature = await signL1Action({
+  const signature = await signL1ActionHash({
     wallet: args.signer,
-    action: [
-      args.multiSigUser.toLowerCase(),
-      args.outerSigner.toLowerCase(),
-      args.action,
-    ],
-    nonce: args.nonce,
+    actionHash: args.actionHash,
     isTestnet: args.isTestnet,
-    vaultAddress: args.vaultAddress,
-    expiresAfter: args.expiresAfter,
   });
   return trimSignature(signature);
 }

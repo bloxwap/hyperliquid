@@ -21,7 +21,7 @@ import { isSubset, requestToId, specificity } from "./_id.ts";
  *
  * @example
  * ```ts
- * import { WebSocketRequestError, WebSocketTransport } from "@nktkas/hyperliquid";
+ * import { WebSocketRequestError, WebSocketTransport } from "@bloxwap/hyperliquid";
  *
  * const transport = new WebSocketTransport();
  * try {
@@ -115,15 +115,15 @@ export class WebSocketDispatcher {
 
     // --- Socket lifecycle ----------------------------------------------------
     // A rejected unsent request is guaranteed to never reach the server.
-    const handleDisconnect = () => {
-      this._queue.forEach(({ sent, payload, reject }) =>
+    const handleDisconnect = (): void => {
+      this._queue.forEach(({ sent, payload, reject }) => {
         reject(
           new WebSocketRequestError(
             sent ? "WebSocket connection closed" : "WebSocket connection closed before the request was sent",
             { request: payload },
           ),
-        )
-      );
+        );
+      });
       this._queue = [];
     };
     socket.addEventListener("close", handleDisconnect);
@@ -146,11 +146,7 @@ export class WebSocketDispatcher {
    *
    * @param signal Cancels the request from the caller's side.
    */
-  async request<T>(
-    method: "post" | "subscribe" | "unsubscribe",
-    payload: unknown,
-    signal?: AbortSignal,
-  ): Promise<T> {
+  async request<T>(method: "post" | "subscribe" | "unsubscribe", payload: unknown, signal?: AbortSignal): Promise<T> {
     // One controller per request: the timeout timer, the user signal, and the
     // socket termination relay into it, and `finally` detaches everything, so
     // no listener or timer outlives the request.
@@ -164,9 +160,8 @@ export class WebSocketDispatcher {
       if (controller.signal.aborted) throw controller.signal.reason;
 
       // --- Build request envelope --------------------------------------------
-      const request: SubscribeUnsubscribeRequest | PostRequest = method === "post"
-        ? { method, id: ++this._lastId, request: payload }
-        : { method, subscription: payload };
+      const request: SubscribeUnsubscribeRequest | PostRequest =
+        method === "post" ? { method, id: ++this._lastId, request: payload } : { method, subscription: payload };
       const id = "id" in request ? request.id : requestToId(request);
 
       // --- Send or queue -----------------------------------------------------
@@ -175,16 +170,20 @@ export class WebSocketDispatcher {
       if (sent) this._socket.send(frame);
 
       const { promise, resolve, reject } = Promise_.withResolvers<T>();
-      const pending = entry = { id, payload, frame, sent, resolve, reject };
+      const pending = (entry = { id, payload, frame, sent, resolve, reject });
       this._queue.push(pending);
 
-      controller.signal.addEventListener("abort", () => {
-        // Dequeue synchronously: an `open` flush between the abort and the
-        // `finally` microtask must not send a frame the caller saw rejected.
-        const index = this._queue.indexOf(pending);
-        if (index !== -1) this._queue.splice(index, 1);
-        reject(controller.signal.reason);
-      }, { once: true });
+      controller.signal.addEventListener(
+        "abort",
+        () => {
+          // Dequeue synchronously: an `open` flush between the abort and the
+          // `finally` microtask must not send a frame the caller saw rejected.
+          const index = this._queue.indexOf(pending);
+          if (index !== -1) this._queue.splice(index, 1);
+          reject(controller.signal.reason);
+        },
+        { once: true },
+      );
 
       return await promise;
     } catch (error) {
@@ -242,7 +241,10 @@ export class WebSocketDispatcher {
     // Reject by the trailing id, e.g. `too many pending post requests id=1234`.
     const idMatch = detail.match(/id=(\d+)$/);
     if (idMatch) {
-      this._reject(this._queue.find((x) => x.id === parseInt(idMatch[1], 10)), detail);
+      this._reject(
+        this._queue.find((x) => x.id === parseInt(idMatch[1], 10)),
+        detail,
+      );
       return;
     }
 
@@ -254,7 +256,10 @@ export class WebSocketDispatcher {
 
     // A `post` envelope echo carries a numeric id.
     if (typeof parsedRequest.id === "number") {
-      this._reject(this._queue.find((x) => x.id === parsedRequest.id), detail);
+      this._reject(
+        this._queue.find((x) => x.id === parsedRequest.id),
+        detail,
+      );
       return;
     }
 

@@ -15,7 +15,7 @@ A client uses a [transport](transports.md) to call a specific part of the Hyperl
 [Info methods](https://nktkas.gitbook.io/hyperliquid/api-reference/info-methods).
 
 ```ts
-import { HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
 
 const transport = new HttpTransport();
 const client = new InfoClient({ transport });
@@ -33,7 +33,7 @@ const book = await client.l2Book({ coin: "ETH" });
 {% tab title="viem" %}
 
 ```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
 
 const wallet = privateKeyToAccount("0x...");
@@ -46,48 +46,15 @@ await client.order({ orders: [/* ... */], grouping: "na" });
 
 {% endtab %}
 
-{% tab title="ethers" %}
-
-```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
-import { Wallet } from "ethers";
-
-const wallet = new Wallet("0x...");
-
-const transport = new HttpTransport();
-const client = new ExchangeClient({ transport, wallet });
-
-await client.order({ orders: [/* ... */], grouping: "na" });
-```
-
-{% endtab %}
-
 {% tab title="Browser (viem)" %}
 
 ```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { createWalletClient, custom } from "viem";
 import { arbitrum } from "viem/chains";
 
 const [account] = await window.ethereum!.request({ method: "eth_requestAccounts" }) as `0x${string}`[];
 const wallet = createWalletClient({ account, chain: arbitrum, transport: custom(window.ethereum!) });
-
-const transport = new HttpTransport();
-const client = new ExchangeClient({ transport, wallet });
-
-await client.order({ orders: [/* ... */], grouping: "na" });
-```
-
-{% endtab %}
-
-{% tab title="Browser (ethers)" %}
-
-```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
-import { BrowserProvider } from "ethers";
-
-const provider = new BrowserProvider(window.ethereum!);
-const wallet = await provider.getSigner();
 
 const transport = new HttpTransport();
 const client = new ExchangeClient({ transport, wallet });
@@ -103,8 +70,8 @@ Any object matching one of the [supported wallet interfaces](signing.md#wallet-c
 requirement is [`signTypedData`](https://eips.ethereum.org/EIPS/eip-712) and an `address`:
 
 ```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
-import type { AbstractViemLocalAccount } from "@nktkas/hyperliquid/signing";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
+import type { AbstractViemLocalAccount } from "@bloxwap/hyperliquid/signing";
 
 const wallet: AbstractViemLocalAccount = {
   address: "0x...",
@@ -131,7 +98,7 @@ authorized signers to approve every action. The **leader** (first signer in the 
 submits the final transaction — only the leader's nonce is validated by the server.
 
 ```ts
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
 
 const multiSigUser = "0x..."; // the multi-sig account address
@@ -197,8 +164,8 @@ await client.order({ orders: [/* ... */], grouping: "na" }, {
 
 Sets the EIP-712 domain `chainId` for [user-signed actions](signing.md#user-signed-action). Defaults to the wallet's
 provider chain ID. Local wallets without a provider (e.g.,
-[`privateKeyToAccount`](https://viem.sh/docs/accounts/local/privateKeyToAccount),
-[`new Wallet()`](https://docs.ethers.org/v6/api/wallet/#Wallet)) fall back to `0x1`. Override to set a different chain:
+[`privateKeyToAccount`](https://viem.sh/docs/accounts/local/privateKeyToAccount)) fall back to `0x1`. Override to set a
+different chain:
 
 ```ts
 const client = new ExchangeClient({
@@ -236,7 +203,7 @@ const client = new ExchangeClient({
 all [Subscription methods](https://nktkas.gitbook.io/hyperliquid/api-reference/subscription-methods).
 
 ```ts
-import { SubscriptionClient, WebSocketTransport } from "@nktkas/hyperliquid";
+import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
 
 const transport = new WebSocketTransport();
 const client = new SubscriptionClient({ transport });
@@ -306,7 +273,7 @@ RPC endpoint. See all [Explorer methods](https://nktkas.gitbook.io/hyperliquid/a
 Requests take an `HttpTransport`:
 
 ```ts
-import { ExplorerClient, HttpTransport } from "@nktkas/hyperliquid";
+import { ExplorerClient, HttpTransport } from "@bloxwap/hyperliquid";
 
 const transport = new HttpTransport();
 const client = new ExplorerClient({ transport });
@@ -317,7 +284,7 @@ const block = await client.blockDetails({ height: 123 });
 Subscriptions take a [`WebSocketTransport`](transports.md#websocket) pointed at the RPC WebSocket URL:
 
 ```ts
-import { ExplorerClient, WebSocketTransport } from "@nktkas/hyperliquid";
+import { ExplorerClient, WebSocketTransport } from "@bloxwap/hyperliquid";
 
 const transport = new WebSocketTransport({ url: "wss://rpc.hyperliquid.xyz/ws" });
 const client = new ExplorerClient({ transport });

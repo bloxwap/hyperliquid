@@ -1,5 +1,5 @@
-import { type BboEvent, type BboParameters, BboRequest } from "@nktkas/hyperliquid/api/subscription";
-import * as v from "@valibot/valibot";
+import { type BboEvent, type BboParameters, BboRequest } from "@bloxwap/hyperliquid/api/subscription";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -13,20 +13,13 @@ runTest({
   name: "bbo",
   mode: "api",
   fn: async (_t, client) => {
-    const params: BboParameters[] = [
-      { coin: "BTC" },
-      { coin: "ETH" },
-      { coin: "SOL" },
-    ];
+    const params: BboParameters[] = [{ coin: "BTC" }, { coin: "ETH" }, { coin: "SOL" }];
 
     const data = await collectEventsOverTime<BboEvent>(async (cb) => {
       await Promise.all(params.map((p) => client.bbo(p, cb)));
     }, 60_000);
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data, [
-      "#/properties/bbo/items/0/null",
-      "#/properties/bbo/items/1/null",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/properties/bbo/items/0/null", "#/properties/bbo/items/1/null"]);
   },
 });

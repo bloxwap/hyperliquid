@@ -26,9 +26,8 @@ import { userDetails, type UserDetailsParameters, type UserDetailsResponse } fro
  * Requests use an `HttpTransport` and subscriptions use a `WebSocketTransport`, both on the RPC endpoint.
  */
 export class ExplorerClient<
-  T extends IRequestTransport<"explorer"> | ISubscriptionTransport =
-    & IRequestTransport<"explorer">
-    & ISubscriptionTransport,
+  T extends IRequestTransport<"explorer"> | ISubscriptionTransport = IRequestTransport<"explorer"> &
+    ISubscriptionTransport,
 > {
   config_: ExplorerConfig<T>;
 
@@ -39,7 +38,7 @@ export class ExplorerClient<
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * // `HttpTransport` on the RPC URL for requests, or `WebSocketTransport` on the RPC WebSocket URL for subscriptions
    * const transport = new hl.HttpTransport();
@@ -64,7 +63,7 @@ export class ExplorerClient<
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // only `HttpTransport` supports this API
    * const client = new hl.ExplorerClient({ transport });
@@ -94,7 +93,7 @@ export class ExplorerClient<
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport({ url: "wss://rpc.hyperliquid.xyz/ws" }); // only `WebSocketTransport` supports this API
    * const client = new hl.ExplorerClient({ transport });
@@ -126,7 +125,7 @@ export class ExplorerClient<
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.WebSocketTransport({ url: "wss://rpc.hyperliquid.xyz/ws" }); // only `WebSocketTransport` supports this API
    * const client = new hl.ExplorerClient({ transport });
@@ -159,7 +158,7 @@ export class ExplorerClient<
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // only `HttpTransport` supports this API
    * const client = new hl.ExplorerClient({ transport });
@@ -190,7 +189,7 @@ export class ExplorerClient<
    *
    * @example
    * ```ts
-   * import * as hl from "@nktkas/hyperliquid";
+   * import * as hl from "@bloxwap/hyperliquid";
    *
    * const transport = new hl.HttpTransport(); // only `HttpTransport` supports this API
    * const client = new hl.ExplorerClient({ transport });

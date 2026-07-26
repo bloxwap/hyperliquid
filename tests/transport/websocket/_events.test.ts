@@ -1,12 +1,11 @@
-// deno-lint-ignore-file no-import-prefix
-
 /**
  * Tests for the typed event target: routing of Hyperliquid envelopes and
  * explorer pushes, and tolerance to malformed frames.
  * @module
  */
 
-import { assert, assertEquals, assertFalse } from "jsr:@std/assert@1";
+import { describe, test } from "bun:test";
+import { assert, assertEquals, assertFalse } from "@jsr/std__assert";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
 
 // =============================================================================
@@ -32,30 +31,34 @@ const MESSAGES = {
     channel: "testChannel",
     data: { foo: "bar" },
   },
-  explorerBlock: [{
-    blockTime: 1678900000,
-    hash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-    height: 123,
-    numTxs: 42,
-    proposer: "0x0000000000000000000000000000000000000000",
-  }],
-  explorerTxs: [{
-    action: { type: "someAction" },
-    block: 234,
-    error: null,
-    hash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-    time: 1678900001,
-    user: "0x0000000000000000000000000000000000000000",
-  }],
+  explorerBlock: [
+    {
+      blockTime: 1678900000,
+      hash: "0x0000000000000000000000000000000000000000000000000000000000000000",
+      height: 123,
+      numTxs: 42,
+      proposer: "0x0000000000000000000000000000000000000000",
+    },
+  ],
+  explorerTxs: [
+    {
+      action: { type: "someAction" },
+      block: 234,
+      error: null,
+      hash: "0x0000000000000000000000000000000000000000000000000000000000000000",
+      time: 1678900001,
+      user: "0x0000000000000000000000000000000000000000",
+    },
+  ],
 } as const;
 
 // =============================================================================
 // Tests
 // =============================================================================
 
-Deno.test("HyperliquidEventTarget", async (t) => {
-  await t.step("message parsing", async (t) => {
-    await t.step("HyperliquidEvent dispatches to channel name", () => {
+describe("HyperliquidEventTarget", () => {
+  describe("message parsing", () => {
+    test("HyperliquidEvent dispatches to channel name", () => {
       const socket = createFakeSocket();
       const target = new HyperliquidEventTarget(socket);
 
@@ -68,7 +71,7 @@ Deno.test("HyperliquidEventTarget", async (t) => {
       assertEquals(received, MESSAGES.hyperliquidEvent.data);
     });
 
-    await t.step("ExplorerBlock dispatches to explorerBlock_", () => {
+    test("ExplorerBlock dispatches to explorerBlock_", () => {
       const socket = createFakeSocket();
       const target = new HyperliquidEventTarget(socket);
 
@@ -81,7 +84,7 @@ Deno.test("HyperliquidEventTarget", async (t) => {
       assertEquals(received, MESSAGES.explorerBlock);
     });
 
-    await t.step("ExplorerTxs dispatches to explorerTxs_", () => {
+    test("ExplorerTxs dispatches to explorerTxs_", () => {
       const socket = createFakeSocket();
       const target = new HyperliquidEventTarget(socket);
 
@@ -94,7 +97,7 @@ Deno.test("HyperliquidEventTarget", async (t) => {
       assertEquals(received, MESSAGES.explorerTxs);
     });
 
-    await t.step("pong dispatches to pong channel", () => {
+    test("pong dispatches to pong channel", () => {
       const socket = createFakeSocket();
       const target = new HyperliquidEventTarget(socket);
 
@@ -108,8 +111,8 @@ Deno.test("HyperliquidEventTarget", async (t) => {
     });
   });
 
-  await t.step("error handling", async (t) => {
-    await t.step("invalid JSON does not crash", () => {
+  describe("error handling", () => {
+    test("invalid JSON does not crash", () => {
       const socket = createFakeSocket();
       const target = new HyperliquidEventTarget(socket);
 
@@ -122,7 +125,7 @@ Deno.test("HyperliquidEventTarget", async (t) => {
       assertFalse(triggered);
     });
 
-    await t.step("unrecognized message shape is ignored", () => {
+    test("unrecognized message shape is ignored", () => {
       const socket = createFakeSocket();
       const target = new HyperliquidEventTarget(socket);
 

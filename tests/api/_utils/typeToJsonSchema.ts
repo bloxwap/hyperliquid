@@ -27,8 +27,8 @@
  * @module
  */
 
-import { type Config, createGenerator } from "npm:ts-json-schema-generator@2";
-import ts from "npm:typescript@5";
+import { type Config, createGenerator } from "ts-json-schema-generator";
+import ts from "typescript";
 import type { JsonSchema } from "./schemaCoverage.ts";
 
 export type { JsonSchema } from "./schemaCoverage.ts";

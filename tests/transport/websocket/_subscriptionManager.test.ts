@@ -1,12 +1,11 @@
-// deno-lint-ignore-file no-import-prefix
-
 /**
  * Tests for the subscription lifecycle manager: listener registration,
  * resubscription across reconnects, failure reporting, and server-side limits.
  * @module
  */
 
-import { assert, assertEquals, assertFalse, assertRejects } from "jsr:@std/assert@1";
+import { describe, test } from "bun:test";
+import { assert, assertEquals, assertFalse, assertRejects } from "@jsr/std__assert";
 import { ReconnectingWebSocket } from "@nktkas/rews";
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
@@ -39,9 +38,9 @@ function createManager(resubscribe = true): { socket: MockWebSocket; manager: Ma
 // Tests
 // =============================================================================
 
-Deno.test("WebSocketSubscriptionManager", async (t) => {
-  await t.step("subscribe()", async (t) => {
-    await t.step("standard flow: subscribe, receive event, unsubscribe", async () => {
+describe("WebSocketSubscriptionManager", () => {
+  describe("subscribe()", () => {
+    test("standard flow: subscribe, receive event, unsubscribe", async () => {
       const { socket, manager } = createManager();
 
       let eventReceived = false;
@@ -65,7 +64,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assert(manager._subscriptions.size === 0);
     });
 
-    await t.step("duplicate listener is not added twice", async () => {
+    test("duplicate listener is not added twice", async () => {
       const { socket, manager } = createManager();
 
       const payload = { channel: "test", extra: "data" };
@@ -81,7 +80,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(manager._subscriptions.get(JSON.stringify(payload))?.listeners.size, 1);
     });
 
-    await t.step("different listeners share same subscription", async () => {
+    test("different listeners share same subscription", async () => {
       const { socket, manager } = createManager();
 
       const payload = { channel: "test", extra: "data" };
@@ -96,7 +95,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(manager._subscriptions.get(JSON.stringify(payload))?.listeners.size, 2);
     });
 
-    await t.step("second listener does not send subscription request", () => {
+    test("second listener does not send subscription request", () => {
       const { socket, manager } = createManager();
 
       const payload = { channel: "test", extra: "data" };
@@ -107,14 +106,14 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(socket.sentMessages.length, 1);
     });
 
-    await t.step("new listeners wait for pending subscription", async () => {
+    test("new listeners wait for pending subscription", async () => {
       const { socket, manager } = createManager();
 
       const payload = { channel: "test", extra: "data" };
       const subPromise1 = manager.subscribe("test", payload, () => {});
 
       let secondCompleted = false;
-      manager.subscribe("test", payload, () => {}).then(() => secondCompleted = true);
+      manager.subscribe("test", payload, () => {}).then(() => (secondCompleted = true));
 
       await drain();
       assertFalse(secondCompleted);
@@ -126,7 +125,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assert(secondCompleted);
     });
 
-    await t.step("rejected confirmation removes the subscription", async () => {
+    test("rejected confirmation removes the subscription", async () => {
       const { socket, manager } = createManager();
       const payload = { channel: "test", extra: "data" };
 
@@ -146,7 +145,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       await retry;
     });
 
-    await t.step("limit errors carry the request payload", async () => {
+    test("limit errors carry the request payload", async () => {
       const { socket, manager } = createManager();
 
       for (let i = 0; i < 15; i++) {
@@ -165,8 +164,8 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
     });
   });
 
-  await t.step("AbortSignal", async (t) => {
-    await t.step("rejects without sending when already aborted", async () => {
+  describe("AbortSignal", () => {
+    test("rejects without sending when already aborted", async () => {
       const { socket, manager } = createManager();
       const payload = { channel: "test", extra: "data" };
 
@@ -180,7 +179,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(socket.sentMessages.length, 0);
     });
 
-    await t.step("abort while the confirmation is pending detaches the listener", async () => {
+    test("abort while the confirmation is pending detaches the listener", async () => {
       const { socket, manager } = createManager();
       const payload = { channel: "test", extra: "data" };
 
@@ -202,7 +201,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(events, 0);
     });
 
-    await t.step("abort of one waiter does not affect the others", async () => {
+    test("abort of one waiter does not affect the others", async () => {
       const { socket, manager } = createManager();
       const payload = { channel: "test", extra: "data" };
 
@@ -223,8 +222,8 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
     });
   });
 
-  await t.step("unsubscribe()", async (t) => {
-    await t.step("removes listener and clears resources", async () => {
+  describe("unsubscribe()", () => {
+    test("removes listener and clears resources", async () => {
       const { socket, manager } = createManager();
 
       const payload = { channel: "test" };
@@ -239,7 +238,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assert(manager._subscriptions.size === 0);
     });
 
-    await t.step("does not send request if other listeners exist", async () => {
+    test("does not send request if other listeners exist", async () => {
       const { socket, manager } = createManager();
 
       const payload = { channel: "test" };
@@ -256,8 +255,8 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
     });
   });
 
-  await t.step("autoResubscribe", async (t) => {
-    await t.step("resubscribes after reconnection", async () => {
+  describe("autoResubscribe", () => {
+    test("resubscribes after reconnection", async () => {
       const { socket, manager } = createManager(true);
 
       let eventCount1 = 0;
@@ -296,7 +295,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       socket.terminate();
     });
 
-    await t.step("onError: rejected re-subscription notifies once, drops the channel, and is not retried", async () => {
+    test("onError: rejected re-subscription notifies once, drops the channel, and is not retried", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -331,7 +330,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(errors.length, 1);
     });
 
-    await t.step("a subscriber joining an in-flight resubscribe shares its failure", async () => {
+    test("a subscriber joining an in-flight resubscribe shares its failure", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -351,7 +350,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(manager._subscriptions.size, 0);
     });
 
-    await t.step("a joiner rejected by a disconnect does not keep a zombie listener", async () => {
+    test("a joiner rejected by a disconnect does not keep a zombie listener", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -381,7 +380,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(joinerEvents, 0);
     });
 
-    await t.step("a subscriber hitting a poisoned cached rejection does not leak its listener", async () => {
+    test("a subscriber hitting a poisoned cached rejection does not leak its listener", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -409,14 +408,14 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(lateEvents, 0);
     });
 
-    await t.step("a re-subscription rejected by a disconnect survives for the next open", async () => {
+    test("a re-subscription rejected by a disconnect survives for the next open", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
       let events = 0;
       let onErrorCalled = false;
       const subPromise = manager.subscribe("test", payload, () => events++, {
-        onError: () => onErrorCalled = true,
+        onError: () => (onErrorCalled = true),
       });
       socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
       await subPromise;
@@ -438,7 +437,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(events, 1);
     });
 
-    await t.step("onError: terminal loss notifies every listener once with the reason, isolating throws", async () => {
+    test("onError: terminal loss notifies every listener once with the reason, isolating throws", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -467,7 +466,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(manager._subscriptions.size, 0);
     });
 
-    await t.step("onError: terminal also fires via the socket error event", async () => {
+    test("onError: terminal also fires via the socket error event", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -486,7 +485,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals((errors[0] as WebSocketRequestError).cause, socket.terminationSignal.reason);
     });
 
-    await t.step("onError: re-subscribing the same listener keeps its original onError (first-wins)", async () => {
+    test("onError: re-subscribing the same listener keeps its original onError (first-wins)", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -510,7 +509,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(second, 0); // replacement ignored
     });
 
-    await t.step("onError: called once when the connection drops with resubscribe disabled", async () => {
+    test("onError: called once when the connection drops with resubscribe disabled", async () => {
       const { socket, manager } = createManager(false);
       const payload = { channel: "test", extra: "data" };
 
@@ -532,7 +531,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(errorCalls, 1);
     });
 
-    await t.step("a failure before the confirmation rejects subscribe() without firing onError", async () => {
+    test("a failure before the confirmation rejects subscribe() without firing onError", async () => {
       const { socket, manager } = createManager(false);
       const payload = { channel: "test", extra: "data" };
 
@@ -548,7 +547,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(manager._subscriptions.size, 0);
     });
 
-    await t.step("a termination before the confirmation rejects subscribe() without firing onError", async () => {
+    test("a termination before the confirmation rejects subscribe() without firing onError", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -563,7 +562,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(manager._subscriptions.size, 0);
     });
 
-    await t.step("disabling resubscribe while disconnected fails the stranded subscriptions at open", async () => {
+    test("disabling resubscribe while disconnected fails the stranded subscriptions at open", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -590,7 +589,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(events, 0);
     });
 
-    await t.step("resubscribe: false clears subscriptions on close", async () => {
+    test("resubscribe: false clears subscriptions on close", async () => {
       const { socket, manager } = createManager(false);
 
       let eventCount1 = 0;
@@ -631,8 +630,8 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
     });
   });
 
-  await t.step("unique user subscription limit", async (t) => {
-    await t.step("rejects when exceeding 15 unique users", async () => {
+  describe("unique user subscription limit", () => {
+    test("rejects when exceeding 15 unique users", async () => {
       const { socket, manager } = createManager();
 
       for (let i = 0; i < 15; i++) {
@@ -650,7 +649,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       );
     });
 
-    await t.step("allows subscription after unsubscribing", async () => {
+    test("allows subscription after unsubscribing", async () => {
       const { socket, manager } = createManager();
 
       const subs = [];
@@ -673,7 +672,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(manager._subscriptions.size, 15);
     });
 
-    await t.step("does not count subscriptions without user parameter", async () => {
+    test("does not count subscriptions without user parameter", async () => {
       const { socket, manager } = createManager();
 
       for (let i = 0; i < 10; i++) {
@@ -689,7 +688,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       await promise;
     });
 
-    await t.step("allows a new channel of an already tracked user at the limit", async () => {
+    test("allows a new channel of an already tracked user at the limit", async () => {
       const { socket, manager } = createManager();
 
       for (let i = 0; i < 15; i++) {
@@ -706,7 +705,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       await promise;
     });
 
-    await t.step("matches tracked users case-insensitively", async () => {
+    test("matches tracked users case-insensitively", async () => {
       const { socket, manager } = createManager();
 
       const mixedCase = "0x00000000000000000000000000000000000000AB";
@@ -724,7 +723,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       await promise;
     });
 
-    await t.step("allows multiple listeners on same user subscription", async () => {
+    test("allows multiple listeners on same user subscription", async () => {
       const { socket, manager } = createManager();
 
       for (let i = 0; i < 15; i++) {
@@ -738,7 +737,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       await manager.subscribe("userEvents", existingPayload, () => {});
     });
 
-    await t.step("allows multiple subscriptions for same user", async () => {
+    test("allows multiple subscriptions for same user", async () => {
       const { socket, manager } = createManager();
 
       // Many channels of one user count as a single unique user.
@@ -759,8 +758,8 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
     });
   });
 
-  await t.step("subscription limit", async (t) => {
-    await t.step("rejects when exceeding 1000 subscriptions", async () => {
+  describe("subscription limit", () => {
+    test("rejects when exceeding 1000 subscriptions", async () => {
       const { socket, manager } = createManager();
 
       for (let i = 0; i < 1000; i++) {
@@ -778,7 +777,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       );
     });
 
-    await t.step("allows subscription after unsubscribing", async () => {
+    test("allows subscription after unsubscribing", async () => {
       const { socket, manager } = createManager();
 
       const subs = [];
@@ -801,7 +800,7 @@ Deno.test("WebSocketSubscriptionManager", async (t) => {
       assertEquals(manager._subscriptions.size, 1000);
     });
 
-    await t.step("allows multiple listeners on same subscription", async () => {
+    test("allows multiple listeners on same subscription", async () => {
       const { socket, manager } = createManager();
 
       for (let i = 0; i < 1000; i++) {

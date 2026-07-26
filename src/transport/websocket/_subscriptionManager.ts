@@ -9,7 +9,7 @@ import { ReconnectingWebSocket } from "@nktkas/rews";
 import * as abort from "../_abort.ts";
 import type { ISubscription } from "../_base.ts";
 import type { HyperliquidEventTarget } from "./_events.ts";
-import { WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
+import { type WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
 import { requestToId } from "./_id.ts";
 
 /** Per-listener registration: its unsubscribe handle and optional error callback. */
@@ -127,8 +127,7 @@ export class WebSocketSubscriptionManager {
         });
       }
 
-      const promise = this._dispatcher.request("subscribe", payload)
-        .finally(() => created.promiseFinished = true);
+      const promise = this._dispatcher.request("subscribe", payload).finally(() => (created.promiseFinished = true));
       const created: SubscriptionState = { channel, listeners: new Map(), promise, promiseFinished: false };
       this._subscriptions.set(id, created);
       subscription = created;
@@ -145,7 +144,7 @@ export class WebSocketSubscriptionManager {
     let registration = subscription.listeners.get(listener);
     const createdRegistration = registration === undefined;
     if (!registration) {
-      const unsubscribe = async () => {
+      const unsubscribe = async (): Promise<void> => {
         this._hlEvents.removeEventListener(channel, listener);
         const current = this._subscriptions.get(id);
         current?.listeners.delete(listener);
@@ -235,7 +234,7 @@ export class WebSocketSubscriptionManager {
             this._failSubscription(id, subscription, error as WebSocketRequestError);
           }
         })
-        .finally(() => subscription.promiseFinished = true);
+        .finally(() => (subscription.promiseFinished = true));
     }
   }
 
@@ -251,9 +250,9 @@ export class WebSocketSubscriptionManager {
     for (const [id, subscription] of [...this._subscriptions.entries()]) {
       const error = terminal
         ? new WebSocketRequestError("WebSocket connection permanently terminated", {
-          cause: this._socket.terminationSignal.reason,
-          request: JSON.parse(id),
-        })
+            cause: this._socket.terminationSignal.reason,
+            request: JSON.parse(id),
+          })
         : new WebSocketRequestError("WebSocket connection closed", { request: JSON.parse(id) });
       this._failSubscription(id, subscription, error);
     }

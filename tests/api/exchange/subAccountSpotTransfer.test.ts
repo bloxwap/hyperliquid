@@ -1,7 +1,10 @@
-import { ApiRequestError } from "@nktkas/hyperliquid";
-import { type SubAccountSpotTransferParameters, SubAccountSpotTransferRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
-import { assertRejects } from "jsr:@std/assert@1";
+import { ApiRequestError } from "@bloxwap/hyperliquid";
+import {
+  type SubAccountSpotTransferParameters,
+  SubAccountSpotTransferRequest,
+} from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
+import { assertRejects } from "@jsr/std__assert";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
 import { runTest } from "./_t.ts";
@@ -30,15 +33,17 @@ runTest({
       },
     ];
 
-    await Promise.all(params.map((p) =>
-      assertRejects(
-        async () => {
-          await exchClient.subAccountSpotTransfer(p);
-        },
-        ApiRequestError,
-        "Invalid sub-account transfer from",
-      )
-    ));
+    await Promise.all(
+      params.map((p) =>
+        assertRejects(
+          async () => {
+            await exchClient.subAccountSpotTransfer(p);
+          },
+          ApiRequestError,
+          "Invalid sub-account transfer from",
+        ),
+      ),
+    );
 
     schemaCoverage(paramsSchema, params);
   },

@@ -1,5 +1,8 @@
-import { type UserTwapSliceFillsByTimeParameters, UserTwapSliceFillsByTimeRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import {
+  type UserTwapSliceFillsByTimeParameters,
+  UserTwapSliceFillsByTimeRequest,
+} from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -43,8 +43,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { allPerpMetas } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { allPerpMetas } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -53,10 +53,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetuals-metadata-universe-and-margin-tables
  */
-export function allPerpMetas(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<AllPerpMetasResponse> {
+export function allPerpMetas(config: InfoConfig, signal?: AbortSignal): Promise<AllPerpMetasResponse> {
   const request = parse(AllPerpMetasRequest, {
     type: "allPerpMetas",
   });

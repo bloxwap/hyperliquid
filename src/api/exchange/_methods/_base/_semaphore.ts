@@ -3,7 +3,7 @@
  * @module
  */
 
-import { Semaphore } from "@std/async/unstable-semaphore";
+import { Semaphore } from "@jsr/std__async/unstable-semaphore";
 
 /**
  * A reference-counted registry for lazily creating and reusing per-key values.

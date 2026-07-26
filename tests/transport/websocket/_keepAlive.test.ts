@@ -1,13 +1,12 @@
-// deno-lint-ignore-file no-import-prefix
-
 /**
  * Tests for the WebSocket keep-alive watchdog: the ping cadence, the pong
  * deadline, and the watchdog teardown on disconnect.
  * @module
  */
 
-import { assertEquals } from "jsr:@std/assert@1";
-import { FakeTime } from "jsr:@std/testing@1/time";
+import { afterEach, beforeEach, describe, test } from "bun:test";
+import { assertEquals } from "@jsr/std__assert";
+import { FakeTime } from "@jsr/std__testing/time";
 import { ReconnectingWebSocket } from "@nktkas/rews";
 import { WebSocketKeepAlive, type WebSocketKeepAliveOptions } from "../../../src/transport/websocket/_keepAlive.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
@@ -21,9 +20,20 @@ function createKeepAlive(options?: WebSocketKeepAliveOptions): { socket: MockWeb
   return { socket };
 }
 
-Deno.test("WebSocketKeepAlive", async (t) => {
-  await t.step("reconnects when a ping stays unanswered", () => {
-    using time = new FakeTime();
+describe("WebSocketKeepAlive", () => {
+  // The npm build of `@std/testing/time` drops the `[Symbol.dispose]` member the Deno version
+  // declares, so the clock is installed and restored through hooks instead of a `using` binding.
+  let time: FakeTime;
+
+  beforeEach(() => {
+    time = new FakeTime();
+  });
+
+  afterEach(() => {
+    time.restore();
+  });
+
+  test("reconnects when a ping stays unanswered", () => {
     const { socket } = createKeepAlive();
 
     socket.open();
@@ -34,8 +44,7 @@ Deno.test("WebSocketKeepAlive", async (t) => {
     assertEquals(socket.reconnectCalls, 1);
   });
 
-  await t.step("a pong in time keeps the connection", () => {
-    using time = new FakeTime();
+  test("a pong in time keeps the connection", () => {
     const { socket } = createKeepAlive();
 
     socket.open();
@@ -46,8 +55,7 @@ Deno.test("WebSocketKeepAlive", async (t) => {
     assertEquals(socket.reconnectCalls, 0);
   });
 
-  await t.step("disconnect clears the watchdog", () => {
-    using time = new FakeTime();
+  test("disconnect clears the watchdog", () => {
     const { socket } = createKeepAlive();
 
     socket.open();
@@ -60,8 +68,7 @@ Deno.test("WebSocketKeepAlive", async (t) => {
     assertEquals(socket.sentMessages.length, sentBeforeTick);
   });
 
-  await t.step("honors custom interval and timeout", () => {
-    using time = new FakeTime();
+  test("honors custom interval and timeout", () => {
     const { socket } = createKeepAlive({ interval: 5_000, timeout: 1_000 });
 
     socket.open();

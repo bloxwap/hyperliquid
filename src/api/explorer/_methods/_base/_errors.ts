@@ -9,8 +9,7 @@ export { ApiRequestError };
 
 /** True if `r` matches the explorer error response shape `{ "type": "error", "message": "..." }`. */
 function isErrorResponse(r: unknown): r is { type: "error"; message?: unknown } {
-  return typeof r === "object" && r !== null &&
-    "type" in r && r.type === "error";
+  return typeof r === "object" && r !== null && "type" in r && r.type === "error";
 }
 
 /**

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -26,24 +26,26 @@ export type SubAccountsRequest = v.InferOutput<typeof SubAccountsRequest>;
  * Array of user sub-account or null if the user does not have any sub-accounts.
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-subaccounts
  */
-export type SubAccountsResponse = {
-  /** Sub-account name. */
-  name: string;
-  /**
-   * Sub-account address.
-   * @pattern ^0x[a-fA-F0-9]{40}$
-   */
-  subAccountUser: `0x${string}`;
-  /**
-   * Master account address.
-   * @pattern ^0x[a-fA-F0-9]{40}$
-   */
-  master: `0x${string}`;
-  /** Perpetual trading clearinghouse state summary. */
-  clearinghouseState: ClearinghouseStateResponse;
-  /** Spot tokens clearinghouse state. */
-  spotState: SpotClearinghouseStateResponse;
-}[] | null;
+export type SubAccountsResponse =
+  | {
+      /** Sub-account name. */
+      name: string;
+      /**
+       * Sub-account address.
+       * @pattern ^0x[a-fA-F0-9]{40}$
+       */
+      subAccountUser: `0x${string}`;
+      /**
+       * Master account address.
+       * @pattern ^0x[a-fA-F0-9]{40}$
+       */
+      master: `0x${string}`;
+      /** Perpetual trading clearinghouse state summary. */
+      clearinghouseState: ClearinghouseStateResponse;
+      /** Spot tokens clearinghouse state. */
+      spotState: SpotClearinghouseStateResponse;
+    }[]
+  | null;
 
 // ============================================================
 // Execution Logic
@@ -68,8 +70,8 @@ export type SubAccountsParameters = Omit<v.InferInput<typeof SubAccountsRequest>
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { subAccounts } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { subAccounts } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

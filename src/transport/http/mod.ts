@@ -15,7 +15,7 @@
  *
  * @example
  * ```ts
- * import { HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+ * import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
  *
  * const transport = new HttpTransport();
  * const client = new InfoClient({ transport });
@@ -73,7 +73,7 @@ export const TESTNET_RPC_URL = "https://rpc.hyperliquid-testnet.xyz";
  *
  * @example
  * ```ts
- * import { HttpRequestError, HttpTransport } from "@nktkas/hyperliquid";
+ * import { HttpRequestError, HttpTransport } from "@bloxwap/hyperliquid";
  *
  * const transport = new HttpTransport();
  * try {
@@ -109,9 +109,10 @@ export class HttpRequestError extends TransportError {
       message = detail;
     } else {
       const cause = errorOptions.cause;
-      message = cause === undefined
-        ? "Unknown HTTP request error"
-        : `Unknown HTTP request error: ${cause instanceof Error ? cause.message : String(cause)}`;
+      message =
+        cause === undefined
+          ? "Unknown HTTP request error"
+          : `Unknown HTTP request error: ${cause instanceof Error ? cause.message : String(cause)}`;
     }
 
     super(message, errorOptions);
@@ -126,7 +127,7 @@ export class HttpRequestError extends TransportError {
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
  *
  * const transport = new HttpTransport();
  * const mids = await transport.request("info", { type: "allMids" });
@@ -146,6 +147,8 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   rpcUrl: string | URL;
   /** A custom {@link https://developer.mozilla.org/en-US/docs/Web/API/RequestInit | RequestInit} that is merged with a fetch request. */
   fetchOptions: Omit<RequestInit, "body" | "method">;
+  /** Memoized endpoint URLs, keyed by base and endpoint; mutating `apiUrl`/`rpcUrl` simply misses the cache. */
+  private readonly _urlCache = new Map<string, URL>();
 
   constructor(options?: HttpTransportOptions) {
     this.isTestnet = options?.isTestnet ?? false;
@@ -169,38 +172,47 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
    *
    * @example
    * ```ts
-   * import { HttpTransport } from "@nktkas/hyperliquid";
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
    *
    * const transport = new HttpTransport();
    * const mids = await transport.request("info", { type: "allMids" });
    * ```
    */
-  async request<T>(
-    endpoint: "info" | "exchange" | "explorer",
-    payload: unknown,
-    signal?: AbortSignal,
-  ): Promise<T> {
+  async request<T>(endpoint: "info" | "exchange" | "explorer", payload: unknown, signal?: AbortSignal): Promise<T> {
     // One controller per request: the timeout timer and all user signals relay into it,
     // and `finally` detaches everything, so no listener or timer outlives the request.
     const controller = new AbortController();
     const timeoutMs = this.timeout; // for correct error message after user changes
     const timeout = abort.scheduleTimeout(controller, timeoutMs);
-    const detachRelay = abort.relay([signal, this.fetchOptions.signal], controller);
+    const fetchSignal = this.fetchOptions.signal;
+    const detachRelay =
+      signal !== undefined || (fetchSignal !== undefined && fetchSignal !== null)
+        ? abort.relay([signal, fetchSignal], controller)
+        : noop; // no signals to relay, so nothing to wire up
 
     try {
       // --- Request init ------------------------------------------------------
-      const url = buildEndpointUrl(endpoint === "explorer" ? this.rpcUrl : this.apiUrl, endpoint);
-      const init = mergeRequestInit(
-        {
-          body: JSON.stringify(payload),
-          headers: {
-            "Content-Type": "application/json",
-          },
-          method: "POST",
-        },
-        this.fetchOptions,
-        { signal: controller.signal },
-      );
+      const url = this._endpointUrl(endpoint === "explorer" ? this.rpcUrl : this.apiUrl, endpoint);
+      // With default options there is nothing to merge, and a plain headers
+      // record avoids allocating Headers instances fetch would normalize anyway.
+      const init: RequestInit = isEmptyRequestInit(this.fetchOptions)
+        ? {
+            body: JSON.stringify(payload),
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+            signal: controller.signal,
+          }
+        : mergeRequestInit(
+            {
+              body: JSON.stringify(payload),
+              headers: {
+                "Content-Type": "application/json",
+              },
+              method: "POST",
+            },
+            this.fetchOptions,
+            { signal: controller.signal },
+          );
 
       // --- Send and validate -------------------------------------------------
       const response = await fetch(url, init);
@@ -244,6 +256,17 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       detachRelay();
     }
   }
+
+  /** Memoized {@link buildEndpointUrl}: the result only changes when `apiUrl`/`rpcUrl` does. */
+  private _endpointUrl(base: string | URL, endpoint: string): URL {
+    const key = `${base}${endpoint}`;
+    let url = this._urlCache.get(key);
+    if (url === undefined) {
+      url = buildEndpointUrl(base, endpoint);
+      this._urlCache.set(key, url);
+    }
+    return url;
+  }
 }
 
 // =============================================================================
@@ -274,8 +297,18 @@ function recreateResponse(original: Response, text: string): Response {
   });
 }
 
+/** Shared no-op used when no abort relay is needed. */
+function noop(): void {}
+
+/** True when `init` has no own enumerable properties, i.e. merging it would change nothing. */
+function isEmptyRequestInit(init: RequestInit): boolean {
+  for (const _ in init) return false;
+  return true;
+}
+
 /** Merges headers inits left to right: a later occurrence of a key overwrites the earlier one. */
 function mergeHeadersInit(...inits: HeadersInit[]): Headers {
+  if (inits.length === 1) return new Headers(inits[0]); // a single init needs no merging
   const merged = new Headers();
   for (const init of inits) {
     for (const [key, value] of new Headers(init)) {

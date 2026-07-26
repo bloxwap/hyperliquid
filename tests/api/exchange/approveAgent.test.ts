@@ -1,5 +1,5 @@
-import { type ApproveAgentParameters, ApproveAgentRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type ApproveAgentParameters, ApproveAgentRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -63,8 +63,14 @@ runTest({
 
     const data = [withName, withoutName, withExpiration, withoutNameMissing];
 
-    schemaCoverage(paramsSchema, data.map((d) => d.params));
-    schemaCoverage(responseSchema, data.map((d) => d.result));
+    schemaCoverage(
+      paramsSchema,
+      data.map((d) => d.params),
+    );
+    schemaCoverage(
+      responseSchema,
+      data.map((d) => d.result),
+    );
   },
 });
 

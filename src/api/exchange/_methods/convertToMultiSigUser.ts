@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -39,16 +39,8 @@ export const ConvertToMultiSigUserRequest = /* @__PURE__ */ (() => {
        * Must be `ConvertToMultiSigUserRequestSignersSchema` converted to a string via `JSON.stringify(...)`.
        */
       signers: v.union([
-        v.pipe(
-          v.string(),
-          v.parseJson(),
-          ConvertToMultiSigUserRequestSignersSchema,
-          v.stringifyJson(),
-        ),
-        v.pipe(
-          ConvertToMultiSigUserRequestSignersSchema,
-          v.stringifyJson(),
-        ),
+        v.pipe(v.string(), v.parseJson(), ConvertToMultiSigUserRequestSignersSchema, v.stringifyJson()),
+        v.pipe(ConvertToMultiSigUserRequestSignersSchema, v.stringifyJson()),
       ]),
       /** Nonce (timestamp in ms) used to prevent replay attacks. */
       nonce: UnsignedInteger,
@@ -74,20 +66,20 @@ export type ConvertToMultiSigUserRequest = v.InferOutput<typeof ConvertToMultiSi
  */
 export type ConvertToMultiSigUserResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -104,10 +96,11 @@ import {
 
 /** Schema for action fields (excludes request-level system fields). */
 const ConvertToMultiSigUserActionSchema = /* @__PURE__ */ (() => {
-  return v.omit(
-    v.object(ConvertToMultiSigUserRequest.entries.action.entries),
-    ["signatureChainId", "hyperliquidChain", "nonce"],
-  );
+  return v.omit(v.object(ConvertToMultiSigUserRequest.entries.action.entries), [
+    "signatureChainId",
+    "hyperliquidChain",
+    "nonce",
+  ]);
 })();
 
 /** Action parameters for the {@linkcode convertToMultiSigUser} function. */
@@ -144,11 +137,11 @@ export const ConvertToMultiSigUserTypes = {
  *
  * @example Convert to multi-sig user
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { convertToMultiSigUser } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { convertToMultiSigUser } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await convertToMultiSigUser({ transport, wallet }, {
@@ -161,11 +154,11 @@ export const ConvertToMultiSigUserTypes = {
  *
  * @example Convert to single-sig user
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { convertToMultiSigUser } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { convertToMultiSigUser } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await convertToMultiSigUser({ transport, wallet }, {

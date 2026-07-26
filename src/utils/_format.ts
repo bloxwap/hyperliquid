@@ -12,7 +12,7 @@ import { HyperliquidError } from "../_base.ts";
  *
  * @example
  * ```ts
- * import { formatPrice, FormatError } from "@nktkas/hyperliquid/utils";
+ * import { formatPrice, FormatError } from "@bloxwap/hyperliquid/utils";
  *
  * try {
  *   formatPrice("not a number", 0);
@@ -68,7 +68,7 @@ function toDecimal(value: string | number, field: "price" | "size"): Decimal {
  *
  * @example
  * ```ts
- * import { formatPrice } from "@nktkas/hyperliquid/utils";
+ * import { formatPrice } from "@bloxwap/hyperliquid/utils";
  *
  * formatPrice("97123.456789", 0); // → "97123" (perp, szDecimals=0)
  * formatPrice("1.23456789", 5); // → "1.2" (perp, szDecimals=5)
@@ -105,7 +105,7 @@ export function formatPrice(price: string | number, szDecimals: number, type: "p
  *
  * @example
  * ```ts
- * import { formatSize } from "@nktkas/hyperliquid/utils";
+ * import { formatSize } from "@bloxwap/hyperliquid/utils";
  *
  * formatSize("1.23456789", 5); // → "1.23456"
  * formatSize("0.123456789", 2); // → "0.12"

@@ -9,17 +9,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-      - uses: denoland/setup-deno@v2
+      - uses: oven-sh/setup-bun@v2
         with:
-          deno-version: v2.x
+          bun-version: canary
 
-      - name: deno test (with coverage)
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # `PRIVATE_KEY` unlocks the tests that place real testnet orders; without it those tests skip themselves.
+      - name: bun test (with coverage)
         env:
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-        run: deno test -A --coverage --coverage-raw-data-only
-
-      - name: Create coverage report
-        run: deno coverage --exclude=./tests --lcov --output=cov.lcov
+        run: bun test tests/ --coverage --coverage-reporter=lcov
 
       - name: Upload coverage to Coveralls.io
         uses: coverallsapp/github-action@v2
+        with:
+          file: ./coverage/lcov.info

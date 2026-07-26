@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -96,8 +96,8 @@ export type WebData3Parameters = Omit<v.InferInput<typeof WebData3Request>, "typ
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { webData3 } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { webData3 } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -117,9 +117,14 @@ export function webData3(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(WebData3Request, { type: "webData3", ...params });
-  return config.transport.subscribe<WebData3Event>(payload.type, payload, (e) => {
-    if (e.detail.userState.user === payload.user) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<WebData3Event>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.userState.user === payload.user) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

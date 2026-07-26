@@ -6,13 +6,13 @@
  *
  * @example
  * ```ts
- * import { privateKeyToAccount } from "npm:viem/accounts";
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { order } from "@nktkas/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { order } from "@bloxwap/hyperliquid/api/exchange";
  * //       ^^^^^
  * //       same name as in `ExchangeClient`
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * const data = await order(

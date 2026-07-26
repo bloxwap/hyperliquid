@@ -6,8 +6,8 @@
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { candle } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { candle } from "@bloxwap/hyperliquid/api/subscription";
  * //       ^^^^^^
  * //       same name as in `SubscriptionClient`
  *

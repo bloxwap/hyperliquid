@@ -1,5 +1,5 @@
-import { type CancelParameters, CancelRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type CancelParameters, CancelRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -28,7 +28,13 @@ runTest({
 
     const data = [standard, fast];
 
-    schemaCoverage(paramsSchema, data.map((d) => d.params));
-    schemaCoverage(responseSchema, data.map((d) => d.result));
+    schemaCoverage(
+      paramsSchema,
+      data.map((d) => d.params),
+    );
+    schemaCoverage(
+      responseSchema,
+      data.map((d) => d.result),
+    );
   },
 });

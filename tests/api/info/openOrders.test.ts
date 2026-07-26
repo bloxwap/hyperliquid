@@ -1,5 +1,5 @@
-import { type OpenOrdersParameters, OpenOrdersRequest } from "@nktkas/hyperliquid/api/info";
-import * as v from "@valibot/valibot";
+import { type OpenOrdersParameters, OpenOrdersRequest } from "@bloxwap/hyperliquid/api/info";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -20,8 +20,6 @@ runTest({
     const data = await Promise.all(params.map((p) => client.openOrders(p)));
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data, [
-      "#/items/properties/cloid/present",
-    ]);
+    schemaCoverage(responseSchema, data, ["#/items/properties/cloid/present"]);
   },
 });

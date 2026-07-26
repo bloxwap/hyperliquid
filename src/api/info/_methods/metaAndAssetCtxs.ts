@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -55,8 +55,8 @@ export type MetaAndAssetCtxsParameters = Omit<v.InferInput<typeof MetaAndAssetCt
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { metaAndAssetCtxs } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { metaAndAssetCtxs } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -70,10 +70,7 @@ export function metaAndAssetCtxs(
   params?: MetaAndAssetCtxsParameters,
   signal?: AbortSignal,
 ): Promise<MetaAndAssetCtxsResponse>;
-export function metaAndAssetCtxs(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<MetaAndAssetCtxsResponse>;
+export function metaAndAssetCtxs(config: InfoConfig, signal?: AbortSignal): Promise<MetaAndAssetCtxsResponse>;
 export function metaAndAssetCtxs(
   config: InfoConfig,
   paramsOrSignal?: MetaAndAssetCtxsParameters | AbortSignal,

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -93,8 +93,8 @@ export type L2BookParameters = Omit<v.InferInput<typeof L2BookRequest>, "type">;
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { l2Book } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { l2Book } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -119,9 +119,14 @@ export function l2Book(
     nSigFigs: params.nSigFigs ?? null,
     mantissa: params.mantissa ?? null,
   });
-  return config.transport.subscribe<L2BookEvent>(payload.type, payload, (e) => {
-    if (e.detail.coin === payload.coin) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<L2BookEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.coin === payload.coin) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

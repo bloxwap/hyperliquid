@@ -5,7 +5,7 @@
  * @module
  */
 
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // Number

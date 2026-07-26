@@ -1,0 +1,3 @@
+[test]
+# Test files should not count toward the library's coverage numbers.
+coveragePathIgnorePatterns = ["tests/"]

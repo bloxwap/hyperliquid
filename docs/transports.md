@@ -15,7 +15,7 @@ Both transports take the same two options:
 - `timeout` — abort a request after this many milliseconds (default `10_000`; pass `null` to disable).
 
 ```ts
-import { HttpTransport, WebSocketTransport } from "@nktkas/hyperliquid";
+import { HttpTransport, WebSocketTransport } from "@bloxwap/hyperliquid";
 
 const transport = new HttpTransport({ isTestnet: true, timeout: 30_000 });
 //                    ^^^^^^^^^^^^^
@@ -28,7 +28,7 @@ Each request is an independent POST with no connection to keep alive, which suit
 and unstable networks:
 
 ```ts
-import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+import { ExchangeClient, HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
 
 const wallet = privateKeyToAccount("0x...");
@@ -53,7 +53,7 @@ the testnet URL):
 Override either to run against your [own node](https://github.com/hyperliquid-dex/node) or a proxy:
 
 ```ts
-import { HttpTransport } from "@nktkas/hyperliquid";
+import { HttpTransport } from "@bloxwap/hyperliquid";
 
 const transport = new HttpTransport({
   apiUrl: "https://custom-api.example.com",
@@ -68,7 +68,7 @@ const transport = new HttpTransport({
 headers, `credentials`, `cache`, and the like:
 
 ```ts
-import { HttpTransport } from "@nktkas/hyperliquid";
+import { HttpTransport } from "@bloxwap/hyperliquid";
 
 const transport = new HttpTransport({
   fetchOptions: {
@@ -83,7 +83,7 @@ const transport = new HttpTransport({
 subscription API:
 
 ```ts
-import { SubscriptionClient, WebSocketTransport } from "@nktkas/hyperliquid";
+import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
 
 const transport = new WebSocketTransport();
 const subs = new SubscriptionClient({ transport });
@@ -104,7 +104,7 @@ subscriptions; [explorer](https://app.hyperliquid.xyz/explorer) subscriptions ne
 `wss://rpc.hyperliquid.xyz/ws`:
 
 ```ts
-import { ExplorerClient, WebSocketTransport } from "@nktkas/hyperliquid";
+import { ExplorerClient, WebSocketTransport } from "@bloxwap/hyperliquid";
 
 const transport = new WebSocketTransport({ url: "wss://rpc.hyperliquid.xyz/ws" });
 //                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -126,7 +126,7 @@ By default it retries 3 times with exponential backoff (capped at 10 s); pass `r
 delay, or connection timeout. See [`ReconnectingWebSocketOptions`](https://github.com/nktkas/rews#options) for the rest.
 
 ```ts
-import { WebSocketTransport } from "@nktkas/hyperliquid";
+import { WebSocketTransport } from "@bloxwap/hyperliquid";
 
 const transport = new WebSocketTransport({
   reconnect: { maxRetries: 5, reconnectionDelay: 1_000 },

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -62,8 +62,8 @@ export type UserTwapHistoryParameters = Omit<v.InferInput<typeof UserTwapHistory
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { userTwapHistory } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { userTwapHistory } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -83,9 +83,14 @@ export function userTwapHistory(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(UserTwapHistoryRequest, { type: "userTwapHistory", ...params });
-  return config.transport.subscribe<UserTwapHistoryEvent>(payload.type, payload, (e) => {
-    if (e.detail.user === payload.user) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<UserTwapHistoryEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.user === payload.user) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

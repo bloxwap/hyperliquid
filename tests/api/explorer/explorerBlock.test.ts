@@ -1,4 +1,4 @@
-import type { ExplorerBlockEvent } from "@nktkas/hyperliquid/api/explorer";
+import type { ExplorerBlockEvent } from "@bloxwap/hyperliquid/api/explorer";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { collectEventsOverTime, runSubscriptionTest } from "./_t.ts";

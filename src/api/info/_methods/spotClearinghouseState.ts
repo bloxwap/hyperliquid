@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -28,65 +28,68 @@ export type SpotClearinghouseStateResponse = {
   /** Whether portfolio margin is enabled for the account. */
   portfolioMarginEnabled?: boolean;
   /** Array of available token balances. */
-  balances: ({
-    /** Asset symbol (e.g., USDC). */
-    coin: string;
-    /** Unique identifier for the token. */
-    token: number;
-    /**
-     * Total balance.
-     * @pattern ^-?[0-9]+(\.[0-9]+)?$
-     */
-    total: string;
-    /**
-     * Amount on hold.
-     * @pattern ^-?[0-9]+(\.[0-9]+)?$
-     */
-    hold: string;
-    /**
-     * Entry notional value.
-     * @pattern ^-?[0-9]+(\.[0-9]+)?$
-     */
-    entryNtl: string;
-    /**
-     * Amount on hold in spot.
-     * @pattern ^-?[0-9]+(\.[0-9]+)?$
-     */
-    spotHold?: string;
-    /**
-     * Loan-to-value ratio.
-     * @pattern ^[0-9]+(\.[0-9]+)?$
-     */
-    ltv?: string;
-    /**
-     * Borrowed amount.
-     * @pattern ^[0-9]+(\.[0-9]+)?$
-     */
-    borrowed?: string;
-    /**
-     * Supplied amount.
-     * @pattern ^[0-9]+(\.[0-9]+)?$
-     */
-    supplied?: string;
-  } | {
-    /** Outcome market identifier ("+" followed by `assetId - 100000000`). */
-    coin: `+${number}`;
-    /**
-     * Total balance.
-     * @pattern ^[0-9]+(\.[0-9]+)?$
-     */
-    total: string;
-    /**
-     * Amount on hold.
-     * @pattern ^[0-9]+(\.[0-9]+)?$
-     */
-    hold: string;
-    /**
-     * Entry notional value.
-     * @pattern ^[0-9]+(\.[0-9]+)?$
-     */
-    entryNtl: string;
-  })[];
+  balances: (
+    | {
+        /** Asset symbol (e.g., USDC). */
+        coin: string;
+        /** Unique identifier for the token. */
+        token: number;
+        /**
+         * Total balance.
+         * @pattern ^-?[0-9]+(\.[0-9]+)?$
+         */
+        total: string;
+        /**
+         * Amount on hold.
+         * @pattern ^-?[0-9]+(\.[0-9]+)?$
+         */
+        hold: string;
+        /**
+         * Entry notional value.
+         * @pattern ^-?[0-9]+(\.[0-9]+)?$
+         */
+        entryNtl: string;
+        /**
+         * Amount on hold in spot.
+         * @pattern ^-?[0-9]+(\.[0-9]+)?$
+         */
+        spotHold?: string;
+        /**
+         * Loan-to-value ratio.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        ltv?: string;
+        /**
+         * Borrowed amount.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        borrowed?: string;
+        /**
+         * Supplied amount.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        supplied?: string;
+      }
+    | {
+        /** Outcome market identifier ("+" followed by `assetId - 100000000`). */
+        coin: `+${number}`;
+        /**
+         * Total balance.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        total: string;
+        /**
+         * Amount on hold.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        hold: string;
+        /**
+         * Entry notional value.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        entryNtl: string;
+      }
+  )[];
   /** Array of escrowed balances. */
   evmEscrows?: {
     /** Asset symbol (e.g., USDC). */
@@ -149,8 +152,8 @@ export type SpotClearinghouseStateParameters = Omit<v.InferInput<typeof SpotClea
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { spotClearinghouseState } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { spotClearinghouseState } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

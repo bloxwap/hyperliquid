@@ -1,8 +1,8 @@
-import { ApiRequestError } from "@nktkas/hyperliquid";
-import { type UserSetAbstractionParameters, UserSetAbstractionRequest } from "@nktkas/hyperliquid/api/exchange";
-import { getWalletAddress } from "@nktkas/hyperliquid/signing";
-import * as v from "@valibot/valibot";
-import { assertRejects } from "jsr:@std/assert@1";
+import { ApiRequestError } from "@bloxwap/hyperliquid";
+import { type UserSetAbstractionParameters, UserSetAbstractionRequest } from "@bloxwap/hyperliquid/api/exchange";
+import { getWalletAddress } from "@bloxwap/hyperliquid/signing";
+import * as v from "valibot";
+import { assertRejects } from "@jsr/std__assert";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -22,9 +22,10 @@ const paramsSchema = valibotToJsonSchema(
 runTest({
   name: "userSetAbstraction",
   codeTestFn: async (_t, exchClient) => {
-    const user = "multiSigUser" in exchClient.config_
-      ? exchClient.config_.multiSigUser
-      : await getWalletAddress(exchClient.config_.wallet);
+    const user =
+      "multiSigUser" in exchClient.config_
+        ? exchClient.config_.multiSigUser
+        : await getWalletAddress(exchClient.config_.wallet);
 
     const params: UserSetAbstractionParameters[] = [
       { user, abstraction: "disabled" },
@@ -32,10 +33,7 @@ runTest({
       { user, abstraction: "portfolioMargin" },
     ];
 
-    const data = [
-      await exchClient.userSetAbstraction(params[0]),
-      await exchClient.userSetAbstraction(params[1]),
-    ];
+    const data = [await exchClient.userSetAbstraction(params[0]), await exchClient.userSetAbstraction(params[1])];
     await assertRejects(
       () => exchClient.userSetAbstraction(params[2]),
       ApiRequestError,

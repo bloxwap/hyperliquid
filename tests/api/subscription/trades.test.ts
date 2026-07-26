@@ -1,5 +1,5 @@
-import { type TradesEvent, type TradesParameters, TradesRequest } from "@nktkas/hyperliquid/api/subscription";
-import * as v from "@valibot/valibot";
+import { type TradesEvent, type TradesParameters, TradesRequest } from "@bloxwap/hyperliquid/api/subscription";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -13,9 +13,7 @@ runTest({
   name: "trades",
   mode: "api",
   fn: async (_t, client) => {
-    const params: TradesParameters[] = [
-      { coin: "BTC" },
-    ];
+    const params: TradesParameters[] = [{ coin: "BTC" }];
 
     const data = await collectEventsOverTime<TradesEvent>(async (cb) => {
       await Promise.all(params.map((p) => client.trades(p, cb)));

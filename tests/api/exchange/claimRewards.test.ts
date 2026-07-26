@@ -1,5 +1,5 @@
-import { ApiRequestError } from "@nktkas/hyperliquid";
-import { assertRejects } from "jsr:@std/assert@1";
+import { ApiRequestError } from "@bloxwap/hyperliquid";
+import { assertRejects } from "@jsr/std__assert";
 import { runTest } from "./_t.ts";
 
 runTest({

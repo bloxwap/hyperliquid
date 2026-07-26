@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -24,32 +24,35 @@ export type UserRoleRequest = v.InferOutput<typeof UserRoleRequest>;
  * User role.
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-role
  */
-export type UserRoleResponse = {
-  /** Role identifier. */
-  role: "missing" | "user" | "vault";
-} | {
-  /** Role identifier. */
-  role: "agent";
-  /** Details for agent role. */
-  data: {
-    /**
-     * Master account address associated with the agent.
-     * @pattern ^0x[a-fA-F0-9]{40}$
-     */
-    user: `0x${string}`;
-  };
-} | {
-  /** Role identifier. */
-  role: "subAccount";
-  /** Details for sub-account role. */
-  data: {
-    /**
-     * Master account address associated with the sub-account.
-     * @pattern ^0x[a-fA-F0-9]{40}$
-     */
-    master: `0x${string}`;
-  };
-};
+export type UserRoleResponse =
+  | {
+      /** Role identifier. */
+      role: "missing" | "user" | "vault";
+    }
+  | {
+      /** Role identifier. */
+      role: "agent";
+      /** Details for agent role. */
+      data: {
+        /**
+         * Master account address associated with the agent.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        user: `0x${string}`;
+      };
+    }
+  | {
+      /** Role identifier. */
+      role: "subAccount";
+      /** Details for sub-account role. */
+      data: {
+        /**
+         * Master account address associated with the sub-account.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        master: `0x${string}`;
+      };
+    };
 
 // ============================================================
 // Execution Logic
@@ -74,8 +77,8 @@ export type UserRoleParameters = Omit<v.InferInput<typeof UserRoleRequest>, "typ
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { userRole } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { userRole } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *

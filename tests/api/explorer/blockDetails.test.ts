@@ -1,5 +1,5 @@
-import { type BlockDetailsParameters, BlockDetailsRequest } from "@nktkas/hyperliquid/api/explorer";
-import * as v from "@valibot/valibot";
+import { type BlockDetailsParameters, BlockDetailsRequest } from "@bloxwap/hyperliquid/api/explorer";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -12,9 +12,7 @@ const paramsSchema = valibotToJsonSchema(v.omit(BlockDetailsRequest, ["type"]));
 runRequestTest({
   name: "blockDetails",
   fn: async (_t, client) => {
-    const params: BlockDetailsParameters[] = [
-      { height: 300836507 },
-    ];
+    const params: BlockDetailsParameters[] = [{ height: 300836507 }];
 
     const data = await Promise.all(params.map((p) => client.blockDetails(p)));
 

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -65,16 +65,18 @@ export type TwapOrderResponse = {
     /** Specific data. */
     data: {
       /** Status of the operation or error message. */
-      status: {
-        /** Running order status. */
-        running: {
-          /** TWAP ID. */
-          twapId: number;
-        };
-      } | {
-        /** Error message. */
-        error: string;
-      };
+      status:
+        | {
+            /** Running order status. */
+            running: {
+              /** TWAP ID. */
+              twapId: number;
+            };
+          }
+        | {
+            /** Error message. */
+            error: string;
+          };
     };
   };
 };
@@ -122,11 +124,11 @@ export type TwapOrderSuccessResponse = ExcludeErrorResponse<TwapOrderResponse>;
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { twapOrder } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { twapOrder } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * const data = await twapOrder({ transport, wallet }, {
@@ -148,9 +150,6 @@ export function twapOrder(
   params: TwapOrderParameters,
   opts?: TwapOrderOptions,
 ): Promise<TwapOrderSuccessResponse> {
-  const action = canonicalize(
-    TwapOrderActionSchema,
-    parse(TwapOrderActionSchema, { type: "twapOrder", ...params }),
-  );
+  const action = canonicalize(TwapOrderActionSchema, parse(TwapOrderActionSchema, { type: "twapOrder", ...params }));
   return executeL1Action(config, action, opts);
 }

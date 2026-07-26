@@ -3,7 +3,7 @@
  * @module
  */
 
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 import { HyperliquidError, parse } from "../../../../_base.ts";
 import {
   getWalletChainId,
@@ -15,6 +15,20 @@ import {
 import { Address, Hex, UnsignedInteger } from "../../../_schemas.ts";
 import type { ExchangeConfig } from "./_config.ts";
 import { executeWithShell } from "./_shell.ts";
+
+// ============================================================
+// Schemas
+// ============================================================
+
+/** Schema for the optional vault address request option. */
+const OptionalVaultAddressSchema = /* @__PURE__ */ (() => {
+  return v.optional(Address);
+})();
+
+/** Schema for the optional expiration time request option. */
+const OptionalExpiresAfterSchema = /* @__PURE__ */ (() => {
+  return v.optional(UnsignedInteger);
+})();
 
 // ============================================================
 // Execute L1 Action
@@ -43,43 +57,44 @@ export async function executeL1Action<T>(
   },
 ): Promise<T> {
   // Validate options before acquiring the lock.
-  const vaultAddress = parse(
-    v.optional(Address),
-    options?.vaultAddress ?? config.defaultVaultAddress,
-  );
+  const vaultAddress = parse(OptionalVaultAddressSchema, options?.vaultAddress ?? config.defaultVaultAddress);
   const expiresAfter = parse(
-    v.optional(UnsignedInteger),
+    OptionalExpiresAfterSchema,
     options?.expiresAfter ??
       (typeof config.defaultExpiresAfter === "function"
         ? await config.defaultExpiresAfter()
         : config.defaultExpiresAfter),
   );
 
-  return executeWithShell<T>(config, async (nonce) => {
-    if ("wallet" in config) {
-      const signature = await signL1Action({
-        wallet: config.wallet,
-        action,
-        nonce,
-        isTestnet: config.transport.isTestnet,
-        vaultAddress,
-        expiresAfter,
-      });
-      return { action, signature, extras: { vaultAddress, expiresAfter } };
-    } else {
-      const { action: wrapper, signature } = await signMultiSigL1({
-        signers: config.signers,
-        multiSigUser: config.multiSigUser,
-        signatureChainId: await resolveSignatureChainId(config),
-        action,
-        nonce,
-        isTestnet: config.transport.isTestnet,
-        vaultAddress,
-        expiresAfter,
-      });
-      return { action: wrapper, signature, extras: { vaultAddress, expiresAfter } };
-    }
-  }, options?.signal);
+  return executeWithShell<T>(
+    config,
+    async (nonce) => {
+      if ("wallet" in config) {
+        const signature = await signL1Action({
+          wallet: config.wallet,
+          action,
+          nonce,
+          isTestnet: config.transport.isTestnet,
+          vaultAddress,
+          expiresAfter,
+        });
+        return { action, signature, extras: { vaultAddress, expiresAfter } };
+      } else {
+        const { action: wrapper, signature } = await signMultiSigL1({
+          signers: config.signers,
+          multiSigUser: config.multiSigUser,
+          signatureChainId: await resolveSignatureChainId(config),
+          action,
+          nonce,
+          isTestnet: config.transport.isTestnet,
+          vaultAddress,
+          expiresAfter,
+        });
+        return { action: wrapper, signature, extras: { vaultAddress, expiresAfter } };
+      }
+    },
+    options?.signal,
+  );
 }
 
 // ============================================================
@@ -110,39 +125,44 @@ export function executeUserSignedAction<T>(
     signal?: AbortSignal;
   },
 ): Promise<T> {
-  return executeWithShell<T>(config, async (nonce) => {
-    // --- Construct full action (type, system fields, user fields, nonce/time)
-    const { type, ...restAction } = action;
-    const nonceFieldName = extractNonceFieldName(types);
-    const baseFields = {
-      type,
-      signatureChainId: await resolveSignatureChainId(config),
-      hyperliquidChain: config.transport.isTestnet ? "Testnet" : "Mainnet",
-    } as const;
-    const fullAction = nonceFieldName === "nonce"
-      ? { ...baseFields, ...restAction, nonce }
-      : { ...baseFields, ...restAction, time: nonce };
+  return executeWithShell<T>(
+    config,
+    async (nonce) => {
+      // --- Construct full action (type, system fields, user fields, nonce/time)
+      const { type, ...restAction } = action;
+      const nonceFieldName = extractNonceFieldName(types);
+      const baseFields = {
+        type,
+        signatureChainId: await resolveSignatureChainId(config),
+        hyperliquidChain: config.transport.isTestnet ? "Testnet" : "Mainnet",
+      } as const;
+      const fullAction =
+        nonceFieldName === "nonce"
+          ? { ...baseFields, ...restAction, nonce }
+          : { ...baseFields, ...restAction, time: nonce };
 
-    // --- Sign (single-wallet or multi-sig) -------------------
-    if ("wallet" in config) {
-      const signature = await signUserSignedAction({
-        wallet: config.wallet,
-        action: fullAction,
-        types,
-      });
-      return { action: fullAction, signature };
-    } else {
-      const payloadAction = options?.toMultiSigPayloadAction?.(fullAction) ?? fullAction;
-      const { action: wrapper, signature } = await signMultiSigUserSigned({
-        signers: config.signers,
-        multiSigUser: config.multiSigUser,
-        action: fullAction,
-        payloadAction,
-        types,
-      });
-      return { action: wrapper, signature };
-    }
-  }, options?.signal);
+      // --- Sign (single-wallet or multi-sig) -------------------
+      if ("wallet" in config) {
+        const signature = await signUserSignedAction({
+          wallet: config.wallet,
+          action: fullAction,
+          types,
+        });
+        return { action: fullAction, signature };
+      } else {
+        const payloadAction = options?.toMultiSigPayloadAction?.(fullAction) ?? fullAction;
+        const { action: wrapper, signature } = await signMultiSigUserSigned({
+          signers: config.signers,
+          multiSigUser: config.multiSigUser,
+          action: fullAction,
+          payloadAction,
+          types,
+        });
+        return { action: wrapper, signature };
+      }
+    },
+    options?.signal,
+  );
 }
 
 // ============================================================
@@ -162,9 +182,8 @@ function extractNonceFieldName(types: Record<string, readonly { name: string; ty
 /** Resolves signature chain ID from config, or falls back to the leader wallet's chain ID. */
 async function resolveSignatureChainId(config: ExchangeConfig): Promise<`0x${string}`> {
   if (config.signatureChainId) {
-    const id = typeof config.signatureChainId === "function"
-      ? await config.signatureChainId()
-      : config.signatureChainId;
+    const id =
+      typeof config.signatureChainId === "function" ? await config.signatureChainId() : config.signatureChainId;
     return parse(Hex, id);
   }
   const leader = "wallet" in config ? config.wallet : config.signers[0];

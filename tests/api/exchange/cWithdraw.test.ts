@@ -1,5 +1,5 @@
-import { type CWithdrawParameters, CWithdrawRequest } from "@nktkas/hyperliquid/api/exchange";
-import * as v from "@valibot/valibot";
+import { type CWithdrawParameters, CWithdrawRequest } from "@bloxwap/hyperliquid/api/exchange";
+import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -17,9 +17,7 @@ runTest({
     await topUpSpot(exchClient, "HYPE", "0.00000001");
     await exchClient.cDeposit({ wei: 1 });
 
-    const params: CWithdrawParameters[] = [
-      { wei: 1 },
-    ];
+    const params: CWithdrawParameters[] = [{ wei: 1 }];
 
     const data = await Promise.all(params.map((p) => exchClient.cWithdraw(p)));
 

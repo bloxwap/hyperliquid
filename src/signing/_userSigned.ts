@@ -16,11 +16,11 @@ import { trimSignature } from "./_multiSig.ts";
  *
  * @example
  * ```ts
- * import { signUserSignedAction } from "@nktkas/hyperliquid/signing";
- * import { ApproveAgentTypes } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { signUserSignedAction } from "@bloxwap/hyperliquid/signing";
+ * import { ApproveAgentTypes } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // `viem` or `ethers` or any `AbstractWallet`
+ * const wallet = privateKeyToAccount("0x..."); // or any `AbstractWallet`
  *
  * const types = ApproveAgentTypes; // or custom EIP-712 types matching the action
  * const action = {
@@ -38,11 +38,11 @@ import { trimSignature } from "./_multiSig.ts";
  * @example
  * \- Full cycle of signing and sending a user-signed action to the Hyperliquid API
  * ```ts
- * import { signUserSignedAction } from "@nktkas/hyperliquid/signing";
- * import { ApproveAgentTypes } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { signUserSignedAction } from "@bloxwap/hyperliquid/signing";
+ * import { ApproveAgentTypes } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // `viem` or `ethers` or any `AbstractWallet`
+ * const wallet = privateKeyToAccount("0x..."); // or any `AbstractWallet`
  *
  * const types = ApproveAgentTypes; // or custom EIP-712 types matching the action
  * const action = {
@@ -81,7 +81,9 @@ export async function signUserSignedAction<
     domain: {
       name: "HyperliquidSignTransaction",
       version: "1",
-      chainId: parseInt(action.signatureChainId),
+      // `signatureChainId` is a `0x`-prefixed hex string, so radix 16 is the only correct base here:
+      // radix 10 would parse it as `0` and silently sign under the wrong EIP-712 domain.
+      chainId: parseInt(action.signatureChainId, 16),
       verifyingContract: "0x0000000000000000000000000000000000000000",
     },
     types,

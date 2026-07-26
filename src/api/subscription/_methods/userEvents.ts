@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -29,79 +29,79 @@ export type UserEventsRequest = v.InferOutput<typeof UserEventsRequest>;
  */
 export type UserEventsEvent =
   | {
-    /** Array of user trade fills. */
-    fills: UserFillsResponse;
-  }
+      /** Array of user trade fills. */
+      fills: UserFillsResponse;
+    }
   | {
-    /** Funding update details. */
-    funding: {
-      /** Timestamp of the funding event (in ms since epoch). */
-      time: number;
-      /** Asset symbol (e.g., BTC). */
-      coin: string;
-      /**
-       * Amount transferred in USDC.
-       * @pattern ^-?[0-9]+(\.[0-9]+)?$
-       */
-      usdc: string;
-      /**
-       * Signed position size.
-       * @pattern ^-?[0-9]+(\.[0-9]+)?$
-       */
-      szi: string;
-      /**
-       * Applied funding rate.
-       * @pattern ^-?[0-9]+(\.[0-9]+)?$
-       */
-      fundingRate: string;
-      /** Number of samples. */
-      nSamples: number | null;
+      /** Funding update details. */
+      funding: {
+        /** Timestamp of the funding event (in ms since epoch). */
+        time: number;
+        /** Asset symbol (e.g., BTC). */
+        coin: string;
+        /**
+         * Amount transferred in USDC.
+         * @pattern ^-?[0-9]+(\.[0-9]+)?$
+         */
+        usdc: string;
+        /**
+         * Signed position size.
+         * @pattern ^-?[0-9]+(\.[0-9]+)?$
+         */
+        szi: string;
+        /**
+         * Applied funding rate.
+         * @pattern ^-?[0-9]+(\.[0-9]+)?$
+         */
+        fundingRate: string;
+        /** Number of samples. */
+        nSamples: number | null;
+      };
+    }
+  | {
+      /** Liquidation details. */
+      liquidation: {
+        /** Unique liquidation ID. */
+        lid: number;
+        /**
+         * Address of the liquidator.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        liquidator: `0x${string}`;
+        /**
+         * Address of the liquidated user.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        liquidated_user: `0x${string}`;
+        /**
+         * Notional position size that was liquidated.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        liquidated_ntl_pos: string;
+        /**
+         * Account value at time of liquidation.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        liquidated_account_value: string;
+      };
+    }
+  | {
+      /** Array of non-user initiated order cancellations. */
+      nonUserCancel: {
+        /** Asset symbol (e.g., BTC). */
+        coin: string;
+        /** Order ID. */
+        oid: number;
+      }[];
+    }
+  | {
+      /** Array of user's TWAP history. */
+      twapHistory: TwapHistoryResponse;
+    }
+  | {
+      /** Array of user's TWAP slice fills. */
+      twapSliceFills: UserTwapSliceFillsResponse;
     };
-  }
-  | {
-    /** Liquidation details. */
-    liquidation: {
-      /** Unique liquidation ID. */
-      lid: number;
-      /**
-       * Address of the liquidator.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      liquidator: `0x${string}`;
-      /**
-       * Address of the liquidated user.
-       * @pattern ^0x[a-fA-F0-9]{40}$
-       */
-      liquidated_user: `0x${string}`;
-      /**
-       * Notional position size that was liquidated.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      liquidated_ntl_pos: string;
-      /**
-       * Account value at time of liquidation.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      liquidated_account_value: string;
-    };
-  }
-  | {
-    /** Array of non-user initiated order cancellations. */
-    nonUserCancel: {
-      /** Asset symbol (e.g., BTC). */
-      coin: string;
-      /** Order ID. */
-      oid: number;
-    }[];
-  }
-  | {
-    /** Array of user's TWAP history. */
-    twapHistory: TwapHistoryResponse;
-  }
-  | {
-    /** Array of user's TWAP slice fills. */
-    twapSliceFills: UserTwapSliceFillsResponse;
-  };
 
 // ============================================================
 // Execution Logic
@@ -128,8 +128,8 @@ export type UserEventsParameters = Omit<v.InferInput<typeof UserEventsRequest>, 
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { userEvents } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { userEvents } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -149,7 +149,12 @@ export function userEvents(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(UserEventsRequest, { type: "userEvents", ...params });
-  return config.transport.subscribe<UserEventsEvent>("user", payload, (e) => {
-    listener(e.detail);
-  }, options);
+  return config.transport.subscribe<UserEventsEvent>(
+    "user",
+    payload,
+    (e) => {
+      listener(e.detail);
+    },
+    options,
+  );
 }

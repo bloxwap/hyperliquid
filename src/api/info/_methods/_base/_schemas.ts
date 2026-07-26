@@ -48,17 +48,17 @@ export type PerpAssetCtx = {
   /** Impact prices [bid, ask]. */
   impactPxs:
     | [
-      /**
-       * Impact bid price.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      bid: string,
-      /**
-       * Impact ask price.
-       * @pattern ^[0-9]+(\.[0-9]+)?$
-       */
-      ask: string,
-    ]
+        /**
+         * Impact bid price.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        bid: string,
+        /**
+         * Impact ask price.
+         * @pattern ^[0-9]+(\.[0-9]+)?$
+         */
+        ask: string,
+      ]
     | null;
   /**
    * Daily volume in base currency.
@@ -158,13 +158,7 @@ export type FrontendOpenOrder = {
    * - `"Take Profit Limit"`: Executes as a limit order when a take profit price is reached.
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/trading/order-types
    */
-  orderType:
-    | "Market"
-    | "Limit"
-    | "Stop Market"
-    | "Stop Limit"
-    | "Take Profit Market"
-    | "Take Profit Limit";
+  orderType: "Market" | "Limit" | "Stop Market" | "Stop Limit" | "Take Profit Market" | "Take Profit Limit";
   /**
    * Time-in-force:
    * - `"Gtc"`: Remains active until filled or canceled.
@@ -173,13 +167,7 @@ export type FrontendOpenOrder = {
    * - `"FrontendMarket"`: Similar to Ioc, used in Hyperliquid UI.
    * - `"LiquidationMarket"`: Similar to Ioc, used in Hyperliquid UI.
    */
-  tif:
-    | "Gtc"
-    | "Ioc"
-    | "Alo"
-    | "FrontendMarket"
-    | "LiquidationMarket"
-    | null;
+  tif: "Gtc" | "Ioc" | "Alo" | "FrontendMarket" | "LiquidationMarket" | null;
   /**
    * Client Order ID.
    * @pattern ^0x[a-fA-F0-9]{32}$
@@ -258,21 +246,23 @@ export type TwapState = {
 };
 
 /** Vault relationship type. */
-export type VaultRelationship = {
-  /** Relationship type. */
-  type: "normal" | "child";
-} | {
-  /** Relationship type. */
-  type: "parent";
-  /** Child vault information. */
-  data: {
-    /**
-     * Child vault addresses.
-     * @pattern ^0x[a-fA-F0-9]{40}$
-     */
-    childAddresses: `0x${string}`[];
-  };
-};
+export type VaultRelationship =
+  | {
+      /** Relationship type. */
+      type: "normal" | "child";
+    }
+  | {
+      /** Relationship type. */
+      type: "parent";
+      /** Child vault information. */
+      data: {
+        /**
+         * Child vault addresses.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        childAddresses: `0x${string}`[];
+      };
+    };
 
 /** User fill. */
 export type UserFill = {

@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -20,7 +20,7 @@ export type PerpDexsRequest = v.InferOutput<typeof PerpDexsRequest>;
  * Array of perpetual dexes (null is main dex).
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetual-dexs
  */
-export type PerpDexsResponse = (/** Perpetual dex metadata. */ {
+export type PerpDexsResponse = /** Perpetual dex metadata. */ ({
   /** Short name of the perpetual dex. */
   name: string;
   /** Complete name of the perpetual dex. */
@@ -111,8 +111,8 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @example
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { perpDexs } from "@nktkas/hyperliquid/api/info";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { perpDexs } from "@bloxwap/hyperliquid/api/info";
  *
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
@@ -121,10 +121,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetual-dexs
  */
-export function perpDexs(
-  config: InfoConfig,
-  signal?: AbortSignal,
-): Promise<PerpDexsResponse> {
+export function perpDexs(config: InfoConfig, signal?: AbortSignal): Promise<PerpDexsResponse> {
   const request = parse(PerpDexsRequest, {
     type: "perpDexs",
   });

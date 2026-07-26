@@ -9,9 +9,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-      - uses: denoland/setup-deno@v2
+      - uses: oven-sh/setup-bun@v2
         with:
-          deno-version: v2.x
+          bun-version: canary
 
-      - name: deno test (offline)
-        run: deno test -A -- --offline
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Everything after `--` is forwarded to the test files; `--offline` makes them skip live Hyperliquid endpoints.
+      - name: bun test (offline)
+        run: bun test tests/ -- --offline

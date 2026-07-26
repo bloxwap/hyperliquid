@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -62,8 +62,8 @@ export type SpotStateParameters = Omit<v.InferInput<typeof SpotStateRequest>, "t
  *
  * @example
  * ```ts
- * import { WebSocketTransport } from "@nktkas/hyperliquid";
- * import { spotState } from "@nktkas/hyperliquid/api/subscription";
+ * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+ * import { spotState } from "@bloxwap/hyperliquid/api/subscription";
  *
  * const transport = new WebSocketTransport();
  *
@@ -83,9 +83,14 @@ export function spotState(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(SpotStateRequest, { type: "spotState", ...params });
-  return config.transport.subscribe<SpotStateEvent>(payload.type, payload, (e) => {
-    if (e.detail.user === payload.user) {
-      listener(e.detail);
-    }
-  }, options);
+  return config.transport.subscribe<SpotStateEvent>(
+    payload.type,
+    payload,
+    (e) => {
+      if (e.detail.user === payload.user) {
+        listener(e.detail);
+      }
+    },
+    options,
+  );
 }

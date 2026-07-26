@@ -1,4 +1,4 @@
-import * as v from "@valibot/valibot";
+import * as v from "valibot";
 
 // ============================================================
 // API Schemas
@@ -99,20 +99,20 @@ export type CValidatorActionRequest = v.InferOutput<typeof CValidatorActionReque
  */
 export type CValidatorActionResponse =
   | {
-    /** Successful status. */
-    status: "ok";
-    /** Response details. */
-    response: {
-      /** Type of response. */
-      type: "default";
-    };
-  }
+      /** Successful status. */
+      status: "ok";
+      /** Response details. */
+      response: {
+        /** Type of response. */
+        type: "default";
+      };
+    }
   | {
-    /** Error status. */
-    status: "err";
-    /** Error message. */
-    response: string;
-  };
+      /** Error status. */
+      status: "err";
+      /** Error message. */
+      response: string;
+    };
 
 // ============================================================
 // Execution Logic
@@ -133,9 +133,12 @@ const CValidatorActionActionSchema = /* @__PURE__ */ (() => {
 })();
 
 /** Action parameters for the {@linkcode cValidatorAction} function. */
-export type CValidatorActionParameters = v.InferInput<typeof CValidatorActionActionSchema> extends infer T
-  ? T extends unknown ? { [K in Exclude<keyof T, "type">]: T[K] } : never
-  : never;
+export type CValidatorActionParameters =
+  v.InferInput<typeof CValidatorActionActionSchema> extends infer T
+    ? T extends unknown
+      ? { [K in Exclude<keyof T, "type">]: T[K] }
+      : never
+    : never;
 
 /** Request options for the {@linkcode cValidatorAction} function. */
 export type CValidatorActionOptions = ExtractRequestOptions<v.InferInput<typeof CValidatorActionRequest>>;
@@ -159,11 +162,11 @@ export type CValidatorActionSuccessResponse = ExcludeErrorResponse<CValidatorAct
  *
  * @example Change validator profile
  * ```ts
- * import { HttpTransport } from "@nktkas/hyperliquid";
- * import { cValidatorAction } from "@nktkas/hyperliquid/api/exchange";
- * import { privateKeyToAccount } from "npm:viem/accounts";
+ * import { HttpTransport } from "@bloxwap/hyperliquid";
+ * import { cValidatorAction } from "@bloxwap/hyperliquid/api/exchange";
+ * import { privateKeyToAccount } from "viem/accounts";
  *
- * const wallet = privateKeyToAccount("0x..."); // viem or ethers
+ * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await cValidatorAction({ transport, wallet }, {
