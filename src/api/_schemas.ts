@@ -6,6 +6,7 @@
  */
 
 import * as v from "valibot";
+import { HyperliquidError } from "../_base.ts";
 
 // ============================================================
 // Number
@@ -137,6 +138,38 @@ export const Cloid = /* @__PURE__ */ (() => {
   return v.pipe(Hex, v.length(34));
 })();
 export type Cloid = v.InferOutput<typeof Cloid>;
+
+/**
+ * Build a client order ID from a non-negative integer, mirroring the Python SDK's `Cloid.from_int`
+ * (`f"{oid:#034x}"`): `"0x"` followed by 32 lowercase hex digits, zero-padded.
+ *
+ * Divergence from Python: out-of-range input is rejected instead of silently producing an invalid cloid.
+ * Python's format width is a minimum, so `oid >= 2**128` yields an over-long string there; here negatives
+ * and values `>= 2^128` throw, as do numbers that are not safe integers (pass a `bigint` beyond `2^53 - 1`).
+ *
+ * @param n The integer to convert (`0 <= n < 2^128`).
+ * @return The cloid string.
+ *
+ * @throws {HyperliquidError} If `n` is negative, `>= 2^128`, or a number that is not a safe integer.
+ *
+ * @example
+ * ```ts ignore
+ * cloidFromInt(0);                  // => "0x00000000000000000000000000000000"
+ * cloidFromInt(1);                  // => "0x00000000000000000000000000000001"
+ * cloidFromInt(2n ** 128n - 1n);    // => "0xffffffffffffffffffffffffffffffff"
+ * cloidFromInt(2n ** 128n);         // => throws HyperliquidError
+ * ```
+ */
+export function cloidFromInt(n: bigint | number): Cloid {
+  if (typeof n === "number" && !Number.isSafeInteger(n)) {
+    throw new HyperliquidError(`cloidFromInt: number must be a safe integer, got ${n}`);
+  }
+  const value = BigInt(n);
+  if (value < 0n || value >= 2n ** 128n) {
+    throw new HyperliquidError(`cloidFromInt: integer out of range [0, 2^128): ${n}`);
+  }
+  return `0x${value.toString(16).padStart(32, "0")}`;
+}
 
 // ============================================================
 // Other

@@ -10,6 +10,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { encode as encodeReference } from "@jsr/std__msgpack/encode";
+import { keccak_256 } from "@noble/hashes/sha3.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 
 import { createL1ActionHash } from "@bloxwap/hyperliquid/signing";
 import { encode, type MsgpackValue } from "../../src/signing/_msgpack.ts";
@@ -108,6 +110,11 @@ const CORPUS: readonly MsgpackValue[] = [
   -2147483648,
   -2147483649,
   2 ** 53 - 1,
+  // Integral doubles beyond the safe-integer range: python's msgpack and the oracle both emit float64.
+  2 ** 53,
+  -(2 ** 53),
+  1e300,
+  -1e300,
   1.5,
   Number.NaN,
   Number.POSITIVE_INFINITY,
@@ -232,6 +239,21 @@ describe("createL1ActionHash()", () => {
     expect(createL1ActionHash({ action: ORDER_ACTION, nonce })).toBe(
       "0x27015072154fc147842efc672ab345311190856b5143f4b2def65830657fb15d",
     );
+  });
+
+  test("encodes integral doubles beyond the safe-integer range as float64 (python parity)", () => {
+    // `adjust` must not widen `1e300` to a BigInt — the encoder would then throw "Cannot safely encode
+    // bigint larger than 64 bits". Python's msgpack packs an integral double that large as float64, and
+    // the oracle agrees, so the expected hash is computed over the oracle-encoded preimage
+    // (actionBytes ‖ nonce(u64) ‖ 0x00 for the absent vault).
+    const action = { type: "scheduleCancel", time: 1e300 };
+
+    const actionBytes = encodeReference(action);
+    const preimage = new Uint8Array(actionBytes.length + 8 + 1); // zero-init supplies the 0x00 vault marker
+    preimage.set(actionBytes);
+    new DataView(preimage.buffer).setBigUint64(actionBytes.length, BigInt(nonce));
+
+    expect(createL1ActionHash({ action, nonce })).toBe(`0x${bytesToHex(keccak_256(preimage))}`);
   });
 
   test("keeps the known-good vault hash", () => {

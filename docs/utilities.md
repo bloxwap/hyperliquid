@@ -73,6 +73,27 @@ payload instead of routing it through `formatSize`.
 
 {% endhint %}
 
+<a id="wire-float-floattowire"></a>
+
+## Wire floats → `floatToWire`
+
+`formatPrice`/`formatSize` enforce the exchange's tick and lot rules. When you instead need the exact wire format the
+Python SDK signs with — e.g. to reproduce a hash or compare payloads byte-for-byte — use `floatToWire`, a port of
+Python's `float_to_wire`: round to 8 decimals (half-even), refuse precision loss beyond `1e-12`, strip trailing zeros,
+never emit scientific notation.
+
+```ts
+import { floatToWire } from "@bloxwap/hyperliquid/utils";
+
+floatToWire(1e-8);                // "0.00000001"
+floatToWire(1e20);                // "100000000000000000000"
+floatToWire(0.30000000000000004); // "0.3"
+floatToWire(0.000012345678);      // throws FormatError — rounding would change the value
+```
+
+Unlike `formatPrice`/`formatSize` (which truncate and throw on zero), `floatToWire` rounds, accepts zero and negative
+values, and mirrors Python exactly.
+
 <a id="asset-id-symbolconverter"></a>
 
 ## Asset ID → `SymbolConverter`

@@ -6,10 +6,11 @@
  */
 
 import { describe, test } from "bun:test";
-import { assertEquals } from "@jsr/std__assert";
+import { assertEquals, assertThrows } from "@jsr/std__assert";
 import * as v from "valibot";
 
-import { Decimal, UnsignedDecimal } from "../../src/api/_schemas.ts";
+import { Decimal, UnsignedDecimal, cloidFromInt } from "../../src/api/_schemas.ts";
+import { HyperliquidError } from "../../src/_base.ts";
 
 describe("UnsignedDecimal", () => {
   test("expands exponent notation from number inputs", () => {
@@ -60,5 +61,38 @@ describe("Decimal", () => {
     assertEquals(v.safeParse(Decimal, Number.NaN).success, false);
     assertEquals(v.safeParse(Decimal, Number.POSITIVE_INFINITY).success, false);
     assertEquals(v.safeParse(Decimal, Number.NEGATIVE_INFINITY).success, false);
+  });
+});
+
+describe("cloidFromInt", () => {
+  test("matches Python's Cloid.from_int format (0x + 32 lowercase hex, zero-padded)", () => {
+    assertEquals(cloidFromInt(1), "0x00000000000000000000000000000001");
+    assertEquals(cloidFromInt(255), "0x000000000000000000000000000000ff");
+    assertEquals(cloidFromInt(0xdeadbeef), "0x000000000000000000000000deadbeef");
+    assertEquals(cloidFromInt(12345678901234567890n), "0x0000000000000000ab54a98ceb1f0ad2");
+  });
+
+  test("boundary values", () => {
+    assertEquals(cloidFromInt(0), "0x00000000000000000000000000000000");
+    assertEquals(cloidFromInt(0n), "0x00000000000000000000000000000000");
+    assertEquals(cloidFromInt(2n ** 128n - 1n), "0xffffffffffffffffffffffffffffffff");
+  });
+
+  test("number and bigint forms agree", () => {
+    assertEquals(cloidFromInt(42), cloidFromInt(42n));
+    assertEquals(cloidFromInt(2 ** 53 - 1), cloidFromInt(9007199254740991n));
+  });
+
+  test("rejects out-of-range and negative integers", () => {
+    assertThrows(() => cloidFromInt(2n ** 128n), HyperliquidError);
+    assertThrows(() => cloidFromInt(-1), HyperliquidError);
+    assertThrows(() => cloidFromInt(-1n), HyperliquidError);
+  });
+
+  test("rejects numbers that are not safe integers", () => {
+    assertThrows(() => cloidFromInt(1.5), HyperliquidError);
+    assertThrows(() => cloidFromInt(2 ** 53), HyperliquidError);
+    assertThrows(() => cloidFromInt(Number.NaN), HyperliquidError);
+    assertThrows(() => cloidFromInt(Number.POSITIVE_INFINITY), HyperliquidError);
   });
 });

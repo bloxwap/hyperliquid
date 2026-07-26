@@ -124,7 +124,13 @@ class Adjusted {
 /**
  * Normalizes a value into a shape {@linkcode MsgpackWriter} encodes the way Hyperliquid expects on the wire:
  * - drops `undefined` properties (otherwise the encoder throws)
- * - widens `number`s outside the int32 range to `BigInt` (otherwise they would be encoded as float64 instead of int64)
+ * - widens safe-integer `number`s outside the int32 range to `BigInt` (otherwise they would be encoded as
+ *   float64 instead of int64)
+ *
+ * Integral doubles beyond the safe-integer range (e.g. `1e300`) are NOT widened: the `BigInt` would exceed
+ * 64 bits and the encoder would throw "Cannot safely encode bigint larger than 64 bits", while Python's
+ * msgpack — and `@std/msgpack`, this encoder's reference oracle — emits them as float64. They pass through
+ * as-is. `tests/signing/msgpack.test.ts` pins the `1e300` conformance against the oracle.
  *
  * Returns the ORIGINAL reference when a subtree needs no modification (the common case) — which is why the
  * encoder must treat the result as caller-owned data that may still have getters on it.
@@ -167,7 +173,7 @@ function adjust(value: ValueType): ValueType {
     }
     return result;
   }
-  if (typeof value === "number" && Number.isInteger(value) && (value >= 0x100000000 || value < -0x80000000)) {
+  if (typeof value === "number" && Number.isSafeInteger(value) && (value >= 0x100000000 || value < -0x80000000)) {
     return BigInt(value);
   }
   return value;

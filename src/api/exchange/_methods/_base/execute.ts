@@ -179,7 +179,15 @@ function extractNonceFieldName(types: Record<string, readonly { name: string; ty
   return field.name as "nonce" | "time";
 }
 
-/** Resolves signature chain ID from config, or falls back to the leader wallet's chain ID. */
+/**
+ * Resolves signature chain ID from config, or falls back to the leader wallet's chain ID.
+ *
+ * Deliberate divergence from the Python SDK, which hardcodes `"0x66eee"` in `sign_user_signed_action`:
+ * Python's own comment notes the signatureChainId "is the chain used by the wallet to sign and can be any
+ * chain", and the exchange accepts any chain ID for the user-signed domain (only `hyperliquidChain` is
+ * validated against the environment). Resolving the wallet's actual chain keeps the EIP-712 domain honest
+ * about where the signature was produced.
+ */
 async function resolveSignatureChainId(config: ExchangeConfig): Promise<`0x${string}`> {
   if (config.signatureChainId) {
     const id =

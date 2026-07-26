@@ -118,7 +118,7 @@ function scanDecimal(str: string, sign: 1 | -1): DecimalParts | null {
  *
  * @throws {FormatError} If the value is unparsable or not finite.
  */
-function toDecimal(value: string | number, field: "price" | "size"): DecimalParts {
+function toDecimal(value: string | number, field: "price" | "size" | "value"): DecimalParts {
   let str = typeof value === "number" ? String(value) : value;
 
   let sign: 1 | -1 = 1;
@@ -153,12 +153,58 @@ function toDecimal(value: string | number, field: "price" | "size"): DecimalPart
 /**
  * Truncate toward zero to `dp` decimal places — `toDecimalPlaces` with decimal.js's `ROUND_DOWN`.
  * Mutates and returns `value`, which never escapes the format pipeline.
+ *
+ * ROUND_DOWN (truncation) is a deliberate divergence from the Python SDK's half-even slippage
+ * rounding — see the "Divergence from the Python SDK" note on `formatPrice`.
  */
 function toDecimalPlaces(value: DecimalParts, dp: number): DecimalParts {
   // Significant digits sitting at or above the 10^-dp place.
   const keep = value.exp + dp;
   if (keep <= 0) value.digits = "";
   else if (keep < value.digits.length) value.digits = stripTrailingZeros(value.digits.slice(0, keep));
+  return value;
+}
+
+/**
+ * Round to `dp` decimal places, ties to even — `toDecimalPlaces` with decimal.js's `ROUND_HALF_EVEN`.
+ * Mutates and returns `value`, which never escapes the format pipeline.
+ */
+function toDecimalPlacesHalfEven(value: DecimalParts, dp: number): DecimalParts {
+  // Significant digits sitting at or above the 10^-dp place.
+  const keep = value.exp + dp;
+  if (keep <= 0) {
+    // Everything sits below the 10^-dp place; round up to one unit there only past half a unit. An exact
+    // half ties to the implicit leading 0, which is even. digits is normalized (no leading/trailing zeros),
+    // so lexicographic comparison against "5" is the numeric comparison against half a unit.
+    if (keep === 0 && value.digits > "5") {
+      value.digits = "1";
+      value.exp = 1 - dp;
+    } else {
+      value.digits = "";
+    }
+    return value;
+  }
+  if (keep >= value.digits.length) return value; // already an integer multiple of 10^-dp
+
+  const rest = value.digits.slice(keep);
+  // Round up when the discarded tail exceeds half a unit, or ties it with an odd preceding digit
+  // (digit char codes are odd exactly when the digit is).
+  const roundUp = rest > "5" || (rest === "5" && value.digits.charCodeAt(keep - 1) % 2 === 1);
+  value.digits = value.digits.slice(0, keep);
+  if (roundUp) {
+    // Increment the kept digits: flip the rightmost non-"9" up and zero the run after it; a run reaching
+    // the front ("999…") carries out as 0.1 × 10^(exp+1).
+    let i = keep - 1;
+    while (i >= 0 && value.digits.charCodeAt(i) === 57) i--; // "9"
+    if (i < 0) {
+      value.digits = "1";
+      value.exp += 1;
+    } else {
+      value.digits =
+        value.digits.slice(0, i) + String.fromCharCode(value.digits.charCodeAt(i) + 1) + "0".repeat(keep - 1 - i);
+    }
+  }
+  value.digits = stripTrailingZeros(value.digits);
   return value;
 }
 
@@ -191,6 +237,11 @@ function toFixed(value: DecimalParts): string {
  * - Maximum 5 significant figures
  * - Maximum 6 (for perp) or 8 (for spot) - `szDecimals` decimal places
  * - Integer prices are always allowed regardless of significant figures
+ *
+ * Divergence from the Python SDK: values are **truncated** (`ROUND_DOWN`), never rounded to nearest.
+ * Python's `_slippage_price` rounds half-even (to 5 significant figures first, then to 6 decimals).
+ * Truncation is kept deliberately: for a slippage-derived bound, a truncated buy price is never more
+ * aggressive than intended, whereas half-even rounding can nudge the bound upward.
  *
  * @param price The price to format (as string or number).
  * @param szDecimals The size decimals of the asset.
@@ -230,6 +281,9 @@ export function formatPrice(price: string | number, szDecimals: number, type: "p
  * Format size according to Hyperliquid {@link https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/tick-and-lot-size | rules}:
  * - Truncate decimal places to `szDecimals`
  *
+ * Divergence from the Python SDK: like {@linkcode formatPrice}, sizes are **truncated** (`ROUND_DOWN`)
+ * rather than rounded half-even — see the note on `formatPrice` for the rationale.
+ *
  * @param size The size to format (as string or number).
  * @param szDecimals The size decimals of the asset.
  * @return Formatted size string
@@ -255,4 +309,59 @@ export function formatSize(size: string | number, szDecimals: number): string {
   }
 
   return toFixed(result);
+}
+
+/**
+ * Convert a float to its wire string, mirroring the Python SDK's `float_to_wire`
+ * ({@link https://github.com/hyperliquid-dex/hyperliquid-python-sdk/blob/master/hyperliquid/utils/signing.py | signing.py}):
+ * - Round to 8 decimal places, half-even (Python's `f"{x:.8f}"`)
+ * - Throw if rounding changed the value by `>= 1e-12` (Python's `ValueError("float_to_wire causes rounding")`)
+ * - Strip trailing zeros and a bare decimal point; integers have no decimal point
+ * - Never emit scientific notation
+ *
+ * Decisions where JavaScript and Python differ:
+ * - **Negatives are accepted** and keep their sign — `float_to_wire` is used for both signed and unsigned
+ *   contexts in Python, so the sign is mirrored and callers validate it, exactly as in Python.
+ * - **Any value rounding to zero maps to `"0"`**, including `-0` and tiny negatives that pass the precision
+ *   guard. Python intends this (`if rounded == "-0": rounded = "0"`) but the guard never fires there —
+ *   `f"{x:.8f}"` always carries a fraction — so CPython actually emits `"-0"`. `"0"` matches this SDK's
+ *   decimal schemas, which collapse negative zero.
+ * - **Non-finite input throws.** Python would emit `"inf"`/`"nan"` strings that the exchange rejects
+ *   anyway; this SDK's format helpers refuse non-finite values, so `floatToWire` does too.
+ *
+ * @param x The float to convert.
+ * @return The wire string.
+ *
+ * @throws {FormatError} If `x` is not finite, or rounding to 8 decimals changes it by `>= 1e-12`.
+ *
+ * @example
+ * ```ts
+ * import { floatToWire } from "@bloxwap/hyperliquid/utils";
+ *
+ * floatToWire(1e-8);                // → "0.00000001"
+ * floatToWire(1e20);                // → "100000000000000000000"
+ * floatToWire(1.2300000000000002);  // → "1.23"
+ * floatToWire(0.30000000000000004); // → "0.3"
+ * floatToWire(-0);                  // → "0"
+ * floatToWire(0.000012345678);      // → throws FormatError
+ * ```
+ */
+export function floatToWire(x: number): string {
+  // `toDecimal` parses the double's shortest round-trip form rather than its exact binary value, but the
+  // precision guard below rejects every input where that distinction could reach the 8th decimal (any
+  // value close enough to a rounding boundary for the two forms to disagree is >= ~5e-9 away from its
+  // rounded result), so the output matches Python's `f"{x:.8f}"` on every input. An exact tie at the 8th
+  // decimal (e.g. 1/512 = 0.001953125) always trips the guard — a tie moves the value by exactly 5e-9 —
+  // so half-even vs `toFixed`'s half-up is unobservable here; half-even is used for faithfulness.
+  // Non-finite input is rejected inside `toDecimal`, like the other formatters.
+  const rounded = toDecimalPlacesHalfEven(toDecimal(x, "value"), 8);
+  const wire = toFixed(rounded); // zero renders as "0" with no sign — the documented -0 collapse
+
+  // Python: `if abs(float(rounded) - x) >= 1e-12: raise ValueError("float_to_wire causes rounding", x)`.
+  // Python's `float()` is the nearest double to the decimal string — exactly what `Number()` parses.
+  if (Math.abs(Number(wire) - x) >= 1e-12) {
+    throw new FormatError(`floatToWire causes rounding: ${x}`);
+  }
+
+  return wire;
 }

@@ -7,7 +7,7 @@
 import { describe, test } from "bun:test";
 import { assertEquals, assertThrows } from "@jsr/std__assert";
 import { Decimal } from "decimal.js";
-import { FormatError, formatPrice, formatSize } from "@bloxwap/hyperliquid/utils";
+import { FormatError, floatToWire, formatPrice, formatSize } from "@bloxwap/hyperliquid/utils";
 
 // ============================================================
 // Test Data
@@ -337,5 +337,57 @@ describe("decimal.js conformance", () => {
       assertThrows(() => formatPrice(value, 0), FormatError);
       assertThrows(() => formatSize(value, 0), FormatError);
     }
+  });
+});
+
+describe("floatToWire", () => {
+  // Fixtures pin the Python SDK's `float_to_wire` outputs exactly (hyperliquid/utils/signing.py).
+  describe("python parity fixtures", () => {
+    test("documented outputs", () => {
+      assertEquals(floatToWire(1e-8), "0.00000001");
+      assertEquals(floatToWire(1e20), "100000000000000000000");
+      assertEquals(floatToWire(1.2300000000000002), "1.23");
+      assertEquals(floatToWire(0.30000000000000004), "0.3");
+      assertEquals(floatToWire(-0), "0");
+      assertEquals(floatToWire(2.5), "2.5");
+    });
+
+    test("integers have no decimal point", () => {
+      assertEquals(floatToWire(0), "0");
+      assertEquals(floatToWire(100), "100");
+    });
+
+    test("never emits scientific notation", () => {
+      assertEquals(floatToWire(1e21), "1000000000000000000000");
+      assertEquals(floatToWire(1.2e-7), "0.00000012");
+    });
+
+    test("precision-loss guard throws", () => {
+      assertThrows(() => floatToWire(0.000012345678), FormatError);
+      assertThrows(() => floatToWire(-0.000012345678), FormatError);
+      // An exact tie at the 8th decimal (1/512) moves the value by exactly 5e-9 — always caught.
+      assertThrows(() => floatToWire(0.001953125), FormatError);
+      // Just under the guard threshold, the same rounding is allowed through.
+      assertEquals(floatToWire(0.0000123499999), "0.00001235");
+    });
+  });
+
+  describe("documented decisions", () => {
+    test("negatives are accepted (callers validate sign, as in Python)", () => {
+      assertEquals(floatToWire(-2.5), "-2.5");
+      assertEquals(floatToWire(-0.00001235), "-0.00001235");
+    });
+
+    test('values rounding to zero collapse to "0"', () => {
+      assertEquals(floatToWire(-0), "0");
+      // Tiny negatives below the guard threshold; CPython emits "-0" here (its `-0` guard is dead code).
+      assertEquals(floatToWire(-1e-13), "0");
+    });
+
+    test("non-finite input throws", () => {
+      assertThrows(() => floatToWire(Number.NaN), FormatError);
+      assertThrows(() => floatToWire(Number.POSITIVE_INFINITY), FormatError);
+      assertThrows(() => floatToWire(Number.NEGATIVE_INFINITY), FormatError);
+    });
   });
 });
