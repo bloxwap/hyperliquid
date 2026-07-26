@@ -53,31 +53,31 @@ export type ActiveAssetDataResponse = {
         /** Leverage value used. */
         value: number;
       };
-  /** Maximum trade size range [min, max]. */
+  /** Maximum trade sizes per side [buy, sell]. */
   maxTradeSzs: [
     /**
-     * Minimum trade size.
+     * Maximum buy trade size.
      * @pattern ^[0-9]+(\.[0-9]+)?$
      */
-    min: string,
+    buy: string,
     /**
-     * Maximum trade size.
+     * Maximum sell trade size.
      * @pattern ^[0-9]+(\.[0-9]+)?$
      */
-    max: string,
+    sell: string,
   ];
-  /** Available to trade range [min, max]. */
+  /** Available to trade per side [buy, sell]. */
   availableToTrade: [
     /**
-     * Minimum available to trade.
+     * Maximum available to trade on the buy side.
      * @pattern ^[0-9]+(\.[0-9]+)?$
      */
-    min: string,
+    buy: string,
     /**
-     * Maximum available to trade.
+     * Maximum available to trade on the sell side.
      * @pattern ^[0-9]+(\.[0-9]+)?$
      */
-    max: string,
+    sell: string,
   ];
   /**
    * Mark price.

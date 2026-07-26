@@ -17,54 +17,58 @@ export const OrderRequest = /* @__PURE__ */ (() => {
       /** Type of action. */
       type: v.literal("order"),
       /** Array of order parameters. */
-      orders: v.array(
-        v.object({
-          /** Asset ID. */
-          a: UnsignedInteger,
-          /** Position side (`true` for long, `false` for short). */
-          b: v.boolean(),
-          /** Price. */
-          p: v.pipe(
-            UnsignedDecimal,
-            v.check((input) => Number(input) > 0, "Value must be greater than zero"),
-          ),
-          /** Size (in base currency units). */
-          s: UnsignedDecimal,
-          /** Whether the order is reduce-only. */
-          r: v.boolean(),
-          /** Order type (`limit` for limit orders, `trigger` for stop-loss/take-profit orders). */
-          t: v.union([
-            v.object({
-              /** Limit order parameters. */
-              limit: v.object({
-                /**
-                 * Time-in-force.
-                 * - `"Gtc"`: Remains active until filled or canceled.
-                 * - `"Ioc"`: Fills immediately or cancels any unfilled portion.
-                 * - `"Alo"`: Adds liquidity only.
-                 * - `"FrontendMarket"`: Similar to Ioc, but add a note that this is market order.
-                 */
-                tif: v.picklist(["Gtc", "Ioc", "Alo", "FrontendMarket"]),
+      orders: v.pipe(
+        v.array(
+          v.object({
+            /** Asset ID. */
+            a: UnsignedInteger,
+            /** Position side (`true` for long, `false` for short). */
+            b: v.boolean(),
+            /** Price. */
+            p: v.pipe(
+              UnsignedDecimal,
+              v.check((input) => Number(input) > 0, "Value must be greater than zero"),
+            ),
+            /** Size (in base currency units). */
+            s: UnsignedDecimal,
+            /** Whether the order is reduce-only. */
+            r: v.boolean(),
+            /** Order type (`limit` for limit orders, `trigger` for stop-loss/take-profit orders). */
+            t: v.union([
+              v.object({
+                /** Limit order parameters. */
+                limit: v.object({
+                  /**
+                   * Time-in-force.
+                   * - `"Gtc"`: Remains active until filled or canceled.
+                   * - `"Ioc"`: Fills immediately or cancels any unfilled portion.
+                   * - `"Alo"`: Adds liquidity only.
+                   * - `"FrontendMarket"`: Similar to Ioc, but add a note that this is market order.
+                   */
+                  tif: v.picklist(["Gtc", "Ioc", "Alo", "FrontendMarket"]),
+                }),
               }),
-            }),
-            v.object({
-              /** Trigger order parameters. */
-              trigger: v.object({
-                /** Whether the order is a market order. */
-                isMarket: v.boolean(),
-                /** Trigger price. */
-                triggerPx: v.pipe(
-                  UnsignedDecimal,
-                  v.check((input) => Number(input) > 0, "Value must be greater than zero"),
-                ),
-                /** Indicates whether it is take profit or stop loss. */
-                tpsl: v.picklist(["tp", "sl"]),
+              v.object({
+                /** Trigger order parameters. */
+                trigger: v.object({
+                  /** Whether the order is a market order. */
+                  isMarket: v.boolean(),
+                  /** Trigger price. */
+                  triggerPx: v.pipe(
+                    UnsignedDecimal,
+                    v.check((input) => Number(input) > 0, "Value must be greater than zero"),
+                  ),
+                  /** Indicates whether it is take profit or stop loss. */
+                  tpsl: v.picklist(["tp", "sl"]),
+                }),
               }),
-            }),
-          ]),
-          /** Client Order ID. */
-          c: v.optional(Cloid),
-        }),
+            ]),
+            /** Client Order ID. */
+            c: v.optional(Cloid),
+          }),
+        ),
+        // The server rejects an empty batch ("empty batch of orders"), so fail fast here.
+        v.minLength(1),
       ),
       /**
        * Order grouping strategy:
@@ -89,7 +93,7 @@ export const OrderRequest = /* @__PURE__ */ (() => {
         v.object({
           /** Builder address. */
           b: Address,
-          /** Builder fee in 0.1bps (1 = 0.0001%). Max 100 for perps (0.1%), 1000 for spot (1%). */
+          /** Builder fee in 0.1bps (1 = 0.001%). Max 100 for perps (0.1%), 1000 for spot (1%). */
           f: v.pipe(UnsignedInteger, v.maxValue(1000)),
         }),
       ),

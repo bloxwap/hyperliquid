@@ -73,6 +73,8 @@ export type L2BookParameters = Omit<v.InferInput<typeof L2BookRequest>, "type">;
 /**
  * Request L2 order book.
  *
+ * Returns at most 20 levels per side.
+ *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.

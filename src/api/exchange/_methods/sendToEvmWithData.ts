@@ -35,7 +35,7 @@ export const SendToEvmWithDataRequest = /* @__PURE__ */ (() => {
       /** Gas limit for execution on the destination chain. */
       gasLimit: UnsignedInteger,
       /** Additional data payload (hex-encoded bytes, "0x" for empty). */
-      data: v.pipe(v.string(), v.regex(/^0[xX]([0-9a-fA-F]+)?$/)),
+      data: v.pipe(v.string(), v.regex(/^0x([0-9a-fA-F]{2})*$/)),
       /** Nonce (timestamp in ms) used to prevent replay attacks. */
       nonce: UnsignedInteger,
     }),

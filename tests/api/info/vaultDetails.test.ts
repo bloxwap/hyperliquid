@@ -1,5 +1,8 @@
-import { type VaultDetailsParameters, VaultDetailsRequest } from "@bloxwap/hyperliquid/api/info";
+import { type VaultDetailsParameters, VaultDetailsRequest, vaultDetails } from "@bloxwap/hyperliquid/api/info";
 import * as v from "valibot";
+import { describe, test } from "bun:test";
+import { assertEquals } from "@jsr/std__assert";
+import type { IRequestTransport } from "@bloxwap/hyperliquid";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -19,6 +22,7 @@ runTest({
         vaultAddress: "0xa15099a30bbf2e68942d6f4c43d70d04faeab0a0",
         user: "0xe019d6167E7e324aEd003d94098496b6d986aB05",
       }, // relationship.type = parent, user present
+      { vaultAddress: "0x0000000000000000000000000000000000000001" }, // nonexistent vault, null response
     ];
 
     const data = await Promise.all(params.map((p) => client.vaultDetails(p)));
@@ -26,4 +30,23 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: the API returns `null` for unknown vaults
+// ============================================================
+
+describe("vaultDetails (offline)", () => {
+  test("nonexistent vault address resolves to null", async () => {
+    const transport: IRequestTransport = {
+      isTestnet: true,
+      request<T>(): Promise<T> {
+        return Promise.resolve(null as T);
+      },
+    };
+
+    const result = await vaultDetails({ transport }, { vaultAddress: "0x0000000000000000000000000000000000000001" });
+
+    assertEquals(result, null);
+  });
 });

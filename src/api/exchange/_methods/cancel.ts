@@ -17,13 +17,17 @@ export const CancelRequest = /* @__PURE__ */ (() => {
       /** Type of action. */
       type: v.literal("cancel"),
       /** Orders to cancel by asset and order ID. */
-      cancels: v.array(
-        v.object({
-          /** Asset ID. */
-          a: UnsignedInteger,
-          /** Order ID. */
-          o: UnsignedInteger,
-        }),
+      cancels: v.pipe(
+        v.array(
+          v.object({
+            /** Asset ID. */
+            a: UnsignedInteger,
+            /** Order ID. */
+            o: UnsignedInteger,
+          }),
+        ),
+        // The server rejects an empty batch, so fail fast here.
+        v.minLength(1),
       ),
       /** Prioritize this cancel in the mempool (fast cancel). */
       f: v.optional(v.literal(true)),

@@ -63,6 +63,8 @@ export type UserFillsParameters = Omit<v.InferInput<typeof UserFillsRequest>, "t
 /**
  * Request array of user fills.
  *
+ * Returns at most 2000 most recent fills.
+ *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
