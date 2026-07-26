@@ -21,7 +21,7 @@
  * @module
  */
 
-import { ReconnectingWebSocket, type ReconnectingWebSocketOptions } from "@nktkas/rews";
+import { ReconnectingWebSocket, type ReconnectingWebSocketOptions } from "./_reconnectingSocket.ts";
 import type { IRequestTransport, ISubscription, ISubscriptionTransport } from "../_base.ts";
 import { WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
 import { HyperliquidEventTarget } from "./_events.ts";

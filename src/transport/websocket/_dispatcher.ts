@@ -5,7 +5,7 @@
  * @module
  */
 
-import { ReconnectingWebSocket } from "@nktkas/rews";
+import { ReconnectingWebSocket } from "./_reconnectingSocket.ts";
 import * as abort from "../_abort.ts";
 import { TransportError } from "../_base.ts";
 import { Promise_ } from "../_polyfills.ts";

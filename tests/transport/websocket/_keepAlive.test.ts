@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, test } from "bun:test";
 import { assertEquals } from "@jsr/std__assert";
 import { FakeTime } from "@jsr/std__testing/time";
-import type { ReconnectingWebSocket } from "@nktkas/rews";
+import type { ReconnectingWebSocket } from "../../../src/transport/websocket/_reconnectingSocket.ts";
 import { WebSocketKeepAlive, type WebSocketKeepAliveOptions } from "../../../src/transport/websocket/_keepAlive.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
 import { getLastSent, MockWebSocket } from "./_mock.ts";
