@@ -21,13 +21,24 @@
  * ```sh
  * bun run .dev/perf/gate.ts --threshold 15
  * ```
+ *
+ * Baselines are machine-specific: comparing reports from different CPUs, OSes, or runtimes
+ * is refused outright (see `incomparableReason` in `compare.ts`) unless
+ * `--allow-environment-mismatch` is passed for a rough look.
  * @module
  */
 
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { compareReports, isFailure, readReport, renderComparison, renderFailure } from "./compare.ts";
+import {
+  compareReports,
+  incomparableReason,
+  isFailure,
+  readReport,
+  renderComparison,
+  renderFailure,
+} from "./compare.ts";
 
 /** Repository root, so the gate behaves the same from any working directory. */
 const ROOT = resolve(import.meta.dir, "../..");
@@ -98,25 +109,35 @@ if (import.meta.main) {
   // --- Measure -------------------------------------------------------------
   const dir = await mkdtemp(join(tmpdir(), "hl-perf-"));
   const currentPath = join(dir, "current.json");
-  let failed = false;
+  let exitCode = 0;
   try {
     await runSuite(currentPath);
 
     const baseline = await readReport(BASELINE);
     const current = await readReport(currentPath);
-    const result = compareReports(baseline, current, thresholdPct);
 
-    console.log(`\n${renderComparison(baseline, current, result, thresholdPct)}`);
-
-    failed = isFailure(result);
-    if (failed) {
-      console.error(`\n${renderFailure(result)}`);
+    // Same enforcement as the compare.ts CLI: different machines are not comparable.
+    const incomparable = incomparableReason(baseline, current);
+    if (incomparable && !args.includes("--allow-environment-mismatch")) {
+      console.error(incomparable);
+      exitCode = 2;
     } else {
-      console.log("\nPASS: no performance regressions.");
+      const result = compareReports(baseline, current, thresholdPct, {
+        allowUnfingerprintedBase: args.includes("--allow-unfingerprinted-base"),
+      });
+
+      console.log(`\n${renderComparison(baseline, current, result, thresholdPct)}`);
+
+      if (isFailure(result)) {
+        console.error(`\n${renderFailure(result)}`);
+        exitCode = 1;
+      } else {
+        console.log("\nPASS: no performance regressions.");
+      }
     }
   } finally {
     // `process.exit` skips pending work, so the temp report is removed before exiting.
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
-  if (failed) process.exit(1);
+  if (exitCode !== 0) process.exit(exitCode);
 }

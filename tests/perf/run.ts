@@ -19,9 +19,10 @@
  * @module
  */
 
-import { mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { cpus } from "node:os";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { formatNs, type PerfReport, registeredScenarios, runScenario, type ScenarioResult } from "./_harness.ts";
 
 // --- Scenario registration -------------------------------------------------
@@ -50,6 +51,32 @@ async function git(...args: string[]): Promise<string> {
   }
 }
 
+/**
+ * Fingerprint of the whole perf suite's SOURCE: every file that defines what the
+ * scenarios measure — `_harness.ts`, `_fixtures.ts`, `_helpers.ts`, and every
+ * `scenarios/*.ts` module, enumerated sorted for determinism.
+ *
+ * Unlike the per-scenario fingerprint (which covers one scenario's definition and call
+ * sites), this catches edits ANYWHERE in the suite — e.g. a fixture payload change inside
+ * `_fixtures.ts` — so the regression gate can refuse to compare two revisions whose
+ * workloads are not byte-identical. A `--filter`ed run hashes the same files, so filtered
+ * reports stay comparable with each other.
+ */
+async function suiteFingerprint(): Promise<string> {
+  const suiteDir = import.meta.dir;
+  const scenarioFiles = (await readdir(join(suiteDir, "scenarios"))).filter((f) => f.endsWith(".ts")).sort();
+  const files = ["_harness.ts", "_fixtures.ts", "_helpers.ts", ...scenarioFiles.map((f) => join("scenarios", f))];
+
+  const hash = createHash("sha256");
+  for (const file of files) {
+    hash.update(file);
+    hash.update("\0");
+    hash.update(await readFile(join(suiteDir, file)));
+    hash.update("\0");
+  }
+  return hash.digest("hex").slice(0, 16);
+}
+
 /** Collects environment metadata so a report is interpretable months later. */
 async function collectMeta(label?: string): Promise<PerfReport["meta"]> {
   const commit = await git("rev-parse", "HEAD");
@@ -63,6 +90,7 @@ async function collectMeta(label?: string): Promise<PerfReport["meta"]> {
     cpu: cpus()[0]?.model ?? "unknown",
     os: `${process.platform} ${process.arch}`,
     date: new Date().toISOString(),
+    suiteFingerprint: await suiteFingerprint(),
     ...(label ? { label } : {}),
   };
 }

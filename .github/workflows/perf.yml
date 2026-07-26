@@ -28,6 +28,11 @@ jobs:
   # `.dev/perf/compare.ts` aggregates the per-round ratios with a median plus a conservative
   # between-round band and only flags a regression when the WHOLE band clears the threshold,
   # so one contaminated round widens the band instead of fabricating a regression.
+  # The band is the median ± the maximum round deviation with per-side sampling margins on
+  # top — a deliberately conservative heuristic, not a confidence interval.
+  # The gate also fails closed when the perf SUITE itself differs between the revisions
+  # (source fingerprint of scenarios/fixtures/helpers/harness): a PR editing tests/perf
+  # changes the workload being compared and is flagged for explicit review, not waved through.
   # If this job flaps, widen the threshold — do not add retries and do not drop the job.
   perf:
     runs-on: ubuntu-latest
@@ -110,7 +115,12 @@ jobs:
             exit 0
           fi
           # base-i pairs with head-i by position; the estimator is documented in compare.ts.
+          # --allow-unfingerprinted-base is TRANSITION GRACE: base commits that predate
+          # workload fingerprinting carry no fingerprints and would otherwise fail the
+          # presence-parity check. Remove this flag once the base branch is guaranteed to
+          # contain the fingerprinted suite (i.e. once this change is old).
           bun run .dev/perf/compare.ts \
             "$RUNNER_TEMP/base-1.json" "$RUNNER_TEMP/base-2.json" "$RUNNER_TEMP/base-3.json" \
             --vs \
-            "$RUNNER_TEMP/head-1.json" "$RUNNER_TEMP/head-2.json" "$RUNNER_TEMP/head-3.json"
+            "$RUNNER_TEMP/head-1.json" "$RUNNER_TEMP/head-2.json" "$RUNNER_TEMP/head-3.json" \
+            --allow-unfingerprinted-base

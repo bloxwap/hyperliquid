@@ -56,14 +56,20 @@
  * Verdicts:
  *
  * - **regression** only when the WHOLE band sits above the noise floor — the lower bound
- *   exceeds `threshold + median(rme_base) + median(rme_head)`, the within-run sampling
- *   error of both sides (the harness' per-run 95% relative margins of error);
+ *   exceeds `threshold + median(rme_base) + median(rme_head)`;
  * - **improvement** only when the upper bound is below `−threshold`;
  * - otherwise **unchanged**.
  *
  * A single contaminated round (a neighbour VM stealing CPU for one run) inflates `w`
  * instead of shifting `m`, so it widens the band into an "unchanged" verdict rather than
  * fabricating a regression.
+ *
+ * What this is NOT: a confidence interval. `rme` is the harness' per-run Student-t margin
+ * of the sample MEAN, used here only as a sampling-noise magnitude — the headline
+ * statistic is a median, so no valid 95% coverage claim attaches to adding those margins.
+ * In short: band = median ± max round deviation, noise floor = threshold + per-side
+ * sampling margins — an intentionally conservative heuristic, not a statistical
+ * confidence calculation.
  *
  * This replaces an earlier design that merged each revision's runs by per-scenario
  * MINIMUM and compared the two minima. Independent minima are downward-biased on both
@@ -76,11 +82,13 @@
  * ## What the table shows
  *
  * The baseline/current columns show the REPRESENTATIVE PAIR: the actual round whose
- * log-ratio is the median (for even `n`, the round closest to it), so the displayed values
- * always reproduce `deltaPct` and the band. Picking each side's display value
- * independently could show a baseline→current pair that flatly contradicts the median
- * ratio the verdict is computed from. Single-run sides have no round structure, so they
- * render the ratio verdict only (an em dash in the value columns).
+ * log-ratio is the median, so the displayed values always reproduce `deltaPct` and the
+ * band. Paired mode requires an ODD round count (the CI workflow measures 3): with an
+ * even count the median would fall between two rounds and no measured pair could
+ * represent it. Picking each side's display value independently could show a
+ * baseline→current pair that flatly contradicts the median ratio the verdict is computed
+ * from. A single run per side is a real pair too: its measured values are shown, and the
+ * band is a point.
  *
  * ## Input validation
  *
@@ -91,12 +99,29 @@
  * - every round of a side must measure the same scenario set — a round that omits a
  *   scenario would otherwise shrink that scenario's estimate to fewer pairs, destroying
  *   the robustness the paired design promises;
- * - a scenario's identity (`group`, `unit`, `description`) must be constant across rounds
- *   and sides — a change signals a renamed or repurposed scenario, i.e. a different
- *   measurement, not a comparable one;
- * - round files must come from one suite: schema 1, and (with 2+ rounds) labels of the
- *   form `<stem>-<round>` with a single stem per side and round numbers in measurement
- *   order — anything else looks like files from different suites or in the wrong order.
+ * - a scenario's identity (`group`, `unit`, `description`, `samples`, `iterations`,
+ *   `unitsPerIteration`) must be constant across rounds and sides — a change signals a
+ *   renamed or repurposed scenario, i.e. a different measurement, not a comparable one.
+ *   This is checked over the UNION of scenario names: head-only ("added") scenarios are
+ *   validated across their rounds too;
+ * - a scenario's workload fingerprint (see `scenarioFingerprint` in the harness) must be
+ *   identical wherever it is recorded — an edited scenario or workload is a different
+ *   measurement;
+ * - the SUITE fingerprint (`meta.suiteFingerprint`, a hash of the suite's source files —
+ *   scenarios, fixtures, helpers, harness) must be identical on both sides: the base and
+ *   head checkouts each run their own tests/perf code, so unchanged scenario metadata can
+ *   still hide a workload edit. A mismatch fails closed on purpose — a PR that edits the
+ *   suite changes what the gate measures and is flagged for explicit review;
+ * - PRESENCE PARITY for both fingerprints: either every report carries them or none does.
+ *   One fingerprinted side against an unfingerprinted one means the unfingerprinted side
+ *   predates fingerprinting — that fails with a migration message unless the explicit
+ *   transition grace `--allow-unfingerprinted-base` is given. Fail-closed is the default
+ *   because a silently skipped equality gate is exactly how unequal workloads get
+ *   compared;
+ * - round files must come from one suite: schema 1, and (with 2+ rounds) every round
+ *   labelled `<stem>-<round>` with a single stem per side and round numbers in
+ *   measurement order — missing, mixed, or misordered labels look like files from
+ *   different suites or in the wrong order.
  *
  * Scenarios present on the base side but entirely absent from the current side keep the
  * `missing` semantics (failure — usually a rename); scenarios new to the current side
@@ -111,10 +136,7 @@ import { formatNs } from "../../tests/perf/_harness.ts";
 export interface Comparison {
   name: string;
   group: string;
-  /**
-   * The representative base measurement: the median round's base run when
-   * {@linkcode Comparison.representativeRound} is set, otherwise the single base run.
-   */
+  /** The representative base measurement: the median round's base run (round 1 when there is one round). */
   baseline: ScenarioResult;
   /** The representative current measurement (same rule as {@linkcode Comparison.baseline}). */
   current: ScenarioResult;
@@ -126,16 +148,16 @@ export interface Comparison {
   lowerPct: number;
   /** Upper bound of the paired band, in percent. */
   upperPct: number;
-  /** Noise floor in percentage points: `threshold + both sides' median margins of error`. */
+  /** Noise floor in percentage points: `threshold + both sides' median sampling margins`. */
   tolerancePct: number;
   /** Number of paired rounds the estimate is computed from. */
   rounds: number;
   /**
    * 1-based index of the round whose log-ratio is the median — the pair the table shows,
-   * so values, `deltaPct` and band always agree. `undefined` for single-run sides, which
-   * have no round structure and render ratio-only.
+   * so values, `deltaPct` and band always agree. A single run per side is a real pair
+   * too, so this is always set (round 1 in that case).
    */
-  representativeRound?: number;
+  representativeRound: number;
   verdict: "regression" | "improvement" | "unchanged";
 }
 
@@ -191,32 +213,129 @@ function signedPct(pct: number): string {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
 }
 
+/** Identity fields that define WHAT a scenario measures; a change means a different measurement. */
+const IDENTITY_FIELDS = ["group", "unit", "description", "samples", "iterations", "unitsPerIteration"] as const;
+
+/**
+ * Fails when a scenario's identity is not constant across all its occurrences.
+ *
+ * A change in any {@linkcode IDENTITY_FIELDS} field means a renamed, repurposed, or
+ * re-parametrized scenario — a different measurement, not a comparable one. The workload
+ * fingerprint (see `scenarioFingerprint` in the harness) must be identical wherever it is
+ * recorded, and present on either every occurrence or none (presence parity — reports
+ * written before fingerprints existed carry none and trip the parity check, not the
+ * mismatch check).
+ *
+ * @param name The scenario name, for the message.
+ * @param runs Every occurrence of the scenario, with its side and 1-based round.
+ * @param allowUnfingerprintedBase Transition grace for the presence-parity check (see
+ *   {@linkcode CompareOptions}); mismatches are never excused.
+ * @return One failure message per drifted field, plus one for a fingerprint problem.
+ */
+function identityDrift(
+  name: string,
+  runs: readonly { side: string; round: number; scenario: ScenarioResult }[],
+  allowUnfingerprintedBase = false,
+): string[] {
+  const failures: string[] = [];
+  const first = runs[0].scenario;
+  for (const field of IDENTITY_FIELDS) {
+    const offender = runs.find((r) => r.scenario[field] !== first[field]);
+    if (offender) {
+      failures.push(
+        `scenario ${JSON.stringify(name)} has ${field} ${JSON.stringify(offender.scenario[field])} in ${offender.side} ` +
+          `round ${offender.round} but ${JSON.stringify(first[field])} elsewhere — a renamed or repurposed scenario ` +
+          `must fail the gate, not compare.`,
+      );
+    }
+  }
+
+  const withPrint = runs.filter((r) => r.scenario.fingerprint !== undefined);
+  if (withPrint.length > 0 && withPrint.length < runs.length) {
+    // Presence parity: either every occurrence carries a fingerprint or none does. A clean
+    // side split means one side predates fingerprinting (the rollout case); fingerprints
+    // appearing in only SOME rounds of one side means files from different suite versions.
+    const sidesWith = new Set(withPrint.map((r) => r.side));
+    const mixedWithinSide = runs.some((r) => r.scenario.fingerprint === undefined && sidesWith.has(r.side));
+    if (mixedWithinSide) {
+      failures.push(
+        `scenario ${JSON.stringify(name)}'s rounds disagree on carrying a workload fingerprint — ` +
+          `the round files come from different suite versions; re-record them with one harness.`,
+      );
+    } else if (!allowUnfingerprintedBase) {
+      const predating = runs.find((r) => r.scenario.fingerprint === undefined)?.side ?? "base";
+      failures.push(
+        `scenario ${JSON.stringify(name)} has a workload fingerprint on one side but none on the ${predating} side — ` +
+          `the ${predating} reports predate workload fingerprinting. Re-record them (or merge a base that contains ` +
+          `fingerprints), or pass --allow-unfingerprinted-base during the transition.`,
+      );
+    }
+  }
+  if (withPrint.length === runs.length && new Set(withPrint.map((r) => r.scenario.fingerprint)).size > 1) {
+    failures.push(
+      `scenario ${JSON.stringify(name)}'s workload fingerprint differs across rounds or revisions — ` +
+        `the gate compares identical workloads; re-record the baseline in the same commit as an intentional change.`,
+    );
+  }
+  return failures;
+}
+
+/** Options for {@linkcode comparePairedReports}. */
+export interface CompareOptions {
+  /**
+   * Transition grace: reports recorded before workload fingerprinting existed carry no
+   * fingerprints, so a pre-fingerprint base compared against a fingerprinted head would
+   * otherwise fail the presence-parity check. This flag downgrades exactly that case to a
+   * skip; everything else (fingerprint mismatches, mixed-version files) still fails.
+   * Fail-closed is the default on purpose: a silently skipped equality gate is how
+   * unequal workloads get compared, so the transition cost is made explicit instead.
+   */
+  allowUnfingerprintedBase?: boolean;
+}
+
 /**
  * Compares paired rounds of two revisions.
  *
  * `baselineRuns[i]` is paired with `currentRuns[i]`: the CI workflow measures round *i* of
  * both revisions back to back, so the per-round ratio cancels runner drift (see the module
- * doc for the estimator and for the validation rules that fail malformed input). Extra
- * runs on the longer side are ignored.
+ * doc for the estimator and for the validation rules that fail malformed input).
  *
  * @param baselineRuns Reports of the reference revision, in round order.
  * @param currentRuns Reports of the revision under test, in round order.
  * @param thresholdPct Slowdown allowed on top of measurement noise, in percent.
+ * @param options See {@linkcode CompareOptions}.
  * @return Per-scenario comparisons, missing/added scenarios, and validation failures.
- * @throws {Error} If either side has no reports.
+ * @throws {Error} If either side has no reports, the sides have different round counts
+ *   (rounds pair by position, so truncating a longer side would silently change the
+ *   input), or the round count is even and greater than one — with an even count the
+ *   median log-ratio falls BETWEEN two rounds and no actual round reproduces it, so
+ *   paired mode requires an odd count (the CI workflow measures 3).
  */
 export function comparePairedReports(
   baselineRuns: readonly PerfReport[],
   currentRuns: readonly PerfReport[],
   thresholdPct: number,
+  options: CompareOptions = {},
 ): ComparisonResult {
   if (baselineRuns.length === 0 || currentRuns.length === 0) {
     throw new Error("comparePairedReports needs at least one report per side");
   }
-  const rounds = Math.min(baselineRuns.length, currentRuns.length);
+  if (baselineRuns.length !== currentRuns.length) {
+    throw new Error(
+      `comparePairedReports needs the same number of rounds on both sides ` +
+        `(got ${baselineRuns.length} base vs ${currentRuns.length} current) — round files pair by position.`,
+    );
+  }
+  if (baselineRuns.length > 1 && baselineRuns.length % 2 === 0) {
+    throw new Error(
+      `comparePairedReports needs an odd round count in paired mode (got ${baselineRuns.length}) — ` +
+        `with an even count the median log-ratio falls between two rounds and no measured pair represents it.`,
+    );
+  }
+  const rounds = baselineRuns.length;
   const sides = [
-    { name: "base", runs: baselineRuns.slice(0, rounds) },
-    { name: "current", runs: currentRuns.slice(0, rounds) },
+    { name: "base", runs: baselineRuns },
+    { name: "current", runs: currentRuns },
   ] as const;
   const failures: string[] = [];
 
@@ -232,7 +351,13 @@ export function comparePairedReports(
     }
     if (rounds >= 2) {
       const labels = side.runs.map((r) => r.meta.label);
-      if (labels.every((label) => label !== undefined)) {
+      if (labels.some((label) => label === undefined)) {
+        failures.push(
+          `${side.name} rounds must all carry a "<stem>-<round>" label in paired mode ` +
+            `(got ${labels.map((l) => JSON.stringify(l)).join(", ")}) — ` +
+            `the labels tie each round file to its measurement order.`,
+        );
+      } else {
         const parsed = labels.map((label) => /^(.*)-(\d+)$/.exec(label as string));
         const stems = new Set(parsed.map((p) => p?.[1]));
         const badPattern = labels.findIndex((_, i) => parsed[i] === null);
@@ -255,13 +380,42 @@ export function comparePairedReports(
             );
           }
         }
-      } else if (labels.some((label) => label !== undefined)) {
-        failures.push(
-          `${side.name} runs are inconsistently labelled (${labels.map((l) => JSON.stringify(l)).join(", ")}) — ` +
-            `either every round carries a "<stem>-<round>" label or none does.`,
-        );
       }
     }
+  }
+
+  // --- Suite fingerprint: the equality gate for the workload itself --------------------
+  // The base and head checkouts each run their OWN tests/perf code, so identical scenario
+  // metadata can still hide a workload edit (e.g. a fixture payload). The suite
+  // fingerprint hashes the suite's source files; any difference fails closed.
+  const sidePrints = sides.map((side) => side.runs.map((r) => r.meta.suiteFingerprint));
+  for (const [si, side] of sides.entries()) {
+    const defined = sidePrints[si].filter((f) => f !== undefined);
+    if (defined.length > 0 && defined.length < side.runs.length) {
+      failures.push(
+        `${side.name} rounds disagree on carrying a suite fingerprint — ` +
+          `the round files come from different suite versions; re-record them with one harness.`,
+      );
+    }
+  }
+  const baseHasPrints = sidePrints[0].every((f) => f !== undefined);
+  const headHasPrints = sidePrints[1].every((f) => f !== undefined);
+  if (baseHasPrints !== headHasPrints && !options.allowUnfingerprintedBase) {
+    const predating = baseHasPrints ? "current" : "base";
+    failures.push(
+      `the ${predating} reports carry no suite fingerprint — they predate workload fingerprinting. ` +
+        `Re-record them (or merge a base that contains fingerprints), ` +
+        `or pass --allow-unfingerprinted-base during the transition.`,
+    );
+  }
+  if (baseHasPrints && headHasPrints && new Set([...sidePrints[0], ...sidePrints[1]]).size > 1) {
+    failures.push(
+      `the perf suite itself differs between the two revisions ` +
+        `(suite fingerprint ${sidePrints[0][0]} vs ${sidePrints[1][0]}) — a change to tests/perf ` +
+        `(scenarios, fixtures, helpers, harness) changes the workload the gate compares, so the gate ` +
+        `fails closed on purpose: suite edits are flagged for explicit review, not waved through. ` +
+        `Land an intentional suite change with the gate red, or as its own PR.`,
+    );
   }
 
   const byName = (report: PerfReport): Map<string, ScenarioResult> => new Map(report.scenarios.map((s) => [s.name, s]));
@@ -290,6 +444,7 @@ export function comparePairedReports(
   const comparisons: Comparison[] = [];
   const missing: string[] = [];
   const headNames = new Set(orders[1]);
+  const baseNames = new Set(orders[0]);
 
   for (const name of orders[0]) {
     if (partial.has(`0:${name}`) || partial.has(`1:${name}`)) continue; // already failed above
@@ -306,29 +461,19 @@ export function comparePairedReports(
       });
     }
 
-    // --- Identity: a scenario's group/unit/description may not drift between rounds or sides
-    let identityFailed = false;
-    for (const field of ["group", "unit", "description"] as const) {
-      const expected = pairs[0].base[field];
-      for (const [i, pair] of pairs.entries()) {
-        const offender =
-          pair.base[field] !== expected
-            ? { side: "base", got: pair.base[field] }
-            : pair.head[field] !== expected
-              ? { side: "current", got: pair.head[field] }
-              : undefined;
-        if (offender) {
-          identityFailed = true;
-          failures.push(
-            `scenario ${JSON.stringify(name)} has ${field} ${JSON.stringify(offender.got)} in ${offender.side} ` +
-              `round ${i + 1} but ${JSON.stringify(expected)} elsewhere — a renamed or repurposed scenario ` +
-              `must fail the gate, not compare.`,
-          );
-          break; // one message per field is enough
-        }
-      }
+    // --- Identity and workload: the same name must be the same measurement everywhere ---
+    const drift = identityDrift(
+      name,
+      pairs.flatMap((pair, i) => [
+        { side: "base", round: i + 1, scenario: pair.base },
+        { side: "current", round: i + 1, scenario: pair.head },
+      ]),
+      options.allowUnfingerprintedBase,
+    );
+    if (drift.length > 0) {
+      failures.push(...drift);
+      continue;
     }
-    if (identityFailed) continue;
 
     const logRatios = pairs.map((p) => Math.log(p.head.nsPerUnit / p.base.nsPerUnit));
     const m = median(logRatios);
@@ -340,37 +485,46 @@ export function comparePairedReports(
 
     // Representative pair for the table: the actual round whose log-ratio is the median
     // (for even n, the closest round to it), so the displayed baseline/current always
-    // reproduce deltaPct and the band. Single-run sides get no representative pair —
-    // there is no round structure to point at, and they render ratio-only.
-    let representativeRound: number | undefined;
-    let representative: { base: ScenarioResult; head: ScenarioResult } | undefined;
-    if (pairs.length >= 2) {
-      let best = 0;
-      for (let i = 1; i < pairs.length; i++) {
-        if (Math.abs(logRatios[i] - m) < Math.abs(logRatios[best] - m)) best = i;
-      }
-      representative = pairs[best];
-      representativeRound = best + 1;
+    // reproduce deltaPct and the band. A single round is a real pair and shows its values.
+    let best = 0;
+    for (let i = 1; i < pairs.length; i++) {
+      if (Math.abs(logRatios[i] - m) < Math.abs(logRatios[best] - m)) best = i;
     }
 
     comparisons.push({
       name,
       group: pairs[0].base.group,
-      baseline: representative?.base ?? pairs[0].base,
-      current: representative?.head ?? pairs[0].head,
+      baseline: pairs[best].base,
+      current: pairs[best].head,
       deltaPct,
       speedup: Math.exp(-m),
       lowerPct,
       upperPct,
       tolerancePct,
       rounds: pairs.length,
-      ...(representativeRound !== undefined ? { representativeRound } : {}),
+      representativeRound: best + 1,
       verdict: lowerPct > tolerancePct ? "regression" : upperPct < -thresholdPct ? "improvement" : "unchanged",
     });
   }
 
-  const baseNames = new Set(orders[0]);
-  const added = orders[1].filter((n) => !baseNames.has(n) && !partial.has(`1:${n}`));
+  // --- Head-only scenarios: informational "added", but validated like any scenario ------
+  const added: string[] = [];
+  for (const name of orders[1]) {
+    if (baseNames.has(name) || partial.has(`1:${name}`)) continue;
+    added.push(name);
+    failures.push(
+      ...identityDrift(
+        name,
+        mapsByRound[1].map((roundMap, i) => ({
+          side: "current",
+          round: i + 1,
+          scenario: roundMap.get(name) as ScenarioResult,
+        })),
+        options.allowUnfingerprintedBase,
+      ),
+    );
+  }
+
   return { comparisons, missing, added, failures };
 }
 
@@ -386,8 +540,13 @@ export function comparePairedReports(
  * @param thresholdPct Slowdown allowed on top of measurement noise, in percent.
  * @return Per-scenario comparisons, missing/added scenarios, and validation failures.
  */
-export function compareReports(baseline: PerfReport, current: PerfReport, thresholdPct: number): ComparisonResult {
-  return comparePairedReports([baseline], [current], thresholdPct);
+export function compareReports(
+  baseline: PerfReport,
+  current: PerfReport,
+  thresholdPct: number,
+  options: CompareOptions = {},
+): ComparisonResult {
+  return comparePairedReports([baseline], [current], thresholdPct, options);
 }
 
 /**
@@ -423,9 +582,9 @@ export function renderComparison(
   if (comparisons.length > 0) {
     // All comparisons share the round count, so the first one speaks for the table.
     lines.push(
-      comparisons[0].representativeRound !== undefined
+      comparisons[0].rounds > 1
         ? `values    baseline/current show the median round's measured pair for each scenario`
-        : `values    single run per side — verdict from the ratio alone, no round pair to show`,
+        : `values    baseline/current show the single measured round per side (the band is a point)`,
     );
   }
   lines.push("");
@@ -446,8 +605,8 @@ export function renderComparison(
   const body = comparisons.map((c) => [
     symbol[c.verdict],
     c.name,
-    c.representativeRound !== undefined ? formatNs(c.baseline.nsPerUnit) : "—",
-    c.representativeRound !== undefined ? formatNs(c.current.nsPerUnit) : "—",
+    formatNs(c.baseline.nsPerUnit),
+    formatNs(c.current.nsPerUnit),
     signedPct(c.deltaPct),
     `[${signedPct(c.lowerPct)}, ${signedPct(c.upperPct)}]`,
   ]);
@@ -560,7 +719,9 @@ const USAGE = `usage:
   bun run .dev/perf/compare.ts <base-1.json> <base-2.json> ... --vs <head-1.json> <head-2.json> ... [--threshold 10]
 
 The --vs form compares paired rounds: base-i is paired with head-i, so both lists must have
-the same length and be in the order the rounds were measured.`;
+the same length (an odd number) and be in the order the rounds were measured.
+Flags: --allow-environment-mismatch, --allow-unfingerprinted-base (transition grace for
+bases recorded before workload fingerprinting).`;
 
 if (import.meta.main) {
   const args = Bun.argv.slice(2);
@@ -612,7 +773,16 @@ if (import.meta.main) {
     }
   }
 
-  const result = comparePairedReports(baselineRuns, currentRuns, thresholdPct);
+  // Usage errors (unequal or even round counts) are exit-2 errors, not stack traces.
+  let result: ComparisonResult;
+  try {
+    result = comparePairedReports(baselineRuns, currentRuns, thresholdPct, {
+      allowUnfingerprintedBase: args.includes("--allow-unfingerprinted-base"),
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(2);
+  }
 
   console.log(renderComparison(baselineRuns, currentRuns, result, thresholdPct));
 

@@ -11,14 +11,16 @@
  * - a consistent slowdown visible in every round — must be "regression";
  * - one contaminated round (a 10x outlier in a single head run) — must stay "unchanged"
  *   because the contamination inflates the band instead of shifting the median;
- * - the strict input validation: partial rounds, identity drift, and mixed suite files
- *   must FAIL the comparison rather than silently shrink the paired estimate.
+ * - the strict input validation: unequal or even round counts, partial rounds, identity
+ *   drift (including sampling parameters), workload and suite fingerprint mismatch,
+ *   fingerprint presence parity, missing labels, and mixed suite files must FAIL the
+ *   comparison rather than silently degrade it.
  *
  * @module
  */
 
 import { test } from "bun:test";
-import { assert, assertEquals } from "@jsr/std__assert";
+import { assert, assertEquals, assertThrows } from "@jsr/std__assert";
 import { comparePairedReports, compareReports, isFailure, renderComparison } from "../../.dev/perf/compare.ts";
 import { formatNs, type PerfReport } from "./_harness.ts";
 
@@ -30,10 +32,14 @@ interface ScenarioSpec {
   unit?: string;
   group?: string;
   description?: string;
+  samples?: number;
+  iterations?: number;
+  unitsPerIteration?: number;
+  fingerprint?: string;
 }
 
 /** Builds a one-report-per-round fixture with the given scenarios. */
-function report(label: string, scenarios: ScenarioSpec[]): PerfReport {
+function report(label: string, scenarios: ScenarioSpec[], suiteFingerprint?: string): PerfReport {
   return {
     schema: 1,
     meta: {
@@ -43,6 +49,7 @@ function report(label: string, scenarios: ScenarioSpec[]): PerfReport {
       cpu: "test-cpu",
       os: "test-os",
       date: "2026-01-01T00:00:00.000Z",
+      ...(suiteFingerprint !== undefined ? { suiteFingerprint } : {}),
       label,
     },
     scenarios: scenarios.map((s) => ({
@@ -50,9 +57,9 @@ function report(label: string, scenarios: ScenarioSpec[]): PerfReport {
       group: s.group ?? "test",
       description: s.description ?? `${s.name} description`,
       unit: s.unit ?? "op",
-      samples: 15,
-      iterations: 1,
-      unitsPerIteration: 1,
+      samples: s.samples ?? 15,
+      iterations: s.iterations ?? 1,
+      unitsPerIteration: s.unitsPerIteration ?? 1,
       nsPerUnit: s.nsPerUnit,
       unitsPerSec: 1e9 / s.nsPerUnit,
       min: s.nsPerUnit,
@@ -62,6 +69,7 @@ function report(label: string, scenarios: ScenarioSpec[]): PerfReport {
       max: s.nsPerUnit,
       stddev: 0,
       rme: s.rme ?? 0.5,
+      ...(s.fingerprint !== undefined ? { fingerprint: s.fingerprint } : {}),
     })),
   };
 }
@@ -174,7 +182,7 @@ test("missing and added scenarios", () => {
   assert(isFailure(result));
 });
 
-test("single-pair compareReports keeps the one-round gate semantics and renders ratio-only", () => {
+test("single-pair compareReports keeps the one-round gate semantics and shows the measured pair", () => {
   const baseline = report("baseline", [{ name: "scenario", nsPerUnit: 100, rme: 2 }]);
   const regressed = report("current", [{ name: "scenario", nsPerUnit: 125, rme: 2 }]);
   const same = report("current", [{ name: "scenario", nsPerUnit: 105, rme: 2 }]);
@@ -190,13 +198,52 @@ test("single-pair compareReports keeps the one-round gate semantics and renders 
   assertEquals(unchanged.comparisons[0].verdict, "unchanged");
   assert(!isFailure(unchanged));
 
-  // No round structure with a single run per side: no representative pair, and the table
-  // renders the ratio verdict only (em dashes in the value columns).
-  assertEquals(unchanged.comparisons[0].representativeRound, undefined);
+  // A single pair IS a real representative pair: the table shows its measured values.
+  assertEquals(unchanged.comparisons[0].representativeRound, 1);
   const rendered = renderComparison(baseline, same, unchanged, 10);
-  assert(rendered.includes("single run per side"), `legend missing:\n${rendered}`);
-  assert(rendered.includes("—"), `ratio-only value cells missing:\n${rendered}`);
-  assert(!rendered.includes(formatNs(100)), `single-run table must not show measured values:\n${rendered}`);
+  assert(rendered.includes("single measured round per side"), `legend missing:\n${rendered}`);
+  assert(rendered.includes(formatNs(100)) && rendered.includes(formatNs(105)), `values missing:\n${rendered}`);
+  assert(!rendered.includes("—"), `single-pair table must not fall back to em dashes:\n${rendered}`);
+});
+
+test("unequal round counts are a usage error, not a silent truncation", () => {
+  const base = roundsOf("base", "scenario", [100, 100, 100]);
+  const head = roundsOf("head", "scenario", [100, 100]);
+
+  assertThrows(
+    () => comparePairedReports(base, head, 10),
+    Error,
+    "same number of rounds on both sides (got 3 base vs 2 current)",
+  );
+});
+
+test("even round counts are rejected in paired mode; one round is fine", () => {
+  // With an even count the median log-ratio falls between two rounds and no measured pair
+  // could represent it.
+  assertThrows(
+    () => comparePairedReports(roundsOf("base", "scenario", [100, 100]), roundsOf("head", "scenario", [100, 100]), 10),
+    Error,
+    "odd round count in paired mode (got 2)",
+  );
+  assertThrows(
+    () =>
+      comparePairedReports(
+        roundsOf("base", "scenario", [100, 100, 100, 100]),
+        roundsOf("head", "scenario", [100, 100, 100, 100]),
+        10,
+      ),
+    Error,
+    "odd round count in paired mode (got 4)",
+  );
+
+  // n=1 is the gate.ts form and works.
+  const single = compareReports(
+    report("baseline", [{ name: "scenario", nsPerUnit: 100 }]),
+    report("current", [{ name: "scenario", nsPerUnit: 100 }]),
+    10,
+  );
+  assertEquals(single.failures, []);
+  assertEquals(single.comparisons[0].rounds, 1);
 });
 
 test("a round that omits a scenario fails the comparison and names it", () => {
@@ -236,17 +283,16 @@ test("a round that omits a scenario fails the comparison and names it", () => {
 
 test("identity drift between rounds or sides fails the comparison", () => {
   const drift = (
-    field: "unit" | "group" | "description",
-    value: string,
+    field: "unit" | "group" | "description" | "samples" | "iterations" | "unitsPerIteration",
+    value: string | number,
     side: "base" | "head",
     round: number,
   ): string[] => {
-    const spec = (s: string): ScenarioSpec[] => [{ name: "scenario", nsPerUnit: 100, [field]: s }];
     const stable = {
       base: roundsOf("base", "scenario", [100, 100, 100]),
       head: roundsOf("head", "scenario", [100, 100, 100]),
     };
-    stable[side][round - 1] = report(`${side}-${round}`, spec(value));
+    stable[side][round - 1] = report(`${side}-${round}`, [{ name: "scenario", nsPerUnit: 100, [field]: value }]);
     return comparePairedReports(stable.base, stable.head, 10).failures;
   };
 
@@ -261,6 +307,142 @@ test("identity drift between rounds or sides fails the comparison", () => {
   const description = drift("description", "renamed thing", "head", 1);
   assertEquals(description.length, 1);
   assert(description[0].includes("description"), `description drift: ${description[0]}`);
+
+  // A changed sampling parameter is a changed measurement, and must fail the same way.
+  const samples = drift("samples", 30, "head", 2);
+  assertEquals(samples.length, 1);
+  assert(samples[0].includes("samples"), `samples drift: ${samples[0]}`);
+
+  const iterations = drift("iterations", 200, "base", 1);
+  assertEquals(iterations.length, 1);
+  assert(iterations[0].includes("iterations"), `iterations drift: ${iterations[0]}`);
+
+  const unitsPerIteration = drift("unitsPerIteration", 100, "head", 3);
+  assertEquals(unitsPerIteration.length, 1);
+  assert(unitsPerIteration[0].includes("unitsPerIteration"), `unitsPerIteration drift: ${unitsPerIteration[0]}`);
+});
+
+test("head-only (added) scenarios get the same cross-round identity validation", () => {
+  const base = roundsOf("base", "kept", [100, 100, 100]);
+  const head = [
+    report("head-1", [
+      { name: "kept", nsPerUnit: 100 },
+      { name: "fresh", nsPerUnit: 25 },
+    ]),
+    report("head-2", [
+      { name: "kept", nsPerUnit: 100 },
+      { name: "fresh", nsPerUnit: 25, unit: "order" }, // drifted identity in one round
+    ]),
+    report("head-3", [
+      { name: "kept", nsPerUnit: 100 },
+      { name: "fresh", nsPerUnit: 25 },
+    ]),
+  ];
+
+  const result = comparePairedReports(base, head, 10);
+
+  assert(isFailure(result));
+  assertEquals(result.added, ["fresh"]); // still informational…
+  assertEquals(result.failures.length, 1); // …but the drift fails loudly
+  assert(result.failures[0].includes('"fresh"') && result.failures[0].includes("unit"), `drift: ${result.failures[0]}`);
+});
+
+test("workload fingerprint: mismatch fails, presence parity fails, grace excuses only parity", () => {
+  const withPrint = (side: string, fingerprint: string | undefined): PerfReport[] =>
+    [1, 2, 3].map((i) => report(`${side}-${i}`, [{ name: "scenario", nsPerUnit: 100, fingerprint }]));
+
+  const mismatch = comparePairedReports(
+    withPrint("base", "aaaaaaaaaaaaaaaa"),
+    withPrint("head", "bbbbbbbbbbbbbbbb"),
+    10,
+  );
+  assert(isFailure(mismatch));
+  assertEquals(mismatch.failures.length, 1);
+  assert(mismatch.failures[0].includes("fingerprint differs"), `fingerprint: ${mismatch.failures[0]}`);
+
+  const same = comparePairedReports(withPrint("base", "aaaaaaaaaaaaaaaa"), withPrint("head", "aaaaaaaaaaaaaaaa"), 10);
+  assertEquals(same.failures, []);
+
+  // Presence parity: an unfingerprinted base against a fingerprinted head fails closed by
+  // default with a migration message…
+  const legacy = comparePairedReports(withPrint("base", undefined), withPrint("head", "bbbbbbbbbbbbbbbb"), 10);
+  assert(isFailure(legacy));
+  assertEquals(legacy.failures.length, 1);
+  assert(legacy.failures[0].includes("predate workload fingerprinting"), `parity: ${legacy.failures[0]}`);
+
+  // …and only the explicit transition grace excuses it. The grace never excuses a mismatch:
+  const grace = comparePairedReports(withPrint("base", undefined), withPrint("head", "bbbbbbbbbbbbbbbb"), 10, {
+    allowUnfingerprintedBase: true,
+  });
+  assertEquals(grace.failures, []);
+  const graceMismatch = comparePairedReports(
+    withPrint("base", "aaaaaaaaaaaaaaaa"),
+    withPrint("head", "bbbbbbbbbbbbbbbb"),
+    10,
+    {
+      allowUnfingerprintedBase: true,
+    },
+  );
+  assert(isFailure(graceMismatch));
+});
+
+test("suite fingerprint: mismatch fails closed, presence parity fails, grace excuses only parity", () => {
+  const withSuite = (side: string, suiteFingerprint: string | undefined): PerfReport[] =>
+    [1, 2, 3].map((i) => report(`${side}-${i}`, [{ name: "scenario", nsPerUnit: 100 }], suiteFingerprint));
+
+  // Any suite-source edit between the revisions fails closed — that is the equality gate.
+  const mismatch = comparePairedReports(
+    withSuite("base", "suiteaaaaaaaaaaa"),
+    withSuite("head", "suitebbbbbbbbbbbb"),
+    10,
+  );
+  assert(isFailure(mismatch));
+  assertEquals(mismatch.failures.length, 1);
+  assert(mismatch.failures[0].includes("perf suite itself differs"), `suite: ${mismatch.failures[0]}`);
+
+  const same = comparePairedReports(withSuite("base", "suiteaaaaaaaaaaa"), withSuite("head", "suiteaaaaaaaaaaa"), 10);
+  assertEquals(same.failures, []);
+
+  // Presence parity: pre-fingerprint base vs fingerprinted head fails with a migration
+  // message by default and passes only with the transition grace.
+  const legacy = comparePairedReports(withSuite("base", undefined), withSuite("head", "suitebbbbbbbbbbbb"), 10);
+  assert(isFailure(legacy));
+  assert(
+    legacy.failures.some((f) => f.includes("predate workload fingerprinting")),
+    `parity: ${legacy.failures}`,
+  );
+  const grace = comparePairedReports(withSuite("base", undefined), withSuite("head", "suitebbbbbbbbbbbb"), 10, {
+    allowUnfingerprintedBase: true,
+  });
+  assertEquals(grace.failures, []);
+
+  // Fingerprints in only SOME rounds of one side means files from different suite
+  // versions — the grace does not excuse that.
+  const mixedSide = withSuite("base", "suiteaaaaaaaaaaa");
+  delete mixedSide[1].meta.suiteFingerprint;
+  const mixed = comparePairedReports(mixedSide, withSuite("head", "suiteaaaaaaaaaaa"), 10, {
+    allowUnfingerprintedBase: true,
+  });
+  assert(isFailure(mixed));
+  assert(
+    mixed.failures.some((f) => f.includes("different suite versions")),
+    `mixed: ${mixed.failures}`,
+  );
+});
+
+test("round labels are required in paired mode", () => {
+  const unlabelled = (side: string): PerfReport[] =>
+    [1, 2, 3].map((i) => {
+      const r = report(`${side}-${i}`, [{ name: "scenario", nsPerUnit: 100 }]);
+      delete r.meta.label;
+      return r;
+    });
+
+  const result = comparePairedReports(unlabelled("base"), unlabelled("head"), 10);
+
+  assert(isFailure(result));
+  assertEquals(result.failures.length, 2); // one per side
+  assert(result.failures[0].includes('must all carry a "<stem>-<round>" label'), `labels: ${result.failures[0]}`);
 });
 
 test("round labels from different suites or out of order fail the comparison", () => {
