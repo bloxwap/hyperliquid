@@ -239,6 +239,17 @@ export type TwapState = {
   /** Start time of the TWAP order (in ms since epoch). */
   timestamp: number;
   /**
+   * Trigger configuration, present on the wire (observed as `null`; not settable via the current
+   * TWAP order action, so the non-null shape is not yet established).
+   */
+  trigger?: unknown;
+  /**
+   * Stop price, present on the wire (observed as `null`; not settable via the current TWAP order
+   * action).
+   * @pattern ^[0-9]+(\.[0-9]+)?$
+   */
+  stopPx?: string | null;
+  /**
    * User address.
    * @pattern ^0x[a-fA-F0-9]{40}$
    */

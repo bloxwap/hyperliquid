@@ -28,6 +28,13 @@ runTestWithExchange({
     }, 10_000);
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data, ["#/properties/states/items/items/1/properties/side/enum/1"]);
+    // trigger/stopPx always arrive as null on the wire (not settable via the current TWAP order
+    // action), so their missing/non-null branches are uncoverable live.
+    schemaCoverage(responseSchema, data, [
+      "#/properties/states/items/items/1/properties/side/enum/1",
+      "#/properties/states/items/items/1/properties/trigger/missing",
+      "#/properties/states/items/items/1/properties/stopPx/missing",
+      "#/properties/states/items/items/1/properties/stopPx/defined",
+    ]);
   },
 });
