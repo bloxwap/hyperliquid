@@ -7,6 +7,7 @@
 import { describe, test } from "bun:test";
 import { assert, assertEquals, assertFalse } from "@jsr/std__assert";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
+import { payloadEventType } from "../../../src/transport/websocket/_routing.ts";
 
 // =============================================================================
 // Helpers
@@ -108,6 +109,63 @@ describe("HyperliquidEventTarget", () => {
 
       dispatchMessage(socket, '{"channel":"pong"}');
       assert(received);
+    });
+  });
+
+  describe("routed dispatch", () => {
+    test("a routed frame reaches only the matching route", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      const seen: string[] = [];
+      for (const coin of ["BTC", "ETH"]) {
+        target.addEventListener(payloadEventType("l2Book", { type: "l2Book", coin }), () => seen.push(coin));
+      }
+
+      dispatchMessage(socket, JSON.stringify({ channel: "l2Book", data: { coin: "ETH", levels: [] } }));
+      assertEquals(seen, ["ETH"]);
+    });
+
+    test("a listener on the bare channel still receives routed frames", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      let broadcast = 0;
+      let routed = 0;
+      target.addEventListener("l2Book", () => broadcast++);
+      target.addEventListener(payloadEventType("l2Book", { type: "l2Book", coin: "BTC" }), () => routed++);
+
+      dispatchMessage(socket, JSON.stringify({ channel: "l2Book", data: { coin: "BTC", levels: [] } }));
+      assertEquals(broadcast, 1);
+      assertEquals(routed, 1);
+    });
+
+    test("a frame without a route key still reaches the bare channel", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      // A coinless l2Book frame cannot be keyed: it goes out on the channel only, which is where
+      // every subscription that could not be keyed listens.
+      let broadcast = 0;
+      let routed = 0;
+      target.addEventListener("l2Book", () => broadcast++);
+      target.addEventListener(payloadEventType("l2Book", { type: "l2Book", coin: "BTC" }), () => routed++);
+
+      dispatchMessage(socket, JSON.stringify({ channel: "l2Book", data: { levels: [] } }));
+      assertEquals(broadcast, 1);
+      assertEquals(routed, 0);
+    });
+
+    test("an unrouted channel keeps broadcast semantics", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      let calls = 0;
+      target.addEventListener("allMids", () => calls++);
+      target.addEventListener("allMids", () => calls++); // a second, distinct listener
+
+      dispatchMessage(socket, JSON.stringify({ channel: "allMids", data: { mids: {} } }));
+      assertEquals(calls, 2);
     });
   });
 

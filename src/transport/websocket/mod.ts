@@ -171,6 +171,13 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
   /**
    * Subscribes to a Hyperliquid event channel.
    *
+   * On the channels that carry a discriminator in both the payload and the frame — `coin` for
+   * `l2Book`, `user` for `userFills`, and so on — the listener receives only the frames matching
+   * this `payload`, instead of every frame on the channel. Channels without such a discriminator
+   * (`allMids`, `userEvents`, anything unrecognized) still deliver every frame, and so does a
+   * payload that carries none. A frame missing the discriminator reaches only those unkeyed
+   * subscriptions — it is a frame the API's own per-channel filters discard anyway.
+   *
    * @param channel The event channel to listen to.
    * @param payload The payload to send with the subscription request.
    * @param listener The function to call when the event is dispatched.

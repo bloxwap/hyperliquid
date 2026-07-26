@@ -255,6 +255,118 @@ describe("WebSocketSubscriptionManager", () => {
     });
   });
 
+  describe("routing", () => {
+    /** Subscribes to `coin` on the `l2Book` channel and counts the frames its listener receives. */
+    async function subscribeCoin(
+      socket: MockWebSocket,
+      manager: ManagerWithInternals,
+      coin: string,
+      counter: { calls: number },
+    ): Promise<void> {
+      const payload = { type: "l2Book", coin };
+      const promise = manager.subscribe("l2Book", payload, () => counter.calls++);
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      await promise;
+    }
+
+    test("a frame runs only the subscription that asked for it", async () => {
+      const { socket, manager } = createManager();
+
+      const btc = { calls: 0 };
+      const eth = { calls: 0 };
+      await subscribeCoin(socket, manager, "BTC", btc);
+      await subscribeCoin(socket, manager, "ETH", eth);
+
+      socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "BTC", levels: [] }));
+
+      assertEquals(btc.calls, 1);
+      assertEquals(eth.calls, 0);
+    });
+
+    test("routing survives a reconnect", async () => {
+      const { socket, manager } = createManager(true);
+
+      const btc = { calls: 0 };
+      const eth = { calls: 0 };
+      await subscribeCoin(socket, manager, "BTC", btc);
+      await subscribeCoin(socket, manager, "ETH", eth);
+
+      socket.disconnect();
+      socket.open();
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin: "BTC" }));
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin: "ETH" }));
+      await drain();
+
+      socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "ETH", levels: [] }));
+      assertEquals(btc.calls, 0);
+      assertEquals(eth.calls, 1);
+
+      socket.terminate();
+    });
+
+    test("unsubscribing one coin leaves the others routed", async () => {
+      const { socket, manager } = createManager();
+
+      const btc = { calls: 0 };
+      const eth = { calls: 0 };
+      const payload = { type: "l2Book", coin: "BTC" };
+      const subPromise = manager.subscribe("l2Book", payload, () => btc.calls++);
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      const sub = await subPromise;
+      await subscribeCoin(socket, manager, "ETH", eth);
+
+      const unsubPromise = sub.unsubscribe();
+      socket.mockMessage(RESPONSES.subscriptionResponse("unsubscribe", payload));
+      await unsubPromise;
+
+      socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "BTC", levels: [] }));
+      socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "ETH", levels: [] }));
+      assertEquals(btc.calls, 0);
+      assertEquals(eth.calls, 1);
+    });
+
+    test("a frame that cannot be keyed reaches the channel's unkeyed subscriptions", async () => {
+      const { socket, manager } = createManager();
+
+      const btc = { calls: 0 };
+      let unkeyed = 0;
+      await subscribeCoin(socket, manager, "BTC", btc);
+
+      // A payload without a coin cannot be keyed, so it listens on the bare channel.
+      const anyCoin = { type: "l2Book" };
+      const promise = manager.subscribe("l2Book", anyCoin, () => unkeyed++);
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", anyCoin));
+      await promise;
+
+      // A coinless frame carries no route key. It reaches the unkeyed subscription; the keyed one
+      // does not see it, exactly as its `e.detail.coin === payload.coin` filter would have decided.
+      socket.mockMessage(RESPONSES.channelEvent("l2Book", { levels: [] }));
+      assertEquals(unkeyed, 1);
+      assertEquals(btc.calls, 0);
+
+      // A keyed frame reaches both.
+      socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "BTC", levels: [] }));
+      assertEquals(unkeyed, 2);
+      assertEquals(btc.calls, 1);
+    });
+
+    test("an unrouted channel still fans out", async () => {
+      const { socket, manager } = createManager();
+
+      let first = 0;
+      let second = 0;
+      const payload = { type: "allMids" };
+      const promise = manager.subscribe("allMids", payload, () => first++);
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      await promise;
+      await manager.subscribe("allMids", payload, () => second++);
+
+      socket.mockMessage(RESPONSES.channelEvent("allMids", { mids: {} }));
+      assertEquals(first, 1);
+      assertEquals(second, 1);
+    });
+  });
+
   describe("autoResubscribe", () => {
     test("resubscribes after reconnection", async () => {
       const { socket, manager } = createManager(true);

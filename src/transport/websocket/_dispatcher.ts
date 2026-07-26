@@ -82,6 +82,20 @@ interface PendingRequest {
   /** The wire frame, kept until the connection can actually carry it. */
   frame: string;
   sent: boolean;
+  /**
+   * Echo-matching data for a `subscribe` / `unsubscribe` request, derived from its string id when
+   * the entry is created. Absent for `post` requests, which match on their numeric id.
+   *
+   * Every `subscriptionResponse` frame walks the whole queue looking for its match, so deriving
+   * this per scan made a burst of N re-subscriptions cost N² parses — a reconnect at the
+   * 1000-subscription cap stalled the event loop exactly when the book was most stale.
+   */
+  echo?: {
+    /** `JSON.parse` of the id: the normalized request envelope compared against the echo. */
+    request: unknown;
+    /** {@linkcode specificity} of `request`, the tie-breaker between several subset matches. */
+    specificity: number;
+  };
   // deno-lint-ignore no-explicit-any
   resolve: (value?: any) => void;
   // deno-lint-ignore no-explicit-any
@@ -102,7 +116,14 @@ export class WebSocketDispatcher {
 
   private readonly _socket: ReconnectingWebSocket;
   private _lastId = 0;
-  private _queue: PendingRequest[] = [];
+  /**
+   * Every in-flight request, in the order it was queued — a `Set` so removing a settled entry
+   * costs no scan and no memmove, while the iteration order the `open` flush relies on is the
+   * insertion order an array gave.
+   */
+  private readonly _queue: Set<PendingRequest> = new Set();
+  /** Index of {@linkcode _queue} by numeric `post` id, so a post response matches in O(1). */
+  private readonly _posts: Map<number, PendingRequest> = new Map();
 
   constructor(socket: ReconnectingWebSocket, hlEvents: HyperliquidEventTarget, timeout: number | null) {
     this.timeout = timeout;
@@ -116,15 +137,19 @@ export class WebSocketDispatcher {
     // --- Socket lifecycle ----------------------------------------------------
     // A rejected unsent request is guaranteed to never reach the server.
     const handleDisconnect = (): void => {
-      this._queue.forEach(({ sent, payload, reject }) => {
+      // Snapshot and empty the queue before rejecting, so nothing observes it half-cleared and
+      // the abort/`finally` dequeues these rejections trigger find nothing left to do.
+      const abandoned = [...this._queue];
+      this._queue.clear();
+      this._posts.clear();
+      for (const { sent, payload, reject } of abandoned) {
         reject(
           new WebSocketRequestError(
             sent ? "WebSocket connection closed" : "WebSocket connection closed before the request was sent",
             { request: payload },
           ),
         );
-      });
-      this._queue = [];
+      }
     };
     socket.addEventListener("close", handleDisconnect);
     socket.addEventListener("error", handleDisconnect);
@@ -164,22 +189,29 @@ export class WebSocketDispatcher {
         method === "post" ? { method, id: ++this._lastId, request: payload } : { method, subscription: payload };
       const id = "id" in request ? request.id : requestToId(request);
 
+      // Matching a subscription echo needs the id back as an object; parse it once here rather
+      // than once per queue entry per response frame.
+      let echo: PendingRequest["echo"];
+      if (typeof id === "string") {
+        const parsed: unknown = JSON.parse(id);
+        echo = { request: parsed, specificity: specificity(parsed) };
+      }
+
       // --- Send or queue -----------------------------------------------------
       const frame = JSON.stringify(request);
       const sent = this._socket.readyState === ReconnectingWebSocket.OPEN;
       if (sent) this._socket.send(frame);
 
       const { promise, resolve, reject } = Promise_.withResolvers<T>();
-      const pending = (entry = { id, payload, frame, sent, resolve, reject });
-      this._queue.push(pending);
+      const pending = (entry = { id, payload, frame, sent, echo, resolve, reject });
+      this._enqueue(pending);
 
       controller.signal.addEventListener(
         "abort",
         () => {
           // Dequeue synchronously: an `open` flush between the abort and the
           // `finally` microtask must not send a frame the caller saw rejected.
-          const index = this._queue.indexOf(pending);
-          if (index !== -1) this._queue.splice(index, 1);
+          this._dequeue(pending);
           reject(controller.signal.reason);
         },
         { once: true },
@@ -208,13 +240,27 @@ export class WebSocketDispatcher {
         request: payload,
       });
     } finally {
-      if (entry) {
-        const index = this._queue.indexOf(entry);
-        if (index !== -1) this._queue.splice(index, 1);
-      }
+      if (entry) this._dequeue(entry);
       timeout.cancel();
       detachRelay();
     }
+  }
+
+  // ===========================================================================
+  // Queue
+  // ===========================================================================
+
+  /** Queues a request and indexes it by id when it is a `post`. */
+  private _enqueue(entry: PendingRequest): void {
+    this._queue.add(entry);
+    if (typeof entry.id === "number") this._posts.set(entry.id, entry);
+  }
+
+  /** Removes a request from the queue and from the `post` index. Idempotent. */
+  private _dequeue(entry: PendingRequest): void {
+    if (!this._queue.delete(entry)) return;
+    // Post ids are handed out by `++this._lastId`, so no later entry can hold this one.
+    if (typeof entry.id === "number") this._posts.delete(entry.id);
   }
 
   // ===========================================================================
@@ -226,7 +272,7 @@ export class WebSocketDispatcher {
   }
 
   private _handlePostResponse(detail: PostResponse): void {
-    const pending = this._queue.find((x) => x.id === detail.id);
+    const pending = this._posts.get(detail.id);
     if (!pending) return;
 
     if (detail.response.type === "error") {
@@ -241,10 +287,7 @@ export class WebSocketDispatcher {
     // Reject by the trailing id, e.g. `too many pending post requests id=1234`.
     const idMatch = detail.match(/id=(\d+)$/);
     if (idMatch) {
-      this._reject(
-        this._queue.find((x) => x.id === parseInt(idMatch[1], 10)),
-        detail,
-      );
+      this._reject(this._posts.get(parseInt(idMatch[1], 10)), detail);
       return;
     }
 
@@ -256,10 +299,7 @@ export class WebSocketDispatcher {
 
     // A `post` envelope echo carries a numeric id.
     if (typeof parsedRequest.id === "number") {
-      this._reject(
-        this._queue.find((x) => x.id === parsedRequest.id),
-        detail,
-      );
+      this._reject(this._posts.get(parsedRequest.id), detail);
       return;
     }
 
@@ -297,13 +337,12 @@ export class WebSocketDispatcher {
     let best: PendingRequest | undefined;
     let bestSpecificity = -1;
     for (const pending of this._queue) {
-      if (typeof pending.id !== "string") continue;
-      const payload = JSON.parse(pending.id);
-      if (!isSubset(payload, echo)) continue;
-      const score = specificity(payload);
-      if (score > bestSpecificity) {
+      // Only subscription requests match by echo, and those are exactly the entries carrying it.
+      if (pending.echo === undefined) continue;
+      if (!isSubset(pending.echo.request, echo)) continue;
+      if (pending.echo.specificity > bestSpecificity) {
         best = pending;
-        bestSpecificity = score;
+        bestSpecificity = pending.echo.specificity;
       }
     }
     return best;
