@@ -1,9 +1,38 @@
 /**
- * Per-key semaphore registry for serializing async operations.
+ * Per-key mutex registry for serializing async operations.
  * @module
  */
 
-import { Semaphore } from "@jsr/std__async/unstable-semaphore";
+/**
+ * A mutual-exclusion lock that wakes waiters in FIFO order.
+ *
+ * Replaces `@jsr/std__async`'s `Semaphore(1)`, which was only ever used as a
+ * single-permit (and itself FIFO) lock.
+ */
+class Mutex {
+  private _locked = false;
+  private _waiters: (() => void)[] = [];
+
+  /**
+   * Acquires the lock, waiting until it is free.
+   *
+   * @return A promise that resolves once the caller holds the lock.
+   */
+  acquire(): Promise<void> {
+    if (!this._locked) {
+      this._locked = true;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => this._waiters.push(resolve));
+  }
+
+  /** Releases the lock, waking the longest-waiting waiter if any. */
+  release(): void {
+    const next = this._waiters.shift();
+    if (next) next();
+    else this._locked = false;
+  }
+}
 
 /**
  * A reference-counted registry for lazily creating and reusing per-key values.
@@ -58,7 +87,7 @@ class RefCountedRegistry<K, V> {
   }
 }
 
-const semaphores = new RefCountedRegistry(() => new Semaphore(1));
+const mutexes = new RefCountedRegistry(() => new Mutex());
 
 /**
  * Acquires a lock for the given key, executes the provided async function, and releases the lock.
@@ -68,12 +97,12 @@ const semaphores = new RefCountedRegistry(() => new Semaphore(1));
  * @return The result of the async function.
  */
 export async function withLock<K, T>(key: K, fn: () => Promise<T>): Promise<T> {
-  const semaphore = semaphores.ref(key);
-  await semaphore.acquire();
+  const mutex = mutexes.ref(key);
+  await mutex.acquire();
   try {
     return await fn();
   } finally {
-    semaphore.release();
-    semaphores.unref(key);
+    mutex.release();
+    mutexes.unref(key);
   }
 }
