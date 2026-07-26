@@ -288,6 +288,53 @@ Prepare immediately before use anyway.
 
 {% endhint %}
 
+### Orders over WebSocket (low latency)
+
+Every `ExchangeClient` method also works over [`WebSocketTransport`](transports.md#websocket) — the server accepts
+signed actions as [WebSocket post requests](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/post-requests),
+and the SDK wraps them for you. Each HTTP order pays a TCP/TLS handshake and HTTP framing on top of the round trip;
+a WebSocket order is one frame on a connection that is already open, so both latency and — what matters more for
+latency-critical apps — its variance drop.
+
+Build and warm everything at app boot, so the first order pays no setup cost:
+
+```ts
+import { ExchangeClient, WebSocketTransport } from "@bloxwap/hyperliquid";
+import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
+import { privateKeyToAccount } from "viem/accounts";
+
+const wallet = privateKeyToAccount("0x...");
+
+const transport = new WebSocketTransport();
+await transport.ready(); // finish connecting now, not on the first order
+
+const converter = await SymbolConverter.create({ transport }); // pre-fetch meta (asset IDs, szDecimals)
+const client = new ExchangeClient({ transport, wallet });
+
+// Later, on the hot path — one frame out on an open connection:
+await client.order({ orders: [/* ... */], grouping: "na" });
+```
+
+{% hint style="warning" %}
+
+The server allows at most
+[100 simultaneous in-flight post messages](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits)
+across all WebSocket connections per IP (plus 2000 messages/minute overall) — the cap counts concurrent requests, not
+requests per minute, so with typical round trips it sustains far more than the HTTP per-minute budget. An over-limit
+post is rejected and the affected call throws `WebSocketRequestError` ("too many pending post requests"). Leave
+headroom when several clients share the connection or the IP runs several connections.
+
+{% endhint %}
+
+Two more caveats: explorer requests are HTTP-only, so keep an `HttpTransport` around if you use
+[`ExplorerClient`](#explorer-endpoint); and WS requests are bounded by the transport-wide `timeout` — the HTTP-only
+[`exchangeTimeout`](transports.md#exchange-timeout) does not apply, though it remains the right bound if you keep an
+`HttpTransport` as a fallback order path.
+
+The pattern stacks with pre-signing: sign actions ahead of time with [`signL1Action`](signing.md#l1-actions) and keep
+the payload ready, so the hot path carries no signing cost either — the frame goes out the moment the decision is
+made.
+
 ## WebSocket subscriptions
 
 `SubscriptionClient` requires a [`WebSocketTransport`](transports.md#websocket) — subscriptions can't run over HTTP. See

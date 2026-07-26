@@ -14,6 +14,10 @@
 - [Browser wallets](guides/browser-wallets.md)
 - [Tree-shaking](guides/tree-shaking.md)
 
+## Reference
+
+- [Known documentation drift](reference/known-drift.md)
+
 ## API Reference
 
 - Info Methods

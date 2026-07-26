@@ -172,3 +172,6 @@ convention.
 The exception is the request, response, and event types that mirror the Hyperliquid API. The API is unversioned and
 always serves its latest shape, so changes to these types ship in **patch** releases even when breaking — the break
 comes from Hyperliquid, not the SDK.
+
+For places where the official Hyperliquid docs and the live API currently disagree — and what this SDK does about
+each — see [Known documentation drift](reference/known-drift.md).

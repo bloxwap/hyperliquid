@@ -25,3 +25,17 @@ https://github.com/bloxwap/hyperliquid/security/advisories/new.
   as possible; lower-severity issues ship with the next scheduled release.
 
 Please do not open public issues or pull requests for undisclosed vulnerabilities.
+
+## Dependency auditing
+
+`bun audit` skips every `@jsr/*` package ("do not come from the default registry"), and this repository resolves
+crypto-critical dependencies (`@noble/hashes`, `valibot`) through JSR in `.dev/ts7`. CI therefore runs
+[OSV-Scanner](https://google.github.io/osv-scanner/) (`.github/workflows/security.yml`, pinned by commit SHA) over
+both `bun.lock` and `.dev/ts7/bun.lock` on every pull request and weekly; the job fails when any known vulnerability
+is found.
+
+Known residual gap (verified 2026-07-26 against OSV-Scanner v2.4.0): OSV has no JSR ecosystem, and the
+`@jsr/scope__name` aliases in `bun.lock` do not match npm advisories — e.g. `@jsr/valibot__valibot@1.4.1` is not
+flagged although npm `valibot@1.4.1` maps to [GHSA-5qjj-4xww-7phc](https://osv.dev/GHSA-5qjj-4xww-7phc). npm-named
+packages in both lockfiles (the vast majority, including all npm transitives) are covered; JSR-aliased entries are
+extracted and queried but only match if OSV ever learns the alias.
