@@ -33,7 +33,7 @@ Every task in this repo runs through Bun. There is no other toolchain.
 | `bun run check`                | Format, lint, TypeScript 5 + 7 types, JSDoc sync, export sync.       |
 | `bun test tests/`              | Full test suite; the online tests need network and credentials.      |
 | `HL_OFFLINE=1 bun test tests/` | Offline gate: skips every live-endpoint test. This is what CI runs.  |
-| `bun run perf`                 | Performance suite; writes a report to `tests/perf/results/`.         |
+| `bun run perf`                 | Performance suite; prints a table (`--out <path>` writes JSON).      |
 | `bun run perf:gate`            | Zero-performance-regression gate (see below).                        |
 | `bun run build`                | Emit the publishable package into `dist/`.                           |
 
@@ -56,15 +56,23 @@ Without a key — or without network — run only the tests that never touch liv
 HL_OFFLINE=1 bun test tests/
 ```
 
-`HL_OFFLINE=1` (equivalently `bun run test:offline`) is the switch to use. A `--offline` argv flag is also honored, but
-`bun test` does not forward extra arguments to test files reliably, so prefer the env var.
+`HL_OFFLINE=1` (equivalently `bun run test:offline`) is the switch to use, and is what CI runs. A `--offline` argv flag
+is also honored: `bun test` does not forward argv to test files, so `tests/_offline.ts` recovers the raw command line
+from the OS to support it. That recovery works, but the env var needs none of it, which is why it is the documented path.
 
 ## Performance
 
 **This project enforces a zero performance regression policy.** A change may keep performance the same or improve it —
-never regress it. `bun run perf:gate` is what enforces that: it runs the suite in `tests/perf/`, compares the result
-against the committed baseline at `tests/perf/results/baseline.json`, and exits non-zero when any scenario got
-materially slower. The same gate runs on every pull request.
+never regress it.
+
+Locally, `bun run perf:gate` enforces that: it runs the suite in `tests/perf/`, compares against the committed baseline
+at `tests/perf/results/baseline.json`, and exits non-zero when any scenario got materially slower.
+
+The baseline is **machine-specific**. These scenarios measure between 9 ns and 600 µs per unit, so a different CPU or JS
+engine shifts every number by a multiple and swamps the threshold; `.dev/perf/compare.ts` refuses to compare reports
+from different environments rather than emit a page of phantom regressions. That is why CI does not use the committed
+baseline at all: the Performance workflow measures the base commit and the head commit back to back on the *same*
+runner and compares those two reports.
 
 ```bash
 bun run perf                          # measure and print the table

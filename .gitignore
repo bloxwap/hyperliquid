@@ -6,3 +6,6 @@ dist/
 
 # Output of `bun test --coverage`.
 coverage/
+
+# Agent worktrees and local session state.
+.claude/

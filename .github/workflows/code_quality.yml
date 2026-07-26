@@ -17,16 +17,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check formatting
-        run: bunx biome format .
-
-      - name: Lint
-        run: bunx biome lint .
-
-      - name: Type check (TypeScript 5)
-        run: bunx tsc --project tsconfig.json
-
-      # Forward-compatibility gate. TypeScript 7 ships as a native binary with no JS compiler API, so it lives in its
-      # own install tree under .dev/ts7 and never joins the root dependency graph.
-      - name: Type check (TypeScript 7)
-        run: cd .dev/ts7 && bun install --frozen-lockfile && bunx tsc --project tsconfig.json
+      # Deliberately one step invoking the aggregate script rather than a list of individual commands:
+      # package.json calls `check` "everything CI gates on", and enumerating the steps here is how that
+      # claim silently becomes false (it already had — the two sync gates below were missing entirely).
+      #
+      # `check` runs, in order: biome format, biome lint, TypeScript 5 typecheck, the TypeScript 7
+      # forward-compatibility gate (own install tree under .dev/ts7, since TS7 ships a native binary
+      # with no JS compiler API), the JSDoc sync check and the export sync check.
+      - name: Check
+        run: bun run check
