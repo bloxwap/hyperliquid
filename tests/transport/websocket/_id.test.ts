@@ -6,7 +6,7 @@
 
 import { describe, test } from "bun:test";
 import { assert, assertEquals, assertFalse } from "@jsr/std__assert";
-import { isSubset, requestToId, specificity } from "../../../src/transport/websocket/_id.ts";
+import { isSubset, normalize, requestToId, specificity } from "../../../src/transport/websocket/_id.ts";
 
 describe("requestToId", () => {
   test("sorts object keys recursively", () => {
@@ -23,6 +23,39 @@ describe("requestToId", () => {
 
   test("keeps array order significant", () => {
     assert(requestToId([1, 2]) !== requestToId([2, 1]));
+  });
+
+  test("keeps an own __proto__ key from a parsed payload", () => {
+    const payload = JSON.parse('{"type":"l2Book","__proto__":{"coin":"BTC"}}') as Record<string, unknown>;
+    assertEquals(requestToId(payload), '{"__proto__":{"coin":"BTC"},"type":"l2Book"}');
+  });
+
+  test("payloads differing only in __proto__ get different ids", () => {
+    const withProto = JSON.parse('{"a":1,"__proto__":2}');
+    const withoutProto = JSON.parse('{"a":1}');
+    assert(requestToId(withProto) !== requestToId(withoutProto));
+  });
+
+  test("normalizing a __proto__ payload does not pollute plain objects", () => {
+    requestToId(JSON.parse('{"__proto__":{"polluted":true}}'));
+    assertFalse("polluted" in {});
+  });
+});
+
+describe("normalize", () => {
+  test("keeps an own __proto__ key as an own key", () => {
+    const payload = JSON.parse('{"b":1,"__proto__":{"x":2},"a":3}') as Record<string, unknown>;
+    const normalized = normalize(payload) as Record<string, unknown>;
+
+    assertEquals(Object.keys(normalized), ["__proto__", "a", "b"]);
+    const protoEntry = Object.getOwnPropertyDescriptor(normalized, "__proto__");
+    assertEquals(protoEntry?.enumerable, true);
+    assertEquals(((protoEntry?.value ?? {}) as Record<string, unknown>).x, 2);
+  });
+
+  test("output for ordinary inputs is byte-identical to a plain-object build", () => {
+    const input = { z: { b: 1, a: [2, { d: 4, c: 3 }] }, a: "0xABC" };
+    assertEquals(JSON.stringify(normalize(input)), '{"a":"0xabc","z":{"a":[2,{"c":3,"d":4}],"b":1}}');
   });
 });
 

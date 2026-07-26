@@ -22,7 +22,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import * as exchange from "@bloxwap/hyperliquid/api/exchange";
-import { canonicalize } from "@bloxwap/hyperliquid/signing";
+import { canonicalize, CanonicalizeError } from "@bloxwap/hyperliquid/signing";
 
 // ============================================================
 // Helpers
@@ -201,6 +201,34 @@ const REQUESTS: [name: string, schema: v.GenericSchema, input: unknown][] = [
 // ============================================================
 
 describe("canonicalize conformance", () => {
+  describe("extra keys are rejected, including Object.prototype member names", () => {
+    // A `key in entries` check would consult the prototype chain, so a data key named
+    // `constructor`/`toString` would pass as "known" and be silently dropped from the signed
+    // payload. `Object.hasOwn` keeps these loud.
+    test.each(["constructor", "toString", "hasOwnProperty"])("extra key %s throws", (key) => {
+      const schema = exchange.CancelRequest.entries.action as v.GenericSchema;
+      const action = { type: "cancel", cancels: [{ a: 0, o: 12345 }], [key]: 1 };
+
+      expect(() => canonicalize(schema, action)).toThrow(CanonicalizeError);
+    });
+
+    test("extra prototype-member key on a nested object throws", () => {
+      const schema = exchange.CancelRequest.entries.action as v.GenericSchema;
+      const action = { type: "cancel", cancels: [{ a: 0, o: 12345, constructor: 1 }] };
+
+      expect(() => canonicalize(schema, action)).toThrow(CanonicalizeError);
+    });
+
+    test("extra prototype-member key defeats a union option match", () => {
+      const schema = v.union([v.object({ a: v.string() }), v.object({ b: v.number() })]);
+      // Neither option declares `constructor`; an `in`-based check would let option 1 match and
+      // `reorderObject` would then silently drop the key. With no option matching, the union
+      // passes the value through whole instead of mutilating it.
+      const out = canonicalize(schema, { a: "x", constructor: 1 }) as Record<string, unknown>;
+      expect(Object.hasOwn(out, "constructor")).toBe(true);
+    });
+  });
+
   describe("parse() output is already in schema key order", () => {
     for (const [name, schema, input] of REQUESTS) {
       test(name, () => {

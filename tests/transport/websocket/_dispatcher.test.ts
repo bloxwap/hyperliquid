@@ -9,7 +9,7 @@ import { assertEquals, assertRejects } from "@jsr/std__assert";
 import { ReconnectingWebSocket } from "@nktkas/rews";
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
-import { getLastSent, MockWebSocket, RESPONSES } from "./_mock.ts";
+import { drain, getLastSent, MockWebSocket, RESPONSES } from "./_mock.ts";
 
 // =============================================================================
 // Helpers
@@ -190,6 +190,85 @@ describe("WebSocketDispatcher", () => {
           results.map((result) => result.subscription.coin),
           coins,
         );
+      });
+
+      test("a 500-subscribe burst resolves each pending from out-of-order echoes", async () => {
+        const { socket, requester } = createRequester();
+
+        const coins = Array.from({ length: 500 }, (_, i) => `COIN${i}`);
+        const promises = coins.map((coin) => requester.request("subscribe", { type: "l2Book", coin }));
+
+        // The reconnect shape: every request in flight at once, echoes arriving out of order.
+        for (const coin of [...coins].reverse()) {
+          socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin }));
+        }
+
+        const results = (await Promise.all(promises)) as { subscription: { coin: string } }[];
+        assertEquals(
+          results.map((result) => result.subscription.coin),
+          coins,
+        );
+      });
+
+      test("an echo carrying server-added fields still matches via the subset fallback", async () => {
+        const { socket, requester } = createRequester();
+
+        const promise = requester.request("subscribe", { type: "l2Book", coin: "BTC" });
+
+        // The extra fields break the exact-id match, so only the subset scan can resolve this.
+        socket.mockMessage(
+          RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin: "BTC", nSigFigs: null, mantissa: null }),
+        );
+        const result = (await promise) as Record<string, unknown>;
+        assertEquals((result.subscription as Record<string, unknown>).coin, "BTC");
+      });
+
+      test("duplicate subscriptions resolve in enqueue order", async () => {
+        const { socket, requester } = createRequester();
+        const payload = { type: "l2Book", coin: "BTC" };
+
+        const resolved: number[] = [];
+        const p1 = requester.request("subscribe", payload).then(() => resolved.push(1));
+        const p2 = requester.request("subscribe", payload).then(() => resolved.push(2));
+
+        socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+        await drain();
+        assertEquals(resolved, [1]);
+
+        socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+        await drain();
+        assertEquals(resolved, [1, 2]);
+
+        await Promise.all([p1, p2]);
+      });
+
+      test("sends unsubscription and receives its echo", async () => {
+        const { socket, requester } = createRequester();
+        const payload = { channel: "test-sub", param: "XYZ" };
+
+        const promise = requester.request("unsubscribe", payload);
+        const sent = getLastSent(socket);
+        assertEquals(sent.method, "unsubscribe");
+
+        socket.mockMessage(RESPONSES.subscriptionResponse("unsubscribe", payload));
+        const result = (await promise) as Record<string, unknown>;
+        assertEquals(result.method, "unsubscribe");
+        assertEquals(result.subscription, payload);
+      });
+
+      test("an error echo whose body is not valid JSON rejects nothing", async () => {
+        const { socket, requester } = createRequester();
+        const payload = { channel: "test", param: "test" };
+
+        const promise = requester.request("subscribe", payload);
+
+        // The `{…}` body is not JSON; the parse failure must not escape the event listener,
+        // and no pending request may be rejected by it.
+        socket.mockMessage(RESPONSES.errorChannel(`Something failed: {method:subscribe,subscription}`));
+
+        socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+        const result = (await promise) as Record<string, unknown>;
+        assertEquals(result.method, "subscribe");
       });
 
       describe("an echo matches the most specific pending payload", () => {
