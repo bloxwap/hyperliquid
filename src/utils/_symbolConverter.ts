@@ -10,6 +10,17 @@ import {
 } from "../api/info/mod.ts";
 import type { IRequestTransport } from "../transport/mod.ts";
 
+/**
+ * Mutable snapshot of the four lookup maps, built privately by {@link SymbolConverter._reload}
+ * and published onto the instance in a single synchronous block once fully populated.
+ */
+interface SymbolConverterDraft {
+  nameToAssetId: Map<string, number>;
+  nameToSzDecimals: Map<string, number>;
+  nameToSpotPairId: Map<string, string>;
+  spotPairIdToName: Map<string, string>;
+}
+
 /** Options for creating a {@link SymbolConverter} instance. */
 export interface SymbolConverterOptions {
   /** Transport instance to use for API requests. */
@@ -115,25 +126,36 @@ export class SymbolConverter {
       outcomeMeta(config),
     ]);
 
-    this._nameToAssetId.clear();
-    this._nameToSzDecimals.clear();
-    this._nameToSpotPairId.clear();
-    this._spotPairIdToName.clear();
+    // Build the new mappings into a private draft so readers keep observing the previously
+    // published snapshot until the replacement is fully populated.
+    const draft: SymbolConverterDraft = {
+      nameToAssetId: new Map(),
+      nameToSzDecimals: new Map(),
+      nameToSpotPairId: new Map(),
+      spotPairIdToName: new Map(),
+    };
 
-    this._processPerps(perpMetaData);
-    this._processSpot(spotMetaData);
-    this._processOutcomeMarkets(outcomeMetaData);
-    if (perpDexsData) await this._processBuilderDexs(perpDexsData);
+    this._processPerps(draft, perpMetaData);
+    this._processSpot(draft, spotMetaData);
+    this._processOutcomeMarkets(draft, outcomeMetaData);
+    if (perpDexsData) await this._processBuilderDexs(draft, perpDexsData);
+
+    // Publish atomically: no await may run between these four assignments, so a concurrent
+    // reader can never observe a half-built cache.
+    this._nameToAssetId = draft.nameToAssetId;
+    this._nameToSzDecimals = draft.nameToSzDecimals;
+    this._nameToSpotPairId = draft.nameToSpotPairId;
+    this._spotPairIdToName = draft.spotPairIdToName;
   }
 
   // ============================================================
   // Perpetuals
   // ============================================================
 
-  private _processPerps(perpMetaData: MetaResponse): void {
+  private _processPerps(draft: SymbolConverterDraft, perpMetaData: MetaResponse): void {
     perpMetaData.universe.forEach((asset, index) => {
-      this._nameToAssetId.set(asset.name, index);
-      this._nameToSzDecimals.set(asset.name, asset.szDecimals);
+      draft.nameToAssetId.set(asset.name, index);
+      draft.nameToSzDecimals.set(asset.name, asset.szDecimals);
     });
   }
 
@@ -141,7 +163,7 @@ export class SymbolConverter {
   // Spot
   // ============================================================
 
-  private _processSpot(spotMetaData: SpotMetaResponse): void {
+  private _processSpot(draft: SymbolConverterDraft, spotMetaData: SpotMetaResponse): void {
     const tokenMap = new Map<number, { name: string; szDecimals: number }>();
     spotMetaData.tokens.forEach((token) => {
       tokenMap.set(token.index, { name: token.name, szDecimals: token.szDecimals });
@@ -155,10 +177,10 @@ export class SymbolConverter {
       const assetId = 10000 + market.index;
       const baseQuoteKey = `${baseToken.name}/${quoteToken.name}`;
 
-      this._nameToAssetId.set(baseQuoteKey, assetId);
-      this._nameToSzDecimals.set(baseQuoteKey, baseToken.szDecimals);
-      this._nameToSpotPairId.set(baseQuoteKey, market.name);
-      this._spotPairIdToName.set(market.name, baseQuoteKey);
+      draft.nameToAssetId.set(baseQuoteKey, assetId);
+      draft.nameToSzDecimals.set(baseQuoteKey, baseToken.szDecimals);
+      draft.nameToSpotPairId.set(baseQuoteKey, market.name);
+      draft.spotPairIdToName.set(market.name, baseQuoteKey);
     });
   }
 
@@ -166,7 +188,7 @@ export class SymbolConverter {
   // Builder dexs
   // ============================================================
 
-  private async _processBuilderDexs(perpDexsData: PerpDexsResponse): Promise<void> {
+  private async _processBuilderDexs(draft: SymbolConverterDraft, perpDexsData: PerpDexsResponse): Promise<void> {
     const builderDexs = perpDexsData
       .map((dex, index) => ({ dex, index }))
       .filter((item): item is { dex: NonNullable<PerpDexsResponse[number]>; index: number } => {
@@ -190,8 +212,8 @@ export class SymbolConverter {
 
       result.value.universe.forEach((asset, index) => {
         const assetId = offset + index;
-        this._nameToAssetId.set(asset.name, assetId);
-        this._nameToSzDecimals.set(asset.name, asset.szDecimals);
+        draft.nameToAssetId.set(asset.name, assetId);
+        draft.nameToSzDecimals.set(asset.name, asset.szDecimals);
       });
     });
   }
@@ -200,7 +222,7 @@ export class SymbolConverter {
   // Outcome markets
   // ============================================================
 
-  private _processOutcomeMarkets(outcomeMetaData: OutcomeMetaResponse): void {
+  private _processOutcomeMarkets(draft: SymbolConverterDraft, outcomeMetaData: OutcomeMetaResponse): void {
     // Map each named outcome to its owning question, which holds the price spec and bucket order
     const questionByOutcome = new Map<number, OutcomeMetaResponse["questions"][number]>();
     for (const question of outcomeMetaData.questions) {
@@ -220,9 +242,9 @@ export class SymbolConverter {
         const slug = this._outcomeSlug(outcome, sideSpec.name, question);
         if (!slug) return;
 
-        this._nameToAssetId.set(slug, 100000000 + 10 * outcome.outcome + sideIdx);
+        draft.nameToAssetId.set(slug, 100000000 + 10 * outcome.outcome + sideIdx);
         // Outcome markets are absent from szDecimals metadata; they are all 5
-        this._nameToSzDecimals.set(slug, 5);
+        draft.nameToSzDecimals.set(slug, 5);
       });
     });
   }
