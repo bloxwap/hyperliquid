@@ -113,6 +113,15 @@ export function createL1ActionHash(args: {
 }
 
 /**
+ * Opaque marker wrapping a subtree that has already been through {@linkcode adjust} (see
+ * {@linkcode preadjustL1Action}). `adjust` unwraps it on sight instead of re-traversing, so the
+ * marker never reaches the encoder: `adjust` walks the same tree the encoder will see.
+ */
+class Adjusted {
+  constructor(/** The adjusted subtree. */ readonly value: ValueType) {}
+}
+
+/**
  * Normalizes a value into a shape {@linkcode MsgpackWriter} encodes the way Hyperliquid expects on the wire:
  * - drops `undefined` properties (otherwise the encoder throws)
  * - widens `number`s outside the int32 range to `BigInt` (otherwise they would be encoded as float64 instead of int64)
@@ -121,6 +130,8 @@ export function createL1ActionHash(args: {
  * encoder must treat the result as caller-owned data that may still have getters on it.
  */
 function adjust(value: ValueType): ValueType {
+  // A subtree already adjusted by {@linkcode preadjustL1Action} — unwrap it without re-traversing.
+  if (value instanceof Adjusted) return value.value;
   if (Array.isArray(value)) {
     // Allocate a new array only if some element changes (holes are skipped, like `Array.prototype.map`)
     let changed = false;
@@ -160,6 +171,24 @@ function adjust(value: ValueType): ValueType {
     return BigInt(value);
   }
   return value;
+}
+
+/**
+ * Runs the {@linkcode adjust} normalization over an L1 action once and wraps the result in an
+ * {@linkcode Adjusted} marker. A {@linkcode createL1ActionHash} preimage containing the marker
+ * reuses the adjusted subtree instead of re-traversing it — multi-sig hashes the same action
+ * twice (inner payload and outer wrapper), so the second hash would otherwise redo the walk.
+ *
+ * The marker hashes byte-identically to the raw action: `adjust` is deterministic and idempotent,
+ * so the subtree computed here is exactly what re-running `adjust` over the action would produce.
+ * It is only meaningful inside L1 action-hash preimages — never place it in the wire payload
+ * (the multi-sig wrapper keeps the caller's original action object).
+ *
+ * @param action The action to normalize once.
+ * @return An opaque marker standing in for the action inside hash preimages.
+ */
+export function preadjustL1Action(action: Record<string, unknown> | unknown[]): unknown {
+  return new Adjusted(adjust(action as ValueType));
 }
 
 /**

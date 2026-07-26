@@ -13,6 +13,7 @@
 
 import { privateKeyToAccount } from "viem/accounts";
 import { hashTypedData } from "viem";
+import * as v from "valibot";
 import { ExchangeClient } from "@bloxwap/hyperliquid";
 import { ApproveAgentTypes, OrderRequest } from "@bloxwap/hyperliquid/api/exchange";
 import {
@@ -22,6 +23,7 @@ import {
   signMultiSigL1,
   signMultiSigUserSigned,
 } from "@bloxwap/hyperliquid/signing";
+import { parse } from "../../../src/_base.ts";
 import { createL1AgentDigest } from "../../../src/signing/_fastDigest.ts";
 import { scenario } from "../_harness.ts";
 import { MockExchangeTransport, TEST_PRIVATE_KEY } from "../_helpers.ts";
@@ -73,6 +75,24 @@ for (const count of [1, 100] as const) {
     },
   });
 }
+
+// The chain as every exchange method actually runs it: `canonicalize(Schema, parse(Schema, …))`.
+// Issue #8 makes the second pass allocation-free on `parse` output, so the delta versus the two
+// scenarios above isolates what the fast path saves inside the full chain.
+const OrderActionSchema = v.object(OrderRequest.entries.action.entries);
+
+scenario({
+  name: "signing/parse_canonicalize_order_100",
+  group: "signing",
+  description: "parse() + canonicalize() over a 100-order action, as the exchange methods run it",
+  unit: "order",
+  unitsPerIteration: 100,
+  iterations: 50,
+  setup: () => ({ params: { orders: orderAction(100).orders, grouping: "na" } }),
+  run: ({ params }: { params: Record<string, unknown> }) => {
+    canonicalize(OrderActionSchema, parse(OrderActionSchema, { type: "order", ...params }));
+  },
+});
 
 // --- Action hashing --------------------------------------------------------
 // `createL1ActionHash` = `adjust` traversal + msgpack encode + keccak256. Issue #4
@@ -252,6 +272,43 @@ scenario({
         nonce: NONCE,
       },
       types: ApproveAgentTypes,
+    });
+  },
+});
+
+// The L1 multi-sig counterpart, on a 20-order action: large enough that the action-tree
+// traversal (issue #10 reuses the adjusted subtree across the inner and outer hashes instead
+// of traversing twice) is visible above the noise floor. The stub carries the raw-digest
+// `sign` that viem local accounts expose, so the inner signatures take the fast digest path.
+scenario({
+  name: "signing/multisig_l1_3_signers_no_ecdsa",
+  group: "signing",
+  description: "signMultiSigL1() with 3 stub signers over a 20-order action: SDK-side overhead without secp256k1",
+  unit: "request",
+  iterations: 200,
+  samples: 15,
+  setup: () => ({
+    signers: [
+      digestStubWallet("0x1111111111111111111111111111111111111111"),
+      digestStubWallet("0x2222222222222222222222222222222222222222"),
+      digestStubWallet("0x3333333333333333333333333333333333333333"),
+    ] as [ReturnType<typeof digestStubWallet>, ...ReturnType<typeof digestStubWallet>[]],
+    action: orderAction(20),
+  }),
+  run: async ({
+    signers,
+    action,
+  }: {
+    signers: [ReturnType<typeof digestStubWallet>, ...ReturnType<typeof digestStubWallet>[]];
+    action: Record<string, unknown>;
+  }) => {
+    await signMultiSigL1({
+      signers,
+      multiSigUser: "0x1234567890123456789012345678901234567890",
+      signatureChainId: "0x66eee",
+      action,
+      nonce: NONCE,
+      isTestnet: true,
     });
   },
 });

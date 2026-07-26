@@ -15,6 +15,10 @@
  * 2. valibot still orders `v.object` output by entries, including nested/variant/piped objects.
  * 3. No exchange schema uses a construct where `canonicalize` and `v.parse` could disagree.
  *    (3) is the one that catches a *schema* edit rather than a *valibot* upgrade.
+ *
+ * A fourth block pins the issue #8 change itself: the already-canonical fast path in
+ * `canonicalize` returns `parse` output by reference and never changes a byte versus the
+ * pre-fast-path implementation, which is vendored below as the differential oracle.
  * @module
  */
 
@@ -23,6 +27,7 @@ import * as v from "valibot";
 
 import * as exchange from "@bloxwap/hyperliquid/api/exchange";
 import { canonicalize, CanonicalizeError } from "@bloxwap/hyperliquid/signing";
+import { encode, type MsgpackValue } from "../../src/signing/_msgpack.ts";
 
 // ============================================================
 // Helpers
@@ -522,6 +527,258 @@ describe("canonicalize conformance", () => {
       ["intersect", v.intersect([v.object({ z: v.number() }), v.object({ a: v.number() })])],
     ])("the audit rejects %s", (_label, schema) => {
       expect(auditNode(schema as unknown as Node, "synthetic").length).toBeGreaterThan(0);
+    });
+  });
+});
+
+// ============================================================
+// Issue #8: the already-canonical fast path
+// ============================================================
+
+// --- Oracle: the pre-fast-path implementation ----------------
+// Verbatim copy of `walk`/`reorderObject` and their helpers from `src/signing/_canonicalize.ts`
+// as they were before the fast path landed (only the output-neutral key-list memoization is
+// elided). This is the "old path" the differential tests compare against — the same role
+// `@std/msgpack` and viem play as oracles elsewhere in this directory.
+
+interface OracleNode {
+  readonly type: string;
+  readonly entries?: Record<string, OracleNode>;
+  readonly wrapped?: OracleNode;
+  readonly item?: OracleNode;
+  readonly items?: readonly OracleNode[];
+  readonly key?: string;
+  readonly options?: readonly OracleNode[];
+  readonly literal?: unknown;
+}
+
+function oracleWalk(schema: OracleNode, value: unknown): unknown {
+  const t = schema.type;
+
+  if (t === "optional" || t === "nullable" || t === "nullish") {
+    return value === null || value === undefined ? value : oracleWalk(schema.wrapped!, value);
+  }
+
+  if (t === "object" && isRecord(value)) {
+    return oracleReorderObject(schema.entries!, value);
+  }
+
+  if (t === "array" && Array.isArray(value)) {
+    return value.map((item) => oracleWalk(schema.item!, item));
+  }
+
+  if (t === "tuple" && Array.isArray(value)) {
+    return value.map((item, i) => oracleWalk(schema.items![i], item));
+  }
+
+  if (t === "variant" && isRecord(value)) {
+    const option = oracleMatchVariantOption(schema.key!, schema.options!, value);
+    if (option) return oracleWalk(option, value);
+    throw new CanonicalizeError(
+      `No variant option matches data (discriminator "${schema.key}" = ${JSON.stringify(value[schema.key!])})`,
+    );
+  }
+
+  if (t === "union" && isRecord(value)) {
+    const option = oracleMatchByStructure(schema.options!, value);
+    if (option) return oracleWalk(option, value);
+    return value;
+  }
+
+  return value;
+}
+
+function oracleReorderObject(
+  entries: Record<string, OracleNode>,
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  for (const key in value) {
+    if (!Object.hasOwn(entries, key)) {
+      throw new CanonicalizeError(`Key "${key}" exists in data but not in schema`);
+    }
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(entries)) {
+    if (key in value) {
+      result[key] = oracleWalk(entries[key], value[key]);
+    } else {
+      const t = entries[key].type;
+      if (t !== "optional" && t !== "nullable" && t !== "nullish") {
+        throw new CanonicalizeError(`Required key "${key}" exists in schema but not in data`);
+      }
+    }
+  }
+  return result;
+}
+
+function oracleMatchVariantOption(
+  discriminatorKey: string,
+  options: readonly OracleNode[],
+  value: Record<string, unknown>,
+): OracleNode | undefined {
+  const discriminatorValue = value[discriminatorKey];
+
+  let firstMatch: OracleNode | undefined;
+  let extraMatches: OracleNode[] | undefined;
+  for (const option of options) {
+    if (option.type === "object" && option.entries && discriminatorKey in option.entries) {
+      const keySchema = option.entries[discriminatorKey];
+      if (keySchema.type === "literal" && keySchema.literal === discriminatorValue) {
+        if (firstMatch === undefined) {
+          firstMatch = option;
+        } else {
+          (extraMatches ??= [firstMatch]).push(option);
+        }
+      }
+    }
+  }
+
+  if (extraMatches === undefined) return firstMatch;
+  return oracleMatchByStructure(extraMatches, value);
+}
+
+function oracleMatchByStructure(
+  options: readonly OracleNode[],
+  value: Record<string, unknown>,
+): OracleNode | undefined {
+  for (const option of options) {
+    if (option.type !== "object" || !option.entries) continue;
+
+    let allKnown = true;
+    for (const key in value) {
+      if (!Object.hasOwn(option.entries, key)) {
+        allKnown = false;
+        break;
+      }
+    }
+    if (!allKnown) continue;
+
+    let allRequired = true;
+    for (const key of Object.keys(option.entries)) {
+      if (key in value) continue;
+      const t = option.entries[key].type;
+      if (t !== "optional" && t !== "nullable" && t !== "nullish") {
+        allRequired = false;
+        break;
+      }
+    }
+    if (allRequired) return option;
+  }
+
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+describe("canonicalize() fast path (issue #8)", () => {
+  describe("returns parse() output by reference — the rebuild is skipped entirely", () => {
+    for (const [name, schema, input] of REQUESTS) {
+      test(name, () => {
+        const parsed = v.parse(schema, input);
+
+        // Reference identity, not just equal shape: no object was rebuilt anywhere on the walk.
+        expect(canonicalize(schema, parsed)).toBe(parsed);
+      });
+    }
+
+    test("canonical subtrees are shared, not copied", () => {
+      const schema = exchange.OrderRequest.entries.action as v.GenericSchema;
+      const parsed = v.parse(schema, { orders: [SCRAMBLED_ORDER], type: "order" }) as {
+        orders: { t: unknown }[];
+      };
+
+      const out = canonicalize(schema, parsed);
+
+      expect(out).toBe(parsed);
+      expect(out.orders).toBe(parsed.orders);
+      expect(out.orders[0]).toBe(parsed.orders[0]);
+      expect(out.orders[0].t).toBe(parsed.orders[0].t);
+    });
+  });
+
+  describe("byte-identical to the pre-fast-path implementation", () => {
+    // The parsed (canonical) form exercises the fast path; the same request with scrambled
+    // keys exercises the rebuild path. Both must produce the old implementation's bytes.
+    for (const [name, schema, input] of REQUESTS) {
+      test(`fast path: ${name}`, () => {
+        const parsed = v.parse(schema, input);
+        expect(encode(canonicalize(schema, parsed) as MsgpackValue)).toEqual(
+          encode(oracleWalk(schema as unknown as OracleNode, parsed) as MsgpackValue),
+        );
+      });
+
+      test(`rebuild path: ${name}`, () => {
+        expect(encode(canonicalize(schema, input) as MsgpackValue)).toEqual(
+          encode(oracleWalk(schema as unknown as OracleNode, input) as MsgpackValue),
+        );
+      });
+    }
+
+    test("an inherited enumerable key that IS declared is still promoted to an own key", () => {
+      // The rebuild copies the inherited `b` onto the result as an own key. If the fast path
+      // returned the input as-is here, the encoder (`Object.keys` — own keys only) would see
+      // one key fewer than the old implementation produced.
+      const schema = v.object({ a: v.number(), b: v.number() });
+      const input = Object.assign(Object.create({ b: 2 }), { a: 1 });
+
+      const out = canonicalize(schema as v.GenericSchema, input) as Record<string, unknown>;
+      const oracle = oracleWalk(schema as unknown as OracleNode, input) as Record<string, unknown>;
+
+      expect(Object.keys(out)).toEqual(["a", "b"]);
+      expect(encode(out as MsgpackValue)).toEqual(encode(oracle as MsgpackValue));
+    });
+
+    test("integer-like keys keep the engine's numeric-first order on both paths", () => {
+      const schema = v.object({ b: v.number(), "2": v.number(), a: v.number(), "10": v.number() });
+      const parsed = v.parse(schema, { a: 1, "10": 2, b: 3, "2": 5 });
+
+      expect(canonicalize(schema as v.GenericSchema, parsed)).toBe(parsed);
+      expect(encode(canonicalize(schema as v.GenericSchema, parsed) as MsgpackValue)).toEqual(
+        encode(oracleWalk(schema as unknown as OracleNode, parsed) as MsgpackValue),
+      );
+    });
+  });
+
+  describe("throws identically to the pre-fast-path implementation", () => {
+    const ERROR_CASES: [name: string, schema: v.GenericSchema, input: unknown][] = [
+      ["extra key at the root", v.object({ a: v.number() }), { a: 1, z: 2 }],
+      ["extra key nested", v.object({ a: v.object({ b: v.number() }) }), { a: { b: 1, z: 2 } }],
+      ["missing required key", v.object({ a: v.number(), b: v.number() }), { a: 1 }],
+      [
+        "unmatched variant discriminator",
+        v.variant("k", [v.object({ k: v.literal("x"), a: v.number() })]),
+        { k: "y", a: 1 },
+      ],
+    ];
+
+    for (const [name, schema, input] of ERROR_CASES) {
+      test(name, () => {
+        let newError: Error | undefined;
+        let oracleError: Error | undefined;
+        try {
+          canonicalize(schema, input);
+        } catch (error) {
+          newError = error as Error;
+        }
+        try {
+          oracleWalk(schema as unknown as OracleNode, input);
+        } catch (error) {
+          oracleError = error as Error;
+        }
+
+        expect(newError).toBeInstanceOf(CanonicalizeError);
+        expect(newError?.message).toBe(oracleError?.message);
+      });
+    }
+
+    test("over-long tuple dies the same way (TypeError from the missing item schema)", () => {
+      const schema = v.tuple([v.number()]) as unknown as v.GenericSchema;
+
+      expect(() => canonicalize(schema, [1, 2])).toThrow(TypeError);
+      expect(() => oracleWalk(schema as unknown as OracleNode, [1, 2])).toThrow(TypeError);
     });
   });
 });
