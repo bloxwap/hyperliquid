@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue)](https://www.npmjs.com/package/@bloxwap/hyperliquid)
 [![Downloads](https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg)](https://www.npmjs.com/package/@bloxwap/hyperliquid)
-[![coveralls](https://img.shields.io/coverallsCoverage/github/bloxwap/hyperliquid)](https://coveralls.io/github/bloxwap/hyperliquid)
+[![Coverage Status](https://coveralls.io/repos/github/bloxwap/hyperliquid/badge.svg?branch=main)](https://coveralls.io/github/bloxwap/hyperliquid?branch=main)
 [![bundlephobia](https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid)](https://bundlephobia.com/package/@bloxwap/hyperliquid)
 
 A community-supported [Hyperliquid API](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api) SDK for all
