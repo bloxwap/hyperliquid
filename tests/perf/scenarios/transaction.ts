@@ -10,6 +10,7 @@
 
 import { ExchangeClient } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
+import { createNonceManager, type NonceManager } from "../../../src/api/exchange/_methods/_base/_nonce.ts";
 import { scenario } from "../_harness.ts";
 import { MockExchangeTransport, TEST_PRIVATE_KEY } from "../_helpers.ts";
 
@@ -96,5 +97,58 @@ scenario({
     );
 
     return { maxInFlight: transport.maxInFlight, calls: transport.calls.length };
+  },
+});
+
+// --- Nonce manager over capacity ------------------------------------------
+// gh issue #7: with more than `maxEntries` (10k) active wallet keys and nonces running
+// ahead of wall clock, a prune scan can never free anything — so the old per-call scan
+// was a sustained O(n) sweep on every nonce issued. The fix throttles the scan to one
+// pass per second; this scenario keeps the manager permanently in that regime so the
+// per-call cost of the over-capacity path is what gets measured.
+
+const OVER_CAPACITY_KEYS = 12_000;
+
+/** Formats an index as a wallet-like key, matching how callers key the nonce manager. */
+function walletKey(i: number): string {
+  return `0x${i.toString(16).padStart(40, "0")}`;
+}
+
+scenario({
+  name: "transaction/nonce_manager_over_capacity",
+  group: "transaction",
+  description:
+    `getNonce() over ${OVER_CAPACITY_KEYS} distinct wallet keys (above the 10k prune threshold) with the clock ` +
+    "frozen, so every nonce runs ahead of wall time and prune scans can free nothing",
+  unit: "nonce",
+  iterations: 500,
+  samples: 10,
+  setup: () => {
+    // Freeze the clock for the whole scenario (restored in teardown): each key's nonce is
+    // then always `last + 1`, ahead of wall time — the worst case for pruning. The harness
+    // times with `performance.now()`, which is untouched.
+    const realDateNow = Date.now;
+    const frozen = realDateNow();
+    Date.now = () => frozen;
+    // Keys are built up front so the measured body is nonce issuance only, not string
+    // formatting — otherwise a constant ~100 ns of `toString`/`padStart` per call would
+    // dilute the very cost this scenario exists to track.
+    const keys = Array.from({ length: OVER_CAPACITY_KEYS }, (_, i) => walletKey(i));
+    const manager = createNonceManager();
+    for (const key of keys) manager.getNonce(key);
+    return {
+      manager,
+      keys,
+      next: 0,
+      restore: (): void => {
+        Date.now = realDateNow;
+      },
+    };
+  },
+  teardown: ({ restore }: { restore: () => void }) => {
+    restore();
+  },
+  run: (ctx: { manager: NonceManager; keys: readonly string[]; next: number }) => {
+    ctx.manager.getNonce(ctx.keys[ctx.next++ % OVER_CAPACITY_KEYS]);
   },
 });
