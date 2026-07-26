@@ -35,6 +35,11 @@ runTest({
       "#/properties/meta/properties/universe/items/properties/growthMode/present",
       "#/properties/meta/properties/universe/items/properties/lastGrowthModeChangeTime/present",
       "#/properties/twapStates/array",
+      // trigger/stopPx always arrive as null on the wire (not settable via the current TWAP order
+      // action), so their missing/non-null branches are uncoverable live.
+      "#/properties/twapStates/items/items/1/properties/trigger/missing",
+      "#/properties/twapStates/items/items/1/properties/stopPx/missing",
+      "#/properties/twapStates/items/items/1/properties/stopPx/defined",
       "#/properties/perpsAtOpenInterestCap/present",
       "#/properties/agentAddress/defined",
       "#/properties/agentValidUntil/defined",
