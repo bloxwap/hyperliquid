@@ -17,6 +17,42 @@ export type { PreparedExchangeRequest } from "./_base/mod.ts";
 const CAPTURE_SUCCESS = { status: "ok", response: { type: "default" } } as const;
 
 /**
+ * The minimal shape of a signed exchange request, as {@linkcode PreparedExchangeRequest}
+ * documents it: a non-null, non-array object carrying a non-array `action` object, a non-array
+ * `signature` object, and a nonnegative safe-integer `nonce`.
+ *
+ * Returns a shallow plain-object COPY of a valid payload (or `undefined` for anything
+ * malformed). The copy is what gets returned and poison-linked, so a frozen direct payload
+ * survives the `delete` of unset optional keys at finalize (strict mode would throw on the
+ * original), and every later touch of the captured payload is guarded by construction. The
+ * whole inspection is wrapped in try/catch: a payload whose getters or Proxy traps throw is
+ * treated as malformed — the "never a raw TypeError" contract holds.
+ */
+function toPlainSignedRequest(payload: unknown): PreparedExchangeRequest<unknown> | undefined {
+  try {
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return undefined;
+    const candidate = payload as Record<string, unknown>;
+    const { action, signature, nonce } = candidate;
+    if (
+      typeof action !== "object" ||
+      action === null ||
+      Array.isArray(action) ||
+      typeof signature !== "object" ||
+      signature === null ||
+      Array.isArray(signature) ||
+      typeof nonce !== "number" ||
+      !Number.isSafeInteger(nonce) ||
+      nonce < 0
+    ) {
+      return undefined;
+    }
+    return { ...(payload as PreparedExchangeRequest<unknown>) };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Build a fully signed Exchange request without sending it (sign now, submit later).
  *
  * Runs `run` against a capture transport: the callback executes any Exchange method exactly as
@@ -38,6 +74,13 @@ const CAPTURE_SUCCESS = { status: "ok", response: { type: "default" } } as const
  * endpoint or a second request — fails the whole `prepareRequest` call, even if the callback
  * swallowed the rejection.
  *
+ * The callback contract is the exported Exchange methods (e.g. `order`, `cancel`). Direct
+ * `transport.request("exchange", ...)` calls are supported only with well-formed signed
+ * payloads (`{ action, signature, nonce }`) and are validated defensively: malformed payloads —
+ * including ones whose getters or Proxy traps throw — are recorded as invalid attempts and
+ * rejected with a contract error, and a valid direct payload is copied before any mutation
+ * (frozen objects are safe).
+ *
  * Limitations (beyond callback settle, enforcement is best-effort):
  * - An attempt that reaches the capture transport only after the callback settled — a floating
  *   (un-awaited) attempt fired as the callback returns, whose signing path spans several
@@ -58,7 +101,7 @@ const CAPTURE_SUCCESS = { status: "ok", response: { type: "default" } } as const
  * @return The signed request payload (`{ action, signature, nonce, ... }`), ready for {@linkcode submitPrepared}.
  *
  * @throws {ValidationError} When the request parameters fail validation (before signing).
- * @throws {HyperliquidError} When the callback issues zero or more than one request, or targets a non-`exchange` endpoint.
+ * @throws {HyperliquidError} When the callback issues zero or more than one request, targets a non-`exchange` endpoint, or issues a malformed request.
  *
  * @example
  * ```ts
@@ -118,7 +161,19 @@ export async function prepareRequest<T>(
         state.invalidAttempts++;
         return Promise.reject(new HyperliquidError("prepareRequest: the callback issued more than one request"));
       }
-      captured = payload as PreparedExchangeRequest<T>;
+      const plain = toPlainSignedRequest(payload);
+      if (plain === undefined) {
+        // A callback hitting the capture transport directly with a primitive or malformed
+        // payload: record the invalid attempt and reject with a contract error, never letting a
+        // raw TypeError (property access on null, getter/Proxy traps, WeakMap key check) escape.
+        state.invalidAttempts++;
+        return Promise.reject(
+          new HyperliquidError(
+            "prepareRequest: the callback issued a malformed exchange request: expected an object with action/signature/nonce",
+          ),
+        );
+      }
+      captured = plain as PreparedExchangeRequest<T>;
       return Promise.resolve(CAPTURE_SUCCESS as TResponse);
     },
   };

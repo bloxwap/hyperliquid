@@ -1410,6 +1410,13 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * endpoint or a second request — fails the whole `prepareRequest` call, even if the callback
    * swallowed the rejection.
    *
+   * The callback contract is the exported Exchange methods (e.g. `order`, `cancel`). Direct
+   * `transport.request("exchange", ...)` calls are supported only with well-formed signed
+   * payloads (`{ action, signature, nonce }`) and are validated defensively: malformed payloads —
+   * including ones whose getters or Proxy traps throw — are recorded as invalid attempts and
+   * rejected with a contract error, and a valid direct payload is copied before any mutation
+   * (frozen objects are safe).
+   *
    * Limitations (beyond callback settle, enforcement is best-effort):
    * - An attempt that reaches the capture transport only after the callback settled — a floating
    *   (un-awaited) attempt fired as the callback returns, whose signing path spans several
@@ -1429,7 +1436,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @return The signed request payload (`{ action, signature, nonce, ... }`), ready for {@linkcode submitPrepared}.
    *
    * @throws {ValidationError} When the request parameters fail validation (before signing).
-   * @throws {HyperliquidError} When the callback issues zero or more than one request, or targets a non-`exchange` endpoint.
+   * @throws {HyperliquidError} When the callback issues zero or more than one request, targets a non-`exchange` endpoint, or issues a malformed request.
    *
    * @example
    * ```ts

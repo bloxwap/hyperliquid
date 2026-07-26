@@ -328,6 +328,131 @@ describe("prepareRequest + submitPrepared", () => {
     assertEquals(typed.response.type, "order");
   });
 
+  test("malformed direct payloads reject with a contract error, never a raw TypeError", async () => {
+    const { transport } = recordingTransport();
+    const config: ExchangeConfig = { transport, wallet };
+
+    // A callback hitting the capture transport DIRECTLY with a primitive or malformed payload
+    // previously leaked TypeErrors ("null is not an object", "WeakMap keys must be objects").
+    for (const payload of [null, "x", 1, {}, []]) {
+      const error = await assertRejects(
+        () => prepareRequest(config, (c) => c.transport.request("exchange", payload)),
+        HyperliquidError,
+        "malformed exchange request",
+      );
+      assert(
+        error.message.includes("expected an object with action/signature/nonce"),
+        `payload ${JSON.stringify(payload)}: unexpected message ${error.message}`,
+      );
+    }
+  });
+
+  test("a swallowed malformed attempt followed by a valid request still fails the prepare", async () => {
+    const { transport } = recordingTransport();
+    const config: ExchangeConfig = { transport, wallet };
+
+    // The malformed attempt is recorded before its rejection is delivered, so swallowing it
+    // does not let the callback sneak a valid request through.
+    await assertRejects(
+      () =>
+        prepareRequest(config, async (c) => {
+          await c.transport.request("exchange", null).catch(() => undefined); // swallowed
+          await order(c, PARAMS);
+        }),
+      HyperliquidError,
+      "more than one request",
+    );
+  });
+
+  /** A well-formed signed exchange request, as a direct capture-transport caller would build it. */
+  function validDirectPayload(): {
+    action: Record<string, unknown>;
+    signature: { r: string; s: string; v: number };
+    nonce: number;
+  } {
+    return {
+      action: { type: "noop" },
+      signature: { r: `0x${"11".repeat(32)}`, s: `0x${"22".repeat(32)}`, v: 27 },
+      nonce: 1700000000000,
+    };
+  }
+
+  test("payloads with throwing getters or Proxy traps reject as malformed", async () => {
+    const { transport } = recordingTransport();
+    const config: ExchangeConfig = { transport, wallet };
+
+    const getterBomb = {
+      ...validDirectPayload(),
+      get action(): unknown {
+        throw new TypeError("boom");
+      },
+    };
+    const proxyTrap = new Proxy(validDirectPayload(), {
+      get: () => {
+        throw new TypeError("boom");
+      },
+    });
+
+    for (const payload of [getterBomb, proxyTrap]) {
+      const error = await assertRejects(
+        () => prepareRequest(config, (c) => c.transport.request("exchange", payload)),
+        HyperliquidError,
+        "malformed exchange request",
+      );
+      assert(!(error instanceof TypeError)); // the raw getter/Proxy error must never leak
+    }
+  });
+
+  test("invalid nonce values and array fields reject as malformed", async () => {
+    const { transport } = recordingTransport();
+    const config: ExchangeConfig = { transport, wallet };
+
+    const cases: unknown[] = [
+      { ...validDirectPayload(), nonce: NaN },
+      { ...validDirectPayload(), nonce: Infinity },
+      { ...validDirectPayload(), nonce: -1 },
+      { ...validDirectPayload(), nonce: 2 ** 53 },
+      { ...validDirectPayload(), action: [] },
+      { ...validDirectPayload(), signature: [] },
+    ];
+    for (const payload of cases) {
+      await assertRejects(
+        () => prepareRequest(config, (c) => c.transport.request("exchange", payload)),
+        HyperliquidError,
+        "malformed exchange request",
+      );
+    }
+  });
+
+  test("a well-formed direct payload is accepted (valid base case)", async () => {
+    const { transport } = recordingTransport();
+    const config: ExchangeConfig = { transport, wallet };
+    const direct = validDirectPayload();
+
+    const prepared = await prepareRequest(config, (c) => c.transport.request("exchange", direct));
+
+    assertEquals(prepared.nonce, 1700000000000);
+    assertEquals(prepared.action, { type: "noop" });
+    assertEquals(prepared.signature, direct.signature);
+  });
+
+  test("a frozen well-formed payload is captured via a plain copy, original untouched", async () => {
+    const { transport } = recordingTransport();
+    const config: ExchangeConfig = { transport, wallet };
+    // Explicit undefined optional keys: the finalize step deletes them from the captured
+    // payload, which would throw on the frozen original (strict mode).
+    const direct = Object.freeze({ ...validDirectPayload(), vaultAddress: undefined, expiresAfter: undefined });
+
+    const prepared = await prepareRequest(config, (c) => c.transport.request("exchange", direct));
+
+    assert(prepared !== direct); // the returned payload is the plain copy
+    assertEquals("vaultAddress" in prepared, false);
+    assertEquals("expiresAfter" in prepared, false);
+    assert("vaultAddress" in direct && "expiresAfter" in direct); // original untouched
+    assert(Object.isFrozen(direct));
+    assertEquals(prepared.nonce, 1700000000000);
+  });
+
   test("a minimal prepare completes in well under 1 ms (no macrotask drain)", async () => {
     // Rationale: prepareRequest once drained one task tick (`setTimeout(0)`) per call to widen
     // the exactly-one window, which costs ~1.2 ms per prepare (macrotask clamping) — a ~40-150×
