@@ -128,9 +128,9 @@ scenario({
 });
 
 // --- Decimal formatting ---------------------------------------------------
-// `formatPrice` and `formatSize` run decimal.js twice per value (decimal places, then
-// significant digits), so they are orders of magnitude costlier than a symbol lookup and
-// are the realistic candidate for a fast path on the order-building route.
+// `formatPrice` and `formatSize` parse and truncate decimals as strings on every call,
+// so they are far costlier than a symbol lookup and are the realistic candidate for a
+// fast path on the order-building route.
 
 /** Price inputs spanning magnitudes and `szDecimals`, none of which truncate to zero. */
 const PRICE_INPUTS: readonly [price: string, szDecimals: number][] = Array.from(
