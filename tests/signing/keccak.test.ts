@@ -21,6 +21,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { rename } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { privateKeyToAccount } from "viem/accounts";
@@ -314,6 +316,22 @@ describe("keccak256() load semantics", () => {
     expect(createL1ActionHash({ action: ORDER_WITH_CLOID, nonce: NONCE })).toBe(ORDER_ACTION_HASH);
   });
 
+  test("a hasher that throws during the self-check is never trusted", async () => {
+    _setKeccakLoaderForTests(() =>
+      Promise.resolve({
+        init() {
+          throw new Error("broken WASM build");
+        },
+        update() {},
+        digest: (_outputType: "binary") => new Uint8Array(32),
+      }),
+    );
+    await preloadWasmKeccak();
+
+    expect(bytesToHex(keccak256(new Uint8Array(0)))).toBe(KECCAK256_EMPTY);
+    expect(createL1ActionHash({ action: ORDER_WITH_CLOID, nonce: NONCE })).toBe(ORDER_ACTION_HASH);
+  });
+
   test("a partially linked module (missing createKeccak) falls back to noble", async () => {
     _setKeccakLoaderForTests(() => Promise.resolve(undefined));
     await preloadWasmKeccak();
@@ -339,6 +357,40 @@ if (hashWasmAvailable) {
 
       expect(loads).toBe(1);
       expect(bytesToHex(keccak256(new Uint8Array(0)))).toBe(KECCAK256_EMPTY);
+    });
+  });
+
+  describe("loadWasmKeccak() with an unreadable hash-wasm entry", () => {
+    test("the real loader routes a failed import to the noble fallback", async () => {
+      // Hiding the package's entry file makes the real loader's dynamic import reject — the one
+      // loader-failure path `_setKeccakLoaderForTests` cannot reach (it replaces the loader), and
+      // module mocking cannot simulate (a mocked specifier stays poisoned for the process — see
+      // the module header). hash-wasm ships CJS, so forcing a re-read only takes dropping the
+      // `require.cache` record; the file is restored in `finally` and the failed load leaves no
+      // cache entry behind, so the real module loads again on the next import.
+      const nodeRequire = createRequire(import.meta.url);
+      const entry = nodeRequire.resolve("hash-wasm");
+      const hidden = `${entry}.hidden-by-test`;
+      delete nodeRequire.cache[entry];
+      await rename(entry, hidden);
+      try {
+        // The failure must be real — if a future runtime serves the import from an immutable
+        // module cache instead, this test covers nothing and must say so.
+        const served = await import("hash-wasm").then(
+          () => true,
+          () => false,
+        );
+        expect(served).toBe(false);
+
+        _setKeccakLoaderForTests(undefined); // the real loader — its import now rejects
+        await preloadWasmKeccak();
+
+        expect(bytesToHex(keccak256(new Uint8Array(0)))).toBe(KECCAK256_EMPTY);
+        expect(createL1ActionHash({ action: ORDER_WITH_CLOID, nonce: NONCE })).toBe(ORDER_ACTION_HASH);
+      } finally {
+        await rename(hidden, entry);
+        delete nodeRequire.cache[entry]; // drop any failed-load record so the real module re-loads
+      }
     });
   });
 }

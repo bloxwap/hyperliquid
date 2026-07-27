@@ -4,20 +4,23 @@
  * @module
  */
 
-import { describe, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { assertEquals } from "@jsr/std__assert";
 import { createWalletClient, custom } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
 
 import {
+  AbstractWalletError,
   createL1ActionHash,
+  getWalletAddress,
   getWalletChainId,
   signL1Action,
   signMultiSigL1,
   signMultiSigUserSigned,
   signUserSignedAction,
 } from "@bloxwap/hyperliquid/signing";
+import { signRawDigest, signTypedData } from "../../src/signing/_abstractWallet.ts";
 
 // ============================================================
 // Test Data
@@ -369,6 +372,153 @@ describe("signing", () => {
         const chainId = await getWalletChainId(wallet);
         assertEquals(chainId, "0xa4b1");
       });
+    });
+  });
+});
+
+// ============================================================
+// Wallet error wrapping
+// ============================================================
+
+describe("wallet error wrapping (AbstractWalletError)", () => {
+  const TYPED_DATA_ARGS = {
+    domain: {
+      name: "HyperliquidSignTransaction",
+      version: "1",
+      chainId: 421614,
+      verifyingContract: "0x0000000000000000000000000000000000000000",
+    },
+    types: { Agent: [{ name: "source", type: "string" }] },
+    primaryType: "Agent",
+    message: { source: "a" },
+  } as const;
+  const DIGEST = `0x${"11".repeat(32)}` as const;
+  const VALID_HEX_SIGNATURE = `0x${"1".repeat(64)}${"2".repeat(64)}1b` as const;
+
+  /** Minimal JSON-RPC wallet stub; individual methods are overridden per test. */
+  function jsonRpcWallet(overrides: {
+    signTypedData?: (_params: never) => Promise<`0x${string}`>;
+    getAddresses?: () => Promise<`0x${string}`[]>;
+    getChainId?: () => Promise<number>;
+  }) {
+    return {
+      signTypedData: overrides.signTypedData ?? ((_params: never) => Promise.resolve(VALID_HEX_SIGNATURE)),
+      getAddresses:
+        overrides.getAddresses ?? (() => Promise.resolve(["0x1111111111111111111111111111111111111111" as const])),
+      getChainId: overrides.getChainId ?? (() => Promise.resolve(1337)),
+    };
+  }
+
+  /** Awaits a rejection and returns the caught error (fails if the call resolves). */
+  async function caught(promise: Promise<unknown>): Promise<Error> {
+    return promise.then(
+      () => {
+        throw new Error("expected the call to reject");
+      },
+      (error: unknown) => error as Error,
+    );
+  }
+
+  describe("signTypedData()", () => {
+    test("rejects a wallet signature that is not 65 bytes", async () => {
+      const wallet = jsonRpcWallet({ signTypedData: (_params: never) => Promise.resolve("0x1234" as const) });
+
+      const error = await caught(signTypedData({ wallet, ...TYPED_DATA_ARGS }));
+      expect(error).toBeInstanceOf(AbstractWalletError);
+      expect(error.message).toBe("Expected 65-byte signature (132 hex chars), got 6");
+    });
+
+    test("rejects a wallet signature with an invalid recovery value", async () => {
+      const wallet = jsonRpcWallet({
+        signTypedData: (_params: never) => Promise.resolve(`0x${"1".repeat(64)}${"2".repeat(64)}1d` as const),
+      });
+
+      const error = await caught(signTypedData({ wallet, ...TYPED_DATA_ARGS }));
+      expect(error).toBeInstanceOf(AbstractWalletError);
+      expect(error.message).toBe("Invalid signature recovery value: 29, expected 0/1 or 27/28");
+    });
+
+    test("wraps a non-SDK wallet failure, keeping the cause", async () => {
+      const wallet = jsonRpcWallet({
+        signTypedData: (_params: never) => Promise.reject(new Error("user rejected the request")),
+      });
+
+      const error = await caught(signTypedData({ wallet, ...TYPED_DATA_ARGS }));
+      expect(error).toBeInstanceOf(AbstractWalletError);
+      expect(error.message).toBe("Failed to sign the typed data using the wallet");
+      expect(error.cause).toBeInstanceOf(Error);
+    });
+
+    test("rethrows an AbstractWalletError unchanged", async () => {
+      const failure = new AbstractWalletError("already an SDK error");
+      const wallet = jsonRpcWallet({ signTypedData: (_params: never) => Promise.reject(failure) });
+
+      const error = await caught(signTypedData({ wallet, ...TYPED_DATA_ARGS }));
+      expect(error).toBe(failure);
+    });
+  });
+
+  describe("signRawDigest()", () => {
+    /** Minimal viem-local wallet stub whose raw-digest `sign` fails as instructed. */
+    function localWallet(failure: Error) {
+      return {
+        address: "0x1111111111111111111111111111111111111111" as const,
+        sign: (_args: { hash: `0x${string}` }) => Promise.reject(failure),
+        signTypedData: (_params: never) => Promise.resolve(VALID_HEX_SIGNATURE),
+      };
+    }
+
+    test("wraps a non-SDK wallet failure, keeping the cause", async () => {
+      const error = await caught(
+        signRawDigest({ wallet: localWallet(new Error("device disconnected")), digest: DIGEST }),
+      );
+      expect(error).toBeInstanceOf(AbstractWalletError);
+      expect(error.message).toBe("Failed to sign the digest using the wallet");
+      expect(error.cause).toBeInstanceOf(Error);
+    });
+
+    test("rethrows an AbstractWalletError unchanged", async () => {
+      const failure = new AbstractWalletError("already an SDK error");
+      const error = await caught(signRawDigest({ wallet: localWallet(failure), digest: DIGEST }));
+      expect(error).toBe(failure);
+    });
+  });
+
+  describe("getWalletAddress()", () => {
+    test("wraps a non-SDK lookup failure, keeping the cause", async () => {
+      const wallet = jsonRpcWallet({ getAddresses: () => Promise.reject(new Error("rpc down")) });
+
+      const error = await caught(getWalletAddress(wallet));
+      expect(error).toBeInstanceOf(AbstractWalletError);
+      expect(error.message).toBe("Failed to get an address from the wallet");
+      expect(error.cause).toBeInstanceOf(Error);
+    });
+
+    test("rethrows an AbstractWalletError unchanged", async () => {
+      const failure = new AbstractWalletError("already an SDK error");
+      const wallet = jsonRpcWallet({ getAddresses: () => Promise.reject(failure) });
+
+      const error = await caught(getWalletAddress(wallet));
+      expect(error).toBe(failure);
+    });
+  });
+
+  describe("getWalletChainId()", () => {
+    test("wraps a non-SDK lookup failure, keeping the cause", async () => {
+      const wallet = jsonRpcWallet({ getChainId: () => Promise.reject(new Error("rpc down")) });
+
+      const error = await caught(getWalletChainId(wallet));
+      expect(error).toBeInstanceOf(AbstractWalletError);
+      expect(error.message).toBe("Failed to get the chain ID from the wallet");
+      expect(error.cause).toBeInstanceOf(Error);
+    });
+
+    test("rethrows an AbstractWalletError unchanged", async () => {
+      const failure = new AbstractWalletError("already an SDK error");
+      const wallet = jsonRpcWallet({ getChainId: () => Promise.reject(failure) });
+
+      const error = await caught(getWalletChainId(wallet));
+      expect(error).toBe(failure);
     });
   });
 });

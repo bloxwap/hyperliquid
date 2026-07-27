@@ -166,6 +166,36 @@ describe("redactSignature", () => {
     assert(serialized.includes("[Circular]"));
   });
 
+  test("toJSON returning its own owner closes a cycle immediately", () => {
+    // The serialized form IS the object being walked: without the owner on the path before
+    // `toJSON` runs, the walk would descend into the same node forever.
+    const payload = {
+      signature: SIGNATURE,
+      wrapper: {
+        toJSON() {
+          return this;
+        },
+      },
+    };
+
+    const redacted = redactSignature(payload) as Record<string, unknown>;
+    assertEquals(redacted.wrapper, "[Circular]");
+    const serialized = JSON.stringify(redacted); // must not throw or hang
+    assert(serialized.includes('"signature":"0x<redacted>"'));
+  });
+
+  test("toJSON returning an ancestor closes a cycle immediately", () => {
+    const root: Record<string, unknown> = { name: "root" };
+    root.child = {
+      toJSON() {
+        return root;
+      },
+    };
+
+    const redacted = redactSignature({ payload: root }) as Record<string, unknown>;
+    assertEquals((redacted.payload as Record<string, unknown>).child, "[Circular]");
+  });
+
   test("toJSON plus an own signature key: the serialized form wins", () => {
     const real = { r: `0x${"9".repeat(64)}`, s: `0x${"8".repeat(64)}`, v: 27 };
     const payload = {
