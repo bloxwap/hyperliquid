@@ -624,12 +624,26 @@ describe("ExchangeClient multi-sig paths (offline)", () => {
     }
   });
 
+  test("userSetAbstraction: dexAbstraction passes through to the multi-sig payload unmapped", async () => {
+    const { calls, transport } = recordingTransport();
+    const client = new ExchangeClient(multiSigConfig(transport));
+
+    // dexAbstraction has no single-letter wire form — the full name goes through unchanged.
+    await client.userSetAbstraction({ user: MULTI_SIG_USER, abstraction: "dexAbstraction" });
+
+    assertEquals(calls.length, 1);
+    const payload = calls[0].payload.action.payload as { action: Record<string, unknown> };
+    assertEquals(payload.action.abstraction, "dexAbstraction");
+    assertEquals(payload.action.user, MULTI_SIG_USER);
+  });
+
   test("userSetAbstraction: an unmapped abstraction passes through on the skipValidation path", async () => {
     const { calls, transport } = recordingTransport();
     const client = new ExchangeClient(multiSigConfig(transport));
 
     // Only reachable with validation skipped: the schema restricts abstraction to the three
-    // mapped values, so any other string exercises the payload-mapping passthrough branch.
+    // letter-mapped values plus dexAbstraction, so any other string exercises the
+    // payload-mapping passthrough branch.
     await client.userSetAbstraction({ user: MULTI_SIG_USER, abstraction: "other" as never }, { skipValidation: true });
 
     assertEquals(calls.length, 1);

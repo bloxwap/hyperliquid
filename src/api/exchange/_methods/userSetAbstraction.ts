@@ -26,7 +26,7 @@ export const UserSetAbstractionRequest = /* @__PURE__ */ (() => {
       /** User address. */
       user: Address,
       /** Abstraction mode to set. */
-      abstraction: v.picklist(["disabled", "unifiedAccount", "portfolioMargin"]),
+      abstraction: v.picklist(["disabled", "unifiedAccount", "portfolioMargin", "dexAbstraction"]),
       /** Nonce (timestamp in ms) used to prevent replay attacks. */
       nonce: UnsignedInteger,
     }),
@@ -111,6 +111,8 @@ function toMultiSigPayloadAction(action: Readonly<Record<string, unknown>>): Rec
   if (action.abstraction === "disabled") return { ...action, abstraction: "i" };
   if (action.abstraction === "unifiedAccount") return { ...action, abstraction: "u" };
   if (action.abstraction === "portfolioMargin") return { ...action, abstraction: "p" };
+  // "dexAbstraction" has no single-letter wire form; the full name goes through unchanged
+  // (verified accepted by the exchange's action deserializer).
   return action;
 }
 

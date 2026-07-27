@@ -40,7 +40,9 @@ runTest({
       "Portfolio margin requires account value of $10000 or total volume of $5000000.",
     );
 
-    schemaCoverage(paramsSchema, params);
+    // "dexAbstraction" is accepted server-side (verified against the exchange deserializer)
+    // but flipping the shared live test account into that mode would leak into other tests.
+    schemaCoverage(paramsSchema, params, ["#/properties/abstraction/enum/3"]);
     schemaCoverage(responseSchema, data);
   },
 });

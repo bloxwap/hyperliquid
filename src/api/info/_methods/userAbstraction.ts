@@ -24,7 +24,7 @@ export type UserAbstractionRequest = v.InferOutput<typeof UserAbstractionRequest
  * User abstraction state.
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-abstraction-state
  */
-export type UserAbstractionResponse = "unifiedAccount" | "portfolioMargin" | "disabled" | "default";
+export type UserAbstractionResponse = "unifiedAccount" | "portfolioMargin" | "disabled" | "default" | "dexAbstraction";
 
 // ============================================================
 // Execution Logic

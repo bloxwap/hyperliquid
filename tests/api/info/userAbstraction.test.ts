@@ -23,7 +23,9 @@ runTest({
     const data = await Promise.all(params.map((p) => client.userAbstraction(p)));
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data);
+    // "dexAbstraction" (#/enum/4) is accepted server-side (verified against the exchange
+    // deserializer) but no testnet account is in that mode, so it can't be produced live.
+    schemaCoverage(responseSchema, data, ["#/enum/4"]);
   },
 });
 
