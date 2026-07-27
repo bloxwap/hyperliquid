@@ -330,6 +330,9 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       // --- Rate limiting -------------------------------------------------------
       // Opt-in token bucket: the request waits here for its weight. The wait honors caller
       // aborts through the relayed controller signal; an aborted wait never reaches fetch.
+      // The pre-send weight is NOT refunded when the request fails (even on 429): the server
+      // bills attempts, and its own accounting of failures is undocumented — keeping the
+      // debit is the conservative reading.
       const rateLimit = this._rateLimit;
       if (rateLimit !== null) {
         snapshot = JSON.parse(body); // plain data: billing is immune to getters/proxies/toJSON
@@ -441,7 +444,7 @@ function truncate(text: string, limit = 1024): string {
 
 // --- Rate-limit weights -------------------------------------------------------
 // The tables below mirror the official documentation; keep them in sync with it.
-// https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits
+// https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
 
 /**
  * The `request` carried by an error: the parsed form of the one wire serialization, so it is
@@ -493,7 +496,7 @@ const INFO_SURCHARGE_PER_60_ITEMS: ReadonlySet<string> = new Set(["candleSnapsho
  * `1 + floor(batchLength / 40)` for exchange requests. Weights that depend on the response
  * size cannot be known here — see {@linkcode responseSurcharge}.
  *
- * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
  */
 function requestWeight(endpoint: "info" | "exchange" | "explorer", payload: unknown): number {
   if (endpoint === "explorer") return 40;
@@ -543,6 +546,12 @@ function exchangeAction(payload: unknown): Record<string, unknown> | undefined {
  * documented info endpoints, 1 per 60 on `candleSnapshot`, and 1 per block on explorer
  * `blockList`. Post-hoc accounting keeps the limiter honest on average: the response array is
  * the item count the server bills by.
+ *
+ * Two readings are interpretations the docs do not pin down (tracked in
+ * https://github.com/bloxwap/hyperliquid/issues/49): the item count is taken as exactly the
+ * top-level response array length, and partial chunks round UP (`ceil`, the conservative
+ * choice — the docs say neither `ceil` nor `floor`). `blockList` is exact only for recent
+ * blocks: the docs warn older blocks "may be weighted more heavily" without giving a formula.
  */
 function responseSurcharge(endpoint: "info" | "exchange" | "explorer", payload: unknown, response: unknown): number {
   if (!Array.isArray(response) || response.length === 0) return 0;
