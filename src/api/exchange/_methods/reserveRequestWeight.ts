@@ -61,11 +61,10 @@ export type ReserveRequestWeightResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -119,9 +118,6 @@ export function reserveRequestWeight(
   params: ReserveRequestWeightParameters,
   opts?: ReserveRequestWeightOptions,
 ): Promise<ReserveRequestWeightSuccessResponse> {
-  const action = canonicalize(
-    ReserveRequestWeightActionSchema,
-    parse(ReserveRequestWeightActionSchema, { type: "reserveRequestWeight", ...params }),
-  );
+  const action = buildAction(ReserveRequestWeightActionSchema, { type: "reserveRequestWeight", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

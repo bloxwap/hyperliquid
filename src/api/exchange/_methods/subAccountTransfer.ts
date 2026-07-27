@@ -65,11 +65,10 @@ export type SubAccountTransferResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -125,9 +124,6 @@ export function subAccountTransfer(
   params: SubAccountTransferParameters,
   opts?: SubAccountTransferOptions,
 ): Promise<SubAccountTransferSuccessResponse> {
-  const action = canonicalize(
-    SubAccountTransferActionSchema,
-    parse(SubAccountTransferActionSchema, { type: "subAccountTransfer", ...params }),
-  );
+  const action = buildAction(SubAccountTransferActionSchema, { type: "subAccountTransfer", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

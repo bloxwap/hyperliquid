@@ -118,11 +118,10 @@ export type ModifyResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -184,6 +183,6 @@ export function modify(
   params: ModifyParameters,
   opts?: ModifyOptions,
 ): Promise<ModifySuccessResponse> {
-  const action = canonicalize(ModifyActionSchema, parse(ModifyActionSchema, { type: "modify", ...params }));
+  const action = buildAction(ModifyActionSchema, { type: "modify", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

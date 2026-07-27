@@ -69,10 +69,10 @@ export type ScheduleCancelResponse =
 // ============================================================
 
 import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -82,8 +82,34 @@ const ScheduleCancelActionSchema = /* @__PURE__ */ (() => {
   return v.object(ScheduleCancelRequest.entries.action.entries);
 })();
 
+/** Minimum lead time for a scheduled cancel: 5 seconds, per the API docs. */
+const MIN_SCHEDULE_LEAD_MS = 5_000;
+
+/**
+ * Schema enforcing the documented "at least 5 seconds in the future" constraint on `time`.
+ * Kept out of {@linkcode ScheduleCancelRequest}: the check reads `Date.now()` at call time, which
+ * would make the shared request schema non-deterministic for validating recorded payloads.
+ */
+const ScheduleCancelTimeSchema = /* @__PURE__ */ (() => {
+  return v.pipe(
+    UnsignedInteger,
+    v.check(
+      (input) => input >= Date.now() + MIN_SCHEDULE_LEAD_MS,
+      "Scheduled time must be at least 5 seconds in the future",
+    ),
+  );
+})();
+
 /** Action parameters for the {@linkcode scheduleCancel} function. */
-export type ScheduleCancelParameters = Omit<v.InferInput<typeof ScheduleCancelActionSchema>, "type">;
+export type ScheduleCancelParameters = Omit<v.InferInput<typeof ScheduleCancelActionSchema>, "type" | "time"> & {
+  /**
+   * Scheduled time (in ms since epoch).
+   * Must be at least 5 seconds in the future.
+   *
+   * `null` is treated as unset (python SDK parity): all scheduled cancel operations are deleted.
+   */
+  time?: v.InferInput<typeof UnsignedInteger> | null;
+};
 
 /** Request options for the {@linkcode scheduleCancel} function. */
 export type ScheduleCancelOptions = ExtractRequestOptions<v.InferInput<typeof ScheduleCancelRequest>>;
@@ -139,9 +165,15 @@ export function scheduleCancel(
   const params = isFirstArgParams ? paramsOrOpts : {};
   const opts = isFirstArgParams ? maybeOpts : (paramsOrOpts as ScheduleCancelOptions);
 
-  const action = canonicalize(
-    ScheduleCancelActionSchema,
-    parse(ScheduleCancelActionSchema, { type: "scheduleCancel", ...params }),
-  );
+  const actionInput: Record<string, unknown> = { type: "scheduleCancel", ...params };
+  // Python SDK parity: `time: null` means "unset" — the key is dropped from the posted action,
+  // which deletes all scheduled cancel operations.
+  if (actionInput.time === null) delete actionInput.time;
+
+  // Docs: the scheduled time must be at least 5 seconds in the future. Cheap deterministic guard,
+  // checked against `Date.now()` at call time; runs even when `skipValidation` is set.
+  if (actionInput.time !== undefined) parse(ScheduleCancelTimeSchema, actionInput.time);
+
+  const action = buildAction(ScheduleCancelActionSchema, actionInput, opts);
   return executeL1Action(config, action, opts);
 }

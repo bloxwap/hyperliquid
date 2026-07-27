@@ -444,3 +444,32 @@ if (tinySecp256k1Available) {
     },
   });
 }
+
+// --- Skip-validation fast path (issue #28) -----------------------------------
+// Unchecked counterpart of `signing/order_e2e_no_ecdsa` above: with the curve stubbed out, the
+// delta between the two scenarios is exactly the valibot parse + canonicalize pass (plus the
+// request-option validation in the execute path) that `skipValidation: true` opts out of.
+
+scenario({
+  name: "signing/order_e2e_no_ecdsa_unchecked",
+  group: "signing",
+  description:
+    "ExchangeClient.order() with a stub wallet and skipValidation: true: SDK shell overhead without secp256k1 or validation",
+  unit: "order",
+  iterations: 200,
+  samples: 15,
+  setup: () => {
+    const transport = new MockExchangeTransport(0);
+    const client = new ExchangeClient({
+      transport,
+      wallet: digestStubWallet("0x1111111111111111111111111111111111111111"),
+    });
+    return { client };
+  },
+  run: async ({ client }: { client: ExchangeClient }) => {
+    await client.order(
+      { orders: [{ a: 0, b: true, p: "30000", s: "0.001", r: false, t: { limit: { tif: "Gtc" } } }], grouping: "na" },
+      { skipValidation: true },
+    );
+  },
+});

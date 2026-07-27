@@ -69,11 +69,10 @@ export type CSignerActionResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -146,9 +145,6 @@ export function cSignerAction(
   params: CSignerActionParameters,
   opts?: CSignerActionOptions,
 ): Promise<CSignerActionSuccessResponse> {
-  const action = canonicalize(
-    CSignerActionActionSchema,
-    parse(CSignerActionActionSchema, { type: "CSignerAction", ...params }),
-  );
+  const action = buildAction(CSignerActionActionSchema, { type: "CSignerAction", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

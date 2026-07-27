@@ -67,11 +67,10 @@ export type UpdateLeverageResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -127,9 +126,6 @@ export function updateLeverage(
   params: UpdateLeverageParameters,
   opts?: UpdateLeverageOptions,
 ): Promise<UpdateLeverageSuccessResponse> {
-  const action = canonicalize(
-    UpdateLeverageActionSchema,
-    parse(UpdateLeverageActionSchema, { type: "updateLeverage", ...params }),
-  );
+  const action = buildAction(UpdateLeverageActionSchema, { type: "updateLeverage", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

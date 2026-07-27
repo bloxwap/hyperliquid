@@ -63,11 +63,10 @@ export type SubAccountModifyResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -122,9 +121,6 @@ export function subAccountModify(
   params: SubAccountModifyParameters,
   opts?: SubAccountModifyOptions,
 ): Promise<SubAccountModifySuccessResponse> {
-  const action = canonicalize(
-    SubAccountModifyActionSchema,
-    parse(SubAccountModifyActionSchema, { type: "subAccountModify", ...params }),
-  );
+  const action = buildAction(SubAccountModifyActionSchema, { type: "subAccountModify", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

@@ -65,11 +65,10 @@ export type GossipPriorityBidResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -125,9 +124,6 @@ export function gossipPriorityBid(
   params: GossipPriorityBidParameters,
   opts?: GossipPriorityBidOptions,
 ): Promise<GossipPriorityBidSuccessResponse> {
-  const action = canonicalize(
-    GossipPriorityBidActionSchema,
-    parse(GossipPriorityBidActionSchema, { type: "gossipPriorityBid", ...params }),
-  );
+  const action = buildAction(GossipPriorityBidActionSchema, { type: "gossipPriorityBid", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

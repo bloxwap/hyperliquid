@@ -92,11 +92,10 @@ export type ConvertToMultiSigUserResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeUserSignedAction,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -180,9 +179,6 @@ export function convertToMultiSigUser(
   params: ConvertToMultiSigUserParameters,
   opts?: ConvertToMultiSigUserOptions,
 ): Promise<ConvertToMultiSigUserSuccessResponse> {
-  const action = canonicalize(
-    ConvertToMultiSigUserActionSchema,
-    parse(ConvertToMultiSigUserActionSchema, { type: "convertToMultiSigUser", ...params }),
-  );
+  const action = buildAction(ConvertToMultiSigUserActionSchema, { type: "convertToMultiSigUser", ...params }, opts);
   return executeUserSignedAction(config, action, ConvertToMultiSigUserTypes, opts);
 }

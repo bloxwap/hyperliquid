@@ -67,11 +67,10 @@ export type StakingLinkDisableTradingUserResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeUserSignedAction,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -145,9 +144,10 @@ export function stakingLinkDisableTradingUser(
   params: StakingLinkDisableTradingUserParameters,
   opts?: StakingLinkDisableTradingUserOptions,
 ): Promise<StakingLinkDisableTradingUserSuccessResponse> {
-  const action = canonicalize(
+  const action = buildAction(
     StakingLinkDisableTradingUserActionSchema,
-    parse(StakingLinkDisableTradingUserActionSchema, { type: "stakingLinkDisableTradingUser", ...params }),
+    { type: "stakingLinkDisableTradingUser", ...params },
+    opts,
   );
   return executeUserSignedAction(config, action, StakingLinkDisableTradingUserTypes, opts);
 }

@@ -59,11 +59,10 @@ export type AgentEnableDexAbstractionResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -114,9 +113,6 @@ export function agentEnableDexAbstraction(
   config: ExchangeConfig,
   opts?: AgentEnableDexAbstractionOptions,
 ): Promise<AgentEnableDexAbstractionSuccessResponse> {
-  const action = canonicalize(
-    AgentEnableDexAbstractionActionSchema,
-    parse(AgentEnableDexAbstractionActionSchema, { type: "agentEnableDexAbstraction" }),
-  );
+  const action = buildAction(AgentEnableDexAbstractionActionSchema, { type: "agentEnableDexAbstraction" }, opts);
   return executeL1Action(config, action, opts);
 }

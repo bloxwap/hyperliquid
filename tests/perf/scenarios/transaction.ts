@@ -152,3 +152,67 @@ scenario({
     ctx.manager.getNonce(ctx.keys[ctx.next++ % OVER_CAPACITY_KEYS]);
   },
 });
+
+// --- Skip-validation fast path (issue #28) ----------------------------------
+// `skipValidation: true` opts out of the valibot parse + canonicalize pass. secp256k1 dominates
+// the sequential call (~150 µs of ~156 µs), so the saving is below the noise floor here — the
+// isolated view is `signing/order_e2e_no_ecdsa_unchecked`. This scenario exists so the report
+// shows the unchecked path end to end and guards its plumbing against regressions.
+
+scenario({
+  name: "transaction/order_sequential_unchecked",
+  group: "transaction",
+  description:
+    "ExchangeClient.order() with skipValidation: true, one order at a time, 0 ms transport latency (opt-in fast path)",
+  unit: "order",
+  iterations: 50,
+  samples: 10,
+  setup: () => instantClient(),
+  run: async ({ client }: { client: ExchangeClient }) => {
+    await client.order({ orders: [order(0)], grouping: "na" }, { skipValidation: true });
+  },
+});
+
+// --- prepareRequest capture cost ---------------------------------------------
+// prepareRequest (issue #22) runs a full exchange call against a capture transport. It must
+// stay in the µs range: a `setTimeout(0)` drain once regressed a minimal prepare to ~1.2 ms
+// (macrotask clamping) for a contract window the poison mechanism already covers. Stub wallet
+// (same shape as `digestStubWallet` in scenarios/signing.ts) keeps secp256k1 off the clock so
+// the scenario measures exactly the capture path. (The import declaration is hoisted; keeping
+// it next to the scenario keeps this file append-only.)
+
+import { order as orderFn } from "@bloxwap/hyperliquid/api/exchange";
+
+/** A viem-local-shaped wallet whose `sign`/`signTypedData` return a fixed signature without touching the curve. */
+function digestStubWallet(address: `0x${string}`): {
+  address: `0x${string}`;
+  sign: (args: { hash: `0x${string}` }) => Promise<`0x${string}`>;
+  signTypedData: (params: unknown) => Promise<`0x${string}`>;
+} {
+  const signature = `0x${"11".repeat(64)}1b` as `0x${string}`;
+  return {
+    address,
+    sign: (_args: { hash: `0x${string}` }) => Promise.resolve(signature),
+    signTypedData: (_params: unknown) => Promise.resolve(signature),
+  };
+}
+
+scenario({
+  name: "transaction/prepare_request",
+  group: "transaction",
+  description: "ExchangeClient.prepareRequest() of a 1-order action with a stub wallet (capture path, nothing posted)",
+  unit: "prepare",
+  iterations: 200,
+  samples: 15,
+  setup: () => {
+    const transport = new MockExchangeTransport(0);
+    const client = new ExchangeClient({
+      transport,
+      wallet: digestStubWallet("0x1111111111111111111111111111111111111111"),
+    });
+    return { client };
+  },
+  run: async ({ client }: { client: ExchangeClient }) => {
+    await client.prepareRequest((c) => orderFn(c, { orders: [order(0)], grouping: "na" }));
+  },
+});

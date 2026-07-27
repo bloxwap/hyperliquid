@@ -65,11 +65,10 @@ export type TopUpIsolatedOnlyMarginResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -124,9 +123,6 @@ export function topUpIsolatedOnlyMargin(
   params: TopUpIsolatedOnlyMarginParameters,
   opts?: TopUpIsolatedOnlyMarginOptions,
 ): Promise<TopUpIsolatedOnlyMarginSuccessResponse> {
-  const action = canonicalize(
-    TopUpIsolatedOnlyMarginActionSchema,
-    parse(TopUpIsolatedOnlyMarginActionSchema, { type: "topUpIsolatedOnlyMargin", ...params }),
-  );
+  const action = buildAction(TopUpIsolatedOnlyMarginActionSchema, { type: "topUpIsolatedOnlyMargin", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

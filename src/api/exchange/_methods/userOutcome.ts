@@ -114,11 +114,10 @@ export type UserOutcomeResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -180,9 +179,6 @@ export function userOutcome(
   params: UserOutcomeParameters,
   opts?: UserOutcomeOptions,
 ): Promise<UserOutcomeSuccessResponse> {
-  const action = canonicalize(
-    UserOutcomeActionSchema,
-    parse(UserOutcomeActionSchema, { type: "userOutcome", ...params }),
-  );
+  const action = buildAction(UserOutcomeActionSchema, { type: "userOutcome", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

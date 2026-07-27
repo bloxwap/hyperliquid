@@ -20,6 +20,73 @@ export interface BuildResult {
 }
 
 /**
+ * A fully signed Exchange request captured before submission: the exact wire payload of one
+ * Exchange API call, ready to be posted later via `submitPrepared`.
+ *
+ * Produced by `prepareRequest`. The signature commits to `action` and `nonce`, and the nonce was
+ * consumed at prepare time. The payload stays valid while its nonce is among the 100 highest the
+ * exchange has seen from the wallet (and within the block-timestamp window) — it goes stale only
+ * after 100 newer nonces have been consumed.
+ *
+ * @template T Response type of the method the payload was prepared with (type-level only).
+ */
+export interface PreparedExchangeRequest<T = unknown> {
+  /** The final action as posted (canonicalized; the multi-sig wrapper when applicable). */
+  action: Record<string, unknown>;
+  /** The leader's ECDSA signature over the action and nonce. */
+  signature: Signature;
+  /** Nonce (timestamp in ms) the signature commits to. */
+  nonce: number;
+  /** Vault address, when the request trades on behalf of a vault or sub-account. */
+  vaultAddress?: string;
+  /** Expiration time of the action, when set. */
+  expiresAfter?: number;
+  /**
+   * Phantom carrier of the wrapped method's response type — never set at runtime; it only lets
+   * `submitPrepared` infer the response type of the method the payload was prepared with.
+   */
+  readonly __responseType?: T;
+}
+
+// ============================================================
+// Prepared-payload poison state (internal)
+// ============================================================
+
+/**
+ * Mutable state shared between a `prepareRequest` capture transport and the payload it produced.
+ *
+ * The capture transport increments {@linkcode PreparedRequestState.invalidAttempts} on ANY invalid
+ * attempt — a request to a non-`exchange` endpoint, a second request, or a request attempted after
+ * `prepareRequest` settled. Because the state is shared by reference, an attempt that begins only
+ * after `prepareRequest` returned (leaked callback work) still lands here, and `submitPrepared`
+ * rejects the poisoned payload when it re-checks (a point-in-time, best-effort check).
+ */
+export interface PreparedRequestState {
+  /** Number of invalid attempts recorded by the capture transport. */
+  invalidAttempts: number;
+}
+
+/**
+ * In-process link from a prepared payload to its capture-transport state. A `WeakMap` (rather than
+ * a property on the payload) keeps the wire body untouched; the link is intentionally lost when a
+ * payload is serialized and re-parsed (the poison guard is an in-process guard only).
+ */
+const preparedRequestStates = new WeakMap<PreparedExchangeRequest<unknown>, PreparedRequestState>();
+
+/** Links a prepared payload to its capture-transport state (called by `prepareRequest`). */
+export function linkPreparedRequestState(
+  prepared: PreparedExchangeRequest<unknown>,
+  state: PreparedRequestState,
+): void {
+  preparedRequestStates.set(prepared, state);
+}
+
+/** Returns the capture-transport state of a prepared payload, if any (called by `submitPrepared`). */
+export function getPreparedRequestState(prepared: PreparedExchangeRequest<unknown>): PreparedRequestState | undefined {
+  return preparedRequestStates.get(prepared);
+}
+
+/**
  * Common shell for executing an Exchange API request:
  * acquires per-`(walletAddress × isTestnet)` lock, generates nonce, calls `build` to construct
  * the signed payload, sends to the Exchange endpoint, and validates the response.

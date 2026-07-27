@@ -61,11 +61,10 @@ export type SetReferrerResponse =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { canonicalize } from "../../../signing/mod.ts";
 import {
   type ExchangeConfig,
   type ExcludeErrorResponse,
+  buildAction,
   executeL1Action,
   type ExtractRequestOptions,
 } from "./_base/mod.ts";
@@ -119,9 +118,6 @@ export function setReferrer(
   params: SetReferrerParameters,
   opts?: SetReferrerOptions,
 ): Promise<SetReferrerSuccessResponse> {
-  const action = canonicalize(
-    SetReferrerActionSchema,
-    parse(SetReferrerActionSchema, { type: "setReferrer", ...params }),
-  );
+  const action = buildAction(SetReferrerActionSchema, { type: "setReferrer", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

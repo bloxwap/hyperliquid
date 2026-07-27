@@ -1,7 +1,8 @@
 import { type ApproveAgentParameters, ApproveAgentRequest, approveAgent } from "@bloxwap/hyperliquid/api/exchange";
 import * as v from "valibot";
-import { describe, test } from "bun:test";
-import { assertEquals } from "@jsr/std__assert";
+import { afterEach, describe, test } from "bun:test";
+import { assertEquals, assertThrows } from "@jsr/std__assert";
+import { ValidationError } from "@bloxwap/hyperliquid";
 import type { IRequestTransport } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
@@ -146,5 +147,77 @@ describe("approveAgent (offline)", () => {
     assertEquals(wrapper.type, "multiSig");
     const inner = (wrapper.payload as Record<string, unknown>).action as Record<string, unknown>;
     assertEquals("agentName" in inner, false);
+  });
+});
+
+// ============================================================
+// Offline: a `valid_until` expiration can be at most 180 days in the future (compared against
+// `Date.now()` at call time, so these tests freeze the clock); no expiration is not guarded
+// ============================================================
+
+const FROZEN = 1_700_000_000_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const realDateNow = Date.now;
+
+afterEach(() => {
+  Date.now = realDateNow;
+});
+
+describe("approveAgent expiration guard (offline)", () => {
+  test("valid_until exactly 180 days in the future passes", async () => {
+    Date.now = () => FROZEN;
+    const { transport, payloads } = recordingTransport();
+
+    await approveAgent(
+      { transport, wallet, signatureChainId: "0x66eee" },
+      { agentAddress: randomAddress(), agentName: `agent valid_until ${FROZEN + 180 * DAY_MS}` },
+    );
+
+    assertEquals(payloads.length, 1);
+  });
+
+  test("valid_until more than 180 days in the future is rejected before sending", () => {
+    Date.now = () => FROZEN;
+    const { transport, payloads } = recordingTransport();
+
+    assertThrows(
+      () =>
+        approveAgent(
+          { transport, wallet, signatureChainId: "0x66eee" },
+          { agentAddress: randomAddress(), agentName: `agent valid_until ${FROZEN + 180 * DAY_MS + 1}` },
+        ),
+      ValidationError,
+      "at most 180 days in the future",
+    );
+    assertEquals(payloads.length, 0);
+  });
+
+  test("the guard also runs on the skipValidation path", () => {
+    Date.now = () => FROZEN;
+    const { transport, payloads } = recordingTransport();
+
+    assertThrows(
+      () =>
+        approveAgent(
+          { transport, wallet, signatureChainId: "0x66eee" },
+          { agentAddress: randomAddress(), agentName: `agent valid_until ${FROZEN + 181 * DAY_MS}` },
+          { skipValidation: true },
+        ),
+      ValidationError,
+      "at most 180 days in the future",
+    );
+    assertEquals(payloads.length, 0);
+  });
+
+  test("a name without valid_until (no expiration) is not guarded", async () => {
+    Date.now = () => FROZEN;
+    const { transport, payloads } = recordingTransport();
+
+    await approveAgent(
+      { transport, wallet, signatureChainId: "0x66eee" },
+      { agentAddress: randomAddress(), agentName: "myAgent" },
+    );
+
+    assertEquals(payloads.length, 1);
   });
 });

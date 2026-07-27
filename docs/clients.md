@@ -208,9 +208,57 @@ const client = new ExchangeClient({
 {% hint style="warning" %}
 
 A custom `nonceManager` MUST return unique, monotonically increasing values per address — a plain
-`(address) => Date.now()` reintroduces same-millisecond collisions, and Hyperliquid rejects repeated or non-increasing
-nonces. When more than one process signs for the same wallet, back the manager with shared state (e.g. Redis). See
+`(address) => Date.now()` reintroduces same-millisecond collisions, and Hyperliquid only tracks the 100 highest
+nonces per user (rejecting repeats and anything outside that window). When more than one process signs for the same
+wallet, back the manager with shared state (e.g. Redis). See
 [Operational nonce rules](signing.md#operational-nonce-rules).
+
+{% endhint %}
+
+### Pre-signed payloads (sign now, submit later)
+
+`prepareRequest` builds a fully signed request **without sending it**; `submitPrepared` posts it later. A latency-critical
+flow (e.g. a tap-trading UI) can pre-sign a cancel-all and fire it with zero signing latency:
+
+```ts
+import { order, prepareRequest, submitPrepared } from "@bloxwap/hyperliquid/api/exchange";
+
+// Sign now — nothing is sent yet
+const prepared = await client.prepareRequest((config) => order(config, { orders: [/* ... */], grouping: "na" }));
+
+// Submit later, over any transport
+await client.submitPrepared(prepared);
+```
+
+The callback runs any Exchange method exactly as usual (validation, nonce issuance, signing) against a capture
+transport, and must issue exactly one request to the `exchange` endpoint. Exactly-one is enforced — synchronously
+recorded, fail-closed at finalize — for every attempt that reaches the capture transport before the callback's
+returned promise settles: any invalid attempt arriving within that window — a request to another endpoint or a
+second request — fails the whole `prepareRequest` call, even if the callback swallowed the rejection. The returned
+payload is the exact wire body (`{ action, signature, nonce, ... }`), works over both `HttpTransport` and
+`WebSocketTransport`, and must be submitted through the same network (testnet vs mainnet) it was signed for.
+
+Beyond callback settle, enforcement is **best-effort**:
+
+- An attempt that reaches the capture transport only after the callback settled — a floating (un-awaited) attempt
+  fired as the callback returns, whose signing path spans several microtasks past the settle microtask, or leaked
+  callback work beginning later (e.g. still awaiting a remote signer) — cannot be caught at prepare time; it
+  poisons the payload instead — the attempt's own promise rejects, and `submitPrepared` re-checks the poison flag
+  synchronously before posting and rejects a poisoned payload.
+- The poison guard is in-process only (a `WeakMap`): serializing and re-parsing a payload silently drops the
+  guard.
+- `submitPrepared`'s re-check is a point-in-time check, not a happens-before guarantee — an attempt landing after
+  the check but before or during the actual post is not caught.
+- A leaked attempt whose promise is discarded (`void client.order(...)`) rejects unobserved — an unhandled
+  rejection by definition. The rejection is delivered to the attempt's own promise; observing it is the leaker's
+  responsibility, not something the SDK can prevent.
+
+{% hint style="warning" %}
+
+The nonce is consumed at **prepare** time. The exchange tracks the 100 highest nonces per user: a prepared payload
+stays valid while its nonce is among them (and within the block-timestamp window) — another request consuming a
+later nonce does NOT invalidate it. The payload goes **stale** only once 100 newer nonces have been consumed.
+Prepare immediately before use anyway.
 
 {% endhint %}
 
@@ -336,3 +384,31 @@ await client.order({ orders: [/* ... */], grouping: "na" }, {
 
 Unlike [`Expiration`](#expiration), which is a server-side guard, cancellation aborts the request on the client side
 before or during delivery.
+
+### Skipping validation (unsafe)
+
+Every [`ExchangeClient`](#exchange-endpoint) call validates and normalizes its parameters before signing (a valibot
+parse + key canonicalization pass, ~1 µs). Trusted, performance-critical callers can opt out per request with
+`skipValidation`:
+
+```ts
+await client.order({ orders: [/* ... */], grouping: "na" }, {
+  skipValidation: true,
+});
+```
+
+{% hint style="danger" %}
+
+**Unsafe for untrusted input.** On this path the SDK performs no validation, normalization, default-filling, or key
+reordering — parameters are signed and posted exactly as given, so they must already be in canonical wire form:
+
+- object keys in schema-declared order (the signature commits to the encoded key order);
+- decimals as normalized strings (e.g. `"30000"`, not `3e4` or `"030000"`);
+- addresses and hex strings in lowercase;
+- every schema field with a default (e.g. `grouping: "na"`) provided explicitly.
+
+Invalid input is the caller's problem: instead of a client-side `ValidationError`, the server rejects the request —
+detecting that drift is the cost of the saved microseconds. Cheap deterministic guards for documented constraints
+(e.g. `scheduleCancel`'s 5-second lead time) still run.
+
+{% endhint %}
