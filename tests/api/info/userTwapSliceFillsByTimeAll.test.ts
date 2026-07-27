@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { InfoClient } from "@bloxwap/hyperliquid";
 import { userTwapSliceFillsByTimeAll } from "@bloxwap/hyperliquid/api/info";
 import { MockInfoTransport, scriptedPages } from "./_mockInfoTransport.ts";
 
@@ -37,5 +38,17 @@ describe("userTwapSliceFillsByTimeAll", () => {
 
     expect(result).toEqual([]);
     expect(transport.calls).toHaveLength(1);
+  });
+
+  test("is exposed on InfoClient with identical behavior", async () => {
+    const transport = new MockInfoTransport(scriptedPages([sliceFillsPage(0, PAGE), sliceFillsPage(PAGE, 7)]));
+    const client = new InfoClient({ transport });
+    const signal = new AbortController().signal;
+
+    const result = await client.userTwapSliceFillsByTimeAll({ user: USER, startTime: 0 }, { maxPages: 5 }, signal);
+
+    expect(result).toHaveLength(507);
+    expect(transport.calls.map((c) => (c.payload as { startTime: number }).startTime)).toEqual([0, 499]);
+    expect(transport.calls[0].signal).toBe(signal);
   });
 });

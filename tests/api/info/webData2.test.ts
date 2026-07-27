@@ -1,4 +1,5 @@
-import { type WebData2Parameters, WebData2Request } from "@bloxwap/hyperliquid/api/info";
+import { webData2, type WebData2Parameters, WebData2Request } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -54,4 +55,16 @@ runTest({
       "#/properties/spotState/properties/balances/items/anyOf/0/properties/supplied/present",
     ]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "webData2",
+  method: webData2,
+  signature: "params",
+  cases: [{ params: { user: "0x0000000000000000000000000000000000000001" } }],
+  invalidParams: [{ user: "0x123" }, {}],
 });

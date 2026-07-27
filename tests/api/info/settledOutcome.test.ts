@@ -1,4 +1,5 @@
-import { type SettledOutcomeParameters, SettledOutcomeRequest } from "@bloxwap/hyperliquid/api/info";
+import { settledOutcome, type SettledOutcomeParameters, SettledOutcomeRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -21,4 +22,16 @@ runTest({
       "#/anyOf/0/properties/spec/properties/sideSpecs/items/properties/token/present",
     ]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "settledOutcome",
+  method: settledOutcome,
+  signature: "params",
+  cases: [{ params: { outcome: 1 } }],
+  invalidParams: [{ outcome: -1 }, { outcome: "abc" }, {}],
 });

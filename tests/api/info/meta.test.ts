@@ -1,4 +1,5 @@
-import { type MetaParameters, MetaRequest } from "@bloxwap/hyperliquid/api/info";
+import { meta, type MetaParameters, MetaRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -19,4 +20,16 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "meta",
+  method: meta,
+  signature: "overloaded",
+  cases: [{ params: { dex: "test" } }],
+  invalidParams: [{ dex: 123 }],
 });

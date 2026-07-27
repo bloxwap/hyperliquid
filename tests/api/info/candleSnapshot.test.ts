@@ -1,4 +1,5 @@
-import { type CandleSnapshotParameters, CandleSnapshotRequest } from "@bloxwap/hyperliquid/api/info";
+import { candleSnapshot, type CandleSnapshotParameters, CandleSnapshotRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -37,4 +38,28 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "candleSnapshot",
+  method: candleSnapshot,
+  signature: "params",
+  cases: [
+    {
+      params: { coin: "ETH", interval: "1h", startTime: 1000 },
+      payload: { type: "candleSnapshot", req: { coin: "ETH", interval: "1h", startTime: 1000 } },
+    },
+    {
+      params: { coin: "ETH", interval: "1h", startTime: 1000, endTime: 2000 },
+      payload: { type: "candleSnapshot", req: { coin: "ETH", interval: "1h", startTime: 1000, endTime: 2000 } },
+    },
+  ],
+  invalidParams: [
+    { coin: 1, interval: "1h", startTime: 1000 },
+    { coin: "ETH", interval: "7m", startTime: 1000 },
+  ],
 });

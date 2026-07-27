@@ -1,4 +1,5 @@
-import { type RecentTradesParameters, RecentTradesRequest } from "@bloxwap/hyperliquid/api/info";
+import { recentTrades, type RecentTradesParameters, RecentTradesRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -19,4 +20,16 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data, ["#/items/properties/side/enum/0", "#/items/properties/side/enum/1"]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "recentTrades",
+  method: recentTrades,
+  signature: "params",
+  cases: [{ params: { coin: "ETH" } }],
+  invalidParams: [{ coin: 123 }, {}],
 });

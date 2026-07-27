@@ -1,4 +1,5 @@
-import { type TokenDetailsParameters, TokenDetailsRequest } from "@bloxwap/hyperliquid/api/info";
+import { tokenDetails, type TokenDetailsParameters, TokenDetailsRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -23,4 +24,16 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data, ["#/properties/genesis/anyOf/0/properties/blacklistUsers/array"]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "tokenDetails",
+  method: tokenDetails,
+  signature: "params",
+  cases: [{ params: { tokenId: "0x00000000000000000000000000000001" } }],
+  invalidParams: [{ tokenId: "0x123" }, { tokenId: "not-hex" }],
 });

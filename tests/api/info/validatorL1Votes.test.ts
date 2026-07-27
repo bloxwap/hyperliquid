@@ -1,3 +1,5 @@
+import { validatorL1Votes } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { runTest } from "./_t.ts";
@@ -21,4 +23,14 @@ runTest({
       "#/items/properties/action/anyOf/3",
     ]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "validatorL1Votes",
+  method: validatorL1Votes,
+  signature: "none",
 });

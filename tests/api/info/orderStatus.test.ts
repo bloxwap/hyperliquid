@@ -1,4 +1,5 @@
-import { type OrderStatusParameters, OrderStatusRequest } from "@bloxwap/hyperliquid/api/info";
+import { orderStatus, type OrderStatusParameters, OrderStatusRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -77,4 +78,25 @@ runTest({
       "#/anyOf/0/properties/order/properties/status/enum/28",
     ]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "orderStatus",
+  method: orderStatus,
+  signature: "params",
+  cases: [
+    { params: { user: "0x0000000000000000000000000000000000000001", oid: 12345 } },
+    // A cloid beyond the safe-integer range survives the UnsignedInteger arm of the union and
+    // reaches the wire as a string; smaller cloids parse as numbers by design.
+    { params: { user: "0x0000000000000000000000000000000000000001", oid: "0xffffffffffffffffffffffffffffffff" } },
+  ],
+  invalidParams: [
+    { user: "0x0000000000000000000000000000000000000001", oid: -1 },
+    { user: "0x0000000000000000000000000000000000000001", oid: "0xzz" },
+    { oid: 1 },
+  ],
 });

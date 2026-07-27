@@ -1,3 +1,5 @@
+import { perpConciseAnnotations } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { runTest } from "./_t.ts";
@@ -12,4 +14,14 @@ runTest({
 
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "perpConciseAnnotations",
+  method: perpConciseAnnotations,
+  signature: "none",
 });
