@@ -3,7 +3,7 @@
 ## Supported Versions
 
 This SDK is pre-`1.0.0` and ships fixes in new minor releases (see
-[Versioning](README.md#versioning)). Only the **latest minor release** receives security fixes — once `0.(N+1).x` is
+[Versioning](../README.md#versioning)). Only the **latest minor release** receives security fixes — once `0.(N+1).x` is
 published, `0.N.x` no longer gets patched. Always upgrade to the latest release for security fixes.
 
 ## For Issues in Hyperliquid

@@ -10,6 +10,9 @@ coverage/
 # Agent worktrees and local session state.
 .claude/
 
+# macOS Finder metadata.
+.DS_Store
+
 # Local secrets. Tests load `PRIVATE_KEY` from the environment, and Bun auto-loads `.env` —
 # a funded key must never be committable.
 .env

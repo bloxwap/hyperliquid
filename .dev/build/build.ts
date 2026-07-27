@@ -29,8 +29,8 @@ const DIST_DIR: string = join(ROOT_DIR, "dist");
 /** Build-only compiler configuration (emit enabled, tests excluded). See `./tsconfig.build.json`. */
 const BUILD_TSCONFIG: string = join(ROOT_DIR, ".dev/build/tsconfig.build.json");
 
-/** Documentation shipped inside the npm tarball. */
-const COPIED_FILES: readonly string[] = ["README.md", "LICENSE", "CONTRIBUTING.md", "SECURITY.md"];
+/** Consumer-facing documentation shipped inside the npm tarball. */
+const COPIED_FILES: readonly string[] = ["README.md", "LICENSE"];
 
 /** Root manifest keys copied verbatim into the emitted manifest. */
 const INHERITED_KEYS = [
