@@ -1,7 +1,7 @@
 # Table of contents
 
 * [README](README.md)
-* [@bloxwap/hyperliquid documentation](docs/README.md)
+* [@bloxwap/hyperliquid](docs/README.md)
   * [Documentation](docs/SUMMARY.md)
   * [Clients](docs/clients.md)
   * [Error handling](docs/error-handling.md)
