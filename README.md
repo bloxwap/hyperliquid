@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue&style=flat-square"></a>
   <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg?style=flat-square"></a>
-  <a href="https://coveralls.io/github/bloxwap/hyperliquid?branch=main"><img alt="Coverage status" src="https://img.shields.io/coverallsCoverage/github/bloxwap/hyperliquid?branch=main&style=flat-square"></a>
+  <a href="https://codecov.io/gh/bloxwap/hyperliquid"><img alt="Codecov coverage" src="https://img.shields.io/codecov/c/github/bloxwap/hyperliquid?branch=main&style=flat-square"></a>
   <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid?style=flat-square"></a>
 </p>
 
@@ -146,7 +146,3 @@ await subs.l2Book({ coin: "ETH" }, (data) => {
 > - For trading bots, prefer a Hyperliquid **agent wallet** (API wallet) over the master account key: an agent key can
 >   trade but cannot withdraw, and it can be revoked without rotating the master key.
 > - See [Signing](docs/signing.md) for how wallets, signatures, and nonces work.
-
-## Documentation
-
-Full guides, examples, and API reference: [nktkas.gitbook.io/hyperliquid](https://nktkas.gitbook.io/hyperliquid)
