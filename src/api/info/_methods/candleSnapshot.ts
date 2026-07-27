@@ -85,6 +85,7 @@ export type CandleSnapshotParameters = v.InferInput<typeof CandleSnapshotRequest
  * Request candlestick snapshots.
  *
  * Only the most recent 5000 candles are available.
+ * To paginate through a range that exceeds one response, use {@linkcode candleSnapshotAll}.
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.

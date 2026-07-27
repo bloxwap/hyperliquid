@@ -24,7 +24,26 @@ export const UserEventsRequest = /* @__PURE__ */ (() => {
 export type UserEventsRequest = v.InferOutput<typeof UserEventsRequest>;
 
 /**
+ * A user event variant this SDK version does not (yet) know about.
+ *
+ * Hyperliquid extends `userEvents` with new variants over time. An unrecognized variant is
+ * delivered to the listener with its raw payload untouched — it is never dropped or misparsed.
+ *
+ * Typed as an opaque object on purpose: a `{ [variant: string]: unknown }` index signature would
+ * merge into every `"fills" in event`-style narrowing and erase the known variants' payload types
+ * (`event.fills` would degrade to `unknown`). With an opaque catch-all, `in`-narrowing keeps
+ * resolving known variants to their full types, and only the final `else` sees this member.
+ * Use `Object.entries(event)` or a cast to inspect the raw payload.
+ *
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
+ */
+export type UnknownUserEvent = object;
+
+/**
  * Event of one of possible user events.
+ *
+ * Server-extensible: the union ends in an {@linkcode UnknownUserEvent} catch-all, so a variant
+ * added server-side before this SDK names it still type-checks and reaches the listener.
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
  */
 export type UserEventsEvent =
@@ -101,7 +120,8 @@ export type UserEventsEvent =
   | {
       /** Array of user's TWAP slice fills. */
       twapSliceFills: UserTwapSliceFillsResponse;
-    };
+    }
+  | UnknownUserEvent;
 
 // ============================================================
 // Execution Logic

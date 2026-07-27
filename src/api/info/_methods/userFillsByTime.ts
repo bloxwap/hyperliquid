@@ -49,7 +49,7 @@ export type UserFillsByTimeParameters = Omit<v.InferInput<typeof UserFillsByTime
  * Request array of user fills by time.
  *
  * Returns at most 2000 fills per response; only the 10000 most recent fills are available.
- * To paginate, use the last returned timestamp as the next startTime.
+ * To fetch a larger range, use {@linkcode userFillsByTimeAll}, which paginates automatically.
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.

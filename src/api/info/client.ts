@@ -3,7 +3,7 @@
  * @module
  */
 
-import type { InfoConfig } from "./_methods/_base/mod.ts";
+import type { InfoConfig, PaginationOptions } from "./_methods/_base/mod.ts";
 
 // ============================================================
 // Methods Imports
@@ -40,6 +40,7 @@ import {
   type CandleSnapshotParameters,
   type CandleSnapshotResponse,
 } from "./_methods/candleSnapshot.ts";
+import { candleSnapshotAll, type CandleSnapshotAllParameters } from "./_methods/candleSnapshotAll.ts";
 import {
   clearinghouseState,
   type ClearinghouseStateParameters,
@@ -73,6 +74,7 @@ import {
   type FundingHistoryParameters,
   type FundingHistoryResponse,
 } from "./_methods/fundingHistory.ts";
+import { fundingHistoryAll, type FundingHistoryAllParameters } from "./_methods/fundingHistoryAll.ts";
 import {
   gossipPriorityAuctionStatus,
   type GossipPriorityAuctionStatusResponse,
@@ -172,12 +174,17 @@ import {
   type UserFillsByTimeParameters,
   type UserFillsByTimeResponse,
 } from "./_methods/userFillsByTime.ts";
+import { userFillsByTimeAll, type UserFillsByTimeAllParameters } from "./_methods/userFillsByTimeAll.ts";
 import { userFunding, type UserFundingParameters, type UserFundingResponse } from "./_methods/userFunding.ts";
 import {
   userNonFundingLedgerUpdates,
   type UserNonFundingLedgerUpdatesParameters,
   type UserNonFundingLedgerUpdatesResponse,
 } from "./_methods/userNonFundingLedgerUpdates.ts";
+import {
+  userNonFundingLedgerUpdatesAll,
+  type UserNonFundingLedgerUpdatesAllParameters,
+} from "./_methods/userNonFundingLedgerUpdatesAll.ts";
 import { userRateLimit, type UserRateLimitParameters, type UserRateLimitResponse } from "./_methods/userRateLimit.ts";
 import { userRole, type UserRoleParameters, type UserRoleResponse } from "./_methods/userRole.ts";
 import {
@@ -195,6 +202,10 @@ import {
   type UserTwapSliceFillsByTimeParameters,
   type UserTwapSliceFillsByTimeResponse,
 } from "./_methods/userTwapSliceFillsByTime.ts";
+import {
+  userTwapSliceFillsByTimeAll,
+  type UserTwapSliceFillsByTimeAllParameters,
+} from "./_methods/userTwapSliceFillsByTimeAll.ts";
 import {
   userVaultEquities,
   type UserVaultEquitiesParameters,
@@ -430,6 +441,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * Request candlestick snapshots.
    *
    * Only the most recent 5000 candles are available.
+   * To paginate through a range that exceeds one response, use {@linkcode candleSnapshotAll}.
    *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
@@ -456,6 +468,51 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   candleSnapshot(params: CandleSnapshotParameters, signal?: AbortSignal): Promise<CandleSnapshotResponse> {
     return candleSnapshot(this.config_, params, signal);
+  }
+
+  /**
+   * Request candlestick snapshots over a time range, automatically paginating until the range is exhausted.
+   *
+   * Repeatedly calls {@linkcode candleSnapshot}, re-requesting from the last returned candle's
+   * opening time (`startTime` is inclusive) after each full page — the overlap is discarded,
+   * matched by the candle's opening time `t` (exactly one candle exists per interval per opening
+   * time) — and concatenates the pages. Stops at the first short page, when `options.maxPages`
+   * pages have been fetched, or when a page contributes nothing new, so a misbehaving server
+   * causes neither duplicates nor an infinite loop.
+   *
+   * Note: only the most recent 5000 candles are available from the server — that window is an
+   * availability limit, not a pagination cap, so older history cannot be reached by paginating.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Array of candlestick data points.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * const data = await client.candleSnapshotAll({
+   *   coin: "ETH",
+   *   interval: "1h",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#candle-snapshot
+   */
+  candleSnapshotAll(
+    params: CandleSnapshotAllParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): Promise<CandleSnapshotResponse> {
+    return candleSnapshotAll(this.config_, params, options, signal);
   }
 
   /**
@@ -668,6 +725,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   /**
    * Request funding history.
    *
+   * Returns at most 500 records per response.
+   * To fetch a larger range, use {@linkcode fundingHistoryAll}, which paginates automatically.
+   *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
    * @return Array of historical funding rate records for an asset.
@@ -692,6 +752,47 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   fundingHistory(params: FundingHistoryParameters, signal?: AbortSignal): Promise<FundingHistoryResponse> {
     return fundingHistory(this.config_, params, signal);
+  }
+
+  /**
+   * Request all funding history, automatically paginating through the server's 500-records-per-response cap.
+   *
+   * Repeatedly calls {@linkcode fundingHistory}, re-requesting from the last returned timestamp
+   * (`startTime` is inclusive) after each full page — the overlap is discarded, matched by the
+   * record's `time` (there is exactly one funding record per coin per funding interval) — and
+   * concatenates the pages. Stops at the first short page, when `options.maxPages` pages have been
+   * fetched, or when a page contributes nothing new, so a misbehaving server causes neither
+   * duplicates nor an infinite loop.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Array of historical funding rate records for an asset.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * const data = await client.fundingHistoryAll({
+   *   coin: "ETH",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-historical-funding-rates
+   */
+  fundingHistoryAll(
+    params: FundingHistoryAllParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): Promise<FundingHistoryResponse> {
+    return fundingHistoryAll(this.config_, params, options, signal);
   }
 
   /**
@@ -746,6 +847,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
 
   /**
    * Request user historical orders.
+   *
+   * Returns at most 2000 most recent historical orders; the endpoint accepts no time range,
+   * so it cannot be paginated.
    *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
@@ -1863,7 +1967,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * Request array of user fills by time.
    *
    * Returns at most 2000 fills per response; only the 10000 most recent fills are available.
-   * To paginate, use the last returned timestamp as the next startTime.
+   * To fetch a larger range, use {@linkcode userFillsByTimeAll}, which paginates automatically.
    *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
@@ -1889,6 +1993,48 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   userFillsByTime(params: UserFillsByTimeParameters, signal?: AbortSignal): Promise<UserFillsByTimeResponse> {
     return userFillsByTime(this.config_, params, signal);
+  }
+
+  /**
+   * Request all user fills by time, automatically paginating through the server's 2000-fills-per-response cap.
+   *
+   * Repeatedly calls {@linkcode userFillsByTime}, re-requesting from the last returned timestamp
+   * (`startTime` is inclusive) after each full page — the overlap is discarded, matched by fill
+   * `tid`, which is unique per fill — and concatenates the pages. Stops at the first short page,
+   * when `options.maxPages` pages have been fetched, or when a page contributes nothing new, so a
+   * misbehaving server causes neither duplicates nor an infinite loop.
+   *
+   * Note: only the 10000 most recent fills are available from the server, regardless of pagination.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Array of user trade fills by time.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * const data = await client.userFillsByTimeAll({
+   *   user: "0x...",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-fills-by-time
+   */
+  userFillsByTimeAll(
+    params: UserFillsByTimeAllParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): Promise<UserFillsByTimeResponse> {
+    return userFillsByTimeAll(this.config_, params, options, signal);
   }
 
   /**
@@ -1920,6 +2066,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   /**
    * Request user non-funding ledger updates.
    *
+   * The response is capped per request for a given time range.
+   * To fetch a larger range, use {@linkcode userNonFundingLedgerUpdatesAll}, which paginates automatically.
+   *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
    * @return Array of user's non-funding ledger update.
@@ -1944,6 +2093,47 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     signal?: AbortSignal,
   ): Promise<UserNonFundingLedgerUpdatesResponse> {
     return userNonFundingLedgerUpdates(this.config_, params, signal);
+  }
+
+  /**
+   * Request all user non-funding ledger updates, automatically paginating through the server's per-response cap.
+   *
+   * Repeatedly calls {@linkcode userNonFundingLedgerUpdates}, re-requesting from the last returned
+   * timestamp (`startTime` is inclusive) after each full page — the overlap is discarded, matched
+   * by the update's L1 transaction `hash` and `time` (one L1 transaction produces at most one
+   * non-funding ledger update per user) — and concatenates the pages. Stops at the first short
+   * page, when `options.maxPages` pages have been fetched, or when a page contributes nothing new,
+   * so a misbehaving server causes neither duplicates nor an infinite loop.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Array of user's non-funding ledger update.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * const data = await client.userNonFundingLedgerUpdatesAll({
+   *   user: "0x...",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-a-users-funding-history-or-non-funding-ledger-updates
+   */
+  userNonFundingLedgerUpdatesAll(
+    params: UserNonFundingLedgerUpdatesAllParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): Promise<UserNonFundingLedgerUpdatesResponse> {
+    return userNonFundingLedgerUpdatesAll(this.config_, params, options, signal);
   }
 
   /**
@@ -2056,6 +2246,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   /**
    * Request user TWAP slice fills by time.
    *
+   * The response is capped per request for a given time range.
+   * To fetch a larger range, use {@linkcode userTwapSliceFillsByTimeAll}, which paginates automatically.
+   *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
    * @return Array of user's TWAP slice fill by time.
@@ -2083,6 +2276,46 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     signal?: AbortSignal,
   ): Promise<UserTwapSliceFillsByTimeResponse> {
     return userTwapSliceFillsByTime(this.config_, params, signal);
+  }
+
+  /**
+   * Request all user TWAP slice fills by time, automatically paginating through the server's per-response cap.
+   *
+   * Repeatedly calls {@linkcode userTwapSliceFillsByTime}, re-requesting from the last returned
+   * timestamp (`startTime` is inclusive) after each full page — the overlap is discarded, matched
+   * by the nested fill's `tid`, which is unique per fill — and concatenates the pages. Stops at the
+   * first short page, when `options.maxPages` pages have been fetched, or when a page contributes
+   * nothing new, so a misbehaving server causes neither duplicates nor an infinite loop.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Array of user's TWAP slice fill by time.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * const data = await client.userTwapSliceFillsByTimeAll({
+   *   user: "0x...",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-twap-slice-fills
+   */
+  userTwapSliceFillsByTimeAll(
+    params: UserTwapSliceFillsByTimeAllParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): Promise<UserTwapSliceFillsByTimeResponse> {
+    return userTwapSliceFillsByTimeAll(this.config_, params, options, signal);
   }
 
   /**
@@ -2258,6 +2491,7 @@ export type {
 } from "./_methods/borrowLendReserveState.ts";
 export type { BorrowLendUserStateParameters, BorrowLendUserStateResponse } from "./_methods/borrowLendUserState.ts";
 export type { CandleSnapshotParameters, CandleSnapshotResponse } from "./_methods/candleSnapshot.ts";
+export type { CandleSnapshotAllParameters } from "./_methods/candleSnapshotAll.ts";
 export type { ClearinghouseStateParameters, ClearinghouseStateResponse } from "./_methods/clearinghouseState.ts";
 export type { DelegationsParameters, DelegationsResponse } from "./_methods/delegations.ts";
 export type { DelegatorHistoryParameters, DelegatorHistoryResponse } from "./_methods/delegatorHistory.ts";
@@ -2267,6 +2501,7 @@ export type { ExchangeStatusResponse } from "./_methods/exchangeStatus.ts";
 export type { ExtraAgentsParameters, ExtraAgentsResponse } from "./_methods/extraAgents.ts";
 export type { FrontendOpenOrdersParameters, FrontendOpenOrdersResponse } from "./_methods/frontendOpenOrders.ts";
 export type { FundingHistoryParameters, FundingHistoryResponse } from "./_methods/fundingHistory.ts";
+export type { FundingHistoryAllParameters } from "./_methods/fundingHistoryAll.ts";
 export type { GossipPriorityAuctionStatusResponse } from "./_methods/gossipPriorityAuctionStatus.ts";
 export type { GossipRootIpsResponse } from "./_methods/gossipRootIps.ts";
 export type { HistoricalOrdersParameters, HistoricalOrdersResponse } from "./_methods/historicalOrders.ts";
@@ -2324,11 +2559,13 @@ export type {
 export type { UserFeesParameters, UserFeesResponse } from "./_methods/userFees.ts";
 export type { UserFillsParameters, UserFillsResponse } from "./_methods/userFills.ts";
 export type { UserFillsByTimeParameters, UserFillsByTimeResponse } from "./_methods/userFillsByTime.ts";
+export type { UserFillsByTimeAllParameters } from "./_methods/userFillsByTimeAll.ts";
 export type { UserFundingParameters, UserFundingResponse } from "./_methods/userFunding.ts";
 export type {
   UserNonFundingLedgerUpdatesParameters,
   UserNonFundingLedgerUpdatesResponse,
 } from "./_methods/userNonFundingLedgerUpdates.ts";
+export type { UserNonFundingLedgerUpdatesAllParameters } from "./_methods/userNonFundingLedgerUpdatesAll.ts";
 export type { UserRateLimitParameters, UserRateLimitResponse } from "./_methods/userRateLimit.ts";
 export type { UserRoleParameters, UserRoleResponse } from "./_methods/userRole.ts";
 export type {
@@ -2340,6 +2577,7 @@ export type {
   UserTwapSliceFillsByTimeParameters,
   UserTwapSliceFillsByTimeResponse,
 } from "./_methods/userTwapSliceFillsByTime.ts";
+export type { UserTwapSliceFillsByTimeAllParameters } from "./_methods/userTwapSliceFillsByTimeAll.ts";
 export type { UserVaultEquitiesParameters, UserVaultEquitiesResponse } from "./_methods/userVaultEquities.ts";
 export type { ValidatorL1VotesResponse } from "./_methods/validatorL1Votes.ts";
 export type { ValidatorSummariesResponse } from "./_methods/validatorSummaries.ts";
