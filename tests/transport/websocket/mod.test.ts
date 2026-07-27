@@ -164,6 +164,22 @@ describe("WebSocketTransport", () => {
     await subscription.unsubscribe();
   });
 
+  test("resubscribe and timeout accessors proxy to the subscription manager and dispatcher", async () => {
+    await using transport = createTransport(url);
+
+    assertEquals(transport.resubscribe, true); // default
+    transport.resubscribe = false;
+    assertEquals(transport.resubscribe, false);
+    transport.resubscribe = true;
+    assertEquals(transport.resubscribe, true);
+
+    assertEquals(transport.timeout, 10_000); // default
+    transport.timeout = 5_000;
+    assertEquals(transport.timeout, 5_000);
+    transport.timeout = null; // disabled
+    assertEquals(transport.timeout, null);
+  });
+
   describe("ready()", () => {
     test("resolves immediately if already open", async () => {
       await using transport = createTransport(url);

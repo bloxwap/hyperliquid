@@ -8,6 +8,7 @@ import {
   ReconnectingWebSocket,
   ReconnectingWebSocketError,
 } from "../../../src/transport/websocket/_reconnectingSocket.ts";
+import { RealCloseEvent } from "../../_noCloseEvent.ts";
 
 /** In-memory ReconnectingWebSocket stand-in: records frames out, replays frames in. */
 // @ts-expect-error: Mocking WebSocket for testing purposes
@@ -30,7 +31,7 @@ export class MockWebSocket extends EventTarget implements ReconnectingWebSocket 
   /** Network drop: rews reports CONNECTING for any reconnection phase. */
   disconnect(): void {
     this.readyState = ReconnectingWebSocket.CONNECTING;
-    this.dispatchEvent(new CloseEvent("close", { code: 1006 }));
+    this.dispatchEvent(new RealCloseEvent("close", { code: 1006 }));
   }
 
   /** Failed connection attempt: rews reports CONNECTING when `error` fires. */
@@ -52,7 +53,7 @@ export class MockWebSocket extends EventTarget implements ReconnectingWebSocket 
     if (this.terminationSignal.aborted) return;
     this.terminationController.abort(new ReconnectingWebSocketError("TERMINATED_BY_USER", cause));
     this.readyState = ReconnectingWebSocket.CLOSED;
-    this.dispatchEvent(new CloseEvent("close", { code: 1006 }));
+    this.dispatchEvent(new RealCloseEvent("close", { code: 1006 }));
   }
 
   /** Replays a server frame to every listener. */
