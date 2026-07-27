@@ -5,5 +5,5 @@
 minimumReleaseAge = 259200
 
 [test]
-# Test files should not count toward the library's coverage numbers.
-coveragePathIgnorePatterns = ["tests/"]
+# Test and development tooling files should not count toward the library's coverage numbers.
+coveragePathIgnorePatterns = ["tests/**", ".dev/**"]
