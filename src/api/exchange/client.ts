@@ -694,6 +694,9 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * Signing: L1 Action.
    *
+   * Rate limit: this batched action costs `1 + floor(cancels.length / 40)` weight of the shared
+   * per-IP REST budget (1200 weight/minute) — a batch of 40+ cancels costs 2 weight, 80+ costs 3.
+   *
    * @param params Parameters specific to the API request.
    * @param opts Request execution options.
    * @return Successful variant of {@link CancelResponse} without error statuses.
@@ -1274,6 +1277,9 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * Place an order(s).
    *
    * Signing: L1 Action.
+   *
+   * Rate limit: this batched action costs `1 + floor(orders.length / 40)` weight of the shared
+   * per-IP REST budget (1200 weight/minute) — a batch of 40+ orders costs 2 weight, 80+ costs 3.
    *
    * @param params Parameters specific to the API request.
    * @param opts Request execution options.

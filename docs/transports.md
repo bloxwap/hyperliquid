@@ -94,6 +94,61 @@ const transport = new HttpTransport({
 
 Pass `null` to disable the timeout for exchange requests only. Like `timeout`, the field is mutable on the instance.
 
+### Rate limiting
+
+Hyperliquid budgets REST requests at **1200 weight per minute per IP**; going over yields HTTP 429, and repeated
+violations get the IP banned. An exchange request costs `1 + floor(batchLength / 40)` — unbatched actions cost 1, a
+batch of 40–79 orders (or cancels) costs 2, 80–119 costs 3. Info endpoints cost 2–60 weight and explorer requests 40
+(see [Rate limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits) for the full table).
+
+`rateLimit` opts `HttpTransport` into a client-side token bucket paced to that budget: every request acquires its
+weight before sending and **waits** while the bucket is empty instead of failing with a 429 after the fact:
+
+```ts
+import { HttpTransport } from "@bloxwap/hyperliquid";
+
+const transport = new HttpTransport({
+  rateLimit: { capacity: 1200, refillPerMinute: 1200 }, // the defaults, shown for clarity
+});
+```
+
+The limiter bills the documented weights:
+
+| Request                                                                                                             | Weight                                                                                |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `info`: `l2Book`, `allMids`, `clearinghouseState`, `orderStatus`, `spotClearinghouseState`, `exchangeStatus`        | 2                                                                                     |
+| `info`: any other documented request                                                                                | 20                                                                                    |
+| `info`: `userRole`                                                                                                  | 60                                                                                    |
+| `explorer`                                                                                                          | 40                                                                                    |
+| `exchange`                                                                                                          | `1 + floor(batchLength / 40)`                                                         |
+
+The exchange batch length is read from the action's `orders`/`cancels`/`modifies` array, unwrapping multi-sig
+actions (the batch lives inside `action.payload.action`). Those three keys are the documented batch subset — other
+actions carry arrays that are not batch-billed (`spotDeploy`/`perpDeploy` payloads, the multi-sig `signatures`
+array), so the limiter deliberately does not bill by a generic "first array" rule; whether the protocol's
+`batch_length` covers anything more is tracked in [issue #49](https://github.com/bloxwap/hyperliquid/issues/49).
+
+Response-size surcharges can only be known once the response arrives, so they are debited from the bucket **after**
+the response: 1 extra weight per 20 returned items on the documented list endpoints (`recentTrades`, `userFills`,
+`historicalOrders`, …), per 60 on `candleSnapshot`, and per returned block on explorer `blockList`. Later requests
+then wait off the real cost rather than the estimate the request was sent with. One caveat: the official docs warn
+that older `blockList` blocks "may be weighted more heavily" server-side, so the +1-per-block debit is exact only
+for recent blocks.
+
+- The wait happens before the request timeout is armed, so throttling never trips `timeout` / `exchangeTimeout`;
+  aborting the request's signal cancels the wait instead — an aborted request never reaches the wire.
+- The limiter is off by default; without `rateLimit` the transport never delays a request client-side.
+
+**The limiter is per `HttpTransport` instance.** It tracks only the requests it sends itself — other transport
+instances, other processes, and other machines behind the same IP do not coordinate, yet they all share the same
+1200 weight/minute budget. Treat it as best-effort local throttling, not a guarantee against 429s: bursts that
+exceed what one instance can see still hit the server limit, and there is no endpoint that reports the IP bucket's
+state. Handle [`HttpRateLimitError`](error-handling.md#httpratelimiterror) (which carries `status` and, when the
+server sends a `Retry-After` header, a `retryAfter` hint in seconds) as the backstop.
+
+The separate **address-based** limits (requests allowed per user, growing with cumulative trading volume) are what
+the [`userRateLimit`](clients.md) info method reports — it has no view of the shared per-IP weight budget either.
+
 ## WebSocket
 
 `WebSocketTransport` opens one connection and reuses it, shaving a little latency off each request and allows using the

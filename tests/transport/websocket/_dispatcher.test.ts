@@ -83,6 +83,26 @@ describe("WebSocketDispatcher", () => {
         assertEquals((err as WebSocketRequestError).request, { test: true });
       });
 
+      test("error carries a redacted copy of a signed payload; the frame keeps the real signature", async () => {
+        const { socket, requester } = createRequester();
+        const signedPayload = {
+          action: { type: "order", orders: [{ a: 0, b: true }] },
+          signature: { r: `0x${"1".repeat(64)}`, s: `0x${"2".repeat(64)}`, v: 27 },
+          nonce: 12345,
+        };
+
+        const promise = requester.request("post", signedPayload);
+        const sent = getLastSent(socket);
+        assertEquals(sent.request, signedPayload); // the wire keeps the real signature
+
+        socket.mockMessage(RESPONSES.error(sent.id as number, "Operation failed"));
+        const err = await assertRejects(() => promise, WebSocketRequestError, "Operation failed");
+        const redacted = (err as WebSocketRequestError).request as Record<string, unknown>;
+        assertEquals(redacted.signature, "0x<redacted>");
+        assertEquals(redacted.action, signedPayload.action);
+        assertEquals(signedPayload.signature.v, 27); // the caller's object was never mutated
+      });
+
       test("rejects on error channel", async () => {
         const { socket, requester } = createRequester();
 
