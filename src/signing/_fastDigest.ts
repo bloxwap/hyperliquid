@@ -14,8 +14,13 @@
 
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { keccak256 } from "./_keccak.ts";
 
 const ENCODER = new TextEncoder();
+
+// The module-level constants hash through noble's `keccak_256` directly, NOT the `keccak256`
+// dispatch: they run at module load, when the WASM provider can never be ready, and dispatching
+// here would kick the background load for users who never hash a single action.
 
 /** Typehash of the fixed `EIP712Domain` type. */
 const EIP712_DOMAIN_TYPEHASH = keccak_256(
@@ -52,16 +57,29 @@ const SOURCE_HASH_TESTNET = keccak_256(ENCODER.encode("b"));
  * @return The 32-byte digest as a hex string, byte-identical to viem's `hashTypedData`.
  */
 export function createL1AgentDigest(actionHash: `0x${string}`, isTestnet: boolean): `0x${string}` {
+  return `0x${bytesToHex(createL1AgentDigestBytes(hexToBytes(actionHash.slice(2)), isTestnet))}`;
+}
+
+/**
+ * Bytes-level variant of {@linkcode createL1AgentDigest}: takes the action hash and returns the
+ * digest as `Uint8Array`, so the L1 signing path passes bytes end-to-end instead of round-tripping
+ * through hex. Package-internal — not re-exported from `mod.ts`.
+ *
+ * @param actionHash The 32-byte L1 action hash, used as the `connectionId`.
+ * @param isTestnet Selects the `source` value (`"b"` for testnet, `"a"` for mainnet).
+ * @return The 32-byte digest, byte-identical to viem's `hashTypedData`.
+ */
+export function createL1AgentDigestBytes(actionHash: Uint8Array, isTestnet: boolean): Uint8Array {
   const struct = new Uint8Array(32 * 3);
   struct.set(AGENT_TYPEHASH, 0);
   struct.set(isTestnet ? SOURCE_HASH_TESTNET : SOURCE_HASH_MAINNET, 32);
-  struct.set(hexToBytes(actionHash.slice(2)), 64);
-  const structHash = keccak_256(struct);
+  struct.set(actionHash, 64);
+  const structHash = keccak256(struct);
 
   const digest = new Uint8Array(2 + 32 + 32);
   digest[0] = 0x19;
   digest[1] = 0x01;
   digest.set(L1_DOMAIN_SEPARATOR, 2);
   digest.set(structHash, 34);
-  return `0x${bytesToHex(keccak_256(digest))}`;
+  return keccak256(digest);
 }

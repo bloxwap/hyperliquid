@@ -3,10 +3,10 @@
  * @module
  */
 
-import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { type AbstractWallet, type Signature, signRawDigest, signTypedData } from "./_abstractWallet.ts";
-import { createL1AgentDigest } from "./_fastDigest.ts";
+import { type AbstractWallet, type Signature, signRawDigestBytes, signTypedData } from "./_abstractWallet.ts";
+import { createL1AgentDigestBytes } from "./_fastDigest.ts";
+import { keccak256 } from "./_keccak.ts";
 import { MsgpackWriter } from "./_msgpack.ts";
 import { trimSignature } from "./_multiSig.ts";
 
@@ -82,6 +82,27 @@ export function createL1ActionHash(args: {
   /** Optional expiration time of the action in ms since the epoch. */
   expiresAfter?: number;
 }): `0x${string}` {
+  return `0x${bytesToHex(createL1ActionHashBytes(args))}`;
+}
+
+/**
+ * Bytes-level variant of {@linkcode createL1ActionHash}: returns the 32-byte hash as `Uint8Array`,
+ * so the L1 signing path passes bytes end-to-end (hash → Agent digest → raw-digest wallet) instead
+ * of round-tripping through hex. Package-internal — not re-exported from `mod.ts`.
+ *
+ * @param args The action and metadata to hash.
+ * @return The 32-byte keccak256 hash.
+ */
+export function createL1ActionHashBytes(args: {
+  /** The action to be hashed (hash depends on key order). */
+  action: Record<string, unknown> | unknown[];
+  /** The current timestamp in ms. */
+  nonce: number;
+  /** Optional vault address used in the action. */
+  vaultAddress?: `0x${string}`;
+  /** Optional expiration time of the action in ms since the epoch. */
+  expiresAfter?: number;
+}): Uint8Array {
   const { action, nonce, vaultAddress, expiresAfter } = args;
 
   const nested = ACTION_WRITER_BUSY;
@@ -105,8 +126,8 @@ export function createL1ActionHash(args: {
       writer.uint64(expiresAfter);
     }
 
-    // `view()` aliases the writer's buffer; nothing writes to it again before `keccak_256` consumes it.
-    return `0x${bytesToHex(keccak_256(writer.view()))}`;
+    // `view()` aliases the writer's buffer; nothing writes to it again before `keccak256` consumes it.
+    return keccak256(writer.view());
   } finally {
     ACTION_WRITER_BUSY = nested;
   }
@@ -266,17 +287,17 @@ export async function signL1Action<TAction extends Record<string, unknown> | unk
   expiresAfter?: number;
 }): Promise<Signature> {
   const { wallet, action, nonce, isTestnet = false, vaultAddress, expiresAfter } = args;
-  const actionHash = createL1ActionHash({ action, nonce, vaultAddress, expiresAfter });
+  const actionHashBytes = createL1ActionHashBytes({ action, nonce, vaultAddress, expiresAfter });
   // No try/catch in scope: return the promise directly instead of paying an extra async hop.
-  return signL1ActionHash({ wallet, actionHash, isTestnet });
+  return signL1ActionHash({ wallet, actionHashBytes, isTestnet });
 }
 
 /** Signs a precomputed L1 action hash as the `connectionId` of an `Agent` message. */
 async function signL1ActionHash(args: {
   /** Wallet to sign the hash. */
   wallet: AbstractWallet;
-  /** The precomputed action hash. */
-  actionHash: `0x${string}`;
+  /** The precomputed 32-byte action hash. */
+  actionHashBytes: Uint8Array;
   /**
    * Indicates if the action is for the testnet.
    *
@@ -284,13 +305,17 @@ async function signL1ActionHash(args: {
    */
   isTestnet?: boolean;
 }): Promise<Signature> {
-  const { wallet, actionHash, isTestnet = false } = args;
+  const { wallet, actionHashBytes, isTestnet = false } = args;
 
   // Fast path: a wallet that can sign a raw digest (viem local accounts expose `sign`) signs the
   // hand-rolled Agent digest directly and skips viem's whole EIP-712 encoding. The digest is
-  // byte-identical — the differential test pins it against viem's `hashTypedData`. Wallets without
-  // the capability (every JSON-RPC wallet) fall through to the unchanged typed-data path.
-  const fast = await signRawDigest({ wallet, digest: createL1AgentDigest(actionHash, isTestnet) });
+  // byte-identical — the differential test pins it against viem's `hashTypedData`. The thunk keeps
+  // it lazy: wallets without the capability (every JSON-RPC wallet) fall through to the unchanged
+  // typed-data path without paying for a digest they would discard.
+  const fast = await signRawDigestBytes({
+    wallet,
+    digest: () => createL1AgentDigestBytes(actionHashBytes, isTestnet),
+  });
   if (fast !== undefined) return fast;
 
   return signTypedData({
@@ -300,7 +325,7 @@ async function signL1ActionHash(args: {
     primaryType: "Agent",
     message: {
       source: isTestnet ? "b" : "a",
-      connectionId: actionHash,
+      connectionId: `0x${bytesToHex(actionHashBytes)}`,
     },
   });
 }
@@ -331,7 +356,7 @@ export async function signL1Inner(args: {
 }): Promise<Signature> {
   const signature = await signL1ActionHash({
     wallet: args.signer,
-    actionHash: args.actionHash,
+    actionHashBytes: hexToBytes(args.actionHash.slice(2)),
     isTestnet: args.isTestnet,
   });
   return trimSignature(signature);

@@ -22,7 +22,12 @@
 
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { type AbstractViemLocalAccount, AbstractWalletError } from "./_abstractWallet.ts";
+import {
+  type AbstractViemLocalAccount,
+  AbstractWalletError,
+  type DigestBytesCapable,
+  SIGN_DIGEST_BYTES,
+} from "./_abstractWallet.ts";
 
 /** The subset of the `tiny-secp256k1` API the fast wallet relies on (validated after import). */
 interface TinySecp256k1 {
@@ -163,18 +168,25 @@ export async function createFastLocalWallet(
     return delegate;
   };
 
-  return {
+  // libsecp256k1 signs RFC 6979 deterministically and normalizes to low-S, flipping the
+  // recovery id on normalization — the same output noble produces with `lowS: true`, so the
+  // 65-byte layout is byte-identical to viem's `sign`. `v` keeps only the parity bit: the
+  // overflow bit (recoveryId 2/3) is unrepresentable in Ethereum's 27/28 scheme.
+  const signDigestBytes = (digest: Uint8Array): `0x${string}` => {
+    const { signature, recoveryId } = ecc.signRecoverable(digest, privateKeyBytes);
+    return `0x${bytesToHex(signature)}${(27 + (recoveryId & 1)).toString(16)}`;
+  };
+
+  const account: AbstractViemLocalAccount & DigestBytesCapable = {
     address: deriveAddress(ecc, privateKeyBytes),
     async sign({ hash }: { hash: `0x${string}` }): Promise<`0x${string}`> {
-      // libsecp256k1 signs RFC 6979 deterministically and normalizes to low-S, flipping the
-      // recovery id on normalization — the same output noble produces with `lowS: true`, so the
-      // 65-byte layout is byte-identical to viem's `sign`. `v` keeps only the parity bit: the
-      // overflow bit (recoveryId 2/3) is unrepresentable in Ethereum's 27/28 scheme.
-      const { signature, recoveryId } = ecc.signRecoverable(hexToBytes(hash.slice(2)), privateKeyBytes);
-      return `0x${bytesToHex(signature)}${(27 + (recoveryId & 1)).toString(16)}`;
+      return signDigestBytes(hexToBytes(hash.slice(2)));
     },
+    // Bytes-level capability the L1 path prefers over hex `sign` (see SIGN_DIGEST_BYTES).
+    [SIGN_DIGEST_BYTES]: async (digest: Uint8Array): Promise<`0x${string}`> => signDigestBytes(digest),
     async signTypedData(params: never, _options?: unknown): Promise<`0x${string}`> {
       return (await viemDelegate()).signTypedData(params);
     },
   };
+  return account;
 }
