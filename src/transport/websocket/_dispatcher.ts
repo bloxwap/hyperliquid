@@ -83,6 +83,21 @@ interface SubscribeUnsubscribeRequest {
   subscription: unknown;
 }
 
+/**
+ * Internal-only precomputation a trusted caller can hand to {@linkcode WebSocketDispatcher.request}.
+ * The dispatcher class is not re-exported from the package entry point, so this hint never
+ * reaches the public API surface.
+ */
+export interface RequestHint {
+  /**
+   * The caller's precomputed `requestToId(payload)` for a `subscribe` / `unsubscribe` request.
+   * Valid only when `payload` is already in normalized form (the subscription manager's
+   * snapshot): the dispatcher then skips its own normalize of the subscription subtree and
+   * builds the envelope id by concatenation. Ignored for `post` requests.
+   */
+  subscriptionId: string;
+}
+
 /** A queued request awaiting its response. */
 interface PendingRequest {
   id: number | string;
@@ -95,8 +110,8 @@ interface PendingRequest {
   sent: boolean;
   /**
    * Echo-matching data for a `subscribe` / `unsubscribe` request: the normalized request
-   * envelope (the object form of the entry's string id) and its specificity, derived when the
-   * entry is created. Absent for `post` requests, which match on their numeric id.
+   * envelope (the object form of the entry's string id) and its specificity. Absent for `post`
+   * requests, which match on their numeric id.
    *
    * Every `subscriptionResponse` frame that misses the exact-id bucket walks the whole queue
    * looking for its match, so deriving this per scan made a burst of N re-subscriptions cost
@@ -106,8 +121,12 @@ interface PendingRequest {
   echo?: {
     /** The normalized request envelope compared against the echo. */
     request: unknown;
-    /** {@linkcode specificity} of `request`, the tie-breaker between several subset matches. */
-    specificity: number;
+    /**
+     * {@linkcode specificity} of `request`, the tie-breaker between several subset matches.
+     * Only the `_findByEcho` fallback scan consumes it — a rare path, taken solely when the
+     * server rewrote the echo — so it is computed lazily on first access (see {@linkcode echoData}).
+     */
+    readonly specificity: number;
   };
   // deno-lint-ignore no-explicit-any
   resolve: (value?: any) => void;
@@ -191,8 +210,14 @@ export class WebSocketDispatcher {
    * Sends a request and resolves with the matched server response.
    *
    * @param signal Cancels the request from the caller's side.
+   * @param hint Internal-only precomputed ids; see {@linkcode RequestHint}.
    */
-  async request<T>(method: "post" | "subscribe" | "unsubscribe", payload: unknown, signal?: AbortSignal): Promise<T> {
+  async request<T>(
+    method: "post" | "subscribe" | "unsubscribe",
+    payload: unknown,
+    signal?: AbortSignal,
+    hint?: RequestHint,
+  ): Promise<T> {
     // One controller per request: the timeout timer, the user signal, and the
     // socket termination relay into it, and `finally` detaches everything, so
     // no listener or timer outlives the request.
@@ -218,10 +243,16 @@ export class WebSocketDispatcher {
       let echo: PendingRequest["echo"];
       if ("id" in request) {
         id = request.id;
+      } else if (hint?.subscriptionId !== undefined) {
+        // The subscription manager hands over the id it already computed; per the hint contract
+        // `payload` is its normalized snapshot, so the normalized envelope is one shallow object
+        // and its id plain concatenation — no re-normalize of the subscription subtree.
+        id = `{"method":"${request.method}","subscription":${hint.subscriptionId}}`;
+        echo = echoData({ method: request.method, subscription: payload });
       } else {
         const normalized = normalize(request);
         id = JSON.stringify(normalized);
-        echo = { request: normalized, specificity: specificity(normalized) };
+        echo = echoData(normalized);
       }
 
       // --- Send or queue -----------------------------------------------------
@@ -442,7 +473,14 @@ export class WebSocketDispatcher {
     // hence one specificity — so the first match here is exactly what the scan below would pick
     // (a same-specificity tie goes to the earliest enqueued). The subset check is a formality:
     // an id collision implies equal normalized forms, which always subset-match.
-    const bucket = this._byEchoId.get(requestToId(echo));
+    //
+    // Fast path: a verbatim echo of a normalized request reserializes to exactly the pending
+    // entry's id, so one plain stringify answers the bucket lookup and the normalize walk in
+    // `requestToId` is skipped. A bucket key is itself a normalized id, so a verbatim hit can
+    // only occur when the echo already IS in normalized form and the two keys coincide — a
+    // rewritten echo (server-added fields, different key order or hex case) simply misses here
+    // and falls through to the normalized lookup.
+    const bucket = this._byEchoId.get(JSON.stringify(echo)) ?? this._byEchoId.get(requestToId(echo));
     if (bucket) {
       for (const pending of bucket) {
         if (pending.echo !== undefined && isSubset(pending.echo.request, echo)) return pending;
@@ -462,6 +500,22 @@ export class WebSocketDispatcher {
     }
     return best;
   }
+}
+
+/**
+ * Builds an entry's echo-matching data with `specificity` deferred: the only consumer is the
+ * `_findByEcho` fallback scan, which runs solely when the server rewrote the echo, so a
+ * verbatim echo never pays the leaf count. The first access computes and caches it.
+ */
+function echoData(request: unknown): NonNullable<PendingRequest["echo"]> {
+  let cached: number | undefined;
+  return {
+    request,
+    // Accessor names bind nothing in the body scope: `specificity` here is the `_id.ts` import.
+    get specificity(): number {
+      return (cached ??= specificity(request));
+    },
+  };
 }
 
 /**

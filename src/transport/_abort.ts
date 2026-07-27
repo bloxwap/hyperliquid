@@ -64,17 +64,22 @@ export function relay(sources: (AbortSignal | null | undefined)[], target: Abort
     return () => source.removeEventListener("abort", onAbort);
   }
 
-  const detach = new AbortController();
+  // Multiple sources: one listener per source, added with plain `once: true` and removed by a
+  // detach loop. The `{ signal }` registration form (a relay controller aborted on detach) costs
+  // ~1 µs more per listener in Bun than the manual pair.
+  const attached: [AbortSignal, () => void][] = [];
   for (const source of sources) {
     if (!source) continue;
     if (source.aborted) {
       target.abort(source.reason);
       break;
     }
-    source.addEventListener("abort", () => target.abort(source.reason), {
-      once: true,
-      signal: detach.signal,
-    });
+    const onAbort = (): void => target.abort(source.reason);
+    source.addEventListener("abort", onAbort, { once: true });
+    attached.push([source, onAbort]);
   }
-  return () => detach.abort();
+  return () => {
+    // A listener that already fired was removed by `once`; removing it again is a no-op.
+    for (const [source, onAbort] of attached) source.removeEventListener("abort", onAbort);
+  };
 }
