@@ -18,22 +18,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24.x"
-          # Writes the registry auth line for NODE_AUTH_TOKEN (fallback while OIDC
-          # trusted publishing is being diagnosed).
-          registry-url: "https://registry.npmjs.org"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           # Bun 1.4 (the Rust rewrite) ships only as canary; the `canary` tag moves with each build.
           bun-version: canary
-
-      - name: Diagnose OIDC environment (temporary)
-        run: |
-          OIDC_TOKEN=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org" | jq -r .value)
-          echo "exchange response:"
-          curl -s -w "\nHTTP %{http_code}\n" -X POST \
-            -H "Authorization: Bearer ${OIDC_TOKEN}" \
-            "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/@bloxwap%2fhyperliquid" | head -10
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -60,5 +48,3 @@ jobs:
         working-directory: ./dist
         # Scoped packages default to private access (paid); this SDK publishes public.
         run: npm publish --access public --tag ${{ steps.tag.outputs.value }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
