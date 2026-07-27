@@ -34,21 +34,17 @@ formatPrice("0.0000123456789", 0, "spot"); // "0.00001234"  — spot, 8-decimal 
 The third argument selects the market type and defaults to `"perp"`. Pass `"spot"` when the price belongs to a spot
 market — the decimal ceiling differs.
 
-{% hint style="info" %}
+> [!NOTE]
+>
+> Don't rely on
+> [`toFixed(n)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/toFixed): it
+> rounds instead of truncating, ignores the significant-figures ceiling and has issues with
+> [floating-point precision](https://floating-point-gui.de/).
 
-Don't rely on
-[`toFixed(n)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/toFixed): it
-rounds instead of truncating, ignores the significant-figures ceiling and has issues with
-[floating-point precision](https://floating-point-gui.de/).
-
-{% endhint %}
-
-{% hint style="warning" %}
-
-`formatPrice` **truncates**, it does not round. If truncation collapses a very small price to `0`, it throws
-`FormatError`.
-
-{% endhint %}
+> [!WARNING]
+>
+> `formatPrice` **truncates**, it does not round. If truncation collapses a very small price to `0`, it throws
+> `FormatError`.
 
 <a id="lot-size-formatsize"></a>
 
@@ -65,13 +61,11 @@ formatSize("0.123456789", 2); // "0.12"
 formatSize("100", 0);         // "100"
 ```
 
-{% hint style="warning" %}
-
-Hyperliquid treats a literal `"0"` size on a reduce-only order as "close the whole position". `formatSize` refuses to
-return `"0"` (it throws `FormatError`), so if you actually want that behavior, pass `"0"` directly into the order
-payload instead of routing it through `formatSize`.
-
-{% endhint %}
+> [!WARNING]
+>
+> Hyperliquid treats a literal `"0"` size on a reduce-only order as "close the whole position". `formatSize` refuses to
+> return `"0"` (it throws `FormatError`), so if you actually want that behavior, pass `"0"` directly into the order
+> payload instead of routing it through `formatSize`.
 
 <a id="wire-float-floattowire"></a>
 
@@ -249,9 +243,8 @@ await converter.reload();
 [HIP-3 builder-deployed perpetuals](https://hyperliquid.gitbook.io/hyperliquid-docs/hyperliquid-improvement-proposals-hips/hip-3-builder-deployed-perpetuals)
 live outside the default universe. `SymbolConverter` ignores them unless you opt in through the `dexs` option:
 
-{% tabs %}
-
-{% tab title="All builder DEXs" %}
+<details>
+<summary>All builder DEXs</summary>
 
 ```ts
 const converter = await SymbolConverter.create({
@@ -260,9 +253,10 @@ const converter = await SymbolConverter.create({
 });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Selected DEXs" %}
+<details>
+<summary>Selected DEXs</summary>
 
 ```ts
 const converter = await SymbolConverter.create({
@@ -271,9 +265,7 @@ const converter = await SymbolConverter.create({
 });
 ```
 
-{% endtab %}
-
-{% endtabs %}
+</details>
 
 Builder DEX assets use the `"DEX:ASSET"` naming convention:
 
@@ -282,13 +274,11 @@ converter.getAssetId("test:ABC");    // 110000
 converter.getSzDecimals("test:ABC"); // 0
 ```
 
-{% hint style="info" %}
-
-Enabling `dexs` adds a `perpDexs()` call plus one `meta({ dex })` request per builder DEX. Only enable it if you
-actually trade there — the default `SymbolConverter.create()` is one round-trip each to `meta`, `spotMeta`, and
-`outcomeMeta` in parallel.
-
-{% endhint %}
+> [!NOTE]
+>
+> Enabling `dexs` adds a `perpDexs()` call plus one `meta({ dex })` request per builder DEX. Only enable it if you
+> actually trade there — the default `SymbolConverter.create()` is one round-trip each to `meta`, `spotMeta`, and
+> `outcomeMeta` in parallel.
 
 ## End-to-end: resolve, format, place
 

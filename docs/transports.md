@@ -42,7 +42,7 @@ const exchange = new ExchangeClient({ wallet, transport });
 const mids = await info.allMids();
 ```
 
-### Endpoints
+### HTTP endpoints
 
 `HttpTransport` uses two endpoints, both defaulting to Hyperliquid's public URLs (set `isTestnet` to send requests to
 the testnet URL):
@@ -173,7 +173,7 @@ await subs.allMids((data) => {
 // Promise is resolved when the subscription is connected
 ```
 
-### Endpoints
+### WebSocket endpoints
 
 Because a WebSocket transport is one open connection, it reaches a single endpoint per instance, unlike `HttpTransport`.
 `WebSocketTransport` therefore takes one `url` (default `wss://api.hyperliquid.xyz/ws`) for info, exchange, and
@@ -253,5 +253,5 @@ by hand. Delivery pauses while the connection is down and resumes once it's back
 const transport = new WebSocketTransport({ resubscribe: false });
 ```
 
-If a subscription then fails to re-establish, its `onError` callback is invoked — handle it as shown in
-[Handle failures](#handle-failures).
+If a subscription then fails to re-establish, its `onError` callback is invoked. Handle it as shown under
+[subscription errors](clients.md#errors).

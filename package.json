@@ -42,9 +42,11 @@
   },
   "scripts": {
     "//check": "Everything CI gates on.",
-    "check": "bun run check:format && bun run check:lint && bun run check:types && bun run check:ts7 && bun run check:jsdoc && bun run check:export",
+    "check": "bun run check:format && bun run check:lint && bun run check:docs && bun run check:types && bun run check:ts7 && bun run check:jsdoc && bun run check:export",
     "check:format": "biome format .",
     "check:lint": "biome lint .",
+    "//check:docs": "Verifies Markdown formatting, the docs index, and GitHub-compatible syntax. External links are checked by the Documentation workflow.",
+    "check:docs": "bun run .dev/docs_check.ts && markdownlint-cli2 \"README.md\" \"docs/**/*.md\"",
     "//check:types": "TypeScript 5 pass over sources and tests (the version the JS-API tooling pins).",
     "check:types": "tsc --project tsconfig.json",
     "//check:ts7": "Forward-compatibility gate: TypeScript 7 (native) over src/. See .dev/ts7/tsconfig.json.",
@@ -83,6 +85,7 @@
     "@valibot/to-json-schema": "1.7.1",
     "ajv": "8.20.0",
     "decimal.js": "10.6.0",
+    "markdownlint-cli2": "0.23.1",
     "ts-json-schema-generator": "2.9.0",
     "typescript": "5.9.3",
     "viem": "2.55.8"

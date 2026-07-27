@@ -1,0 +1,11 @@
+{
+  "config": {
+    // This repository wraps prose at 120 columns, while the markdownlint default is 80.
+    "MD013": false,
+    // Separate GitHub alert blocks use blank quoted lines by design.
+    "MD028": false,
+    // The root README starts with centered HTML branding, and embedded HTML is intentional there.
+    "MD033": false,
+    "MD041": false
+  }
+}
