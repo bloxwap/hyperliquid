@@ -10,6 +10,7 @@ import { ReconnectingWebSocket } from "../../../src/transport/websocket/_reconne
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
 import { drain, getLastSent, MockWebSocket, RESPONSES } from "./_mock.ts";
+import { requestToId } from "../../../src/transport/websocket/_id.ts";
 
 // =============================================================================
 // Helpers
@@ -437,6 +438,102 @@ describe("WebSocketDispatcher", () => {
           socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", subset));
           const result = (await subsetPromise) as Record<string, unknown>;
           assertEquals(result.method, "subscribe");
+        });
+      });
+
+      describe("echo id fast path", () => {
+        test("a verbatim echo in normalized key order resolves through the verbatim bucket", async () => {
+          const { socket, requester } = createRequester();
+          // Keys already in normalized order: the echo's verbatim serialization IS the entry id.
+          const payload = { coin: "BTC", type: "l2Book" };
+
+          const promise = requester.request("subscribe", payload);
+          socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+
+          const result = (await promise) as Record<string, unknown>;
+          assertEquals((result.subscription as Record<string, unknown>).coin, "BTC");
+        });
+
+        test("an echo in non-normalized key order falls back to the normalized id", async () => {
+          const { socket, requester } = createRequester();
+          const payload = { type: "l2Book", coin: "BTC" };
+
+          const promise = requester.request("subscribe", payload);
+          // The pending id is normalized (`coin` before `type`), so this verbatim serialization
+          // misses the bucket and the normalized lookup must answer instead.
+          socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin: "BTC" }));
+
+          const result = (await promise) as Record<string, unknown>;
+          assertEquals((result.subscription as Record<string, unknown>).coin, "BTC");
+        });
+
+        test("an echo with different hex casing falls back to the normalized id", async () => {
+          const { socket, requester } = createRequester();
+          const payload = { type: "userFills", user: "0xabcdef" };
+
+          const promise = requester.request("subscribe", payload);
+          // The pending id carries the lowercased address, so the verbatim serialization of
+          // this echo misses; the normalized lookup and the case-insensitive subset check match.
+          socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { type: "userFills", user: "0xAbCdEf" }));
+
+          const result = (await promise) as Record<string, unknown>;
+          assertEquals((result.subscription as Record<string, unknown>).user, "0xAbCdEf");
+        });
+      });
+
+      describe("request() subscription-id hint", () => {
+        test("a hinted subscribe sends the payload as-is and matches a verbatim echo", async () => {
+          const { socket, requester } = createRequester();
+          // Normalized form, as the subscription manager hands it over.
+          const payload = { coin: "BTC", type: "l2Book" };
+
+          const promise = requester.request("subscribe", payload, undefined, { subscriptionId: requestToId(payload) });
+          const sent = getLastSent(socket);
+          assertEquals(sent.method, "subscribe");
+          assertEquals(sent.subscription, payload);
+
+          socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+          const result = (await promise) as Record<string, unknown>;
+          assertEquals((result.subscription as Record<string, unknown>).coin, "BTC");
+        });
+
+        test("a hinted unsubscribe matches its echo", async () => {
+          const { socket, requester } = createRequester();
+          const payload = { coin: "BTC", type: "l2Book" };
+
+          const promise = requester.request("unsubscribe", payload, undefined, {
+            subscriptionId: requestToId(payload),
+          });
+          socket.mockMessage(RESPONSES.subscriptionResponse("unsubscribe", payload));
+
+          const result = (await promise) as Record<string, unknown>;
+          assertEquals(result.method, "unsubscribe");
+        });
+
+        test("a hinted pending still matches a rewritten echo via the subset fallback", async () => {
+          const { socket, requester } = createRequester();
+          const payload = { coin: "BTC", type: "l2Book" };
+
+          const promise = requester.request("subscribe", payload, undefined, { subscriptionId: requestToId(payload) });
+
+          // The server-added field breaks both id lookups; the subset scan — which consumes the
+          // lazily computed specificity — must still resolve the pending request.
+          socket.mockMessage(
+            RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin: "BTC", nSigFigs: null }),
+          );
+          const result = (await promise) as Record<string, unknown>;
+          assertEquals((result.subscription as Record<string, unknown>).coin, "BTC");
+        });
+
+        test("the hint is ignored for post requests", async () => {
+          const { socket, requester } = createRequester();
+
+          const promise = requester.request("post", { foo: "bar" }, undefined, { subscriptionId: "ignored" });
+          const sent = getLastSent(socket);
+          assertEquals(sent.method, "post");
+
+          socket.mockMessage(RESPONSES.info(sent.id as number, "TestData"));
+          assertEquals(await promise, "TestData");
         });
       });
     });

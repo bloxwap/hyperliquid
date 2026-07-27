@@ -10,7 +10,7 @@ import * as abort from "../_abort.ts";
 import type { ISubscription } from "../_base.ts";
 import type { HyperliquidEventTarget } from "./_events.ts";
 import { type WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
-import { requestToId } from "./_id.ts";
+import { normalize } from "./_id.ts";
 import { payloadEventType } from "./_routing.ts";
 
 /** A live reference to a registration: one per subscribing call, until its waiter settles or its handle unsubscribes. */
@@ -55,8 +55,8 @@ interface ListenerRegistration {
 /** Internal state for managing a subscription. */
 interface SubscriptionState {
   /**
-   * Snapshot of the subscription payload, taken once at subscribe time as
-   * `JSON.parse(requestToId(payload))` — the normalized form the server echoes back.
+   * Snapshot of the subscription payload, taken once at subscribe time as `normalize(payload)` —
+   * the normalized form the server echoes back.
    *
    * The reconnect and teardown paths re-issue and report this copy: the caller still owns the
    * object it passed, and mutating `payload.coin`/`payload.user` after subscribing must not
@@ -184,7 +184,11 @@ export class WebSocketSubscriptionManager {
     if (signal?.aborted) {
       throw new WebSocketRequestError("Subscription was aborted", { cause: signal.reason, request: payload });
     }
-    const id = requestToId(payload);
+    // `normalize()` returns a fresh deep copy of the payload in the normalized form the server
+    // echoes, so the id is its serialization and the snapshot for a new subscription is already
+    // in hand — no stringify/parse round-trip.
+    const snapshot = normalize(payload);
+    const id = JSON.stringify(snapshot);
     // The routed event type belongs to this call, not to the subscription entry: an entry keyed
     // by payload id alone can serve several channels (see {@linkcode ListenerRegistration.eventType}),
     // so every listener attaches to — and later detaches from — its own call's routed type.
@@ -204,10 +208,11 @@ export class WebSocketSubscriptionManager {
         });
       }
 
-      // Snapshot the payload in the normalized form the server echoes: the id already holds it
-      // as a string, so parsing it back costs one parse per new subscription.
-      const snapshot: unknown = JSON.parse(id);
-      const promise = this._dispatcher.request("subscribe", snapshot).finally(() => (created.promiseFinished = true));
+      // The snapshot doubles as the normalized wire payload; the id is handed over with it so
+      // the dispatcher skips its own normalize of the subscription subtree.
+      const promise = this._dispatcher
+        .request("subscribe", snapshot, undefined, { subscriptionId: id })
+        .finally(() => (created.promiseFinished = true));
       const created: SubscriptionState = {
         payload: snapshot,
         user: userOf(snapshot),
@@ -309,7 +314,7 @@ export class WebSocketSubscriptionManager {
         continue;
       }
 
-      const promise = this._dispatcher.request("subscribe", subscription.payload);
+      const promise = this._dispatcher.request("subscribe", subscription.payload, undefined, { subscriptionId: id });
       subscription.promise = promise;
       subscription.promiseFinished = false;
 
@@ -401,7 +406,7 @@ export class WebSocketSubscriptionManager {
 
     this._deleteSubscription(id);
     if (wireUnsubscribe && this._socket.readyState === ReconnectingWebSocket.OPEN) {
-      return this._dispatcher.request("unsubscribe", subscription.payload);
+      return this._dispatcher.request("unsubscribe", subscription.payload, undefined, { subscriptionId: id });
     }
     return undefined;
   }
