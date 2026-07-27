@@ -5,5 +5,8 @@
 minimumReleaseAge = 259200
 
 [test]
+# Run the whole suite without a global `CloseEvent`, so the WebSocket transport's local
+# fallback class (its older-runtime path) is what every close event exercises.
+preload = ["./tests/_noCloseEvent.ts"]
 # Test and development tooling files should not count toward the library's coverage numbers.
 coveragePathIgnorePatterns = ["tests/**", ".dev/**"]

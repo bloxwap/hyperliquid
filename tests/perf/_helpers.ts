@@ -10,6 +10,7 @@
  */
 
 import type { IRequestTransport } from "@bloxwap/hyperliquid";
+import { RealCloseEvent } from "../_noCloseEvent.ts";
 
 /**
  * Well-known test private key (the same one used by `tests/signing/mod.test.ts`).
@@ -155,7 +156,7 @@ export class MockWebSocket extends EventTarget {
   close(): void {
     if (this.readyState >= 2) return;
     this.readyState = 3; // CLOSED
-    this.dispatchEvent(new CloseEvent("close", { code: 1000, wasClean: true }));
+    this.dispatchEvent(new RealCloseEvent("close", { code: 1000, wasClean: true }));
   }
 
   /** Injects a server-to-client frame (a raw payload object, JSON-encoded here). */

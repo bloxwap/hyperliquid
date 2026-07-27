@@ -1,7 +1,9 @@
 /**
  * Tests for the reconnecting WebSocket: retry policy, backoff scheduling,
  * offline buffering, and termination semantics, driven by a fake global
- * `WebSocket` the tests steer by hand.
+ * `WebSocket` the tests steer by hand. The test process runs without a global
+ * `CloseEvent` (see `tests/_noCloseEvent.ts`), so every close event the wrapper
+ * dispatches also exercises the module's local `CloseEvent` fallback class.
  * @module
  */
 
@@ -15,6 +17,7 @@ import {
 } from "../../../src/transport/websocket/_reconnectingSocket.ts";
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
+import { RealCloseEvent } from "../../_noCloseEvent.ts";
 import { drain } from "./_mock.ts";
 
 // =============================================================================
@@ -57,7 +60,7 @@ class FakeWebSocket extends EventTarget {
     if (this.readyState >= 2) return;
     this.readyState = 3;
     // Stale by the time it fires (the wrapper detaches before calling close()), so timing is irrelevant.
-    this.dispatchEvent(new CloseEvent("close", { code: code ?? 1000, reason: reason ?? "" }));
+    this.dispatchEvent(new RealCloseEvent("close", { code: code ?? 1000, reason: reason ?? "" }));
   }
 
   /** Simulates the handshake completing. */
@@ -79,7 +82,7 @@ class FakeWebSocket extends EventTarget {
   /** Simulates the connection dropping. */
   serverClose(code = 1006, reason = ""): void {
     this.readyState = 3;
-    this.dispatchEvent(new CloseEvent("close", { code, reason }));
+    this.dispatchEvent(new RealCloseEvent("close", { code, reason }));
   }
 }
 
@@ -578,6 +581,25 @@ describe("ReconnectingWebSocket", () => {
       assertEquals(closes.length, 1);
     });
 
+    test("close events come from the local fallback class, with the full CloseEvent shape", () => {
+      const ws = createSocket();
+      lastSocket().serverOpen();
+
+      const closes: CloseEvent[] = [];
+      ws.addEventListener("close", (event) => closes.push(event));
+
+      ws.close(3000, "bye");
+
+      assertEquals(closes.length, 1);
+      assertEquals(closes[0].code, 3000);
+      assertEquals(closes[0].reason, "bye");
+      assertEquals(closes[0].wasClean, true);
+      // The test process has no global CloseEvent (see tests/_noCloseEvent.ts), so the
+      // wrapper's events are built by its local fallback class: the standard shape
+      // holds, but they are not instances of the runtime's CloseEvent.
+      assertFalse(closes[0] instanceof RealCloseEvent);
+    });
+
     test("close() from within a close listener dispatches no second close", async () => {
       const ws = createSocket();
 
@@ -684,6 +706,100 @@ describe("ReconnectingWebSocket", () => {
       assertEquals(FakeWebSocket.instances.length, 2);
       assertEquals(FakeWebSocket.instances[0].readyState, 3);
       assertEquals(lastSocket().readyState, 0);
+      ws.close();
+    });
+  });
+
+  describe("WebSocket API surface", () => {
+    test("exposes the underlying socket's metadata through its getters", () => {
+      const ws = createSocket();
+      assertEquals(ws.retryCount, 0); // no failed attempt yet
+      assertEquals(ws.binaryType, "blob"); // default before any assignment
+
+      // A string url connects synchronously: the underlying socket already exists.
+      const socket = lastSocket();
+      socket.bufferedAmount = 1234;
+      socket.extensions = "permessage-deflate";
+      socket.protocol = "chat";
+
+      assertEquals(ws.bufferedAmount, 1234);
+      assertEquals(ws.extensions, "permessage-deflate");
+      assertEquals(ws.protocol, "chat");
+
+      // The setter propagates to the underlying socket.
+      ws.binaryType = "arraybuffer";
+      assertEquals(ws.binaryType, "arraybuffer");
+      assertEquals(socket.binaryType, "arraybuffer");
+      ws.close();
+    });
+
+    test("metadata getters fall back while no underlying socket exists", async () => {
+      // A factory that never resolves keeps `_socket` unset for the whole test.
+      const ws = createSocket(() => new Promise<string>(() => {}));
+      await drain();
+
+      assertEquals(ws.bufferedAmount, 0);
+      assertEquals(ws.extensions, "");
+      assertEquals(ws.protocol, "");
+
+      // The binaryType setter touches only the stored value; it applies once a socket exists.
+      ws.binaryType = "arraybuffer";
+      assertEquals(ws.binaryType, "arraybuffer");
+      ws.close();
+    });
+
+    test("on* attributes register, replace, and clear event handlers", () => {
+      const ws = createSocket();
+
+      const fired: string[] = [];
+      const onopen = (): void => void fired.push("open");
+      const firstMessage = (event: MessageEvent): void => void fired.push(`message:${event.data}`);
+      const secondMessage = (): void => void fired.push("message:second");
+      const onerror = (): void => void fired.push("error");
+      const onclose = (): void => void fired.push("close");
+
+      ws.onopen = onopen;
+      ws.onmessage = firstMessage;
+      ws.onerror = onerror;
+      ws.onclose = onclose;
+      // The getters return the originally assigned handlers, not the registered wrappers.
+      assertEquals(ws.onopen, onopen);
+      assertEquals(ws.onmessage, firstMessage);
+      assertEquals(ws.onerror, onerror);
+      assertEquals(ws.onclose, onclose);
+
+      lastSocket().serverOpen();
+      lastSocket().serverMessage("hello");
+      lastSocket().serverError();
+      assertEquals(fired, ["open", "message:hello", "error"]);
+
+      // Reassigning detaches the previous handler; assigning null detaches entirely.
+      ws.onmessage = secondMessage;
+      assertEquals(ws.onmessage, secondMessage);
+      ws.onerror = null;
+      assertEquals(ws.onerror, null);
+
+      lastSocket().serverMessage("again");
+      lastSocket().serverError();
+      assertEquals(fired, ["open", "message:hello", "error", "message:second"]);
+
+      ws.close(); // fires the final close
+      assertEquals(fired, ["open", "message:hello", "error", "message:second", "close"]);
+    });
+
+    test("the same function assigned to two on* attributes fires for both", () => {
+      const ws = createSocket();
+
+      let calls = 0;
+      const handler = (): void => void calls++;
+      ws.onopen = handler;
+      ws.onerror = handler;
+
+      lastSocket().serverOpen();
+      lastSocket().serverError();
+
+      // One wrapper per attribute: the shared handler is not deduplicated away.
+      assertEquals(calls, 2);
       ws.close();
     });
   });
