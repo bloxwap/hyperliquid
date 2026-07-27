@@ -270,24 +270,36 @@ const addressCache = new WeakMap<AbstractWallet, Promise<`0x${string}`>>();
 const chainIdCache = new WeakMap<AbstractWallet, Promise<`0x${string}`>>();
 
 /**
+ * Resolved wallet addresses for stable-identity wallets. Lets {@linkcode getWalletAddress} return a
+ * settled value without awaiting the cached promise (an async hop) or re-deriving identity stability.
+ */
+const resolvedAddressCache = new WeakMap<AbstractWallet, `0x${string}`>();
+
+/** Resolved chain IDs for stable-identity wallets — see {@linkcode resolvedAddressCache}. */
+const resolvedChainIdCache = new WeakMap<AbstractWallet, `0x${string}`>();
+
+/**
  * Returns the cached promise for a wallet, computing and caching it on first use.
  *
  * `stable` decides how long a *fulfilled* value may be reused:
  * - `true` — keep it for the life of the wallet object. Only correct when the answer cannot
- *   change: a viem local account carries a fixed address and has no notion of chain.
+ *   change: a viem local account carries a fixed address and has no notion of chain. The settled
+ *   value is also recorded in `resolvedCache`, unlocking the synchronous fast path in the callers.
  * - `false` — evict as soon as the promise settles. A JSON-RPC wallet is a live connection whose
  *   selected account and network the user can change at any moment, so a fulfilled value must
  *   never outlive the call that produced it. Concurrent callers (a burst of orders sharing one
  *   wallet) still collapse onto a single round trip, which is where the cost actually was;
  *   the next burst re-reads the live value instead of signing against a stale one.
  *
- * A rejected promise is always evicted, so a transient failure can be retried.
+ * A rejected promise is always evicted (and never reaches `resolvedCache`), so a transient
+ * failure can be retried.
  */
 function cachedPerWallet<T>(
   cache: WeakMap<AbstractWallet, Promise<T>>,
   wallet: AbstractWallet,
   stable: boolean,
   compute: () => Promise<T>,
+  resolvedCache?: WeakMap<AbstractWallet, T>,
 ): Promise<T> {
   const cached = cache.get(wallet);
   if (cached !== undefined) return cached;
@@ -298,7 +310,7 @@ function cachedPerWallet<T>(
   const evict = (): void => {
     if (cache.get(wallet) === promise) cache.delete(wallet);
   };
-  if (stable) promise.catch(evict);
+  if (stable) promise.then((value) => resolvedCache?.set(wallet, value), evict);
   else promise.then(evict, evict);
   return promise;
 }
@@ -400,8 +412,18 @@ export async function signRawDigest(args: {
  * @throws {AbstractWalletError} If getting the address fails or the wallet type is unknown.
  */
 export async function getWalletAddress(wallet: AbstractWallet): Promise<`0x${string}`> {
+  // Fast path: a settled stable-identity value — return it without the await hop and without
+  // re-evaluating `hasStableIdentity`. Pending and non-stable wallets fall through unchanged.
+  const resolved = resolvedAddressCache.get(wallet);
+  if (resolved !== undefined) return resolved;
   try {
-    return await cachedPerWallet(addressCache, wallet, hasStableIdentity(wallet), () => adapt(wallet).getAddress());
+    return await cachedPerWallet(
+      addressCache,
+      wallet,
+      hasStableIdentity(wallet),
+      () => adapt(wallet).getAddress(),
+      resolvedAddressCache,
+    );
   } catch (error) {
     if (error instanceof AbstractWalletError) throw error;
     throw new AbstractWalletError("Failed to get an address from the wallet", { cause: error });
@@ -424,8 +446,18 @@ export async function getWalletAddress(wallet: AbstractWallet): Promise<`0x${str
  * @throws {AbstractWalletError} If getting the chain ID fails or the wallet type is unknown.
  */
 export async function getWalletChainId(wallet: AbstractWallet): Promise<`0x${string}`> {
+  // Fast path: a settled stable-identity value — return it without the await hop and without
+  // re-evaluating `hasStableIdentity`. Pending and non-stable wallets fall through unchanged.
+  const resolved = resolvedChainIdCache.get(wallet);
+  if (resolved !== undefined) return resolved;
   try {
-    return await cachedPerWallet(chainIdCache, wallet, hasStableIdentity(wallet), () => adapt(wallet).getChainId());
+    return await cachedPerWallet(
+      chainIdCache,
+      wallet,
+      hasStableIdentity(wallet),
+      () => adapt(wallet).getChainId(),
+      resolvedChainIdCache,
+    );
   } catch (error) {
     if (error instanceof AbstractWalletError) throw error;
     throw new AbstractWalletError("Failed to get the chain ID from the wallet", { cause: error });

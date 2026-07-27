@@ -47,7 +47,7 @@ const OptionalExpiresAfterSchema = /* @__PURE__ */ (() => {
  * @throws {ValidationError} If the request options fail validation.
  * @throws {ApiRequestError} If the API returns an error response.
  */
-export async function executeL1Action<T>(
+export function executeL1Action<T>(
   config: ExchangeConfig,
   action: Record<string, unknown>,
   options?: {
@@ -58,19 +58,48 @@ export async function executeL1Action<T>(
     skipValidation?: boolean;
   },
 ): Promise<T> {
-  // Validate options before acquiring the lock (unless the caller opted out via `skipValidation`).
-  const vaultAddressInput = options?.vaultAddress ?? config.defaultVaultAddress;
-  const expiresAfterInput =
-    options?.expiresAfter ??
-    (typeof config.defaultExpiresAfter === "function"
-      ? await config.defaultExpiresAfter()
-      : config.defaultExpiresAfter);
+  // Resolve options synchronously on the common path (no function-valued `defaultExpiresAfter`),
+  // returning the inner promise directly instead of paying the extra async hops of an `async`
+  // function. Sync throws (validation errors, throwing getters) are converted into rejections so
+  // the observable surface matches the previous `async` declaration exactly.
+  try {
+    // Validate options before acquiring the lock (unless the caller opted out via `skipValidation`).
+    const vaultAddressInput = options?.vaultAddress ?? config.defaultVaultAddress;
+    const expiresAfterInput = options?.expiresAfter ?? config.defaultExpiresAfter;
+    if (typeof expiresAfterInput === "function") {
+      // Rare path: a function-valued default may resolve asynchronously. A sync throw from the
+      // function itself lands in the catch below and becomes a rejection, as before.
+      return Promise.resolve(expiresAfterInput()).then((resolved) =>
+        executeL1ActionResolved(config, action, vaultAddressInput, resolved, options),
+      );
+    }
+    return executeL1ActionResolved(config, action, vaultAddressInput, expiresAfterInput, options);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
+/** Validates the resolved options and dispatches the signed request via {@linkcode executeWithShell}. */
+function executeL1ActionResolved<T>(
+  config: ExchangeConfig,
+  action: Record<string, unknown>,
+  vaultAddressInput: string | undefined,
+  expiresAfterInput: string | number | undefined,
+  options?: {
+    signal?: AbortSignal;
+    skipValidation?: boolean;
+  },
+): Promise<T> {
   const vaultAddress = options?.skipValidation
     ? (vaultAddressInput as `0x${string}` | undefined)
-    : parse(OptionalVaultAddressSchema, vaultAddressInput);
+    : vaultAddressInput === undefined
+      ? undefined // `parse(optional(...))` on undefined always yields undefined — skip the call
+      : parse(OptionalVaultAddressSchema, vaultAddressInput);
   const expiresAfter = options?.skipValidation
     ? (expiresAfterInput as number | undefined)
-    : parse(OptionalExpiresAfterSchema, expiresAfterInput);
+    : expiresAfterInput === undefined
+      ? undefined
+      : parse(OptionalExpiresAfterSchema, expiresAfterInput);
 
   return executeWithShell<T>(
     config,
