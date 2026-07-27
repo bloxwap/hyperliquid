@@ -782,3 +782,58 @@ describe("canonicalize() fast path (issue #8)", () => {
     });
   });
 });
+
+describe("canonicalize() fast-path variant and union checks", () => {
+  test("a canonical variant child passes by reference", () => {
+    const schema = v.object({
+      t: v.variant("type", [
+        v.object({ type: v.literal("a"), x: v.number() }),
+        v.object({ type: v.literal("b"), y: v.number() }),
+      ]),
+    });
+    const value = { t: { type: "a" as const, x: 1 } };
+
+    // Already canonical: the identity check must descend into the variant child and match its option.
+    expect(canonicalize(schema, value)).toBe(value);
+  });
+
+  test("a non-canonical variant child is rebuilt in schema order", () => {
+    const schema = v.object({
+      t: v.variant("type", [
+        v.object({ type: v.literal("a"), x: v.number() }),
+        v.object({ type: v.literal("b"), y: v.number() }),
+      ]),
+    });
+    const value = { t: { x: 1, type: "a" as const } };
+
+    const out = canonicalize(schema, value);
+    expect(out).not.toBe(value);
+    expect(Object.keys(out.t)).toEqual(["type", "x"]);
+    expect(out).toEqual(value);
+  });
+
+  test("an unmatched variant child takes the slow path and throws CanonicalizeError", () => {
+    const schema = v.object({
+      t: v.variant("type", [v.object({ type: v.literal("a"), x: v.number() })]),
+    });
+
+    expect(() => canonicalize(schema, { t: { type: "z" } })).toThrow(CanonicalizeError);
+  });
+
+  test("union matching skips an option that is missing a required key", () => {
+    const options = [v.object({ a: v.string(), b: v.string() }), v.object({ a: v.string() })];
+    // Top-level union: `walk` consults the structural matcher directly.
+    expect(canonicalize(v.union(options), { a: "1" })).toEqual({ a: "1" });
+    // Union as a child: the identity check consults it too, and the value passes by reference.
+    const schema = v.object({ u: v.union(options) });
+    const value = { u: { a: "1" } };
+    expect(canonicalize(schema, value)).toBe(value);
+  });
+
+  test("union matching accepts an option whose only missing key is optional", () => {
+    const options = [v.object({ a: v.string(), b: v.optional(v.string()) }), v.object({ a: v.string() })];
+    // The first option matches despite `b` being absent: an optional key is not required.
+    const value = { a: "1" };
+    expect(canonicalize(v.union(options), value)).toBe(value);
+  });
+});

@@ -8,6 +8,7 @@ import { describe, test } from "bun:test";
 import { assertEquals, assertThrows } from "@jsr/std__assert";
 import { Decimal } from "decimal.js";
 import { FormatError, floatToWire, formatPrice, formatSize } from "@bloxwap/hyperliquid/utils";
+import { type DecimalParts, toDecimalPlacesHalfEven, toSignificantDigitsHalfEven } from "../../src/utils/_decimal.ts";
 
 // ============================================================
 // Test Data
@@ -636,5 +637,55 @@ describe("floatToWire", () => {
       assertEquals(floatToWire(-1e-310), "0");
       assertEquals(floatToWire(-1e-13), "0");
     });
+  });
+});
+
+describe("half-even rounding internals (_decimal.ts)", () => {
+  const parts = (digits: string, exp: number): DecimalParts => ({ sign: 1, digits, exp });
+
+  test("toDecimalPlacesHalfEven rounds up to one unit only past half a unit", () => {
+    // 0.6 at 0 decimal places → 1 (past half a unit).
+    assertEquals(toDecimalPlacesHalfEven(parts("6", 0), 0), parts("1", 1));
+    // 0.5 at 0 decimal places → 0: an exact half ties to the implicit leading 0, which is even.
+    assertEquals(toDecimalPlacesHalfEven(parts("5", 0), 0), parts("", 0));
+    // Everything below the place: 0.009 at 1 decimal place → 0.
+    assertEquals(toDecimalPlacesHalfEven(parts("9", -2), 1), parts("", -2));
+  });
+
+  test("toDecimalPlacesHalfEven carries a run of nines out front", () => {
+    // 0.99 at 1 decimal place → 1: the carry reaches the front and comes out as 0.1 × 10^(exp+1).
+    assertEquals(toDecimalPlacesHalfEven(parts("99", 0), 1), parts("1", 1));
+  });
+
+  test("toSignificantDigitsHalfEven carries a run of nines out front", () => {
+    // 9.99 to 2 significant digits → 10.
+    assertEquals(toSignificantDigitsHalfEven(parts("999", 1), 2), parts("1", 2));
+  });
+
+  test("a value past half a unit at the 8th decimal trips the floatToWire guard", () => {
+    // 5e-9's exact expansion exceeds half a unit at the 8th place, so the exact path rounds it up
+    // to 0.00000001 — a 5e-9 change, which the 1e-12 guard rejects.
+    assertThrows(() => floatToWire(0.000000005), FormatError);
+  });
+});
+
+describe("floatToWire exact path on subnormal doubles", () => {
+  test("subnormals decompose through the subnormal branch and round to zero", () => {
+    // The fast path never routes a subnormal to `exactDecimalParts` (every subnormal's
+    // `toFixed(9)` is "0.000000000"), leaving its subnormal-mantissa branch unreachable from the
+    // public API. Force the exact path by making the tie predicate fire; the exact expansion of
+    // every subnormal is far below half a unit at the 8th decimal, so the wire form is still "0" —
+    // the same answer the fast path gives.
+    const original = Number.prototype.toFixed;
+    Number.prototype.toFixed = function (this: number, digits?: number): string {
+      const rendered = original.call(this, digits);
+      return digits === 9 ? `${rendered}5` : rendered;
+    };
+    try {
+      assertEquals(floatToWire(5e-324), "0"); // Number.MIN_VALUE: the smallest subnormal
+      assertEquals(floatToWire(1e-310), "0");
+    } finally {
+      Number.prototype.toFixed = original;
+    }
   });
 });

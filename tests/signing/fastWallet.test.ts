@@ -246,6 +246,36 @@ describe("createFastLocalWallet() fallback", () => {
   });
 });
 
+// --- WASM module validation -----------------------------------------------------
+
+describe("createFastLocalWallet() WASM module validation", () => {
+  test("throws when the module cannot derive a public key from the private key", async () => {
+    // `pointFromScalar` returning null: the guard rejects instead of building a broken address.
+    _setEccLoaderForTests(() =>
+      Promise.resolve({
+        isPrivate: () => true,
+        pointFromScalar: () => null,
+        signRecoverable: () => {
+          throw new Error("unreachable");
+        },
+      }),
+    );
+    await expect(createFastLocalWallet(PRIVATE_KEYS[0])).rejects.toThrow("Failed to derive the public key");
+
+    // A malformed (wrong-length) point hits the same guard.
+    _setEccLoaderForTests(() =>
+      Promise.resolve({
+        isPrivate: () => true,
+        pointFromScalar: () => new Uint8Array(33),
+        signRecoverable: () => {
+          throw new Error("unreachable");
+        },
+      }),
+    );
+    await expect(createFastLocalWallet(PRIVATE_KEYS[0])).rejects.toThrow("Failed to derive the public key");
+  });
+});
+
 // --- JSON-RPC wallets stay untouched --------------------------------------------
 
 describe("createFastLocalWallet() alongside JSON-RPC wallets", () => {
