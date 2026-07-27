@@ -1,0 +1,38 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          # Match the rest of CI while Bun 1.4 remains canary-only.
+          bun-version: canary
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate coverage report with Bun
+        env:
+          HL_OFFLINE: "1"
+        run: |
+          bun test tests/ --coverage --coverage-reporter=lcov --coverage-dir=coverage
+          test -s coverage/lcov.info
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          disable_search: true
+          fail_ci_if_error: true
