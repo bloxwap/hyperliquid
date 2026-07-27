@@ -24,7 +24,7 @@ import {
   signMultiSigUserSigned,
 } from "@bloxwap/hyperliquid/signing";
 import { parse } from "../../../src/_base.ts";
-import { createL1AgentDigest } from "../../../src/signing/_fastDigest.ts";
+import { createL1AgentDigest, createMultiSigDigest } from "../../../src/signing/_fastDigest.ts";
 import { scenario } from "../_harness.ts";
 import { MockExchangeTransport, TEST_PRIVATE_KEY } from "../_helpers.ts";
 
@@ -367,6 +367,61 @@ scenario({
   },
 });
 
+// --- EIP-712 multi-sig outer digest ------------------------------------------
+// Same treatment as the Agent digest above: the fixed `HyperliquidTransaction:SendMultiSig`
+// shape lets the outer multi-sig signature use a hand-rolled digest (`createMultiSigDigest`,
+// domain separator cached per signatureChainId) instead of viem's generic `hashTypedData`.
+// Byte-equality is pinned by `tests/signing/multiSigDigest.test.ts`, not here.
+
+const MULTI_SIG_ACTION_HASH = "0x27015072154fc147842efc672ab345311190856b5143f4b2def65830657fb15d" as const;
+
+/** The typed-data envelope viem's `hashTypedData` is benchmarked on (testnet `hyperliquidChain`). */
+const MULTI_SIG_TYPED_DATA = {
+  domain: {
+    name: "HyperliquidSignTransaction",
+    version: "1",
+    chainId: 0x66eee,
+    verifyingContract: "0x0000000000000000000000000000000000000000",
+  },
+  types: {
+    EIP712Domain: [
+      { name: "name", type: "string" },
+      { name: "version", type: "string" },
+      { name: "chainId", type: "uint256" },
+      { name: "verifyingContract", type: "address" },
+    ],
+    "HyperliquidTransaction:SendMultiSig": [
+      { name: "hyperliquidChain", type: "string" },
+      { name: "multiSigActionHash", type: "bytes32" },
+      { name: "nonce", type: "uint64" },
+    ],
+  },
+  primaryType: "HyperliquidTransaction:SendMultiSig",
+  message: { hyperliquidChain: "Testnet", multiSigActionHash: MULTI_SIG_ACTION_HASH, nonce: NONCE },
+} as const;
+
+scenario({
+  name: "signing/eip712_multisig_digest",
+  group: "signing",
+  description: "createMultiSigDigest(): hand-rolled EIP-712 digest of the fixed SendMultiSig outer message",
+  unit: "digest",
+  iterations: 5000,
+  run: () => {
+    createMultiSigDigest(MULTI_SIG_ACTION_HASH, NONCE, "0x66eee", true);
+  },
+});
+
+scenario({
+  name: "signing/eip712_multisig_digest_viem",
+  group: "signing",
+  description: "viem hashTypedData() over the same SendMultiSig message (the oracle the fast digest replaces)",
+  unit: "digest",
+  iterations: 2000,
+  run: () => {
+    hashTypedData(MULTI_SIG_TYPED_DATA as never);
+  },
+});
+
 // --- End-to-end order without ECDSA -----------------------------------------
 // secp256k1 dominates `client.order` (~85 µs of ~147 µs), which masks the SDK's own plumbing
 // cost — validation, nonce, action hashing, digest, dispatch. Stubbing the curve out (a fixed
@@ -520,6 +575,19 @@ if (hashWasmAvailable) {
     setup: () => preloadWasmKeccak(),
     run: () => {
       createL1AgentDigest(AGENT_ACTION_HASH, true);
+    },
+  });
+
+  scenario({
+    name: "signing/eip712_multisig_digest_wasm",
+    group: "signing",
+    description:
+      "createMultiSigDigest() with the WASM keccak provider (hash-wasm); opt-in counterpart of eip712_multisig_digest",
+    unit: "digest",
+    iterations: 5000,
+    setup: () => preloadWasmKeccak(),
+    run: () => {
+      createMultiSigDigest(MULTI_SIG_ACTION_HASH, NONCE, "0x66eee", true);
     },
   });
 }

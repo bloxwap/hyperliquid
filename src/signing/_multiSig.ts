@@ -3,8 +3,16 @@
  * @module
  */
 
-import { type AbstractWallet, getWalletAddress, type Signature, signTypedData } from "./_abstractWallet.ts";
-import { createL1ActionHash, preadjustL1Action, signL1Inner } from "./_l1.ts";
+import { bytesToHex } from "@noble/hashes/utils.js";
+import {
+  type AbstractWallet,
+  getWalletAddress,
+  type Signature,
+  signRawDigestBytes,
+  signTypedData,
+} from "./_abstractWallet.ts";
+import { createMultiSigDigestBytes } from "./_fastDigest.ts";
+import { createL1ActionHash, createL1ActionHashBytes, preadjustL1Action, signL1Inner } from "./_l1.ts";
 import { signUserSignedInner } from "./_userSigned.ts";
 
 /** EIP-712 types for the multi-sig outer wrapper. */
@@ -69,7 +77,7 @@ async function signMultiSigOuter(args: {
 }): Promise<Signature> {
   const { leader, wrapper, nonce, isTestnet = false, vaultAddress, expiresAfter } = args;
   const { type: _, ...wrapperWithoutType } = wrapper;
-  const multiSigActionHash = createL1ActionHash({
+  const multiSigActionHashBytes = createL1ActionHashBytes({
     action:
       args.adjustedAction === undefined
         ? wrapperWithoutType
@@ -81,21 +89,40 @@ async function signMultiSigOuter(args: {
     vaultAddress,
     expiresAfter,
   });
+
+  // `signatureChainId` is a `0x`-prefixed hex string, so radix 16 is the only correct base here:
+  // radix 10 would parse it as `0` and silently sign under the wrong EIP-712 domain.
+  const chainId = parseInt(wrapper.signatureChainId, 16);
+
+  // Fast path: a wallet that can sign a raw digest (viem local accounts expose `sign`) signs the
+  // hand-rolled SendMultiSig digest directly and skips viem's whole EIP-712 encoding. The digest
+  // is byte-identical — the differential test pins it against viem's `hashTypedData`. The thunk
+  // keeps it lazy: wallets without the capability (every JSON-RPC wallet) fall through to the
+  // unchanged typed-data path without paying for a digest they would discard. A chain ID that did
+  // not parse to a uint256 word falls through too: viem rejects it, while the hand-rolled digest
+  // would silently sign under the wrong domain.
+  const fast =
+    Number.isSafeInteger(chainId) && chainId >= 0
+      ? await signRawDigestBytes({
+          wallet: leader,
+          digest: () => createMultiSigDigestBytes(multiSigActionHashBytes, nonce, wrapper.signatureChainId, isTestnet),
+        })
+      : undefined;
+  if (fast !== undefined) return fast;
+
   return await signTypedData({
     wallet: leader,
     domain: {
       name: "HyperliquidSignTransaction",
       version: "1",
-      // `signatureChainId` is a `0x`-prefixed hex string, so radix 16 is the only correct base here:
-      // radix 10 would parse it as `0` and silently sign under the wrong EIP-712 domain.
-      chainId: parseInt(wrapper.signatureChainId, 16),
+      chainId,
       verifyingContract: "0x0000000000000000000000000000000000000000",
     },
     types: MULTI_SIG_TYPES,
     primaryType: "HyperliquidTransaction:SendMultiSig",
     message: {
       hyperliquidChain: isTestnet ? "Testnet" : "Mainnet",
-      multiSigActionHash,
+      multiSigActionHash: `0x${bytesToHex(multiSigActionHashBytes)}`,
       nonce,
     },
   });
