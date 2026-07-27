@@ -166,7 +166,52 @@ formatSize("0.00123456789", szDecimals); // "0.00123"
 For spot markets, `getSzDecimals` returns the `szDecimals` of the **base** token — which is what both formatters expect
 for an order on that pair.
 
-Outcome markets carry no `szDecimals` metadata, so `getSzDecimals` always returns `5` for them.
+Outcome markets carry no `szDecimals` metadata, and empirically their sizes are whole integers — every observed
+resting book size is integer-valued and HIP-4 guides report fractional sizes rejected (no funded accept/reject probe
+was possible) — so `getSzDecimals` returns `0` for outcome slugs. This is observed current behavior, not a protocol
+guarantee.
+
+### Round a price to a valid tick
+
+`formatPrice` always truncates. When the rounding *direction* matters — a maker order that must not cross the spread,
+or a taker order that should — use `roundPrice`, which picks the direction from the order side:
+
+```ts
+converter.roundPrice("BTC", "buy", "97123.456");  // "97123" — never pays more than requested
+converter.roundPrice("BTC", "sell", "97123.456"); // "97124" — never sells for less than requested
+converter.roundPrice("BTC", "buy", "97123.456", { aggressive: true }); // "97124" — taker: flips both directions
+```
+
+The default is maker-safe: a buy rounds **down**, a sell rounds **up**, so the rounded price is never more aggressive
+than the one you asked for. `aggressive: true` inverts both for taker-style orders that trade up to one tick for a
+better fill probability. A price already on the tick grid is returned unchanged, and all math is exact decimal
+arithmetic — no floating-point artifacts.
+
+`getTickSize` returns the tick itself at a given price level (it steps with the price magnitude, so the price
+argument matters):
+
+```ts
+converter.getTickSize("BTC", "97123.4");      // "1"          — perp, szDecimals=5
+converter.getTickSize("PURR/USDC", "0.0001"); // "0.00000001" — spot, 8-decimal ceiling
+```
+
+Outcome markets share the spot implementation (per the official Asset IDs docs), so both helpers apply the spot
+price rules to outcome slugs — with their integer lot (`szDecimals` 0, empirically observed, not
+protocol-guaranteed) the tick follows the price magnitude, `max(10^(floor(log10 px) − 4), 1e-8)`, and sizes are
+whole integers:
+
+```ts
+converter.getTickSize("btc-above-64570-yes-jul-27-0300", "0.56667"); // "0.00001"  — tick 1e-5 at this magnitude
+converter.getTickSize("btc-above-64570-yes-jul-27-0300", "0.05");    // "0.000001" — finer below 0.1
+converter.getTickSize("btc-above-64570-yes-jul-27-0300", "0.00001"); // "0.00000001" — clamped by the 8-decimal ceiling
+converter.roundPrice("btc-above-64570-yes-jul-27-0300", "buy", "0.56667"); // "0.56667" — already on the grid
+```
+
+(Validated against every live outcome book level at the time of writing; `outcomeMeta` itself exposes no
+precision fields.)
+
+Both accept every name format `getSzDecimals` accepts (perp, `BASE/QUOTE`, `DEX:ASSET`, outcome slug), return
+`undefined` for unknown coins, and throw `FormatError` for a non-positive or unparsable price.
 
 ### Spot pair IDs
 
