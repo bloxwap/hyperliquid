@@ -25,15 +25,10 @@ jobs:
 
       - name: Diagnose OIDC environment (temporary)
         run: |
-          NPM_LIB=$(npm root -g)/npm/lib
-          echo "=== exchange call shape (oidc.js lines 105-135) ==="
-          sed -n '105,135p' "$NPM_LIB/utils/oidc.js"
-          echo "=== manual exchange ==="
           OIDC_TOKEN=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org" | jq -r .value)
           curl -s -w "\nHTTP %{http_code}\n" -X POST \
-            -H "Content-Type: application/json" \
-            -d "{\"token\":\"${OIDC_TOKEN}\"}" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}" \
             "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/@bloxwap%2fhyperliquid" | head -20
 
       - name: Install dependencies
