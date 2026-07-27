@@ -14,6 +14,15 @@
  *
  * Supports exactly what Hyperliquid actions contain — string, integer (including the int64 widening that
  * `_l1.ts` performs via `BigInt`), float, boolean, null, `Uint8Array`, array and plain object.
+ *
+ * Two entry points share the buffer machinery:
+ *
+ * - {@linkcode MsgpackWriter.value} / {@linkcode encode}: the strict encoder described above.
+ * - {@linkcode MsgpackWriter.valueL1}: the L1 action-hash entry, which applies the `_l1.ts` `adjust`
+ *   normalization (dropped `undefined` properties, int64 widening, exotic-object rebuild) INLINE during
+ *   the encode walk instead of as a separate tree pass. Its output is byte-for-byte identical to
+ *   `value(adjust(x))` — pinned differentially by `tests/signing/fusedAdjust.test.ts` — not necessarily
+ *   to `@std/msgpack` of the raw value.
  * @module
  */
 
@@ -27,6 +36,39 @@ export type MsgpackValue =
   | Uint8Array
   | readonly MsgpackValue[]
   | { readonly [key: string]: MsgpackValue };
+
+/**
+ * Opaque marker wrapping a subtree that has already been through the L1 normalization (`preadjustL1Action`
+ * in `_l1.ts`). {@linkcode MsgpackWriter.valueL1} unwraps it on sight and encodes the subtree with the
+ * strict path: the normalization is idempotent, so the bytes are exactly what normalizing the raw subtree
+ * inline would produce, without paying the per-node checks twice. Multi-sig hashes the same action in two
+ * preimages, so the second hash reuses the marked subtree instead of re-walking it.
+ *
+ * Only meaningful inside L1 action-hash preimages — never place it in a wire payload.
+ */
+export class Adjusted {
+  constructor(/** The adjusted subtree. */ readonly value: MsgpackValue) {}
+}
+
+/**
+ * Input shape of {@linkcode MsgpackWriter.valueL1}. Superset of {@linkcode MsgpackValue}: the L1
+ * normalization it applies inline also tolerates `undefined` properties (dropped), exotic objects such as
+ * class instances and `Uint8Array` (encoded as maps of their own enumerable properties — the two-pass
+ * `adjust` rebuilds those into plain objects before the strict encoder ever sees them), and
+ * {@linkcode Adjusted} markers. The `Uint8Array` arm is intersected with a string index signature so the
+ * shared map code indexes it without a cast — the same quirk `ValueType` in `_l1.ts` carries.
+ */
+export type L1Value =
+  | string
+  | number
+  | bigint
+  | boolean
+  | null
+  | undefined
+  | Adjusted
+  | (Uint8Array & { readonly [key: string]: L1Value })
+  | readonly L1Value[]
+  | { readonly [key: string]: L1Value };
 
 const TEXT_ENCODER = new TextEncoder();
 const BIGINT_INT64_MIN = -(2n ** 63n);
@@ -102,6 +144,81 @@ export class MsgpackWriter {
         return;
       }
     }
+    throw new Error("Cannot safely encode value into messagepack");
+  }
+
+  /**
+   * Appends a MessagePack-encoded L1 action value, applying the `_l1.ts` `adjust` normalization INLINE —
+   * one tree walk instead of `adjust`'s walk plus {@linkcode MsgpackWriter.value}'s walk. Byte-for-byte
+   * identical to `value(adjust(x))` for every action shape:
+   *
+   * - `undefined` object properties are dropped, and the map header counts only the encoded entries
+   * - safe integers too wide for the int32/uint32 forms widen to `bigint`, taking the 9-byte int64/uint64
+   *   form instead of float64 (integral doubles beyond the safe-integer range still take float64)
+   * - exotic objects (class instances, `Uint8Array`, …) encode as maps of their own enumerable properties —
+   *   `adjust` rebuilds them into plain objects the strict encoder then maps; a `Uint8Array` in particular
+   *   is a map of its index keys here, never the binary form {@linkcode MsgpackWriter.value} emits
+   * - {@linkcode Adjusted} markers unwrap to their pre-normalized subtree, encoded with the strict path
+   *
+   * Only the L1 action-hash preimage uses this; the standalone {@linkcode encode} stays strict. Getters:
+   * a consistent getter hashes identically to the two-pass path (each property is read once here versus
+   * two or more times there); one that re-enters the hash is covered by the caller's re-entrancy guard,
+   * exactly as before.
+   *
+   * @param value The value to encode.
+   * @throws {Error} If `value` contains a type MessagePack cannot represent, or a `bigint` outside 64 bits.
+   */
+  valueL1(value: L1Value): void {
+    if (value === null) {
+      this.byte(0xc0);
+      return;
+    }
+    if (value === false) {
+      this.byte(0xc2);
+      return;
+    }
+    if (value === true) {
+      this.byte(0xc3);
+      return;
+    }
+    if (typeof value === "number") {
+      this.numberL1(value);
+      return;
+    }
+    if (typeof value === "bigint") {
+      this.bigint(value);
+      return;
+    }
+    if (typeof value === "string") {
+      this.string(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      this.arrayL1(value);
+      return;
+    }
+    if (typeof value === "object") {
+      if (value instanceof Adjusted) {
+        // Pre-normalized subtree: no `undefined`s remain and wide integers are already `bigint`,
+        // so the strict path reproduces the two-pass bytes with no per-node checks.
+        this.value(value.value);
+        return;
+      }
+      // `adjust` passes plain objects through and rebuilds every exotic one into a plain object; both
+      // end up encoded as a map of their own enumerable keys, so the fused path maps them all. The
+      // prototype only decides which `adjust` artifact the map must reproduce. (The cast only drops
+      // the array arm `Array.isArray` cannot narrow out of a readonly tuple union.)
+      const prototype = Object.getPrototypeOf(value);
+      const map = value as { readonly [key: string]: L1Value };
+      if (prototype === null || prototype === Object.prototype) {
+        this.mapL1(map);
+      } else {
+        this.mapL1Exotic(map);
+      }
+      return;
+    }
+    // Unreachable for objects (handled above); this is `undefined` in an array or at the root, a
+    // function, or a symbol — the two-pass path throws the same error on all of them.
     throw new Error("Cannot safely encode value into messagepack");
   }
 
@@ -367,6 +484,141 @@ export class MsgpackWriter {
     for (const key of keys) {
       this.string(key);
       this.value(value[key]);
+    }
+  }
+
+  // --- L1 fused adjust+encode ------------------------------------------------
+  // The {@linkcode MsgpackWriter.valueL1} internals. Every rule reproduces `adjust` (`_l1.ts`) exactly —
+  // the two implementations must change together or not at all; `tests/signing/fusedAdjust.test.ts` pins
+  // their byte-equality differentially.
+
+  /**
+   * `adjust`'s number rule, inline: safe integers too wide for the int32/uint32 forms widen to `bigint`
+   * so they take the 9-byte int64/uint64 form; everything else — including integral doubles beyond the
+   * safe-integer range, which python's msgpack emits as float64 — goes through the strict
+   * {@linkcode MsgpackWriter.number} selection unchanged.
+   */
+  private numberL1(value: number): void {
+    if (Number.isSafeInteger(value) && (value >= 0x100000000 || value < -0x80000000)) {
+      this.bigint(BigInt(value));
+      return;
+    }
+    this.number(value);
+  }
+
+  /**
+   * Same header and element order as the strict {@linkcode MsgpackWriter.array} — `adjust` never changes
+   * an array's length (holes are preserved) — with the normalization applied per element. A hole yields
+   * `undefined` here and in the two-pass encoder alike, so both throw on it identically.
+   */
+  private arrayL1(value: readonly L1Value[]): void {
+    const length = value.length;
+    if (length < 16) {
+      this.byte(0x90 | length);
+    } else if (length < 65536) {
+      this.ensure(3);
+      this.buffer[this.offset] = 0xdc;
+      this.dataView.setUint16(this.offset + 1, length);
+      this.offset += 3;
+    } else if (length < 4294967296) {
+      this.ensure(5);
+      this.buffer[this.offset] = 0xdd;
+      this.dataView.setUint32(this.offset + 1, length);
+      this.offset += 5;
+    } else {
+      throw new Error("Cannot safely encode array with size larger than 32 bits");
+    }
+    for (const entry of value) {
+      this.valueL1(entry);
+    }
+  }
+
+  /**
+   * Fused map encoding for plain objects (the hot path — nearly every node of an action). `adjust`
+   * returns such an object unchanged when nothing needs normalizing, so the two-pass header counts ALL
+   * keys; only a rebuild (triggered by a dropped or changed entry) drops the `undefined` ones. The header
+   * must still precede the entries, so this reserves header bytes sized for the full key set, encodes the
+   * entries reading each property once, and backpatches the header when no key was dropped. The first
+   * `undefined` entry rewinds to {@linkcode MsgpackWriter.mapL1Counted}, which knows its exact count up
+   * front — the rare path, and the only one where the header can shrink below the reservation's form.
+   */
+  private mapL1(value: { readonly [key: string]: L1Value }): void {
+    const keys = Object.keys(value);
+    const length = keys.length;
+    if (length >= 4294967296) {
+      throw new Error("Cannot safely encode map with size larger than 32 bits");
+    }
+    const headerSize = length < 16 ? 1 : length < 65536 ? 3 : 5;
+    this.ensure(headerSize);
+    const headerAt = this.offset;
+    this.offset += headerSize;
+    for (const key of keys) {
+      const entry = value[key];
+      if (entry === undefined) {
+        this.offset = headerAt;
+        this.mapL1Counted(value, keys);
+        return;
+      }
+      this.string(key);
+      this.valueL1(entry);
+    }
+    if (headerSize === 1) {
+      this.buffer[headerAt] = 0x80 | length;
+    } else if (headerSize === 3) {
+      this.buffer[headerAt] = 0xde;
+      this.dataView.setUint16(headerAt + 1, length);
+    } else {
+      this.buffer[headerAt] = 0xdf;
+      this.dataView.setUint32(headerAt + 1, length);
+    }
+  }
+
+  /**
+   * Fused map encoding for exotic objects (class instances, `Uint8Array`, …): `adjust` ALWAYS rebuilds
+   * those into a plain object, so the two-pass bytes always come from the rebuilt key set — straight to
+   * the counting path, no optimistic reservation.
+   */
+  private mapL1Exotic(value: { readonly [key: string]: L1Value }): void {
+    const keys = Object.keys(value);
+    if (keys.length >= 4294967296) {
+      throw new Error("Cannot safely encode map with size larger than 32 bits");
+    }
+    this.mapL1Counted(value, keys);
+  }
+
+  /**
+   * Counting counterpart of {@linkcode MsgpackWriter.mapL1}: the exact entry count is settled before the
+   * header is written. Mirrors `adjust`'s rebuild, which drops `undefined` values and also own
+   * `__proto__` data properties — assigning one onto the rebuilt plain object invokes the prototype
+   * setter instead of creating an own property, so the two-pass encoder never emits it from a rebuild.
+   * (A plain object that needs NO rebuild keeps an own `__proto__` key through `adjust`'s fast path, and
+   * so does the optimistic path above.)
+   */
+  private mapL1Counted(value: { readonly [key: string]: L1Value }, keys: readonly string[]): void {
+    let count = 0;
+    for (const key of keys) {
+      if (key !== "__proto__" && value[key] !== undefined) count++;
+    }
+    if (count < 16) {
+      this.byte(0x80 | count);
+    } else if (count < 65536) {
+      this.ensure(3);
+      this.buffer[this.offset] = 0xde;
+      this.dataView.setUint16(this.offset + 1, count);
+      this.offset += 3;
+    } else {
+      // `count <= keys.length`, which the caller already range-checked against 2^32.
+      this.ensure(5);
+      this.buffer[this.offset] = 0xdf;
+      this.dataView.setUint32(this.offset + 1, count);
+      this.offset += 5;
+    }
+    for (const key of keys) {
+      if (key === "__proto__") continue;
+      const entry = value[key];
+      if (entry === undefined) continue;
+      this.string(key);
+      this.valueL1(entry);
     }
   }
 }

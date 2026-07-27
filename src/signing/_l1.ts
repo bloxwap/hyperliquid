@@ -7,7 +7,7 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { type AbstractWallet, type Signature, signRawDigestBytes, signTypedData } from "./_abstractWallet.ts";
 import { createL1AgentDigestBytes } from "./_fastDigest.ts";
 import { keccak256 } from "./_keccak.ts";
-import { MsgpackWriter } from "./_msgpack.ts";
+import { Adjusted, type L1Value, type MsgpackValue, MsgpackWriter } from "./_msgpack.ts";
 import { trimSignature } from "./_multiSig.ts";
 
 /**
@@ -49,7 +49,7 @@ const L1_AGENT_TYPES = Object.freeze({
 const ACTION_WRITER = new MsgpackWriter();
 
 /**
- * Guards {@linkcode ACTION_WRITER} against re-entrancy. `adjust` may return the caller's own object, so a
+ * Guards {@linkcode ACTION_WRITER} against re-entrancy. The encoder walks the caller's own object, so a
  * getter on a caller-supplied action can call back into {@linkcode createL1ActionHash} while the outer call
  * is mid-write. Sharing one buffer across those two calls would splice the inner preimage into the outer
  * one and hash — and sign — the wrong bytes, so a nested call gets its own writer instead.
@@ -111,7 +111,7 @@ export function createL1ActionHashBytes(args: {
   try {
     // Layout: actionBytes ‖ nonce(u64) ‖ vaultMarker ‖ vault(20) ‖ expiresMarker ‖ expires(u64)
     writer.reset();
-    writer.value(adjust(action as ValueType));
+    writer.valueL1(action as L1Value);
     writer.uint64(nonce);
 
     if (vaultAddress) {
@@ -134,15 +134,6 @@ export function createL1ActionHashBytes(args: {
 }
 
 /**
- * Opaque marker wrapping a subtree that has already been through {@linkcode adjust} (see
- * {@linkcode preadjustL1Action}). `adjust` unwraps it on sight instead of re-traversing, so the
- * marker never reaches the encoder: `adjust` walks the same tree the encoder will see.
- */
-class Adjusted {
-  constructor(/** The adjusted subtree. */ readonly value: ValueType) {}
-}
-
-/**
  * Normalizes a value into a shape {@linkcode MsgpackWriter} encodes the way Hyperliquid expects on the wire:
  * - drops `undefined` properties (otherwise the encoder throws)
  * - widens safe-integer `number`s outside the int32 range to `BigInt` (otherwise they would be encoded as
@@ -153,12 +144,16 @@ class Adjusted {
  * msgpack — and `@std/msgpack`, this encoder's reference oracle — emits them as float64. They pass through
  * as-is. `tests/signing/msgpack.test.ts` pins the `1e300` conformance against the oracle.
  *
+ * Used only by {@linkcode preadjustL1Action}: the hash path itself applies these same rules inline while
+ * encoding ({@linkcode MsgpackWriter.valueL1}), so any change here must be mirrored there — the
+ * differential corpus in `tests/signing/fusedAdjust.test.ts` pins their byte-equality.
+ *
  * Returns the ORIGINAL reference when a subtree needs no modification (the common case) — which is why the
  * encoder must treat the result as caller-owned data that may still have getters on it.
  */
 function adjust(value: ValueType): ValueType {
   // A subtree already adjusted by {@linkcode preadjustL1Action} — unwrap it without re-traversing.
-  if (value instanceof Adjusted) return value.value;
+  if (value instanceof Adjusted) return value.value as ValueType;
   if (Array.isArray(value)) {
     // Allocate a new array only if some element changes (holes are skipped, like `Array.prototype.map`)
     let changed = false;
@@ -203,11 +198,11 @@ function adjust(value: ValueType): ValueType {
 /**
  * Runs the {@linkcode adjust} normalization over an L1 action once and wraps the result in an
  * {@linkcode Adjusted} marker. A {@linkcode createL1ActionHash} preimage containing the marker
- * reuses the adjusted subtree instead of re-traversing it — multi-sig hashes the same action
+ * reuses the adjusted subtree instead of re-normalizing it — multi-sig hashes the same action
  * twice (inner payload and outer wrapper), so the second hash would otherwise redo the walk.
  *
  * The marker hashes byte-identically to the raw action: `adjust` is deterministic and idempotent,
- * so the subtree computed here is exactly what re-running `adjust` over the action would produce.
+ * so the subtree computed here is exactly what normalizing the action inline would produce.
  * It is only meaningful inside L1 action-hash preimages — never place it in the wire payload
  * (the multi-sig wrapper keeps the caller's original action object).
  *
@@ -215,7 +210,7 @@ function adjust(value: ValueType): ValueType {
  * @return An opaque marker standing in for the action inside hash preimages.
  */
 export function preadjustL1Action(action: Record<string, unknown> | unknown[]): unknown {
-  return new Adjusted(adjust(action as ValueType));
+  return new Adjusted(adjust(action as ValueType) as MsgpackValue);
 }
 
 /**
