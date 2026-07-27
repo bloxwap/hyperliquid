@@ -26,7 +26,7 @@ import {
   signUserSignedAction,
 } from "@bloxwap/hyperliquid/signing";
 import { ApproveAgentTypes } from "@bloxwap/hyperliquid/api/exchange";
-import { _setEccLoaderForTests } from "../../src/signing/_fastWallet.ts";
+import { _setEccLoaderForTests, loadTinySecp256k1 } from "../../src/signing/_fastWallet.ts";
 
 // --- Fixtures (same shapes as tests/signing/fastDigest.test.ts) --------------
 
@@ -273,6 +273,38 @@ describe("createFastLocalWallet() WASM module validation", () => {
       }),
     );
     await expect(createFastLocalWallet(PRIVATE_KEYS[0])).rejects.toThrow("Failed to derive the public key");
+  });
+});
+
+// --- Real loader failure arms ---------------------------------------------------
+
+describe("loadTinySecp256k1() failure arms", () => {
+  test("returns undefined when the real import rejects (dependency absent)", async () => {
+    // The same code path the default call takes: a rejecting import lands in the catch arm.
+    await expect(loadTinySecp256k1(() => Promise.reject(new Error("Cannot find module")))).resolves.toBeUndefined();
+  });
+
+  test("returns undefined when the module is partially linked (shape check)", async () => {
+    // Missing one of the three required functions — the shape guard routes to the fallback.
+    await expect(
+      loadTinySecp256k1(() =>
+        Promise.resolve({ signRecoverable: () => new Uint8Array(65), pointFromScalar: () => new Uint8Array(33) }),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  test("returns the module when the shape check passes", async () => {
+    const ecc = {
+      isPrivate: () => true,
+      pointFromScalar: () => new Uint8Array(33),
+      signRecoverable: () => ({ signature: new Uint8Array(64), recoveryId: 0 }),
+    };
+    await expect(loadTinySecp256k1(() => Promise.resolve(ecc))).resolves.toBe(ecc);
+  });
+
+  test("the default import resolves to the real tiny-secp256k1", async () => {
+    const ecc = await loadTinySecp256k1();
+    expect(typeof ecc?.signRecoverable).toBe("function");
   });
 });
 
