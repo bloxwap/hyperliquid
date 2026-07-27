@@ -24,27 +24,31 @@
 - **Integratable**: Easy to use with [viem](https://github.com/wevm/viem) accounts — local (private key) or JSON-RPC
   (browser wallet).
 
+## Documentation
+
+Browse the [SDK documentation](docs/README.md) for installation, clients, transports, signing, utilities, and guides.
+
 ## Installation
 
-**Bun 1.3.3+**
+### Bun 1.3.3+
 
 ```sh
 bun add @bloxwap/hyperliquid
 ```
 
-**Node.js 22.12+ / React Native 0.86+**
+### Node.js 22.12+ / React Native 0.86+
 
 ```sh
 npm i @bloxwap/hyperliquid
 ```
 
-**pnpm**
+### pnpm
 
 ```sh
 pnpm add @bloxwap/hyperliquid
 ```
 
-**Yarn**
+### Yarn
 
 ```sh
 yarn add @bloxwap/hyperliquid
@@ -141,6 +145,7 @@ await subs.l2Book({ coin: "ETH" }, (data) => {
 ```
 
 > [!WARNING]
+>
 > - **Never hardcode private keys** in source or commit them to git. Load them from environment variables or a secret
 >   store (Bun auto-loads a local `.env`, which is gitignored in this repo).
 > - For trading bots, prefer a Hyperliquid **agent wallet** (API wallet) over the master account key: an agent key can

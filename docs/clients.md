@@ -54,9 +54,8 @@ pages.
 `ExchangeClient` requires a wallet for [signing](signing.md#wallet-compatibility) and works with any transport. See all
 [Exchange methods](https://nktkas.gitbook.io/hyperliquid/api-reference/exchange-methods).
 
-{% tabs %}
-
-{% tab title="viem" %}
+<details>
+<summary>viem</summary>
 
 ```ts
 import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
@@ -70,9 +69,10 @@ const client = new ExchangeClient({ transport, wallet });
 await client.order({ orders: [/* ... */], grouping: "na" });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Browser (viem)" %}
+<details>
+<summary>Browser (viem)</summary>
 
 ```ts
 import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
@@ -88,9 +88,10 @@ const client = new ExchangeClient({ transport, wallet });
 await client.order({ orders: [/* ... */], grouping: "na" });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Custom" %}
+<details>
+<summary>Custom</summary>
 
 Any object matching one of the [supported wallet interfaces](signing.md#wallet-compatibility) works. The minimum
 requirement is [`signTypedData`](https://eips.ethereum.org/EIPS/eip-712) and an `address`:
@@ -113,9 +114,7 @@ const client = new ExchangeClient({ transport, wallet });
 await client.order({ orders: [/* ... */], grouping: "na" });
 ```
 
-{% endtab %}
-
-{% endtabs %}
+</details>
 
 ### Multi-sig
 
@@ -231,15 +230,13 @@ const client = new ExchangeClient({
 });
 ```
 
-{% hint style="warning" %}
-
-A custom `nonceManager` MUST return unique, monotonically increasing values per address — a plain
-`(address) => Date.now()` reintroduces same-millisecond collisions, and Hyperliquid only tracks the 100 highest
-nonces per user (rejecting repeats and anything outside that window). When more than one process signs for the same
-wallet, back the manager with shared state (e.g. Redis). See
-[Operational nonce rules](signing.md#operational-nonce-rules).
-
-{% endhint %}
+> [!WARNING]
+>
+> A custom `nonceManager` MUST return unique, monotonically increasing values per address — a plain
+> `(address) => Date.now()` reintroduces same-millisecond collisions, and Hyperliquid only tracks the 100 highest
+> nonces per user (rejecting repeats and anything outside that window). When more than one process signs for the same
+> wallet, back the manager with shared state (e.g. Redis). See
+> [Operational nonce rules](signing.md#operational-nonce-rules).
 
 ### Pre-signed payloads (sign now, submit later)
 
@@ -279,14 +276,12 @@ Beyond callback settle, enforcement is **best-effort**:
   rejection by definition. The rejection is delivered to the attempt's own promise; observing it is the leaker's
   responsibility, not something the SDK can prevent.
 
-{% hint style="warning" %}
-
-The nonce is consumed at **prepare** time. The exchange tracks the 100 highest nonces per user: a prepared payload
-stays valid while its nonce is among them (and within the block-timestamp window) — another request consuming a
-later nonce does NOT invalidate it. The payload goes **stale** only once 100 newer nonces have been consumed.
-Prepare immediately before use anyway.
-
-{% endhint %}
+> [!WARNING]
+>
+> The nonce is consumed at **prepare** time. The exchange tracks the 100 highest nonces per user: a prepared payload
+> stays valid while its nonce is among them (and within the block-timestamp window) — another request consuming a
+> later nonce does NOT invalidate it. The payload goes **stale** only once 100 newer nonces have been consumed.
+> Prepare immediately before use anyway.
 
 ### Orders over WebSocket (low latency)
 
@@ -315,16 +310,14 @@ const client = new ExchangeClient({ transport, wallet });
 await client.order({ orders: [/* ... */], grouping: "na" });
 ```
 
-{% hint style="warning" %}
-
-The server allows at most
-[100 simultaneous in-flight post messages](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits)
-across all WebSocket connections per IP (plus 2000 messages/minute overall) — the cap counts concurrent requests, not
-requests per minute, so with typical round trips it sustains far more than the HTTP per-minute budget. An over-limit
-post is rejected and the affected call throws `WebSocketRequestError` ("too many pending post requests"). Leave
-headroom when several clients share the connection or the IP runs several connections.
-
-{% endhint %}
+> [!WARNING]
+>
+> The server allows at most
+> [100 simultaneous in-flight post messages](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits)
+> across all WebSocket connections per IP (plus 2000 messages/minute overall) — the cap counts concurrent requests, not
+> requests per minute, so with typical round trips it sustains far more than the HTTP per-minute budget. An over-limit
+> post is rejected and the affected call throws `WebSocketRequestError` ("too many pending post requests"). Leave
+> headroom when several clients share the connection or the IP runs several connections.
 
 Two more caveats: explorer requests are HTTP-only, so keep an `HttpTransport` around if you use
 [`ExplorerClient`](#explorer-endpoint); and WS requests are bounded by the transport-wide `timeout` — the HTTP-only
@@ -508,18 +501,16 @@ await client.order({ orders: [/* ... */], grouping: "na" }, {
 });
 ```
 
-{% hint style="danger" %}
-
-**Unsafe for untrusted input.** On this path the SDK performs no validation, normalization, default-filling, or key
-reordering — parameters are signed and posted exactly as given, so they must already be in canonical wire form:
-
-- object keys in schema-declared order (the signature commits to the encoded key order);
-- decimals as normalized strings (e.g. `"30000"`, not `3e4` or `"030000"`);
-- addresses and hex strings in lowercase;
-- every schema field with a default (e.g. `grouping: "na"`) provided explicitly.
-
-Invalid input is the caller's problem: instead of a client-side `ValidationError`, the server rejects the request —
-detecting that drift is the cost of the saved microseconds. Cheap deterministic guards for documented constraints
-(e.g. `scheduleCancel`'s 5-second lead time) still run.
-
-{% endhint %}
+> [!CAUTION]
+>
+> **Unsafe for untrusted input.** On this path the SDK performs no validation, normalization, default-filling, or key
+> reordering — parameters are signed and posted exactly as given, so they must already be in canonical wire form:
+>
+> - object keys in schema-declared order (the signature commits to the encoded key order);
+> - decimals as normalized strings (e.g. `"30000"`, not `3e4` or `"030000"`);
+> - addresses and hex strings in lowercase;
+> - every schema field with a default (e.g. `grouping: "na"`) provided explicitly.
+>
+> Invalid input is the caller's problem: instead of a client-side `ValidationError`, the server rejects the request —
+> detecting that drift is the cost of the saved microseconds. Cheap deterministic guards for documented constraints
+> (e.g. `scheduleCancel`'s 5-second lead time) still run.

@@ -30,14 +30,14 @@ Every task in this repo runs through Bun. There is no other toolchain.
 | Command                        | What it does                                                         |
 | ------------------------------ | -------------------------------------------------------------------- |
 | `bun install`                  | Install dependencies.                                                |
-| `bun run check`                | Format, lint, TypeScript 5 + 7 types, JSDoc sync, export sync.       |
+| `bun run check`                | Format, lint, docs, TypeScript 5 + 7, JSDoc sync, export sync.       |
 | `bun test tests/`              | Full test suite; the online tests need network and credentials.      |
 | `HL_OFFLINE=1 bun test tests/` | Offline gate: skips every live-endpoint test. This is what CI runs.  |
 | `bun run perf`                 | Performance suite; prints a table (`--out <path>` writes JSON).      |
 | `bun run perf:gate`            | Zero-performance-regression gate (see below).                        |
 | `bun run build`                | Emit the publishable package into `dist/`.                           |
 
-`bun run check` is a bundle of narrower scripts (`check:format`, `check:lint`, `check:types`, `check:ts7`,
+`bun run check` is a bundle of narrower scripts (`check:format`, `check:lint`, `check:docs`, `check:types`, `check:ts7`,
 `check:jsdoc`, `check:export`) — run one directly when you only want to re-check that dimension. `bun run format` and
 `bun run lint` are the `--write` variants of the first two.
 
@@ -86,7 +86,7 @@ that change. If the gate flaps on a busy machine, widen the band with `--thresho
 
 ## Coding Guidelines
 
-- **Style**: After making all changes, run: `bun run check` (format, lint, TypeScript 5, TypeScript 7, doc/export sync).
+- **Style**: After making changes, run `bun run check` (format, lint, docs, TypeScript 5 + 7, JSDoc/export sync).
 - **Performance**: Zero-regression policy — if you touch a hot path, run `bun run perf:gate` before opening a PR.
 - **Dependencies**: Use small and easily auditable dependencies (e.g.
   [@noble/hashes](https://www.npmjs.com/package/@noble/hashes) or [valibot](https://valibot.dev/)).

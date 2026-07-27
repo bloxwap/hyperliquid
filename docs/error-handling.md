@@ -7,7 +7,7 @@ Typed exceptions thrown by `@bloxwap/hyperliquid` so you can route error handlin
 Every exception the SDK itself throws extends `HyperliquidError`. One `instanceof` check is enough to separate
 "something in the SDK threw" from "something else threw".
 
-```
+```text
 Error
 └─ HyperliquidError
    ├─ ValidationError

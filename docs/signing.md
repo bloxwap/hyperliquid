@@ -87,9 +87,8 @@ Three optional parameters:
 - `vaultAddress` — sign through a vault; folded into the hash.
 - `expiresAfter` — reject the action after this timestamp; folded into the hash.
 
-{% tabs %}
-
-{% tab title="viem" %}
+<details>
+<summary>viem</summary>
 
 ```ts
 import { signL1Action } from "@bloxwap/hyperliquid/signing";
@@ -109,9 +108,10 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Browser (viem)" %}
+<details>
+<summary>Browser (viem)</summary>
 
 ```ts
 import { signL1Action } from "@bloxwap/hyperliquid/signing";
@@ -133,9 +133,10 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Custom" %}
+<details>
+<summary>Custom</summary>
 
 ```ts
 import { signL1Action } from "@bloxwap/hyperliquid/signing";
@@ -161,9 +162,7 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
-
-{% endtabs %}
+</details>
 
 ## User-signed actions
 
@@ -174,9 +173,8 @@ Each action type has its own types, exported from `@bloxwap/hyperliquid/api/exch
 `PascalCase(actionType) + "Types"` — `ApproveAgentTypes` for `approveAgent`, `Withdraw3Types` for `withdraw3`, and so
 on.
 
-{% tabs %}
-
-{% tab title="viem" %}
+<details>
+<summary>viem</summary>
 
 ```ts
 import { signUserSignedAction } from "@bloxwap/hyperliquid/signing";
@@ -203,9 +201,10 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Browser (viem)" %}
+<details>
+<summary>Browser (viem)</summary>
 
 ```ts
 import { signUserSignedAction } from "@bloxwap/hyperliquid/signing";
@@ -234,9 +233,10 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Custom" %}
+<details>
+<summary>Custom</summary>
 
 ```ts
 import { signUserSignedAction } from "@bloxwap/hyperliquid/signing";
@@ -269,9 +269,7 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
-
-{% endtabs %}
+</details>
 
 ## Action hashing
 
@@ -288,12 +286,10 @@ const hash = createL1ActionHash({
 });
 ```
 
-{% hint style="warning" %}
-
-The hash depends on key order in the action object. The expected order varies by action type — look it up in that
-action's valibot schema (e.g., `CancelRequest` for `cancel`), or hand the action to [`canonicalize`](#canonicalize).
-
-{% endhint %}
+> [!WARNING]
+>
+> The hash depends on key order in the action object. The expected order varies by action type — look it up in that
+> action's valibot schema (e.g., `CancelRequest` for `cancel`), or hand the action to [`canonicalize`](#canonicalize).
 
 ## Canonicalize
 
@@ -330,9 +326,8 @@ It returns `{ action, signature }`, where `action` is the multi-sig wrapper — 
 
 Optional `isTestnet`, `vaultAddress`, and `expiresAfter` behave as in [`signL1Action`](#l1-actions).
 
-{% tabs %}
-
-{% tab title="viem" %}
+<details>
+<summary>viem</summary>
 
 ```ts
 import { signMultiSigL1 } from "@bloxwap/hyperliquid/signing";
@@ -362,9 +357,10 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Browser (viem)" %}
+<details>
+<summary>Browser (viem)</summary>
 
 ```ts
 import { signMultiSigL1 } from "@bloxwap/hyperliquid/signing";
@@ -399,9 +395,10 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Custom" %}
+<details>
+<summary>Custom</summary>
 
 ```ts
 import { signMultiSigL1 } from "@bloxwap/hyperliquid/signing";
@@ -436,9 +433,7 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
-
-{% endtabs %}
+</details>
 
 ### signMultiSigUserSigned
 
@@ -448,9 +443,8 @@ pass the same `types` as the single-signer call.
 
 It returns `{ action, signature }` — `action` is the wrapper to send, not your original action.
 
-{% tabs %}
-
-{% tab title="viem" %}
+<details>
+<summary>viem</summary>
 
 ```ts
 import { signMultiSigUserSigned } from "@bloxwap/hyperliquid/signing";
@@ -486,9 +480,10 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Browser (viem)" %}
+<details>
+<summary>Browser (viem)</summary>
 
 ```ts
 import { signMultiSigUserSigned } from "@bloxwap/hyperliquid/signing";
@@ -530,9 +525,10 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
+</details>
 
-{% tab title="Custom" %}
+<details>
+<summary>Custom</summary>
 
 ```ts
 import { signMultiSigUserSigned } from "@bloxwap/hyperliquid/signing";
@@ -572,9 +568,7 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 });
 ```
 
-{% endtab %}
-
-{% endtabs %}
+</details>
 
 ## Wallet compatibility
 

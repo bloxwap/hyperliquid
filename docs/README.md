@@ -1,41 +1,42 @@
-# @bloxwap/hyperliquid
+# @bloxwap/hyperliquid documentation
 
-A community-supported [Hyperliquid API](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api) SDK for all
-major JS runtimes, written in TypeScript.
+`@bloxwap/hyperliquid` is a community-supported Hyperliquid API SDK for TypeScript and JavaScript runtimes.
+
+Use the [table of contents](SUMMARY.md) to browse every guide, or start with:
+
+- [Connect to Hyperliquid](transports.md)
+- [Clients](clients.md)
+- [Error handling](error-handling.md)
+- [Utilities](utilities.md)
+- [Signing](signing.md)
 
 ## Installation
 
-{% tabs %}
-
-{% tab title="Bun 1.3.3+" %}
+### Bun 1.3.3+
 
 ```sh
 bun add @bloxwap/hyperliquid
 ```
 
-{% endtab %}
-
-{% tab title="Node.js 22.12+" %}
+### Node.js 22.12+
 
 ```sh
 npm i @bloxwap/hyperliquid
 ```
 
-{% endtab %}
-
-{% tab title="pnpm / yarn" %}
+### pnpm
 
 ```sh
 pnpm add @bloxwap/hyperliquid
 ```
 
+### Yarn
+
 ```sh
 yarn add @bloxwap/hyperliquid
 ```
 
-{% endtab %}
-
-{% tab title="React Native 0.86+" %}
+### React Native 0.86+
 
 ```sh
 npm i @bloxwap/hyperliquid
@@ -54,7 +55,7 @@ import "web-streams-polyfill/polyfill";
 import "compression-streams-polyfill";
 ```
 
-On **React Native < 0.86** the global `Event`/`EventTarget` is missing — polyfill it:
+On **React Native < 0.86**, the global `Event` and `EventTarget` are missing:
 
 ```sh
 npm i event-target-shim
@@ -62,11 +63,12 @@ npm i event-target-shim
 
 ```ts
 import { Event, EventTarget } from "event-target-shim";
+
 if (!globalThis.EventTarget) globalThis.EventTarget = EventTarget;
 if (!globalThis.Event) globalThis.Event = Event;
 ```
 
-On **React Native < 0.84** the native `URL` is incomplete — add `react-native-url-polyfill`:
+On **React Native < 0.84**, the native `URL` is incomplete:
 
 ```sh
 npm i react-native-url-polyfill
@@ -76,19 +78,14 @@ npm i react-native-url-polyfill
 import "react-native-url-polyfill/auto";
 ```
 
-Import every polyfill before `@bloxwap/hyperliquid` (e.g. at the top of `index.js`).
-
-{% endtab %}
-
-{% endtabs %}
+Import every polyfill before `@bloxwap/hyperliquid`, such as at the top of `index.js`.
 
 ## Quick start
 
-{% tabs %}
+### Read market data
 
-{% tab title="InfoClient" %}
-
-Read market data, account state, order book. [Learn more](clients.md#info-endpoint)
+Use `InfoClient` to read market data, account state, and order books. See the [Info endpoint](clients.md#info-endpoint)
+for all client behavior.
 
 ```ts
 import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
@@ -99,18 +96,16 @@ const client = new InfoClient({ transport });
 const mids = await client.allMids();
 ```
 
-{% endtab %}
+### Trade
 
-{% tab title="ExchangeClient" %}
-
-Place orders, transfer funds, manage accounts. [Learn more](clients.md#exchange-endpoint)
+Use `ExchangeClient` to place orders, transfer funds, and manage accounts. See the
+[Exchange endpoint](clients.md#exchange-endpoint) before using a funded wallet.
 
 ```ts
 import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
 
 const wallet = privateKeyToAccount("0x...");
-
 const transport = new HttpTransport();
 const client = new ExchangeClient({ transport, wallet });
 
@@ -127,11 +122,10 @@ await client.order({
 });
 ```
 
-{% endtab %}
+### Subscribe
 
-{% tab title="SubscriptionClient" %}
-
-Receive real-time updates via WebSocket. [Learn more](clients.md#websocket-subscriptions)
+Use `SubscriptionClient` to receive real-time updates. See
+[WebSocket subscriptions](clients.md#websocket-subscriptions) for subscription lifecycle details.
 
 ```ts
 import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
@@ -144,11 +138,10 @@ await client.allMids((data) => {
 });
 ```
 
-{% endtab %}
+### Explore
 
-{% tab title="ExplorerClient" %}
-
-Look up blocks, transactions, and addresses. [Learn more](clients.md#explorer-endpoint)
+Use `ExplorerClient` to look up blocks, transactions, and addresses. See the
+[Explorer endpoint](clients.md#explorer-endpoint) for the available methods.
 
 ```ts
 import { ExplorerClient, HttpTransport } from "@bloxwap/hyperliquid";
@@ -159,19 +152,15 @@ const client = new ExplorerClient({ transport });
 const block = await client.blockDetails({ height: 123 });
 ```
 
-{% endtab %}
-
-{% endtabs %}
-
 ## Versioning
 
 This SDK follows [Semantic Versioning](https://semver.org/). Until `1.0.0`, breaking changes bump the minor version and
-everything else bumps the patch — the [caret-range](https://github.com/npm/node-semver#caret-ranges-123-025-004)
-convention.
+everything else bumps the patch, following the
+[caret-range convention](https://github.com/npm/node-semver#caret-ranges-123-025-004).
 
-The exception is the request, response, and event types that mirror the Hyperliquid API. The API is unversioned and
-always serves its latest shape, so changes to these types ship in **patch** releases even when breaking — the break
-comes from Hyperliquid, not the SDK.
+The exception is request, response, and event types that mirror the Hyperliquid API. The API is unversioned and always
+serves its latest shape, so changes to these types ship in patch releases even when breaking: the break comes from
+Hyperliquid, not the SDK.
 
-For places where the official Hyperliquid docs and the live API currently disagree — and what this SDK does about
-each — see [Known documentation drift](reference/known-drift.md).
+For places where the official Hyperliquid documentation and the live API currently disagree, see
+[Known documentation drift](reference/known-drift.md).
