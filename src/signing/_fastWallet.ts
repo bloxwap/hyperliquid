@@ -43,10 +43,17 @@ let fallbackWarningShown = false;
  * Dynamically imports `tiny-secp256k1`, returning `undefined` when the optional dependency is
  * missing or unusable. The shape check guards against a partially linked install the same way the
  * `try` guards against an absent one: both route to the viem/noble fallback.
+ *
+ * Exported (never from `mod.ts`) so tests can drive the failure arms through the same code the
+ * real path uses: ESM module records are immutable, so a rejecting or partially linked real
+ * import cannot be simulated any other way — see {@linkcode _setEccLoaderForTests} for why module
+ * mocking is not an option. Production calls always take the default real import.
  */
-async function loadTinySecp256k1(): Promise<TinySecp256k1 | undefined> {
+export async function loadTinySecp256k1(
+  importEcc: () => Promise<unknown> = () => import("tiny-secp256k1"),
+): Promise<TinySecp256k1 | undefined> {
   try {
-    const ecc = await import("tiny-secp256k1");
+    const ecc = (await importEcc()) as TinySecp256k1;
     if (
       typeof ecc.signRecoverable !== "function" ||
       typeof ecc.pointFromScalar !== "function" ||

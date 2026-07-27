@@ -11,6 +11,7 @@
 
 ## Guides
 
+- [Guides](guides/README.md)
 - [Market orders](guides/market-orders.md)
 - [Agent wallets and vaults](guides/agent-wallets-and-vaults.md)
 - [Browser wallets](guides/browser-wallets.md)
@@ -18,4 +19,5 @@
 
 ## Reference
 
+- [Reference](reference/README.md)
 - [Known documentation drift](reference/known-drift.md)
