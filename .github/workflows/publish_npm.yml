@@ -27,10 +27,10 @@ jobs:
         run: |
           OIDC_TOKEN=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org" | jq -r .value)
-          # Decode the JWT payload (claims only — the signature part is dropped) to see
-          # exactly which repo/workflow/environment npm's exchange is matching against.
-          PAYLOAD=$(echo "$OIDC_TOKEN" | cut -d. -f2)
-          echo "$PAYLOAD" | tr '_-' '/+' | { p=$(cat); pad=$(( (4 - ${#p} % 4) % 4 )); printf '%s%*s' "$p" "$pad" '' | tr ' ' '='; } | base64 -d 2>/dev/null | jq '{aud, repository, repository_owner, workflow_ref, job_workflow_ref, ref, environment, actor, event_name}'
+          echo "exchange response:"
+          curl -s -w "\nHTTP %{http_code}\n" -X POST \
+            -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/@bloxwap%2fhyperliquid" | head -10
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
