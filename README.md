@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue&style=flat-square"></a>
+  <a href="https://github.com/bloxwap/hyperliquid/blob/main/package.json"><img alt="Release version" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbloxwap%2Fhyperliquid%2Fmain%2Fpackage.json&query=%24.version&label=release&style=flat-square"></a>
   <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg?style=flat-square"></a>
   <a href="https://codecov.io/gh/bloxwap/hyperliquid"><img alt="Codecov coverage" src="https://img.shields.io/codecov/c/github/bloxwap/hyperliquid?branch=main&style=flat-square"></a>
   <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid?style=flat-square"></a>
