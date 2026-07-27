@@ -146,7 +146,3 @@ await subs.l2Book({ coin: "ETH" }, (data) => {
 > - For trading bots, prefer a Hyperliquid **agent wallet** (API wallet) over the master account key: an agent key can
 >   trade but cannot withdraw, and it can be revoked without rotating the master key.
 > - See [Signing](docs/signing.md) for how wallets, signatures, and nonces work.
-
-## Documentation
-
-Full guides, examples, and API reference: [nktkas.gitbook.io/hyperliquid](https://nktkas.gitbook.io/hyperliquid)
