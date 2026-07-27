@@ -434,6 +434,101 @@ describe("HttpTransport", () => {
     });
   });
 
+  describe("shared timeout wheel", () => {
+    // The transport schedules every request timeout on one wheel instance; these tests pin the
+    // per-request semantics under concurrency: mixed values, insertion order at equal deadlines,
+    // `null` entries, and the armed-value snapshot.
+    /** Never responds; rejects when the request's abort signal fires. */
+    const hangUntilAbort = (_req: FetchArgs[0], init?: FetchArgs[1]): Promise<Response> =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+      });
+
+    test("concurrent requests with mixed timeouts each get their own deadline", async () => {
+      const stub = stubFetch(hangUntilAbort);
+      try {
+        const transport = new HttpTransport({ timeout: 30, exchangeTimeout: 5 });
+        const order: string[] = [];
+        const watch = (name: string, promise: Promise<unknown>): Promise<unknown> =>
+          promise.catch((error: unknown) => {
+            order.push(name);
+            throw error;
+          });
+
+        const exchange = watch("exchange", transport.request("exchange", {}));
+        const info = watch("info", transport.request("info", {}));
+        await assertRejects(() => exchange, HttpRequestError, "Request timed out after 5 ms");
+        await assertRejects(() => info, HttpRequestError, "Request timed out after 30 ms");
+        assertEquals(order, ["exchange", "info"]); // the 5 ms deadline beats the shared 30 ms one
+        assertEquals(stub.calls, 2);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("same-timeout concurrent requests time out in schedule order", async () => {
+      const stub = stubFetch(hangUntilAbort);
+      try {
+        const transport = new HttpTransport({ timeout: 5 });
+        const order: number[] = [];
+        const pending = [0, 1, 2].map((i) =>
+          transport.request("info", {}).catch((error: unknown) => {
+            order.push(i);
+            throw error;
+          }),
+        );
+
+        for (const p of pending) await assertRejects(() => p, HttpRequestError, "Request timed out after 5 ms");
+        assertEquals(order, [0, 1, 2]);
+        assertEquals(stub.calls, 3);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("a timeout: null request outlives timing-out siblings on the same transport", async () => {
+      // Exchange requests hang forever; the info request hangs until its timeout aborts it.
+      const stub = stubFetch((req, init) => {
+        if (new Request(req).url.endsWith("/exchange")) {
+          return new Promise((resolve) => setTimeout(() => resolve(jsonResponse()), 30));
+        }
+        return hangUntilAbort(req, init);
+      });
+      try {
+        const transport = new HttpTransport({ timeout: 5, exchangeTimeout: null });
+        const timed = transport.request("info", {});
+        const untimed = transport.request("exchange", {});
+
+        await assertRejects(() => timed, HttpRequestError, "Request timed out after 5 ms");
+        await untimed; // no wheel entry: resolves when fetch does, well past the 5 ms sibling timeout
+        assertEquals(stub.calls, 2);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("shortening the timeout mid-flight does not move the armed deadline", async () => {
+      const stub = stubFetch(hangUntilAbort);
+      try {
+        const transport = new HttpTransport({ timeout: 30 });
+        const pending = transport.request("info", {});
+        transport.timeout = 5; // the wheel stamped the deadline when arming: still 30 ms
+
+        let settled = false;
+        void pending
+          .catch(() => {})
+          .then(() => {
+            settled = true;
+          });
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        assert(!settled, "must not re-arm to the shortened 5 ms");
+        await assertRejects(() => pending, HttpRequestError, "Request timed out after 30 ms");
+      } finally {
+        stub.restore();
+      }
+    });
+  });
+
   describe("429 rate limit responses", () => {
     test("429 throws HttpRateLimitError carrying status and retryAfter", async () => {
       mockFetch(() => new Response("Too Many Requests", { status: 429, headers: { "Retry-After": "30" } }));

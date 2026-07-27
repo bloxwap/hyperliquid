@@ -265,6 +265,8 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   fetchOptions: Omit<RequestInit, "body" | "method">;
   /** Opt-in token-bucket rate limiter; `null` keeps requests unthrottled (the default). */
   private readonly _rateLimit: TokenBucketRateLimiter | null;
+  /** Shared request-timeout scheduler: at most one armed native timer, however many requests are in flight. */
+  private readonly _timeouts = new abort.TimeoutWheel();
   /** Memoized endpoint URLs, keyed by base and endpoint; mutating `apiUrl`/`rpcUrl` simply misses the cache. */
   private readonly _urlCache = new Map<string, URL>();
 
@@ -339,7 +341,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
         await rateLimit.acquire(requestWeight(endpoint, snapshot), controller.signal);
       }
 
-      timeout = abort.scheduleTimeout(controller, timeoutMs);
+      timeout = this._timeouts.schedule(controller, timeoutMs);
 
       // --- Request init ------------------------------------------------------
       const url = this._endpointUrl(endpoint === "explorer" ? this.rpcUrl : this.apiUrl, endpoint);
