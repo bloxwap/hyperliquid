@@ -53,8 +53,9 @@ async function git(...args: string[]): Promise<string> {
 
 /**
  * Fingerprint of the whole perf suite's SOURCE: every file that defines what the
- * scenarios measure — `_harness.ts`, `_fixtures.ts`, `_helpers.ts`, and every
- * `scenarios/*.ts` module, enumerated sorted for determinism.
+ * scenarios measure and how they are run — `_harness.ts`, `_fixtures.ts`, `_helpers.ts`,
+ * this runner (`run.ts` drives scenario selection, metadata collection, and the report
+ * format), and every `scenarios/*.ts` module, enumerated sorted for determinism.
  *
  * Unlike the per-scenario fingerprint (which covers one scenario's definition and call
  * sites), this catches edits ANYWHERE in the suite — e.g. a fixture payload change inside
@@ -65,7 +66,13 @@ async function git(...args: string[]): Promise<string> {
 async function suiteFingerprint(): Promise<string> {
   const suiteDir = import.meta.dir;
   const scenarioFiles = (await readdir(join(suiteDir, "scenarios"))).filter((f) => f.endsWith(".ts")).sort();
-  const files = ["_harness.ts", "_fixtures.ts", "_helpers.ts", ...scenarioFiles.map((f) => join("scenarios", f))];
+  const files = [
+    "_harness.ts",
+    "_fixtures.ts",
+    "_helpers.ts",
+    "run.ts",
+    ...scenarioFiles.map((f) => join("scenarios", f)),
+  ];
 
   const hash = createHash("sha256");
   for (const file of files) {

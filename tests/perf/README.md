@@ -123,10 +123,11 @@ symptoms have the same cause; a fix that isolates listener errors per message re
   from another CPU or runtime turns every comparison into noise. `compare.ts` and `gate.ts` refuse to compare reports
   from different environments — a hard error, overridable with `--allow-environment-mismatch`.
 - Every report carries a **suite fingerprint**: a hash of the suite's source files (`scenarios/*.ts`, `_fixtures.ts`,
-  `_helpers.ts`, `_harness.ts`). The gate fails closed when it differs between the two revisions — a PR that edits
-  anything under `tests/perf` changes the workload being compared and is flagged for explicit review rather than waved
-  through. Reports recorded before fingerprinting trip a presence-parity check; `--allow-unfingerprinted-base` is the
-  documented transition grace, and the fix is to re-record the baseline / merge a fingerprinted base.
+  `_helpers.ts`, `_harness.ts`, `run.ts`). The gate fails closed when it differs between the two revisions — a PR that
+  edits anything under `tests/perf` changes the workload being compared and is flagged for explicit review rather than
+  waved through. Reports recorded before fingerprinting trip a presence-parity check; `--allow-unfingerprinted-base`
+  excuses ONLY a pre-fingerprint base (never a current side that dropped fingerprints), and the fix is to re-record
+  the baseline / merge a fingerprinted base.
 - [`results/baseline.txt`](results/baseline.txt), `results/baseline_bench.log` and `results/baseline_test.log` are
   historical artifacts: the pre-fix output of the original Deno `bench`/`test` suite this harness replaced. They are kept
   as evidence of the pre-fix numbers and are not read by any tooling.

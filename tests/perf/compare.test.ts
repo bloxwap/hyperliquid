@@ -384,6 +384,22 @@ test("workload fingerprint: mismatch fails, presence parity fails, grace excuses
     },
   );
   assert(isFailure(graceMismatch));
+
+  // Direction: the grace excuses ONLY base-absent + head-present. A head that DROPPED
+  // fingerprints fails with or without the flag.
+  const headDropped = comparePairedReports(withPrint("base", "aaaaaaaaaaaaaaaa"), withPrint("head", undefined), 10);
+  assert(isFailure(headDropped));
+  assert(headDropped.failures[0].includes("never excused"), `direction: ${headDropped.failures[0]}`);
+  const headDroppedGrace = comparePairedReports(
+    withPrint("base", "aaaaaaaaaaaaaaaa"),
+    withPrint("head", undefined),
+    10,
+    {
+      allowUnfingerprintedBase: true,
+    },
+  );
+  assert(isFailure(headDroppedGrace));
+  assert(headDroppedGrace.failures[0].includes("never excused"), `direction+grace: ${headDroppedGrace.failures[0]}`);
 });
 
 test("suite fingerprint: mismatch fails closed, presence parity fails, grace excuses only parity", () => {
@@ -428,6 +444,28 @@ test("suite fingerprint: mismatch fails closed, presence parity fails, grace exc
     mixed.failures.some((f) => f.includes("different suite versions")),
     `mixed: ${mixed.failures}`,
   );
+
+  // Direction: the grace excuses ONLY base-absent + head-present. A head that DROPPED
+  // the suite fingerprint fails with or without the flag.
+  const headDropped = comparePairedReports(withSuite("base", "suiteaaaaaaaaaaa"), withSuite("head", undefined), 10);
+  assert(isFailure(headDropped));
+  assert(
+    headDropped.failures.some((f) => f.includes("never excused")),
+    `direction: ${headDropped.failures}`,
+  );
+  const headDroppedGrace = comparePairedReports(
+    withSuite("base", "suiteaaaaaaaaaaa"),
+    withSuite("head", undefined),
+    10,
+    {
+      allowUnfingerprintedBase: true,
+    },
+  );
+  assert(isFailure(headDroppedGrace));
+  assert(
+    headDroppedGrace.failures.some((f) => f.includes("never excused")),
+    `direction+grace: ${headDroppedGrace.failures}`,
+  );
 });
 
 test("round labels are required in paired mode", () => {
@@ -471,4 +509,207 @@ test("round labels from different suites or out of order fail the comparison", (
   assert(isFailure(misordered));
   assertEquals(misordered.failures.length, 1);
   assert(misordered.failures[0].includes("measurement order"), `order: ${misordered.failures[0]}`);
+});
+
+test("structurally broken reports throw instead of passing (fail-closed)", () => {
+  const base = () => roundsOf("base", "scenario", [100, 100, 100]);
+  const head = () => roundsOf("head", "scenario", [100, 100, 100]);
+  /** Mutates head round 1 and returns the [base, head] pair. */
+  const withBrokenHead = (mutate: (report: PerfReport) => void): [PerfReport[], PerfReport[]] => {
+    const runs = head();
+    mutate(runs[0]);
+    return [base(), runs];
+  };
+  const mutable = (report: PerfReport): Record<string, unknown> =>
+    report.scenarios[0] as unknown as Record<string, unknown>;
+
+  // The fail-open being pinned shut: a broken nsPerUnit would turn every log-ratio and
+  // band into NaN, and NaN falls through every verdict branch to "unchanged".
+  for (const bad of [0, -5, Number.NaN, undefined]) {
+    assertThrows(
+      () => comparePairedReports(...withBrokenHead((r) => void (mutable(r).nsPerUnit = bad)), 10),
+      Error,
+      'current round 1, scenario "scenario": nsPerUnit must be finite and positive',
+    );
+  }
+  // …and none of them can PASS, not just fail a verdict:
+  for (const bad of [0, -5, Number.NaN, undefined]) {
+    let passed = false;
+    try {
+      passed = !isFailure(comparePairedReports(...withBrokenHead((r) => void (mutable(r).nsPerUnit = bad)), 10));
+    } catch {
+      passed = false;
+    }
+    assert(!passed, `nsPerUnit=${String(bad)} must not be able to pass the gate`);
+  }
+
+  // Duplicate scenario names within one report: the join key must be unique.
+  assertThrows(
+    () =>
+      compareReports(
+        report("baseline", [{ name: "scenario", nsPerUnit: 100 }]),
+        report("current", [
+          { name: "scenario", nsPerUnit: 100 },
+          { name: "scenario", nsPerUnit: 200 },
+        ]),
+        10,
+      ),
+    Error,
+    'duplicate scenario name "scenario"',
+  );
+
+  // A negative margin of error is not a measurement.
+  assertThrows(
+    () => comparePairedReports(...withBrokenHead((r) => void (mutable(r).rme = -1)), 10),
+    Error,
+    "rme must be finite and non-negative",
+  );
+
+  // Sampling parameters must be positive integers.
+  assertThrows(
+    () => comparePairedReports(...withBrokenHead((r) => void (mutable(r).samples = 0)), 10),
+    Error,
+    "samples must be a positive integer",
+  );
+  assertThrows(
+    () => comparePairedReports(...withBrokenHead((r) => void (mutable(r).iterations = 1.5)), 10),
+    Error,
+    "iterations must be a positive integer",
+  );
+
+  // The unmutated pair passes validation (and the gate).
+  const result = comparePairedReports(base(), head(), 10);
+  assertEquals(result.failures, []);
+  assert(!isFailure(result));
+});
+
+test("structural validator covers meta shape, identity strings, percentiles, and stddev", () => {
+  const valid = () => report("base-1", [{ name: "scenario", nsPerUnit: 100 }]);
+  const withMeta = (mutate: (meta: Record<string, unknown>) => void): PerfReport => {
+    const r = valid();
+    mutate(r.meta as unknown as Record<string, unknown>);
+    return r;
+  };
+  const withScenario = (mutate: (scenario: Record<string, unknown>) => void): PerfReport => {
+    const r = valid();
+    mutate(r.scenarios[0] as unknown as Record<string, unknown>);
+    return r;
+  };
+  const expectThrow = (r: PerfReport, message: string): void => {
+    assertThrows(() => compareReports(r, valid(), 10), Error, message);
+  };
+
+  // The full probe from the review: meta {commit: null, dirty: "no", os: null, date:
+  // "garbage"} and scenario {group: null, description: 42, unit: {}, p50: NaN, …} — it
+  // used to return isFailure=false and then crash renderComparison on commit.slice.
+  const probe = withMeta((m) => {
+    m.commit = null;
+    m.dirty = "no";
+    m.os = null;
+    m.date = "garbage";
+  });
+  probe.scenarios[0] = {
+    ...probe.scenarios[0],
+    ...({ group: null, description: 42, unit: {} } as unknown as PerfReport["scenarios"][number]),
+  };
+  assertThrows(() => compareReports(probe, valid(), 10), Error, "meta.commit");
+  // …and renderComparison never gets a chance to throw, because validation threw first.
+
+  expectThrow(
+    withMeta((m) => (m.commit = null)),
+    "meta.commit must be a non-empty string",
+  );
+  expectThrow(
+    withMeta((m) => (m.dirty = "no")),
+    "meta.dirty must be a boolean",
+  );
+  expectThrow(
+    withMeta((m) => (m.os = null)),
+    "meta.os must be a non-empty string",
+  );
+  expectThrow(
+    withMeta((m) => (m.date = "garbage")),
+    "meta.date must be a valid date string",
+  );
+  expectThrow(
+    withScenario((s) => (s.group = null)),
+    "group must be a non-empty string",
+  );
+  expectThrow(
+    withScenario((s) => (s.description = 42)),
+    "description must be a non-empty string",
+  );
+  expectThrow(
+    withScenario((s) => (s.unit = {})),
+    "unit must be a non-empty string",
+  );
+  expectThrow(
+    withScenario((s) => (s.p50 = Number.NaN)),
+    "p50 must be finite",
+  );
+  expectThrow(
+    withScenario((s) => (s.p75 = Number.POSITIVE_INFINITY)),
+    "p75 must be finite",
+  );
+  expectThrow(
+    withScenario((s) => (s.p99 = -9)),
+    "min <= p50 <= p75 <= p99 <= max",
+  );
+  expectThrow(
+    withScenario((s) => (s.stddev = -1)),
+    "stddev must be finite and non-negative",
+  );
+
+  // A valid report passes validation and renders without throwing.
+  const ok = compareReports(valid(), valid(), 10);
+  assertEquals(ok.failures, []);
+  assert(!isFailure(ok));
+  const rendered = renderComparison(valid(), valid(), ok, 10);
+  assert(rendered.includes("scenario"), `valid report must render:\n${rendered}`);
+});
+
+test("a contaminated round masking a majority regression fails closed", () => {
+  // base 100/100/100 vs head 120/120/1, threshold 10, rme 0: the median is +20% but the
+  // max-deviation band spans [-99%, +14300%] — the whole-band rule would wave two
+  // agreeing regressions through as "unchanged".
+  const result = comparePairedReports(
+    roundsOf("base", "scenario", [100, 100, 100], 0),
+    roundsOf("head", "scenario", [120, 120, 1], 0),
+    10,
+  );
+
+  assert(isFailure(result));
+  assertEquals(result.comparisons.length, 0); // no verdict — the measurement is not trusted
+  assertEquals(result.failures.length, 1);
+  assert(result.failures[0].includes('"scenario"'), `scenario named: ${result.failures[0]}`);
+  assert(result.failures[0].includes("inconclusive"), `inconclusive: ${result.failures[0]}`);
+  assert(result.failures[0].includes("rerun"), `rerun instruction: ${result.failures[0]}`);
+});
+
+test("a contaminated round masking a majority improvement fails closed too", () => {
+  // Mirror image: base 100/100/100 vs head 80/80/1000 — two rounds agree on -20%, one
+  // 10x outlier hides it. An inconclusive measurement fails regardless of direction.
+  const result = comparePairedReports(
+    roundsOf("base", "scenario", [100, 100, 100], 0),
+    roundsOf("head", "scenario", [80, 80, 1000], 0),
+    10,
+  );
+
+  assert(isFailure(result));
+  assertEquals(result.comparisons.length, 0);
+  assert(result.failures[0].includes("inconclusive"), `inconclusive: ${result.failures[0]}`);
+});
+
+test("a majority regression the band would wave through is still a regression", () => {
+  // base 100/100/100 vs head 130/130/105: two rounds regress +26% (past the 10% floor),
+  // the third quiet round (+5%) widens the band below the floor. The majority decides.
+  const result = comparePairedReports(
+    roundsOf("base", "scenario", [100, 100, 100], 0),
+    roundsOf("head", "scenario", [130, 130, 105], 0),
+    10,
+  );
+
+  assertEquals(result.failures, []);
+  assertEquals(result.comparisons[0].verdict, "regression");
+  assert(isFailure(result));
 });

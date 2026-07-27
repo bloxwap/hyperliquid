@@ -119,6 +119,12 @@ jobs:
           # workload fingerprinting carry no fingerprints and would otherwise fail the
           # presence-parity check. Remove this flag once the base branch is guaranteed to
           # contain the fingerprinted suite (i.e. once this change is old).
+          #
+          # MIGRATION NOTE: adding run.ts to the suite fingerprint changed the fingerprint
+          # relative to main, so THIS PR's own perf check fails closed BY DESIGN — that red
+          # check is the intended one-time migration and is approved explicitly. The grace
+          # flag covers pre-fingerprint bases ONLY; never widen it (not for suite edits,
+          # not for direction, not for flapping).
           bun run .dev/perf/compare.ts \
             "$RUNNER_TEMP/base-1.json" "$RUNNER_TEMP/base-2.json" "$RUNNER_TEMP/base-3.json" \
             --vs \
