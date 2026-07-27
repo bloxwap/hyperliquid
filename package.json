@@ -89,5 +89,8 @@
     "ts-json-schema-generator": "2.9.0",
     "typescript": "5.9.3",
     "viem": "2.55.8"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -45,6 +45,7 @@ const INHERITED_KEYS = [
   "bugs",
   "repository",
   "engines",
+  "publishConfig",
   "dependencies",
   "optionalDependencies",
 ] as const;

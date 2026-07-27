@@ -49,6 +49,7 @@ jobs:
 
       - name: Publish package
         working-directory: ./dist
-        run: npm publish --tag ${{ steps.tag.outputs.value }}
+        # Scoped packages default to private access (paid); this SDK publishes public.
+        run: npm publish --access public --tag ${{ steps.tag.outputs.value }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
