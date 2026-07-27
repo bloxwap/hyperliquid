@@ -391,7 +391,7 @@ const CASES: MethodCase[] = [
     invalid: [(client) => client.webData3({ user: "0x123" } as never, () => {})],
     channel: "webData3",
     payload: { type: "webData3", user: USER },
-    match: { userState: { user: USER }, perpDexStates: [] },
+    match: { userState: { user: USER, abstraction: "dexAbstraction" }, perpDexStates: [] },
     misses: [{ userState: { user: OTHER_USER }, perpDexStates: [] }],
   },
 ];

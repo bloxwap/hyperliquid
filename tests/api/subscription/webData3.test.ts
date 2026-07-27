@@ -28,6 +28,8 @@ runTest({
     schemaCoverage(responseSchema, data.flat(), [
       "#/properties/userState/properties/agentAddress/defined",
       "#/properties/userState/properties/agentValidUntil/defined",
+      // No testnet account in dexAbstraction mode, so that enum branch can't be produced live.
+      "#/properties/userState/properties/abstraction/enum/3",
     ]);
   },
 });
