@@ -380,7 +380,10 @@ const subscription = await client.allMids(
 ### Unsubscribe
 
 A single connection supports up to
-[1000 active subscriptions and 10 unique users](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits).
+[1000 active subscriptions and 15 unique users](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits)
+(the official docs, updated ~17 days earlier, say 10 — but a live mainnet probe on 2026-07-26 observed the server
+accepting 15 users and rejecting the 16th with "Cannot track more than 15 total users."; the server is the authority
+here, the docs lag).
 Call `unsubscribe()` to remove a listener and free these slots:
 
 ```ts

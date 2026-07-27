@@ -13,7 +13,20 @@ import { type WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.t
 import { requestToId } from "./_id.ts";
 import { payloadEventType } from "./_routing.ts";
 
-/** Per-listener registration: its unsubscribe handle and optional error callback. */
+/** A live reference to a registration: one per subscribing call, until its waiter settles or its handle unsubscribes. */
+interface RegistrationHandle {
+  /** The call's error callback, invoked on subscription failure only while this lease is live. */
+  onError?: (error: WebSocketRequestError) => void;
+  /**
+   * Whether this lease's `subscribe()` call resolved with the subscription live. A failure
+   * is reported through exactly one channel: the pending `subscribe()` promise before that
+   * (an unconfirmed lease never became a subscriber — its `onError` does not fire), the
+   * first live confirmed lease's `onError` after.
+   */
+  confirmed: boolean;
+}
+
+/** Per-listener registration: its routed event type, live leases, and confirmation state. */
 interface ListenerRegistration {
   /**
    * Event type this listener is attached to, derived from its own call's channel and payload.
@@ -24,16 +37,19 @@ interface ListenerRegistration {
    * entry must receive its own channel's frames, not the channel of the call that created it.
    */
   eventType: string;
-  /** Removes this listener and, if it is the last, unsubscribes from the channel. */
-  unsubscribe: () => Promise<void>;
-  /** Optional callback invoked once on subscription failure (see {@link WebSocketSubscriptionManager.subscribe}). */
-  onError?: (error: WebSocketRequestError) => void;
   /**
-   * Whether this listener's `subscribe()` call has resolved. A failure is
-   * reported through exactly one channel: the pending `subscribe()` promise
-   * before that, `onError` after.
+   * Live per-call leases on this registration: pending `subscribe()` waiters plus returned
+   * handles, keyed by identity (a shared callback ref is safe). A call adds one
+   * synchronously on attach and removes it when its waiter settles or its handle's
+   * `unsubscribe()` runs; the registration is retired when the last lease goes away. An
+   * aborting waiter can therefore never roll back a registration an identical joiner still
+   * awaits, and one handle's `unsubscribe()` cannot cut off another live handle.
+   *
+   * Error ownership is first-live-owner: the first live confirmed lease in insertion order
+   * owns the failure callback, and when it retires the next live lease promotes — a failure
+   * fires exactly one `onError`, never a dead lease's.
    */
-  confirmed: boolean;
+  handles: Set<RegistrationHandle>;
 }
 
 /** Internal state for managing a subscription. */
@@ -54,12 +70,25 @@ interface SubscriptionState {
    * hit the same key.
    */
   user: string | undefined;
-  /** Map of event listeners to their registration. */
-  listeners: Map<(data: CustomEvent) => void, ListenerRegistration>;
+  /**
+   * Registrations per event listener, keyed by routed event type within each listener.
+   *
+   * Nested by event type because one callback can subscribe through several channels that
+   * share a payload id — `activeAssetCtx` and `activeSpotAssetCtx` send the identical
+   * `{type:"activeAssetCtx",…}` payload, so both calls land on this one entry, and each must
+   * attach (and later detach) its own channel's registration independently.
+   */
+  listeners: Map<(data: CustomEvent) => void, Map<string, ListenerRegistration>>;
   /** Promise tracking the subscription request. */
   promise: Promise<unknown>;
   /** Whether the subscription request has completed. */
   promiseFinished: boolean;
+  /**
+   * The failure this subscription was torn down with, recorded by `_failSubscription` so a
+   * joiner whose confirmation continuation runs after the teardown can reject with it
+   * instead of resolving a handle into the dead subscription.
+   */
+  failure?: WebSocketRequestError;
 }
 
 /**
@@ -73,6 +102,14 @@ const MAX_SUBSCRIPTIONS = 1000;
 /**
  * Maximum number of unique users across subscriptions; the server rejects the
  * excess without echoing the request, so the guard must run client-side.
+ *
+ * The official docs say 10 (updated ~17 days before the probe), but a live
+ * mainnet probe on 2026-07-26 observed the server accepting 15 users and
+ * rejecting the 16th with an `error` frame "Cannot track more than 15 total
+ * users." — the server is the authority here and the docs lag. The rejection
+ * carries no echoed request, so it cannot be matched to the pending subscribe
+ * and would surface only via the request timeout — another reason the
+ * client-side guard must fire first.
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
  */
@@ -190,51 +227,57 @@ export class WebSocketSubscriptionManager {
     }
 
     // --- Listener registration -----------------------------------------------
-    let registration = subscription.listeners.get(listener);
-    const createdRegistration = registration === undefined;
+    let registration = subscription.listeners.get(listener)?.get(eventType);
     if (!registration) {
-      const unsubscribe = async (): Promise<void> => {
-        this._hlEvents.removeEventListener(eventType, listener);
-        const current = this._subscriptions.get(id);
-        current?.listeners.delete(listener);
-
-        if (current?.listeners.size === 0) {
-          this._deleteSubscription(id);
-
-          if (this._socket.readyState === ReconnectingWebSocket.OPEN) {
-            await this._dispatcher.request("unsubscribe", current.payload);
-          }
-        }
-      };
-
       this._hlEvents.addEventListener(eventType, listener);
-      registration = { eventType, unsubscribe, onError, confirmed: false };
-      subscription.listeners.set(listener, registration);
+      registration = { eventType, handles: new Set() };
+      let bucket = subscription.listeners.get(listener);
+      if (bucket === undefined) subscription.listeners.set(listener, (bucket = new Map()));
+      bucket.set(eventType, registration);
     }
+    // Claimed synchronously, before any await: a concurrent unsubscribe of another handle
+    // must observe this call's lease and leave the registration live.
+    const handle: RegistrationHandle = { onError, confirmed: false };
+    registration.handles.add(handle);
+
+    // Each call gets its own unsubscribe: Set.delete by identity makes a stale call a
+    // no-op, and the identity check inside _retireRegistration keeps it from touching a
+    // later registration that reused this one's slot.
+    const unsubscribe = async (): Promise<void> => {
+      if (!registration.handles.delete(handle)) return;
+      if (registration.handles.size > 0) return;
+      await this._retireRegistration(id, subscription, listener, registration, true);
+    };
 
     // --- Server confirmation -------------------------------------------------
     try {
       await abort.race(subscription.promise, signal);
-      registration.confirmed = true;
+      // The request settled, but a synchronous teardown (terminate, refused re-subscribe)
+      // may have run while this continuation was queued: re-verify that the subscription,
+      // the registration, and this lease are all still live before resolving a handle
+      // into them — an unconfirmed joiner must never resolve into a dead subscription.
+      if (
+        this._subscriptions.get(id) !== subscription ||
+        subscription.listeners.get(listener)?.get(eventType) !== registration ||
+        !registration.handles.has(handle)
+      ) {
+        throw (
+          subscription.failure ??
+          new WebSocketRequestError("Subscription was lost before the confirmation completed", { request: payload })
+        );
+      }
+      handle.confirmed = true;
     } catch (error) {
-      // Roll back only what this call registered: the subscription entry itself
-      // may legitimately survive (a re-subscription rejected by a disconnect is
-      // retried on the next open), but a listener whose subscribe() failed must
-      // never receive events — its caller holds no handle to remove it.
-      if (createdRegistration) {
-        this._hlEvents.removeEventListener(eventType, listener);
-        const current = this._subscriptions.get(id);
-        if (current === subscription) {
-          subscription.listeners.delete(listener);
-          if (subscription.listeners.size === 0) {
-            this._deleteSubscription(id);
-            // On abort the shared request stays in flight and may still confirm:
-            // free the server-side slot nobody is listening to.
-            if (signal && error === signal.reason && this._socket.readyState === ReconnectingWebSocket.OPEN) {
-              this._dispatcher.request("unsubscribe", subscription.payload).catch(() => {});
-            }
-          }
-        }
+      // Roll back only what this call still owns: the subscription entry itself may
+      // legitimately survive (a re-subscription rejected by a disconnect is retried on
+      // the next open), and the registration itself survives while other waiters or
+      // handles reference it — an abort is private to its caller, a failure is shared.
+      registration.handles.delete(handle);
+      if (registration.handles.size === 0) {
+        // On abort the shared request stays in flight and may still confirm: free the
+        // server-side slot nobody is listening to. On failure there is nothing to free.
+        const aborted = signal !== undefined && error === signal.reason;
+        this._retireRegistration(id, subscription, listener, registration, aborted)?.catch(() => {});
       }
       if (signal && error === signal.reason) {
         throw new WebSocketRequestError("Subscription was aborted", { cause: error, request: payload });
@@ -242,9 +285,7 @@ export class WebSocketSubscriptionManager {
       throw error;
     }
 
-    return {
-      unsubscribe: registration.unsubscribe,
-    };
+    return { unsubscribe };
   }
 
   // ===========================================================================
@@ -333,6 +374,38 @@ export class WebSocketSubscriptionManager {
     else this._users.set(user, count - 1);
   }
 
+  /**
+   * Retires a registration whose last reference is gone: detaches the listener and removes
+   * the registration, then — when it was the subscription's last — deletes the subscription
+   * and, for `wireUnsubscribe`, returns the wire unsubscribe request.
+   *
+   * Identity-checked: the registration must still be the one stored for its
+   * listener/eventType pair, so a stale closure targeting an already-retired registration
+   * (e.g. a handle whose slot a later subscribe re-used) is a no-op.
+   */
+  private _retireRegistration(
+    id: string,
+    subscription: SubscriptionState,
+    listener: (data: CustomEvent) => void,
+    registration: ListenerRegistration,
+    wireUnsubscribe: boolean,
+  ): Promise<unknown> | undefined {
+    if (this._subscriptions.get(id) !== subscription) return undefined;
+    const bucket = subscription.listeners.get(listener);
+    if (bucket?.get(registration.eventType) !== registration) return undefined;
+
+    this._hlEvents.removeEventListener(registration.eventType, listener);
+    bucket.delete(registration.eventType);
+    if (bucket.size === 0) subscription.listeners.delete(listener);
+    if (subscription.listeners.size > 0) return undefined;
+
+    this._deleteSubscription(id);
+    if (wireUnsubscribe && this._socket.readyState === ReconnectingWebSocket.OPEN) {
+      return this._dispatcher.request("unsubscribe", subscription.payload);
+    }
+    return undefined;
+  }
+
   // ===========================================================================
   // Teardown
   // ===========================================================================
@@ -346,16 +419,25 @@ export class WebSocketSubscriptionManager {
   private _failSubscription(id: string, subscription: SubscriptionState, error: WebSocketRequestError): void {
     if (this._subscriptions.get(id) !== subscription) return;
     this._deleteSubscription(id);
+    // Recorded for joiners whose confirmation continuation is still queued: they reject
+    // with this failure instead of resolving a handle into the dead subscription.
+    subscription.failure = error;
 
-    for (const [listener, registration] of subscription.listeners) {
-      this._hlEvents.removeEventListener(registration.eventType, listener);
-      // An unconfirmed listener observes the failure through its still-pending
-      // subscribe() call instead.
-      if (!registration.confirmed) continue;
-      try {
-        registration.onError?.(error);
-      } catch {
-        // A throwing onError must not affect other listeners.
+    for (const [listener, registrations] of subscription.listeners) {
+      for (const registration of registrations.values()) {
+        this._hlEvents.removeEventListener(registration.eventType, listener);
+        // First-live-owner: exactly one live, confirmed lease — the first in insertion
+        // order — is notified. Unconfirmed leases observe the failure through their
+        // subscribe() rejection; dead leases were removed from the set already.
+        for (const handle of registration.handles) {
+          if (!handle.confirmed) continue;
+          try {
+            handle.onError?.(error);
+          } catch {
+            // A throwing onError must not affect other listeners.
+          }
+          break;
+        }
       }
     }
   }

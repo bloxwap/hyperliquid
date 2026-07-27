@@ -96,6 +96,133 @@ describe("WebSocketSubscriptionManager", () => {
       assertEquals(manager._subscriptions.get(JSON.stringify(payload))?.listeners.size, 2);
     });
 
+    test("the same callback serves two channels sharing a payload id independently", async () => {
+      const { socket, manager } = createManager();
+
+      // activeAssetCtx and activeSpotAssetCtx send the identical payload, so both calls land
+      // on one subscription entry — but the callback must be attached per channel.
+      const payload = { type: "activeAssetCtx", coin: "BTC" };
+      const received: string[] = [];
+      const listener = (e: CustomEvent) => received.push(e.type);
+
+      const sub1Promise = manager.subscribe("activeAssetCtx", payload, listener);
+      const sub2Promise = manager.subscribe("activeSpotAssetCtx", payload, listener);
+      assertEquals(socket.sentMessages.length, 1); // one wire subscription for the shared payload
+
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      const sub1 = await sub1Promise;
+      const sub2 = await sub2Promise;
+
+      // Both channels deliver to the one callback, each through its own routed event type.
+      socket.mockMessage(RESPONSES.channelEvent("activeAssetCtx", { coin: "BTC", ctx: 1 }));
+      socket.mockMessage(RESPONSES.channelEvent("activeSpotAssetCtx", { coin: "BTC", ctx: 2 }));
+      assertEquals(received, ["activeAssetCtx\0BTC", "activeSpotAssetCtx\0BTC"]);
+
+      // Unsubscribing one handle removes exactly its own registration; the other still fires.
+      await sub2.unsubscribe();
+      received.length = 0;
+      socket.mockMessage(RESPONSES.channelEvent("activeAssetCtx", { coin: "BTC", ctx: 3 }));
+      socket.mockMessage(RESPONSES.channelEvent("activeSpotAssetCtx", { coin: "BTC", ctx: 4 }));
+      assertEquals(received, ["activeAssetCtx\0BTC"]);
+      assertEquals(manager._subscriptions.size, 1); // shared subscription survives
+
+      // The last handle tears the subscription down.
+      const unsubPromise = sub1.unsubscribe();
+      socket.mockMessage(RESPONSES.subscriptionResponse("unsubscribe", payload));
+      await unsubPromise;
+      assertEquals(manager._subscriptions.size, 0);
+    });
+
+    test("an aborted creator does not roll back a same-callback pending joiner", async () => {
+      const { socket, manager } = createManager();
+
+      const payload = { type: "l2Book", coin: "BTC" };
+      let events = 0;
+      const listener = () => events++;
+
+      // Two concurrent subscribe calls, same callback and route: one pending registration.
+      const controller = new AbortController();
+      const subAPromise = manager.subscribe("l2Book", payload, listener, { signal: controller.signal });
+      const subBPromise = manager.subscribe("l2Book", payload, listener);
+      assertEquals(socket.sentMessages.length, 1);
+
+      controller.abort(new Error("A changed its mind"));
+      await assertRejects(() => subAPromise, WebSocketRequestError, "Subscription was aborted");
+      // A's abort is private: no wire unsubscribe while B still waits.
+      assertEquals(socket.sentMessages.length, 1);
+
+      // The shared request confirms; B becomes fully live.
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      const subB = await subBPromise;
+
+      socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "BTC", levels: [] }));
+      assertEquals(events, 1);
+
+      const unsub = subB.unsubscribe();
+      socket.mockMessage(RESPONSES.subscriptionResponse("unsubscribe", payload));
+      await unsub;
+      assertEquals(manager._subscriptions.size, 0);
+    });
+
+    test("a stale unsubscribe does not remove a later same-id registration", async () => {
+      const { socket, manager } = createManager();
+
+      const payload = { type: "activeAssetCtx", coin: "BTC" };
+      let events = 0;
+      const listener = () => events++;
+
+      const subAPromise = manager.subscribe("activeAssetCtx", payload, listener);
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      const subA = await subAPromise;
+
+      const unsubA = subA.unsubscribe();
+      socket.mockMessage(RESPONSES.subscriptionResponse("unsubscribe", payload));
+      await unsubA;
+
+      // B re-subscribes the same id with the same callback: a fresh registration.
+      const subBPromise = manager.subscribe("activeAssetCtx", payload, listener);
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      await subBPromise;
+
+      // A's retired handle fires again: must be a no-op — B's listener stays attached
+      // and no wire unsubscribe goes out for B's registration.
+      await subA.unsubscribe();
+      assertEquals(socket.sentMessages.length, 3); // subscribe, unsubscribe, subscribe
+
+      socket.mockMessage(RESPONSES.channelEvent("activeAssetCtx", { coin: "BTC", ctx: 1 }));
+      assertEquals(events, 1);
+    });
+
+    test("a joiner attaching as another handle unsubscribes stays live", async () => {
+      const { socket, manager } = createManager();
+
+      const payload = { type: "activeAssetCtx", coin: "BTC" };
+      let events = 0;
+      const listener = () => events++;
+
+      const subAPromise = manager.subscribe("activeAssetCtx", payload, listener);
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      const subA = await subAPromise;
+
+      // B joins the confirmed registration and yields on the (resolved) confirmation;
+      // A's unsubscribe interleaves before B resumes.
+      const subBPromise = manager.subscribe("activeAssetCtx", payload, listener);
+      await subA.unsubscribe();
+      const subB = await subBPromise;
+
+      // A's unsubscribe dropped the refcount to 1, not 0: nothing was torn down.
+      assertEquals(socket.sentMessages.length, 1); // no wire unsubscribe
+      assertEquals(manager._subscriptions.size, 1);
+
+      socket.mockMessage(RESPONSES.channelEvent("activeAssetCtx", { coin: "BTC", ctx: 1 }));
+      assertEquals(events, 1);
+
+      const unsubB = subB.unsubscribe();
+      socket.mockMessage(RESPONSES.subscriptionResponse("unsubscribe", payload));
+      await unsubB;
+      assertEquals(manager._subscriptions.size, 0);
+    });
+
     test("second listener does not send subscription request", () => {
       const { socket, manager } = createManager();
 
@@ -663,7 +790,7 @@ describe("WebSocketSubscriptionManager", () => {
       assertEquals((errors[0] as WebSocketRequestError).cause, socket.terminationSignal.reason);
     });
 
-    test("onError: re-subscribing the same listener keeps its original onError (first-wins)", async () => {
+    test("onError: only the first live owner's callback fires on failure", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -683,8 +810,113 @@ describe("WebSocketSubscriptionManager", () => {
       socket.terminate(new Error("x"));
       await drain();
 
-      assertEquals(first, 1); // original onError fired
-      assertEquals(second, 0); // replacement ignored
+      // First-live-owner: the first live confirmed lease owns the failure callback.
+      assertEquals(first, 1);
+      assertEquals(second, 0);
+    });
+
+    test("onError: an unconfirmed joiner rejects on a synchronous terminate instead of resolving a zombie", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { type: "l2Book", coin: "BTC" };
+      const listener = () => {};
+
+      const errorsA: unknown[] = [];
+      const errorsB: unknown[] = [];
+      const subAPromise = manager.subscribe("l2Book", payload, listener, { onError: (e) => errorsA.push(e) });
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      await subAPromise;
+
+      // B joins the confirmed registration; its continuation is queued but has not run
+      // when the terminate lands synchronously.
+      const subBPromise = manager.subscribe("l2Book", payload, listener, { onError: (e) => errorsB.push(e) });
+      socket.terminate(new Error("gone for good"));
+
+      // No zombie resolution: B's subscribe() rejects with the failure; its onError never
+      // fires (it never became a live subscriber). A, the live confirmed owner, fires once.
+      await assertRejects(() => subBPromise, WebSocketRequestError, "permanently terminated");
+      assertEquals(errorsB.length, 0);
+      assertEquals(errorsA.length, 1);
+    });
+
+    test("onError: when the owner retires the next live lease promotes", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { type: "l2Book", coin: "BTC" };
+      const listener = () => {};
+
+      const errorsA: unknown[] = [];
+      const errorsB: unknown[] = [];
+      const subAPromise = manager.subscribe("l2Book", payload, listener, { onError: (e) => errorsA.push(e) });
+      const subBPromise = manager.subscribe("l2Book", payload, listener, { onError: (e) => errorsB.push(e) });
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      const subA = await subAPromise;
+      await subBPromise;
+
+      // A retires while B is live: no teardown, and B becomes the owner.
+      await subA.unsubscribe();
+      assertEquals(manager._subscriptions.size, 1);
+
+      socket.terminate(new Error("gone for good"));
+      await drain();
+
+      assertEquals(errorsA.length, 0); // retired owner: never notified
+      assertEquals(errorsB.length, 1); // promoted owner: exactly once
+    });
+
+    test("onError: the same callback ref is safe across leases through the whole lifecycle", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { type: "l2Book", coin: "BTC" };
+
+      let events = 0;
+      const listener = () => events++;
+      const errorsA: unknown[] = [];
+      const errorsB: unknown[] = [];
+      const subAPromise = manager.subscribe("l2Book", payload, listener, { onError: (e) => errorsA.push(e) });
+      const subBPromise = manager.subscribe("l2Book", payload, listener, { onError: (e) => errorsB.push(e) });
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      const subA = await subAPromise;
+      await subBPromise;
+
+      // One attachment per registration: the shared callback fires once per frame.
+      socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "BTC", levels: [] }));
+      assertEquals(events, 1);
+
+      // A retires; B's lease keeps the delivery and the ownership.
+      await subA.unsubscribe();
+      socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "BTC", levels: [] }));
+      assertEquals(events, 2);
+
+      socket.terminate(new Error("gone for good"));
+      await drain();
+      assertEquals(errorsA.length, 0);
+      assertEquals(errorsB.length, 1);
+    });
+
+    test("onError: a dead handle's callback is skipped, the survivor's fires once", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { type: "l2Book", coin: "BTC" };
+      const listener = () => {};
+
+      const errorsA: unknown[] = [];
+      const errorsB: unknown[] = [];
+      const controller = new AbortController();
+      const subA = manager.subscribe("l2Book", payload, listener, {
+        signal: controller.signal,
+        onError: (e) => errorsA.push(e),
+      });
+      const subB = manager.subscribe("l2Book", payload, listener, { onError: (e) => errorsB.push(e) });
+
+      // A's handle dies before the confirmation; B survives on the shared registration.
+      controller.abort(new Error("A leaves"));
+      await assertRejects(() => subA, WebSocketRequestError, "Subscription was aborted");
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      await subB;
+
+      socket.terminate(new Error("gone for good"));
+      await drain();
+
+      assertEquals(errorsA.length, 0); // dead handle: never notified
+      assertEquals(errorsB.length, 1); // live handle: exactly once
+      assert(errorsB[0] instanceof WebSocketRequestError);
     });
 
     test("onError: called once when the connection drops with resubscribe disabled", async () => {

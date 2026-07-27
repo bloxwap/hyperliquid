@@ -195,8 +195,22 @@ await explorer.explorerBlock((data) => {
 `ReconnectingWebSocket` (`src/transport/websocket/_reconnectingSocket.ts`) — a minimal WebSocket wrapper with
 reconnection logic.
 
-By default it retries with exponential backoff (capped at 10 s); pass `reconnect` to change the retry count,
-delay, or connection timeout. See `ReconnectingWebSocketOptions` in the source for the rest.
+Reconnection defaults, tuned for a latency-critical trading connection:
+
+- **Unbounded retries** — `maxRetries: Infinity`. The socket never silently stops reconnecting; the consecutive-failure
+  counter resets once a connection stays open for `stableTimeout` (default `3_000` ms).
+- **Backoff** — `reconnectionDelay` defaults to exponential backoff `2 ** attempt * 150` ms with equal jitter (half the
+  capped delay is fixed, half uniform random), capped at **10 s**. The cap trades a slightly slower recovery after a
+  long outage for not hammering an endpoint that is already struggling; pass a custom delay to change it.
+- **Routine rotations reconnect immediately** — a clean close (code 1000, e.g. Hyperliquid's `Expired` connection
+  rotation) skips the delay on the first retry of a streak and emits no `error` event; only repeated clean closes fall
+  back to the backoff.
+- **Handshake bound** — `connectionTimeout` (default `10_000` ms) recycles a stuck connection attempt through the same
+  retry policy.
+
+Pass `reconnect` to change the retry count, delay, or connection timeout. See `ReconnectingWebSocketOptions` in the
+source for the rest. `transport.close()` (or `socket.close()`) terminates permanently — no further reconnection is
+attempted afterwards.
 
 ```ts
 import { WebSocketTransport } from "@bloxwap/hyperliquid";
