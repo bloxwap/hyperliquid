@@ -621,6 +621,27 @@ The acceleration is strictly opt-in:
 Use it when signature latency is on the hot path — market making, high-frequency order management, bursts of cancels.
 For occasional actions the default viem account is fine.
 
+## WASM keccak
+
+Every L1 action hashes its msgpack preimage with keccak256, and the EIP-712 `Agent` digest adds two more hashes per
+signature. When the optional [`hash-wasm`](https://github.com/Daninet/hash-wasm) dependency is installed, those hashes
+run on its WASM keccak instead of the pure-JS one in `@noble/hashes` — roughly 4-7× faster per hash (~0.5 µs vs ~2.2 µs
+for a single-order preimage, ~8.5 µs vs ~61 µs for a 100-order one), which takes the SDK's non-ECDSA overhead per order
+from ~11 µs down to ~5 µs.
+
+The acceleration needs no code changes:
+
+- **Automatic dispatch.** The first hash loads the WASM module in the background; until it is ready — and permanently
+  when `hash-wasm` is not installed — hashing transparently stays on `@noble/hashes`. Both compute keccak-256, so the
+  output is byte-identical either way; the SDK's differential tests pin that identity across input sizes, block
+  boundaries, and real action preimages.
+- **Optional dependency.** `hash-wasm` is declared as an optional dependency and loaded through a guarded dynamic
+  import — if your package manager skips optional dependencies, install it explicitly: `npm install hash-wasm`. A
+  missing or broken module is never an error; the SDK just keeps the noble path.
+
+Unlike `createFastLocalWallet`, the dispatch is ambient: every signing entry point benefits, including wallets you
+already create today.
+
 ## Helpers
 
 These functions work with any supported wallet type:

@@ -3,6 +3,7 @@
  * @module
  */
 
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { HyperliquidError } from "../_base.ts";
 
 // ============================================================
@@ -61,9 +62,10 @@ interface Signer {
   /**
    * Sign a raw 32-byte digest directly, skipping EIP-712 encoding entirely. Present only when the
    * wallet can do so locally (viem local accounts expose `sign`); JSON-RPC wallets never have it,
-   * so their behavior is unchanged.
+   * so their behavior is unchanged. Takes the digest as bytes so the L1 path avoids a hex round
+   * trip per signature; adapters whose wallet speaks hex (`sign({ hash })`) convert here.
    */
-  signDigest?(digest: `0x${string}`): Promise<Signature>;
+  signDigest?(digest: Uint8Array): Promise<Signature>;
   /** Lowercase wallet address. */
   getAddress(): Promise<`0x${string}`>;
   /** Wallet chain ID as a hex string. */
@@ -191,6 +193,20 @@ export interface AbstractViemLocalAccount {
   address: `0x${string}`;
 }
 
+/**
+ * Property key for the internal bytes-level raw-digest capability. `createFastLocalWallet` carries
+ * it, so the L1 signing path hands the WASM signer the 32 digest bytes directly instead of paying
+ * a hex encode in the adapter and a hex decode in the wallet for every signature. Package-internal:
+ * not part of {@linkcode AbstractViemLocalAccount} and never re-exported from `mod.ts` — external
+ * wallets keep exposing hex `sign`, which the adapter converts.
+ */
+export const SIGN_DIGEST_BYTES: unique symbol = Symbol("hyperliquid.signDigestBytes");
+
+/** Internal capability interface for a wallet that can sign a raw digest given as bytes. */
+export interface DigestBytesCapable {
+  [SIGN_DIGEST_BYTES]?(digest: Uint8Array): Promise<`0x${string}`>;
+}
+
 function isViemLocal(wallet: AbstractWallet): wallet is AbstractViemLocalAccount {
   return (
     "signTypedData" in wallet &&
@@ -202,6 +218,9 @@ function isViemLocal(wallet: AbstractWallet): wallet is AbstractViemLocalAccount
 }
 
 function adaptViemLocal(wallet: AbstractViemLocalAccount): Signer {
+  // A wallet carrying the bytes-level capability (the WASM fast wallet) skips the hex conversion
+  // the hex-speaking `sign` requires.
+  const signDigestBytes = (wallet as DigestBytesCapable)[SIGN_DIGEST_BYTES];
   return {
     kind: "viem-local",
     async signTypedData(args: TypedDataArgs): Promise<Signature> {
@@ -216,9 +235,12 @@ function adaptViemLocal(wallet: AbstractViemLocalAccount): Signer {
     // A viem local account can sign a raw 32-byte digest locally; wire that up so callers with a
     // precomputed digest can skip the typed-data encoding round trip entirely.
     signDigest:
-      typeof wallet.sign === "function"
-        ? async (digest: `0x${string}`): Promise<Signature> => parseSignature(await wallet.sign!({ hash: digest }))
-        : undefined,
+      typeof signDigestBytes === "function"
+        ? async (digest: Uint8Array): Promise<Signature> => parseSignature(await signDigestBytes(digest))
+        : typeof wallet.sign === "function"
+          ? async (digest: Uint8Array): Promise<Signature> =>
+              parseSignature(await wallet.sign!({ hash: `0x${bytesToHex(digest)}` }))
+          : undefined,
     getAddress(): Promise<`0x${string}`> {
       return Promise.resolve(wallet.address.toLowerCase() as `0x${string}`);
     },
@@ -389,10 +411,30 @@ export async function signRawDigest(args: {
   /** The 32-byte digest to sign. */
   digest: `0x${string}`;
 }): Promise<Signature | undefined> {
+  return signRawDigestBytes({ wallet: args.wallet, digest: () => hexToBytes(args.digest.slice(2)) });
+}
+
+/**
+ * Bytes-level, lazy variant of {@linkcode signRawDigest}. The digest is produced by a thunk that
+ * runs ONLY after the wallet's raw-digest capability is confirmed — a wallet without it (every
+ * JSON-RPC wallet) returns `undefined` without paying for a digest that would be discarded.
+ * Package-internal — not re-exported from `mod.ts`.
+ *
+ * @param args The wallet and a thunk producing the 32-byte digest.
+ * @return The ECDSA signature components, or `undefined` when raw-digest signing is unsupported.
+ *
+ * @throws {AbstractWalletError} If the wallet type is unknown or signing fails.
+ */
+export async function signRawDigestBytes(args: {
+  /** Wallet to sign the digest. */
+  wallet: AbstractWallet;
+  /** Produces the 32-byte digest; invoked only when the wallet can sign it. */
+  digest: () => Uint8Array;
+}): Promise<Signature | undefined> {
   const signDigest = adapt(args.wallet).signDigest;
   if (signDigest === undefined) return undefined;
   try {
-    return await signDigest(args.digest);
+    return await signDigest(args.digest());
   } catch (error) {
     if (error instanceof AbstractWalletError) throw error;
     throw new AbstractWalletError(`Failed to sign the digest using the wallet`, { cause: error });

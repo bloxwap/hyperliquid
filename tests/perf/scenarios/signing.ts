@@ -473,3 +473,53 @@ scenario({
     );
   },
 });
+
+// --- WASM keccak -------------------------------------------------------------
+// `_keccak.ts` swaps noble's pure-JS keccak_256 for hash-wasm's WASM keccak once the optional
+// dependency finishes loading — the ambient counterpart of the `_wasm` secp256k1 scenario above.
+// The dispatch is global, so the base scenarios accelerate too once the module is ready; these
+// twins exist to pin the fully-loaded number explicitly, with the load settled in `setup` rather
+// than mid-warmup. Byte-identity with noble is pinned by `tests/signing/keccak.test.ts`, not
+// here. The scenarios register only when the optional dependency is installed, so a checkout
+// without it skips them cleanly. (The import declaration is hoisted; keeping it next to the
+// scenarios keeps this file append-only.)
+
+import { preloadWasmKeccak } from "../../../src/signing/_keccak.ts";
+
+const hashWasmAvailable = await import("hash-wasm").then(
+  () => true,
+  () => false,
+);
+
+if (hashWasmAvailable) {
+  for (const count of [1, 100] as const) {
+    scenario({
+      name: `signing/l1_action_hash_order_${count}_wasm`,
+      group: "signing",
+      description: `createL1ActionHash() over an order action with ${count} order(s) with the WASM keccak provider (hash-wasm); opt-in counterpart of l1_action_hash_order_${count}`,
+      unit: "order",
+      unitsPerIteration: count,
+      iterations: count === 1 ? 2000 : 100,
+      setup: async () => {
+        await preloadWasmKeccak();
+        return { action: orderAction(count) };
+      },
+      run: ({ action }: { action: Record<string, unknown> }) => {
+        createL1ActionHash({ action, nonce: NONCE });
+      },
+    });
+  }
+
+  scenario({
+    name: "signing/eip712_agent_digest_wasm",
+    group: "signing",
+    description:
+      "createL1AgentDigest() with the WASM keccak provider (hash-wasm); opt-in counterpart of eip712_agent_digest",
+    unit: "digest",
+    iterations: 5000,
+    setup: () => preloadWasmKeccak(),
+    run: () => {
+      createL1AgentDigest(AGENT_ACTION_HASH, true);
+    },
+  });
+}
