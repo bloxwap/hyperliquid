@@ -309,9 +309,13 @@ describe("ReconnectingWebSocket", () => {
       const ws = createSocket("ws://localhost/ws", { connectionTimeout: 5 });
       assertEquals(FakeWebSocket.instances.length, 1);
 
-      // Every attempt that stays stuck past the timeout fails and is retried, so within one
-      // sleep more than one attempt may cycle — what matters is that fresh attempts happen.
-      await sleep(15);
+      // Every attempt that stays stuck past the timeout fails and is retried. Timer scheduling
+      // is unbounded on a loaded CI runner, so poll for the recycle (generous deadline) instead
+      // of asserting after a fixed sleep — what matters is that fresh attempts happen at all.
+      const deadline = Date.now() + 5_000;
+      while (FakeWebSocket.instances.length < 2 && Date.now() < deadline) {
+        await sleep(5);
+      }
       assert(FakeWebSocket.instances.length >= 2);
       assert(ws.retryCount >= 1);
 
