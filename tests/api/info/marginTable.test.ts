@@ -1,4 +1,5 @@
-import { type MarginTableParameters, MarginTableRequest } from "@bloxwap/hyperliquid/api/info";
+import { marginTable, type MarginTableParameters, MarginTableRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -19,4 +20,16 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "marginTable",
+  method: marginTable,
+  signature: "params",
+  cases: [{ params: { id: 1 } }],
+  invalidParams: [{ id: -1 }, { id: "abc" }, {}],
 });

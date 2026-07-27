@@ -14,6 +14,7 @@ import type { IRequestTransport } from "@bloxwap/hyperliquid";
 export interface MockInfoCall {
   endpoint: "info" | "exchange";
   payload: unknown;
+  signal?: AbortSignal;
 }
 
 /** An {@linkcode IRequestTransport} that serves canned responses for offline tests. */
@@ -23,9 +24,11 @@ export class MockInfoTransport implements IRequestTransport {
 
   constructor(readonly handler: (payload: Record<string, unknown>) => unknown) {}
 
-  request<T>(endpoint: "info" | "exchange", payload: unknown, _signal?: AbortSignal): Promise<T> {
-    this.calls.push({ endpoint, payload });
-    return Promise.resolve(this.handler(payload as Record<string, unknown>) as T);
+  async request<T>(endpoint: "info" | "exchange", payload: unknown, signal?: AbortSignal): Promise<T> {
+    this.calls.push({ endpoint, payload, signal });
+    // `async` so a throwing handler rejects the returned promise, the way a real transport's
+    // failures surface — never a synchronous throw out of `request`.
+    return this.handler(payload as Record<string, unknown>) as T;
   }
 }
 

@@ -1,4 +1,9 @@
-import { type PreTransferCheckParameters, PreTransferCheckRequest } from "@bloxwap/hyperliquid/api/info";
+import {
+  preTransferCheck,
+  type PreTransferCheckParameters,
+  PreTransferCheckRequest,
+} from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -24,4 +29,26 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "preTransferCheck",
+  method: preTransferCheck,
+  signature: "params",
+  cases: [
+    {
+      params: {
+        user: "0x0000000000000000000000000000000000000001",
+        source: "0x0000000000000000000000000000000000000002",
+      },
+    },
+  ],
+  invalidParams: [
+    { user: "0x123", source: "0x0000000000000000000000000000000000000002" },
+    { user: "0x0000000000000000000000000000000000000001", source: "0x456" },
+  ],
 });

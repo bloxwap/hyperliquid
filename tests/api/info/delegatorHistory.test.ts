@@ -1,4 +1,9 @@
-import { type DelegatorHistoryParameters, DelegatorHistoryRequest } from "@bloxwap/hyperliquid/api/info";
+import {
+  delegatorHistory,
+  type DelegatorHistoryParameters,
+  DelegatorHistoryRequest,
+} from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -19,4 +24,16 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "delegatorHistory",
+  method: delegatorHistory,
+  signature: "params",
+  cases: [{ params: { user: "0x0000000000000000000000000000000000000001" } }],
+  invalidParams: [{ user: "0x123" }, {}],
 });

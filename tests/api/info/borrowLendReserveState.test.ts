@@ -1,4 +1,9 @@
-import { type BorrowLendReserveStateParameters, BorrowLendReserveStateRequest } from "@bloxwap/hyperliquid/api/info";
+import {
+  borrowLendReserveState,
+  type BorrowLendReserveStateParameters,
+  BorrowLendReserveStateRequest,
+} from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -19,4 +24,16 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "borrowLendReserveState",
+  method: borrowLendReserveState,
+  signature: "params",
+  cases: [{ params: { token: 1 } }],
+  invalidParams: [{ token: -1 }, { token: "abc" }, {}],
 });

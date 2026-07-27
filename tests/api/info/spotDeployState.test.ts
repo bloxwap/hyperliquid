@@ -1,4 +1,5 @@
-import { type SpotDeployStateParameters, SpotDeployStateRequest } from "@bloxwap/hyperliquid/api/info";
+import { spotDeployState, type SpotDeployStateParameters, SpotDeployStateRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -28,4 +29,16 @@ runTest({
       "#/properties/gasAuction/properties/endGas/defined",
     ]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "spotDeployState",
+  method: spotDeployState,
+  signature: "params",
+  cases: [{ params: { user: "0x0000000000000000000000000000000000000001" } }],
+  invalidParams: [{ user: "0x123" }, {}],
 });

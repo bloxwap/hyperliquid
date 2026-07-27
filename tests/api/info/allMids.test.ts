@@ -1,4 +1,5 @@
-import { type AllMidsParameters, AllMidsRequest } from "@bloxwap/hyperliquid/api/info";
+import { allMids, type AllMidsParameters, AllMidsRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -19,4 +20,16 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "allMids",
+  method: allMids,
+  signature: "overloaded",
+  cases: [{ params: { dex: "test" } }],
+  invalidParams: [{ dex: 123 }],
 });

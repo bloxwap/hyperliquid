@@ -1,4 +1,9 @@
-import { type FrontendOpenOrdersParameters, FrontendOpenOrdersRequest } from "@bloxwap/hyperliquid/api/info";
+import {
+  frontendOpenOrders,
+  type FrontendOpenOrdersParameters,
+  FrontendOpenOrdersRequest,
+} from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -32,4 +37,19 @@ runTest({
       "#/items/properties/children/*",
     ]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "frontendOpenOrders",
+  method: frontendOpenOrders,
+  signature: "params",
+  cases: [
+    { params: { user: "0x0000000000000000000000000000000000000001" } },
+    { params: { user: "0x0000000000000000000000000000000000000001", dex: "test" } },
+  ],
+  invalidParams: [{ user: "0x123" }, { user: "0x0000000000000000000000000000000000000001", dex: 123 }],
 });

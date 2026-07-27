@@ -1,4 +1,5 @@
-import { type UserFeesParameters, UserFeesRequest } from "@bloxwap/hyperliquid/api/info";
+import { userFees, type UserFeesParameters, UserFeesRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -26,4 +27,16 @@ runTest({
       "#/properties/stakingLink/defined",
     ]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "userFees",
+  method: userFees,
+  signature: "params",
+  cases: [{ params: { user: "0x0000000000000000000000000000000000000001" } }],
+  invalidParams: [{ user: "0x123" }, {}],
 });

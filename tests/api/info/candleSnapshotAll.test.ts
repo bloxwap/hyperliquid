@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { InfoClient } from "@bloxwap/hyperliquid";
 import { candleSnapshotAll } from "@bloxwap/hyperliquid/api/info";
 import { MockInfoTransport, scriptedPages } from "./_mockInfoTransport.ts";
 
@@ -53,5 +54,21 @@ describe("candleSnapshotAll", () => {
     // The repeated window reaches no new timestamp: it is dropped (not appended) and the walk stops.
     expect(transport.calls).toHaveLength(2);
     expect(result).toHaveLength(PAGE);
+  });
+
+  test("is exposed on InfoClient with identical behavior", async () => {
+    const transport = new MockInfoTransport(scriptedPages([candlePage(0, PAGE), candlePage(PAGE * 60_000, 7)]));
+    const client = new InfoClient({ transport });
+    const signal = new AbortController().signal;
+
+    const result = await client.candleSnapshotAll(
+      { coin: "ETH", interval: "1m", startTime: 0 },
+      { maxPages: 5 },
+      signal,
+    );
+
+    expect(result).toHaveLength(5_007);
+    expect(requestedStartTimes(transport)).toEqual([0, (PAGE - 1) * 60_000]);
+    expect(transport.calls[0].signal).toBe(signal);
   });
 });

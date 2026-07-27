@@ -1,4 +1,5 @@
-import { type TwapHistoryParameters, TwapHistoryRequest } from "@bloxwap/hyperliquid/api/info";
+import { twapHistory, type TwapHistoryParameters, TwapHistoryRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { describe, test } from "bun:test";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
@@ -118,4 +119,16 @@ describe("twapHistory (offline)", () => {
     ];
     schemaCoverage(responseSchema, [samples]);
   });
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "twapHistory",
+  method: twapHistory,
+  signature: "params",
+  cases: [{ params: { user: "0x0000000000000000000000000000000000000001" } }],
+  invalidParams: [{ user: "0x123" }, {}],
 });

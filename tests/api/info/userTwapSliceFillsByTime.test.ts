@@ -1,7 +1,9 @@
 import {
+  userTwapSliceFillsByTime,
   type UserTwapSliceFillsByTimeParameters,
   UserTwapSliceFillsByTimeRequest,
 } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -31,4 +33,23 @@ runTest({
       "#/items/properties/fill/properties/twapId/defined",
     ]);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "userTwapSliceFillsByTime",
+  method: userTwapSliceFillsByTime,
+  signature: "params",
+  cases: [
+    { params: { user: "0x0000000000000000000000000000000000000001", startTime: 1000 } },
+    { params: { user: "0x0000000000000000000000000000000000000001", startTime: 1000, endTime: 2000 } },
+  ],
+  invalidParams: [
+    { user: "0x123", startTime: 1000 },
+    { user: "0x0000000000000000000000000000000000000001", startTime: -1 },
+    { user: "0x0000000000000000000000000000000000000001" },
+  ],
 });

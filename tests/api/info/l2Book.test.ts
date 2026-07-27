@@ -1,4 +1,5 @@
-import { type L2BookParameters, L2BookRequest } from "@bloxwap/hyperliquid/api/info";
+import { l2Book, type L2BookParameters, L2BookRequest } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
@@ -30,4 +31,16 @@ runTest({
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data);
   },
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "l2Book",
+  method: l2Book,
+  signature: "params",
+  cases: [{ params: { coin: "ETH" } }, { params: { coin: "ETH", nSigFigs: 2, mantissa: 2 } }],
+  invalidParams: [{ coin: 1 }, { coin: "ETH", nSigFigs: 6 }, { coin: "ETH", mantissa: 3 }],
 });

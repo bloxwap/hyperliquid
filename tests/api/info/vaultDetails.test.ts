@@ -1,4 +1,5 @@
 import { type VaultDetailsParameters, VaultDetailsRequest, vaultDetails } from "@bloxwap/hyperliquid/api/info";
+import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
 import { describe, test } from "bun:test";
 import { assertEquals } from "@jsr/std__assert";
@@ -49,4 +50,28 @@ describe("vaultDetails (offline)", () => {
 
     assertEquals(result, null);
   });
+});
+
+// ============================================================
+// Offline: request construction, passthrough, and InfoClient wrapper
+// ============================================================
+
+runOfflineMethodTests({
+  name: "vaultDetails",
+  method: vaultDetails,
+  signature: "params",
+  cases: [
+    { params: { vaultAddress: "0x0000000000000000000000000000000000000001" } },
+    { params: { vaultAddress: "0x0000000000000000000000000000000000000001", user: null } },
+    {
+      params: {
+        vaultAddress: "0x0000000000000000000000000000000000000001",
+        user: "0x0000000000000000000000000000000000000002",
+      },
+    },
+  ],
+  invalidParams: [
+    { vaultAddress: "0x123" },
+    { vaultAddress: "0x0000000000000000000000000000000000000001", user: "0x456" },
+  ],
 });
