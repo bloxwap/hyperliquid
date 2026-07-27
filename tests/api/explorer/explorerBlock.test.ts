@@ -16,3 +16,56 @@ runSubscriptionTest({
     schemaCoverage(responseSchema, data);
   },
 });
+
+// ============================================================
+// Offline: channel, payload, and listener wiring against a mock subscription transport
+// ============================================================
+
+import { describe, test } from "bun:test";
+import { assertEquals, assertRejects, assertStrictEquals } from "@jsr/std__assert";
+import { TransportError } from "@bloxwap/hyperliquid";
+import { explorerBlock } from "@bloxwap/hyperliquid/api/explorer";
+import { MockExplorerSubscriptionTransport } from "./_mockTransport.ts";
+
+describe("explorerBlock (offline)", () => {
+  test("subscribes to the duck channel with the validated payload", async () => {
+    const transport = new MockExplorerSubscriptionTransport();
+    const onError = () => {};
+
+    const sub = await explorerBlock({ transport }, () => {}, onError);
+
+    assertEquals(transport.calls.length, 1);
+    assertEquals(transport.calls[0].channel, "explorerBlock_");
+    assertEquals(transport.calls[0].payload, { type: "explorerBlock" });
+    assertStrictEquals(transport.calls[0].options?.onError, onError);
+    assertEquals(typeof sub.unsubscribe, "function");
+  });
+
+  test("forwards event detail to the listener", async () => {
+    const transport = new MockExplorerSubscriptionTransport();
+    const received: ExplorerBlockEvent[] = [];
+
+    await explorerBlock({ transport }, (data) => received.push(data));
+
+    const detail: ExplorerBlockEvent = [{ blockTime: 1, hash: "0xabc", height: 1, numTxs: 0, proposer: "0xdef" }];
+    transport.dispatch("explorerBlock_", detail);
+
+    assertEquals(received, [detail]);
+  });
+
+  test("the returned subscription unsubscribes", async () => {
+    const transport = new MockExplorerSubscriptionTransport();
+
+    const sub = await explorerBlock({ transport }, () => {});
+    await sub.unsubscribe();
+
+    assertEquals(transport.unsubscribeCount, 1);
+  });
+
+  test("subscribe failures reject the promise", async () => {
+    const transport = new MockExplorerSubscriptionTransport();
+    transport.error = new TransportError("connection lost");
+
+    await assertRejects(() => explorerBlock({ transport }, () => {}), TransportError, "connection lost");
+  });
+});
