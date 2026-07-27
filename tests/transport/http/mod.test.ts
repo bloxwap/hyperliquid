@@ -932,7 +932,7 @@ describe("HttpTransport", () => {
         }
       }
 
-      // The classes from https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits
+      // The classes from https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
       test("info weight 2 (allMids)", async () => {
         await assertWeight("info", { type: "allMids" }, 2);
       });

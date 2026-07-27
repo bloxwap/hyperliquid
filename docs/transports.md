@@ -99,7 +99,7 @@ Pass `null` to disable the timeout for exchange requests only. Like `timeout`, t
 Hyperliquid budgets REST requests at **1200 weight per minute per IP**; going over yields HTTP 429, and repeated
 violations get the IP banned. An exchange request costs `1 + floor(batchLength / 40)` — unbatched actions cost 1, a
 batch of 40–79 orders (or cancels) costs 2, 80–119 costs 3. Info endpoints cost 2–60 weight and explorer requests 40
-(see [Rate limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits) for the full table).
+(see [Rate limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits) for the full table).
 
 `rateLimit` opts `HttpTransport` into a client-side token bucket paced to that budget: every request acquires its
 weight before sending and **waits** while the bucket is empty instead of failing with a 429 after the fact:
@@ -131,12 +131,17 @@ array), so the limiter deliberately does not bill by a generic "first array" rul
 Response-size surcharges can only be known once the response arrives, so they are debited from the bucket **after**
 the response: 1 extra weight per 20 returned items on the documented list endpoints (`recentTrades`, `userFills`,
 `historicalOrders`, …), per 60 on `candleSnapshot`, and per returned block on explorer `blockList`. Later requests
-then wait off the real cost rather than the estimate the request was sent with. One caveat: the official docs warn
+then wait off the real cost rather than the estimate the request was sent with. Two caveats: the official docs warn
 that older `blockList` blocks "may be weighted more heavily" server-side, so the +1-per-block debit is exact only
-for recent blocks.
+for recent blocks; and the item-count rule is an interpretation — the docs do not say whether the count is exactly
+the top-level response array length (what the limiter bills) nor whether partial chunks round up or down (the
+limiter rounds up, the conservative choice). Both are tracked in [issue #49](https://github.com/bloxwap/hyperliquid/issues/49).
 
 - The wait happens before the request timeout is armed, so throttling never trips `timeout` / `exchangeTimeout`;
   aborting the request's signal cancels the wait instead — an aborted request never reaches the wire.
+- A request that fails after the wait — even with HTTP 429 — keeps its pre-send weight debit (no refund): the
+  server bills attempts, its own accounting of failed requests is undocumented, and keeping the debit is the
+  conservative reading.
 - The limiter is off by default; without `rateLimit` the transport never delays a request client-side.
 
 **The limiter is per `HttpTransport` instance.** It tracks only the requests it sends itself — other transport
