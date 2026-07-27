@@ -1,6 +1,6 @@
 # Contributing to @bloxwap/hyperliquid
 
-Welcome, and thank you for taking time in contributing to SDK! You can contribute to SDK in different ways:
+Welcome, and thank you for taking the time to contribute to the SDK! You can contribute in different ways:
 
 - Submit new features
 - Report bugs

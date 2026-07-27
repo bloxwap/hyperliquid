@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Runs the same script contributors run, so CI and CONTRIBUTING.md cannot drift apart.
+      # Runs the same script contributors run, so CI and .github/CONTRIBUTING.md cannot drift apart.
       # It sets HL_OFFLINE=1, which makes tests needing live Hyperliquid endpoints skip.
       #
       # `bun test tests/ -- --offline` also works: tests/_offline.ts recovers the raw command line
