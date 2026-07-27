@@ -60,6 +60,13 @@ export const UnsignedInteger = /* @__PURE__ */ (() => {
 export type UnsignedInteger = v.InferOutput<typeof UnsignedInteger>;
 
 /**
+ * Already-normalized decimal shape: optional sign, no leading zeros in the integer part (except
+ * `"0"` itself), and no trailing zeros (or empty digits) in an optional fraction. Anything with an
+ * exponent, a bare point (`.5`, `1.`), or redundant zeros fails the test and takes the slow path.
+ */
+const CANONICAL_DECIMAL = /^-?(0|[1-9][0-9]*)(\.[0-9]*[1-9])?$/;
+
+/**
  * Normalize a decimal string: expand exponent notation, drop redundant leading and trailing
  * zeros, and collapse negative zero. A string that is not a well-formed decimal is returned
  * unchanged (and is later rejected by the decimal regex).
@@ -82,6 +89,10 @@ export type UnsignedInteger = v.InferOutput<typeof UnsignedInteger>;
  * ```
  */
 function normalizeDecimalString(value: string): string {
+  // Fast path: already canonical — nothing to strip or expand, so skip the regex/replace work.
+  // `p`/`s` wire values like "30000" or "0.015" take this path. "-0" matches the pattern but is
+  // NOT canonical: the slow path collapses it to "0".
+  if (CANONICAL_DECIMAL.test(value) && value !== "-0") return value;
   const match = expandExponentNotation(value).match(/^(-?)([0-9]*)(?:\.([0-9]*))?$/);
   if (!match) return value;
   const [, sign, intRaw, fracRaw = ""] = match;

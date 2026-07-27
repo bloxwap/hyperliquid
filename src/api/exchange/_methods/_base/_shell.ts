@@ -87,6 +87,17 @@ export function getPreparedRequestState(prepared: PreparedExchangeRequest<unknow
 }
 
 /**
+ * Cache of the nonce-lock key per (leader wallet × transport), keyed by object identity so a wallet
+ * object is dropped from the cache when the caller drops it. The cached entry is only reused while
+ * the wallet's current address and the transport's testnet flag still match it — a JSON-RPC wallet
+ * whose selected account changed gets a freshly built key for the new address.
+ */
+const nonceKeyCache = new WeakMap<
+  object,
+  WeakMap<object, { walletAddress: string; isTestnet: boolean; key: string }>
+>();
+
+/**
  * Common shell for executing an Exchange API request:
  * acquires per-`(walletAddress × isTestnet)` lock, generates nonce, calls `build` to construct
  * the signed payload, sends to the Exchange endpoint, and validates the response.
@@ -112,10 +123,28 @@ export async function executeWithShell<T>(
   const walletAddress = await getWalletAddress(leader);
 
   // Lock per (wallet × testnet) ensures requests are dispatched to the server in nonce order.
-  const key = `${walletAddress}:${config.transport.isTestnet}`;
+  // The key string is cached per (wallet × transport); it is rebuilt only when the wallet's
+  // address or the transport's testnet flag no longer matches the cached entry.
+  const isTestnet = config.transport.isTestnet;
+  let perTransport = nonceKeyCache.get(leader);
+  const cached = perTransport?.get(config.transport);
+  let key: string;
+  if (cached !== undefined && cached.walletAddress === walletAddress && cached.isTestnet === isTestnet) {
+    key = cached.key;
+  } else {
+    key = `${walletAddress}:${isTestnet}`;
+    if (perTransport === undefined) {
+      perTransport = new WeakMap();
+      nonceKeyCache.set(leader, perTransport);
+    }
+    perTransport.set(config.transport, { walletAddress, isTestnet, key });
+  }
   const box = await withLock(key, async () => {
     // --- Generate nonce --------------------------------------
-    const nonce = await (config.nonceManager?.(walletAddress) ?? globalNonceManager.getNonce(key));
+    // `globalNonceManager.getNonce` returns a plain number: skip the await (and its async hop)
+    // unless a custom `nonceManager` actually handed back a promise.
+    const nonceOrPromise = config.nonceManager?.(walletAddress) ?? globalNonceManager.getNonce(key);
+    const nonce = typeof nonceOrPromise === "number" ? nonceOrPromise : await nonceOrPromise;
 
     // --- Build signed payload --------------------------------
     const { action, signature, extras } = await build(nonce);

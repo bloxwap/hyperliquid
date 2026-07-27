@@ -267,7 +267,8 @@ export async function signL1Action<TAction extends Record<string, unknown> | unk
 }): Promise<Signature> {
   const { wallet, action, nonce, isTestnet = false, vaultAddress, expiresAfter } = args;
   const actionHash = createL1ActionHash({ action, nonce, vaultAddress, expiresAfter });
-  return await signL1ActionHash({ wallet, actionHash, isTestnet });
+  // No try/catch in scope: return the promise directly instead of paying an extra async hop.
+  return signL1ActionHash({ wallet, actionHash, isTestnet });
 }
 
 /** Signs a precomputed L1 action hash as the `connectionId` of an `Agent` message. */
