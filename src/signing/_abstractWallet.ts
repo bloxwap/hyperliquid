@@ -61,9 +61,10 @@ interface Signer {
   signTypedData(args: TypedDataArgs): Promise<Signature>;
   /**
    * Sign a raw 32-byte digest directly, skipping EIP-712 encoding entirely. Present only when the
-   * wallet can do so locally (viem local accounts expose `sign`); JSON-RPC wallets never have it,
-   * so their behavior is unchanged. Takes the digest as bytes so the L1 path avoids a hex round
-   * trip per signature; adapters whose wallet speaks hex (`sign({ hash })`) convert here.
+   * wallet can do so locally: a viem local account exposes `sign`, and a JSON-RPC-shaped wallet
+   * has it too when it wraps one (see {@linkcode embeddedLocalAccount}). A wallet that signs only
+   * through a remote endpoint never has it. Takes the digest as bytes so the L1 path avoids a hex
+   * round trip per signature; adapters whose wallet speaks hex (`sign({ hash })`) convert here.
    */
   signDigest?(digest: Uint8Array): Promise<Signature>;
   /** Lowercase wallet address. */
@@ -442,7 +443,8 @@ export async function signTypedData(args: {
 /**
  * Signs a raw 32-byte digest directly when the wallet supports it (a viem local account exposing
  * `sign`), bypassing EIP-712 encoding. Returns `undefined` for wallets without that capability —
- * JSON-RPC wallets among them — so the caller can fall back to {@linkcode signTypedData}.
+ * wallets that can only sign remotely among them — so the caller can fall back to
+ * {@linkcode signTypedData}.
  *
  * Internal to the signing module: the caller is responsible for computing a digest that is
  * byte-identical to what the typed-data path would have produced.

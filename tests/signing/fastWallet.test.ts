@@ -294,6 +294,19 @@ describe("createFastLocalWallet() fallback", () => {
     );
   });
 
+  test("rejects an injected factory that ignores the private key it is given", async () => {
+    // `() => someOtherAccount` type-checks, and on the WASM path it would split the wallet:
+    // L1 digests signed by the WASM key, typed data by the injected account's key.
+    const wrongKeyFactory = (): ReturnType<typeof privateKeyToAccount> => privateKeyToAccount(PRIVATE_KEYS[1]);
+    const fast = await createFastLocalWallet(PRIVATE_KEYS[0], { privateKeyToAccount: wrongKeyFactory });
+
+    // The wallet itself is fine; only the typed-data delegate is wrong, so it fails there.
+    expect(fast.address).toBe(privateKeyToAccount(PRIVATE_KEYS[0]).address);
+    await expect(
+      signUserSignedAction({ wallet: fast, action: { ...APPROVE_AGENT }, types: ApproveAgentTypes }),
+    ).rejects.toThrow("must derive the account from the private key it is given");
+  });
+
   test("`wasm: false` takes the viem/noble path without loading or warning", async () => {
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {

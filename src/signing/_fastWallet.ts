@@ -91,19 +91,44 @@ export type PrivateKeyToAccount = (privateKey: `0x${string}`) => AbstractViemLoc
  * When neither is possible the failure is reported for what it is, rather than surfacing the
  * host's opaque message from somewhere deep in the signing path.
  */
-async function resolvePrivateKeyToAccount(provided: PrivateKeyToAccount | undefined): Promise<PrivateKeyToAccount> {
+async function resolvePrivateKeyToAccount(
+  provided: PrivateKeyToAccount | undefined,
+  need: "the tiny-secp256k1 fallback" | "signTypedData",
+): Promise<PrivateKeyToAccount> {
   if (provided !== undefined) return provided;
   try {
     const { privateKeyToAccount } = await import("viem/accounts");
     return privateKeyToAccount as PrivateKeyToAccount;
   } catch (cause) {
+    // Two very different situations land here and the remedy differs, so name both rather than
+    // asserting one: viem may be absent (it is not a dependency, so this is the common case), or
+    // present but unreachable because the host cannot service a dynamic import.
     throw new AbstractWalletError(
-      "createFastLocalWallet: could not load `viem/accounts`. It is imported dynamically because " +
-        "viem is not a dependency of this package, and this environment cannot service a dynamic " +
-        "import (Jest without `--experimental-vm-modules` is the usual cause). Import " +
+      `createFastLocalWallet: ${need} needs \`viem/accounts\`, which could not be loaded. ` +
+        "Either viem is not installed (it is not a dependency of this package — install it), or " +
+        "this environment cannot service the dynamic import used to reach it (Jest without " +
+        "`--experimental-vm-modules` is the usual cause), in which case import " +
         "`privateKeyToAccount` from `viem/accounts` yourself and pass it as " +
-        "`options.privateKeyToAccount`, or install `tiny-secp256k1` so signing never needs viem.",
+        "`options.privateKeyToAccount`. See the underlying error on `cause`.",
       { cause },
+    );
+  }
+}
+
+/**
+ * Guards against a supplied factory that ignores the key it is handed.
+ *
+ * The natural mistake in exactly the hosts `options.privateKeyToAccount` exists for is passing a
+ * bound or curried helper closed over a different key — `() => myAccount` type-checks. On the WASM
+ * path the wallet's `address` and raw-digest signer come from `tiny-secp256k1` over `privateKey`
+ * while `signTypedData` delegates to this factory, so a mismatch would sign L1 actions and
+ * user-signed actions with two different keys and report only one of them.
+ */
+function assertDelegateMatches(delegate: AbstractViemLocalAccount, expected: `0x${string}`): void {
+  if (delegate.address?.toLowerCase() !== expected.toLowerCase()) {
+    throw new AbstractWalletError(
+      `createFastLocalWallet: options.privateKeyToAccount returned an account for ${delegate.address}, ` +
+        `but this wallet signs as ${expected}. It must derive the account from the private key it is given.`,
     );
   }
 }
@@ -210,7 +235,10 @@ export async function createFastLocalWallet(
           "falling back to the viem/noble signing path. Install `tiny-secp256k1` to enable WASM acceleration.",
       );
     }
-    const privateKeyToAccount = await resolvePrivateKeyToAccount(options?.privateKeyToAccount);
+    const privateKeyToAccount = await resolvePrivateKeyToAccount(
+      options?.privateKeyToAccount,
+      "the tiny-secp256k1 fallback",
+    );
     return privateKeyToAccount(privateKey);
   }
 
@@ -218,12 +246,19 @@ export async function createFastLocalWallet(
     throw new AbstractWalletError("Private key is outside the secp256k1 scalar range");
   }
 
+  // Derived once, and also the identity any `signTypedData` delegate must agree with.
+  const address = deriveAddress(ecc, privateKeyBytes);
+
   // viem is needed only for `signTypedData` (user-signed actions); a pure-L1 wallet never pays for it.
   let delegate: AbstractViemLocalAccount | undefined;
   const viemDelegate = async (): Promise<AbstractViemLocalAccount> => {
     if (delegate === undefined) {
-      const privateKeyToAccount = await resolvePrivateKeyToAccount(options?.privateKeyToAccount);
-      delegate = privateKeyToAccount(privateKey);
+      const privateKeyToAccount = await resolvePrivateKeyToAccount(options?.privateKeyToAccount, "signTypedData");
+      const resolved = privateKeyToAccount(privateKey);
+      // The WASM path derives `address` and the digest signer itself, so a delegate for a
+      // different key would split this wallet's identity in two. Checked before it is memoized.
+      assertDelegateMatches(resolved, address);
+      delegate = resolved;
     }
     return delegate;
   };
@@ -238,7 +273,7 @@ export async function createFastLocalWallet(
   };
 
   const account: AbstractViemLocalAccount & DigestBytesCapable = {
-    address: deriveAddress(ecc, privateKeyBytes),
+    address,
     async sign({ hash }: { hash: `0x${string}` }): Promise<`0x${string}`> {
       return signDigestBytes(hexToBytes(hash.slice(2)));
     },
