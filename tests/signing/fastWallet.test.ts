@@ -230,6 +230,83 @@ describe("createFastLocalWallet() fallback", () => {
     }
   });
 
+  test("an injected `privateKeyToAccount` is used instead of the dynamic import", async () => {
+    // Environments that cannot service `import()` (Jest without `--experimental-vm-modules`, some
+    // React Native bundlers) pass viem's factory in. It must be used on both viem-dependent paths.
+    _setEccLoaderForTests(() => Promise.resolve(undefined));
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      let injectedCalls = 0;
+      const injected = (key: `0x${string}`): ReturnType<typeof privateKeyToAccount> => {
+        injectedCalls++;
+        return privateKeyToAccount(key);
+      };
+
+      const fast = await createFastLocalWallet(PRIVATE_KEYS[0], { privateKeyToAccount: injected });
+      expect(injectedCalls).toBeGreaterThan(0);
+      expect(fast.address).toBe(privateKeyToAccount(PRIVATE_KEYS[0]).address);
+
+      const args = { action: { ...CANCEL }, nonce: NONCE, isTestnet: true } as const;
+      expect(await signL1Action({ wallet: fast, ...args })).toEqual(
+        await signL1Action({ wallet: privateKeyToAccount(PRIVATE_KEYS[0]), ...args }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("the WASM path uses an injected `privateKeyToAccount` for signTypedData", async () => {
+    // With WASM present the fallback never runs, but `signTypedData` still needs viem.
+    let injectedCalls = 0;
+    const injected = (key: `0x${string}`): ReturnType<typeof privateKeyToAccount> => {
+      injectedCalls++;
+      return privateKeyToAccount(key);
+    };
+
+    const fast = await createFastLocalWallet(PRIVATE_KEYS[0], { privateKeyToAccount: injected });
+    expect(injectedCalls).toBe(0); // not needed until typed data is signed
+
+    const signed = await fast.signTypedData({
+      domain: { name: "Exchange", version: "1", chainId: 1337, verifyingContract: `0x${"00".repeat(20)}` },
+      types: {
+        Agent: [
+          { name: "source", type: "string" },
+          { name: "connectionId", type: "bytes32" },
+        ],
+      },
+      primaryType: "Agent",
+      message: { source: "a", connectionId: `0x${"11".repeat(32)}` },
+    });
+
+    expect(injectedCalls).toBe(1);
+    expect(signed).toBe(
+      await privateKeyToAccount(PRIVATE_KEYS[0]).signTypedData({
+        domain: { name: "Exchange", version: "1", chainId: 1337, verifyingContract: `0x${"00".repeat(20)}` },
+        types: {
+          Agent: [
+            { name: "source", type: "string" },
+            { name: "connectionId", type: "bytes32" },
+          ],
+        },
+        primaryType: "Agent",
+        message: { source: "a", connectionId: `0x${"11".repeat(32)}` },
+      }),
+    );
+  });
+
+  test("rejects an injected factory that ignores the private key it is given", async () => {
+    // `() => someOtherAccount` type-checks, and on the WASM path it would split the wallet:
+    // L1 digests signed by the WASM key, typed data by the injected account's key.
+    const wrongKeyFactory = (): ReturnType<typeof privateKeyToAccount> => privateKeyToAccount(PRIVATE_KEYS[1]);
+    const fast = await createFastLocalWallet(PRIVATE_KEYS[0], { privateKeyToAccount: wrongKeyFactory });
+
+    // The wallet itself is fine; only the typed-data delegate is wrong, so it fails there.
+    expect(fast.address).toBe(privateKeyToAccount(PRIVATE_KEYS[0]).address);
+    await expect(
+      signUserSignedAction({ wallet: fast, action: { ...APPROVE_AGENT }, types: ApproveAgentTypes }),
+    ).rejects.toThrow("must derive the account from the private key it is given");
+  });
+
   test("`wasm: false` takes the viem/noble path without loading or warning", async () => {
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {

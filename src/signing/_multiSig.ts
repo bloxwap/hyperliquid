@@ -97,7 +97,7 @@ async function signMultiSigOuter(args: {
   // Fast path: a wallet that can sign a raw digest (viem local accounts expose `sign`) signs the
   // hand-rolled SendMultiSig digest directly and skips viem's whole EIP-712 encoding. The digest
   // is byte-identical — the differential test pins it against viem's `hashTypedData`. The thunk
-  // keeps it lazy: wallets without the capability (every JSON-RPC wallet) fall through to the
+  // keeps it lazy: wallets without the capability (those that can only sign remotely) fall through to the
   // unchanged typed-data path without paying for a digest they would discard. A chain ID that did
   // not parse to a uint256 word falls through too: viem rejects it, while the hand-rolled digest
   // would silently sign under the wrong domain.

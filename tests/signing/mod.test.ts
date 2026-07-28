@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { assertEquals } from "@jsr/std__assert";
+import { assert, assertEquals } from "@jsr/std__assert";
 import { createWalletClient, custom } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
@@ -373,6 +373,99 @@ describe("signing", () => {
         assertEquals(chainId, "0xa4b1");
       });
     });
+  });
+});
+
+// ============================================================
+// WalletClient wrapping a local account
+// ============================================================
+
+/**
+ * A `WalletClient` built over a local account satisfies the JSON-RPC guard unconditionally — it
+ * always carries `signTypedData`, `getAddresses` and `getChainId` — so it used to be adapted as a
+ * remote wallet and lose the raw-digest path even though the key was in process. It must now sign
+ * L1 digests through the embedded account while everything else still goes through the client.
+ */
+describe("viem WalletClient over a local account", () => {
+  /** A transport that fails loudly: a local-account client must not need the network to sign. */
+  const offlineTransport = custom({
+    request: async ({ method }: { method: string }) => {
+      if (method === "eth_chainId") return await Promise.resolve("0xa4b1");
+      throw new Error(`Unexpected RPC method: ${method}`);
+    },
+  });
+
+  test("signs an L1 action identically to the bare local account", async () => {
+    const account = privateKeyToAccount(PRIVATE_KEY);
+    const client = createWalletClient({ account, chain: arbitrum, transport: offlineTransport });
+    const action = { type: "cancel", cancels: [{ a: 0, o: 12345 }] };
+
+    const bare = await signL1Action({ wallet: account, action, nonce: 1700000000000 });
+    const viaClient = await signL1Action({ wallet: client, action, nonce: 1700000000000 });
+
+    assertEquals(viaClient, bare);
+  });
+
+  test("takes the raw-digest path instead of the client's typed-data path", async () => {
+    const account = privateKeyToAccount(PRIVATE_KEY);
+    let accountSignCalls = 0;
+    const spied = new Proxy(account, {
+      get(target, prop, receiver) {
+        if (prop === "sign") accountSignCalls++;
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    const client = createWalletClient({ account: spied, chain: arbitrum, transport: offlineTransport });
+
+    let clientTypedDataCalls = 0;
+    const originalSignTypedData = client.signTypedData.bind(client);
+    // Declared with one parameter on purpose: the JSON-RPC guard checks `signTypedData.length`,
+    // so a rest-args wrapper would make the client stop looking like a wallet at all.
+    client.signTypedData = ((params: Parameters<typeof originalSignTypedData>[0]) => {
+      clientTypedDataCalls++;
+      return originalSignTypedData(params);
+    }) as typeof client.signTypedData;
+
+    await signL1Action({ wallet: client, action: { type: "cancel", cancels: [] }, nonce: 1700000000000 });
+
+    assert(accountSignCalls > 0, "the embedded local account was never asked to sign the digest");
+    assertEquals(clientTypedDataCalls, 0, "the client's typed-data path was used despite a local account");
+  });
+
+  test("still reports the client's chain ID, not the local-account default", async () => {
+    const client = createWalletClient({
+      account: privateKeyToAccount(PRIVATE_KEY),
+      chain: arbitrum,
+      transport: offlineTransport,
+    });
+
+    // A bare local account reports 0x1; routing through the account must not leak that default.
+    assertEquals(await getWalletChainId(client), "0xa4b1");
+    assertEquals(await getWalletAddress(client), privateKeyToAccount(PRIVATE_KEY).address.toLowerCase());
+  });
+
+  test("a client over a remote account keeps going through the client", async () => {
+    const address = privateKeyToAccount(PRIVATE_KEY).address;
+    let typedDataCalls = 0;
+    const client = createWalletClient({
+      account: address,
+      chain: arbitrum,
+      transport: custom({
+        request: async ({ method }: { method: string }) => {
+          if (method === "eth_chainId") return await Promise.resolve("0xa4b1");
+          if (method === "eth_accounts") return await Promise.resolve([address]);
+          if (method === "eth_signTypedData_v4") {
+            typedDataCalls++;
+            return await Promise.resolve(`0x${"11".repeat(64)}1b`);
+          }
+          throw new Error(`Unexpected RPC method: ${method}`);
+        },
+      }),
+    });
+
+    await signL1Action({ wallet: client, action: { type: "cancel", cancels: [] }, nonce: 1700000000000 });
+
+    assert(typedDataCalls > 0, "a remote account must still sign through the client's typed-data path");
   });
 });
 

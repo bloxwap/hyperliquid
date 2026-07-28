@@ -61,9 +61,10 @@ interface Signer {
   signTypedData(args: TypedDataArgs): Promise<Signature>;
   /**
    * Sign a raw 32-byte digest directly, skipping EIP-712 encoding entirely. Present only when the
-   * wallet can do so locally (viem local accounts expose `sign`); JSON-RPC wallets never have it,
-   * so their behavior is unchanged. Takes the digest as bytes so the L1 path avoids a hex round
-   * trip per signature; adapters whose wallet speaks hex (`sign({ hash })`) convert here.
+   * wallet can do so locally: a viem local account exposes `sign`, and a JSON-RPC-shaped wallet
+   * has it too when it wraps one (see {@linkcode embeddedLocalAccount}). A wallet that signs only
+   * through a remote endpoint never has it. Takes the digest as bytes so the L1 path avoids a hex
+   * round trip per signature; adapters whose wallet speaks hex (`sign({ hash })`) convert here.
    */
   signDigest?(digest: Uint8Array): Promise<Signature>;
   /** Lowercase wallet address. */
@@ -148,9 +149,65 @@ function isViemJsonRpc(wallet: AbstractWallet): wallet is AbstractViemJsonRpcAcc
   );
 }
 
+/**
+ * A viem `WalletClient` configured with a local account, e.g. `createWalletClient({ account:
+ * privateKeyToAccount(key), … })` — the shape wagmi and viem hand around when the key lives in
+ * process.
+ *
+ * Such a client satisfies {@linkcode isViemJsonRpc} unconditionally (it always carries
+ * `signTypedData`, `getAddresses` and `getChainId`), so without this it would be adapted as a
+ * remote wallet and every L1 action would go through generic typed-data encoding — even though the
+ * key is right there and can sign the digest directly.
+ */
+interface LocalAccountCarrier {
+  account?: { type?: string } & AbstractViemLocalAccount & DigestBytesCapable;
+}
+
+/**
+ * The embedded local account of a JSON-RPC-shaped wallet, when it has one that can sign raw digests.
+ *
+ * Deliberately narrow: only viem's own `type: "local"` marker counts. A remote account (`type:
+ * "json-rpc"`) must keep going through the client, and a wallet whose `account` cannot sign a
+ * digest has nothing to offer here.
+ */
+function embeddedLocalAccount(wallet: AbstractWallet): (AbstractViemLocalAccount & DigestBytesCapable) | undefined {
+  const account = (wallet as LocalAccountCarrier).account;
+  if (account === undefined || account === null || account.type !== "local") return undefined;
+  if (typeof account.address !== "string") return undefined;
+  const canSignDigest = typeof account.sign === "function" || typeof account[SIGN_DIGEST_BYTES] === "function";
+  return canSignDigest ? account : undefined;
+}
+
+/**
+ * Raw-digest signer built from a viem local account, or `undefined` when it cannot sign digests.
+ *
+ * Shared by {@linkcode adaptViemLocal} and the JSON-RPC adapter, so a local account signs L1
+ * digests the same way whether it was passed directly or wrapped in a `WalletClient`.
+ */
+function digestSignerFor(
+  account: AbstractViemLocalAccount & DigestBytesCapable,
+): ((digest: Uint8Array) => Promise<Signature>) | undefined {
+  // A wallet carrying the bytes-level capability (the WASM fast wallet) skips the hex conversion
+  // the hex-speaking `sign` requires.
+  const signDigestBytes = account[SIGN_DIGEST_BYTES];
+  if (typeof signDigestBytes === "function") {
+    return async (digest: Uint8Array): Promise<Signature> => parseSignature(await signDigestBytes(digest));
+  }
+  if (typeof account.sign === "function") {
+    return async (digest: Uint8Array): Promise<Signature> =>
+      parseSignature(await account.sign!({ hash: `0x${bytesToHex(digest)}` }));
+  }
+  return undefined;
+}
+
 function adaptViemJsonRpc(wallet: AbstractViemJsonRpcAccount): Signer {
+  // When the client wraps an in-process key, L1 actions sign the digest through that account.
+  // Everything else — typed data, address, chain ID — still goes through the client, so a wallet
+  // that switches chains or accounts behaves exactly as it did before.
+  const localAccount = embeddedLocalAccount(wallet);
   return {
     kind: "viem-jsonrpc",
+    signDigest: localAccount === undefined ? undefined : digestSignerFor(localAccount),
     async signTypedData(args: TypedDataArgs): Promise<Signature> {
       const hex = await wallet.signTypedData({
         domain: args.domain,
@@ -218,9 +275,6 @@ function isViemLocal(wallet: AbstractWallet): wallet is AbstractViemLocalAccount
 }
 
 function adaptViemLocal(wallet: AbstractViemLocalAccount): Signer {
-  // A wallet carrying the bytes-level capability (the WASM fast wallet) skips the hex conversion
-  // the hex-speaking `sign` requires.
-  const signDigestBytes = (wallet as DigestBytesCapable)[SIGN_DIGEST_BYTES];
   return {
     kind: "viem-local",
     async signTypedData(args: TypedDataArgs): Promise<Signature> {
@@ -234,13 +288,7 @@ function adaptViemLocal(wallet: AbstractViemLocalAccount): Signer {
     },
     // A viem local account can sign a raw 32-byte digest locally; wire that up so callers with a
     // precomputed digest can skip the typed-data encoding round trip entirely.
-    signDigest:
-      typeof signDigestBytes === "function"
-        ? async (digest: Uint8Array): Promise<Signature> => parseSignature(await signDigestBytes(digest))
-        : typeof wallet.sign === "function"
-          ? async (digest: Uint8Array): Promise<Signature> =>
-              parseSignature(await wallet.sign!({ hash: `0x${bytesToHex(digest)}` }))
-          : undefined,
+    signDigest: digestSignerFor(wallet as AbstractViemLocalAccount & DigestBytesCapable),
     getAddress(): Promise<`0x${string}`> {
       return Promise.resolve(wallet.address.toLowerCase() as `0x${string}`);
     },
@@ -395,7 +443,8 @@ export async function signTypedData(args: {
 /**
  * Signs a raw 32-byte digest directly when the wallet supports it (a viem local account exposing
  * `sign`), bypassing EIP-712 encoding. Returns `undefined` for wallets without that capability —
- * JSON-RPC wallets among them — so the caller can fall back to {@linkcode signTypedData}.
+ * wallets that can only sign remotely among them — so the caller can fall back to
+ * {@linkcode signTypedData}.
  *
  * Internal to the signing module: the caller is responsible for computing a digest that is
  * byte-identical to what the typed-data path would have produced.

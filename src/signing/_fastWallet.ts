@@ -17,6 +17,11 @@
  * `signTypedData` (user-signed actions, multi-sig wrappers) is not accelerated: it delegates to a
  * viem local account created from the same key, imported lazily on first use. A wallet used only
  * for L1 actions therefore never loads viem at all.
+ *
+ * viem is not a dependency of this package, so both viem-dependent paths reach it through
+ * `import()`. Environments that cannot service a dynamic import (Jest without
+ * `--experimental-vm-modules`, some React Native bundlers) supply `options.privateKeyToAccount`
+ * instead; without it those paths throw an error saying so.
  * @module
  */
 
@@ -70,6 +75,64 @@ export async function loadTinySecp256k1(
 /** The loader the factory uses; replaced only by tests through {@linkcode _setEccLoaderForTests}. */
 let eccLoader: () => Promise<TinySecp256k1 | undefined> = loadTinySecp256k1;
 
+/** `privateKeyToAccount` from `viem/accounts`, however the caller obtained it. */
+export type PrivateKeyToAccount = (privateKey: `0x${string}`) => AbstractViemLocalAccount;
+
+/**
+ * Resolves `privateKeyToAccount`, preferring one the caller supplied.
+ *
+ * `viem` is not a dependency of this package — not even an optional one — so it can only be
+ * reached through `import()`, and the specifier has to stay dynamic or every consumer who does not
+ * use viem would fail to resolve this module at load time. Some environments cannot service a
+ * dynamic import at all: Jest without `--experimental-vm-modules` rejects it with "A dynamic
+ * import callback was invoked without --experimental-vm-modules", and bundlers targeting React
+ * Native may drop it. Those callers pass `privateKeyToAccount` in and never reach the import.
+ *
+ * When neither is possible the failure is reported for what it is, rather than surfacing the
+ * host's opaque message from somewhere deep in the signing path.
+ */
+async function resolvePrivateKeyToAccount(
+  provided: PrivateKeyToAccount | undefined,
+  need: "the tiny-secp256k1 fallback" | "signTypedData",
+): Promise<PrivateKeyToAccount> {
+  if (provided !== undefined) return provided;
+  try {
+    const { privateKeyToAccount } = await import("viem/accounts");
+    return privateKeyToAccount as PrivateKeyToAccount;
+  } catch (cause) {
+    // Two very different situations land here and the remedy differs, so name both rather than
+    // asserting one: viem may be absent (it is not a dependency, so this is the common case), or
+    // present but unreachable because the host cannot service a dynamic import.
+    throw new AbstractWalletError(
+      `createFastLocalWallet: ${need} needs \`viem/accounts\`, which could not be loaded. ` +
+        "Either viem is not installed (it is not a dependency of this package — install it), or " +
+        "this environment cannot service the dynamic import used to reach it (Jest without " +
+        "`--experimental-vm-modules` is the usual cause), in which case import " +
+        "`privateKeyToAccount` from `viem/accounts` yourself and pass it as " +
+        "`options.privateKeyToAccount`. See the underlying error on `cause`.",
+      { cause },
+    );
+  }
+}
+
+/**
+ * Guards against a supplied factory that ignores the key it is handed.
+ *
+ * The natural mistake in exactly the hosts `options.privateKeyToAccount` exists for is passing a
+ * bound or curried helper closed over a different key — `() => myAccount` type-checks. On the WASM
+ * path the wallet's `address` and raw-digest signer come from `tiny-secp256k1` over `privateKey`
+ * while `signTypedData` delegates to this factory, so a mismatch would sign L1 actions and
+ * user-signed actions with two different keys and report only one of them.
+ */
+function assertDelegateMatches(delegate: AbstractViemLocalAccount, expected: `0x${string}`): void {
+  if (delegate.address?.toLowerCase() !== expected.toLowerCase()) {
+    throw new AbstractWalletError(
+      `createFastLocalWallet: options.privateKeyToAccount returned an account for ${delegate.address}, ` +
+        `but this wallet signs as ${expected}. It must derive the account from the private key it is given.`,
+    );
+  }
+}
+
 /**
  * Internal test hook: swaps the `tiny-secp256k1` loader (pass `undefined` to restore the real one)
  * and resets the one-time warning latch. Module mocking cannot reliably simulate a missing
@@ -116,15 +179,23 @@ function toChecksumAddress(address: `0x${string}`): `0x${string}` {
  *
  * Fallbacks, in order:
  * - `tiny-secp256k1` missing or broken → a one-time `console.warn`, and the factory returns the
- *   plain viem local account (the noble path) — never a hard failure.
+ *   plain viem local account (the noble path).
  * - `signTypedData` → always delegated to viem (imported lazily on first use), since the WASM
  *   module accelerates raw digests only.
  *
+ * Both fallbacks need `viem/accounts`, which this package can only reach through a dynamic import
+ * (viem is not a dependency of it). Environments that cannot service one — Jest without
+ * `--experimental-vm-modules`, some React Native bundlers — must pass `options.privateKeyToAccount`;
+ * otherwise those two paths throw with an explanation. With `tiny-secp256k1` present and only L1
+ * actions signed, viem is never needed at all.
+ *
  * @param privateKey The 32-byte private key as a hex string.
- * @param options Set `wasm: false` to skip the WASM accelerator and use the viem/noble path directly.
+ * @param options Set `wasm: false` to skip the WASM accelerator and use the viem/noble path directly,
+ * and `privateKeyToAccount` to supply viem's factory where a dynamic import is unavailable.
  * @return The wallet, WASM-accelerated when available.
  *
- * @throws {AbstractWalletError} If the private key is not a valid 32-byte secp256k1 scalar.
+ * @throws {AbstractWalletError} If the private key is not a valid 32-byte secp256k1 scalar, or if
+ * viem is needed but can neither be imported nor was supplied.
  *
  * @example
  * ```ts
@@ -141,6 +212,13 @@ export async function createFastLocalWallet(
   options?: {
     /** Set `false` to skip the WASM accelerator and use the viem/noble path. Default: `true`. */
     wasm?: boolean;
+    /**
+     * `privateKeyToAccount` from `viem/accounts`, for environments where this package cannot
+     * `import()` it (Jest without `--experimental-vm-modules`, some React Native bundlers). When
+     * supplied it is used instead of the dynamic import on both viem-dependent paths: the
+     * `tiny-secp256k1` fallback and `signTypedData`.
+     */
+    privateKeyToAccount?: PrivateKeyToAccount;
   },
 ): Promise<AbstractViemLocalAccount> {
   if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
@@ -157,7 +235,10 @@ export async function createFastLocalWallet(
           "falling back to the viem/noble signing path. Install `tiny-secp256k1` to enable WASM acceleration.",
       );
     }
-    const { privateKeyToAccount } = await import("viem/accounts");
+    const privateKeyToAccount = await resolvePrivateKeyToAccount(
+      options?.privateKeyToAccount,
+      "the tiny-secp256k1 fallback",
+    );
     return privateKeyToAccount(privateKey);
   }
 
@@ -165,12 +246,19 @@ export async function createFastLocalWallet(
     throw new AbstractWalletError("Private key is outside the secp256k1 scalar range");
   }
 
+  // Derived once, and also the identity any `signTypedData` delegate must agree with.
+  const address = deriveAddress(ecc, privateKeyBytes);
+
   // viem is needed only for `signTypedData` (user-signed actions); a pure-L1 wallet never pays for it.
   let delegate: AbstractViemLocalAccount | undefined;
   const viemDelegate = async (): Promise<AbstractViemLocalAccount> => {
     if (delegate === undefined) {
-      const { privateKeyToAccount } = await import("viem/accounts");
-      delegate = privateKeyToAccount(privateKey);
+      const privateKeyToAccount = await resolvePrivateKeyToAccount(options?.privateKeyToAccount, "signTypedData");
+      const resolved = privateKeyToAccount(privateKey);
+      // The WASM path derives `address` and the digest signer itself, so a delegate for a
+      // different key would split this wallet's identity in two. Checked before it is memoized.
+      assertDelegateMatches(resolved, address);
+      delegate = resolved;
     }
     return delegate;
   };
@@ -185,7 +273,7 @@ export async function createFastLocalWallet(
   };
 
   const account: AbstractViemLocalAccount & DigestBytesCapable = {
-    address: deriveAddress(ecc, privateKeyBytes),
+    address,
     async sign({ hash }: { hash: `0x${string}` }): Promise<`0x${string}`> {
       return signDigestBytes(hexToBytes(hash.slice(2)));
     },
