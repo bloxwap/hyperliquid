@@ -83,9 +83,6 @@ export function fastAssetCtxs(
   let queue = Promise.resolve();
   /** Frames still waiting on the async queue; the synchronous path may only run at zero. */
   let queued = 0;
-  const released = (): void => {
-    queued--;
-  };
   return config.transport.subscribe<string>(
     payload.type,
     payload,
@@ -110,7 +107,15 @@ export function fastAssetCtxs(
       // promise would skip every subsequent `.then` callback, silently dropping all later updates
       // for the life of the subscription.
       queued++;
-      queue = queue.then(() => deliver(data, listener)).then(released);
+      // One chained step per frame: the release rides the same continuation via try/finally, so
+      // `queued` still drains even if `deliver` ever does reject.
+      queue = queue.then(async () => {
+        try {
+          await deliver(data, listener);
+        } finally {
+          queued--;
+        }
+      });
     },
     options,
   );
@@ -285,7 +290,12 @@ function decompressSync(data: string): FastAssetCtxsEvent {
   if (data.length === 0 || data.length % 4 !== 0) throw new Error("Invalid base64");
   const pooled = Buf.from(data, "base64");
   if (pooled.byteLength !== expectedBase64Bytes(data)) throw new Error("Invalid base64");
-  return JSON.parse(TEXT_DECODER.decode(inflate(pooled)));
+  // `inflate` returns a `Buffer` here (node:zlib), and `Buffer.toString("utf8")` decodes the
+  // ASCII-heavy JSON payload measurably faster than the shared TextDecoder — no decoder machinery.
+  // The cast is structural (same style as the node:zlib import above): the declared return type
+  // stays `Uint8Array` so browser/RN type-check stays clean.
+  const inflated = inflate(pooled) as Uint8Array & { toString(encoding: "utf8"): string };
+  return JSON.parse(inflated.toString("utf8"));
 }
 
 /** Decode a base64 + raw DEFLATE (RFC 1951) payload into a {@linkcode FastAssetCtxsEvent}. */

@@ -191,33 +191,61 @@ export function floatToWire(x: number): string {
     throw new FormatError(`floatToWire: ${String(x)} is not finite`);
   }
 
-  // Fast path: for |x| < 1e21, native `toFixed(8)` renders the EXACT stored double (V8/JSC exact-mode
-  // dtoa — `1e18 + 128` comes out as "1000000000000000128.00000000"), byte-identical to CPython's
-  // `f"{x:.8f}"` on every input EXCEPT an exact 8-decimal tie, where it rounds half-up while Python
-  // rounds half-even (repro: -233095212199.9004 → toFixed gives …063, Python gives …062). The 1e-12
-  // guard does NOT catch that — both candidates parse back to x — so ties must not take this path.
-  // A tie means the exact expansion terminates in digit 5 at the 9th decimal, so `toFixed(9)` ending
-  // in "5" detects every potential tie (no false negatives; false positives only cost the slow path).
-  // |x| >= 1e21 also takes the slow path: toFixed degenerates to `String()` (exponent form) there.
-  // This path never exceeds 28 significant digits (≤ 20 integer digits + 8 decimals below 1e20;
-  // doubles in [1e20, 1e21) are integers), so the context-28 normalize below can only strip here.
-  if (Math.abs(x) < 1e21 && !x.toFixed(9).endsWith("5")) {
-    let wire = x.toFixed(8);
-    // toFixed pads to exactly 8 decimals; strip the padding (Python's `Decimal(rounded).normalize()`):
-    // trailing zeros, then a bare decimal point. "-0.00000000" collapses to "0" — the documented -0
-    // mapping. A manual strip rather than the scanDecimal/toFixed round-trip: the string shape is
-    // fixed, so no parse is needed, and it is ~90 ns/call cheaper (see tests/perf float_to_wire).
-    let end = wire.length;
-    while (wire.charCodeAt(end - 1) === 48) end--; // "0"
-    if (wire.charCodeAt(end - 1) === 46) end--; // "."
-    wire = wire.slice(0, end);
-    if (wire === "-0") wire = "0";
-    // Python: `if abs(float(rounded) - x) >= 1e-12: raise ValueError("float_to_wire causes rounding")`.
-    // Python's `float()` is the nearest double to the decimal string — exactly what `Number()` parses.
-    if (Math.abs(Number(wire) - x) >= 1e-12) {
-      throw new FormatError(`floatToWire causes rounding: ${x}`);
+  // Fast path: for |x| < 1e21, native `toFixed` renders the EXACT stored double (V8/JSC exact-mode
+  // dtoa — `1e18 + 128` comes out as "1000000000000000128.000000000"), byte-identical to CPython's
+  // fixed-point render on every input EXCEPT an exact 8-decimal tie, where it rounds half-up while
+  // Python rounds half-even (repro: -233095212199.9004 → toFixed gives …063, Python gives …062).
+  // The 1e-12 guard does NOT catch that — both candidates parse back to x — so ties must not take
+  // this path. A tie means the exact expansion terminates in digit 5 at the 9th decimal, so
+  // `toFixed(9)` ending in "5" detects every potential tie (no false negatives; false positives
+  // only cost the slow path). The 8-decimal wire string is then derived from the SAME 9-decimal
+  // render — digit 9 (never 5 here) is the round digit: 0-4 truncate, 6-9 round digit 8 up with
+  // carry. Byte-identical to `x.toFixed(8)`: the 9-decimal render lies within 0.5e-9 of the exact
+  // double, and only a 5e-9 tie (already excluded) sits close enough to the 8-decimal rounding
+  // boundary for that gap to flip the result. |x| >= 1e21 takes the slow path: toFixed degenerates
+  // to `String()` (exponent form) there. This path never exceeds 28 significant digits (≤ 20
+  // integer digits + 8 decimals below 1e20; doubles in [1e20, 1e21) are integers), so the
+  // context-28 normalize below can only strip here.
+  if (Math.abs(x) < 1e21) {
+    const round9 = x.toFixed(9);
+    if (!round9.endsWith("5")) {
+      let wire: string;
+      if (round9.charCodeAt(round9.length - 1) < 53 /* "5" */) {
+        // Digit 9 of 0-4: the 8-decimal render truncates.
+        wire = round9.slice(0, -1);
+      } else {
+        // Digit 9 of 6-9: round digit 8 up, carrying left through any run of 9s (hopping the
+        // decimal point); a carry that reaches the sign or the first digit grows the integer
+        // part ("9.999999999" → "10.00000000", "-9.…" → "-10.…").
+        let i = round9.length - 2;
+        while (round9.charCodeAt(i) === 57 /* "9" */) {
+          i -= round9.charCodeAt(i - 1) === 46 /* "." */ ? 2 : 1;
+        }
+        // Zero the carried 9-run; the decimal point inside it (if any) keeps its place.
+        const dot = round9.length - 10; // index of "." in a 9-decimal render
+        const zeros = i < dot ? `${"0".repeat(dot - i - 1)}.00000000` : "0".repeat(round9.length - 2 - i);
+        wire =
+          i >= 0 && round9.charCodeAt(i) !== 45 /* "-" */
+            ? round9.slice(0, i) + String.fromCharCode(round9.charCodeAt(i) + 1) + zeros
+            : `${round9.slice(0, i + 1)}1${zeros}`;
+      }
+      // The render pads to exactly 8 decimals; strip the padding (Python's
+      // `Decimal(rounded).normalize()`): trailing zeros, then a bare decimal point. "-0.00000000"
+      // collapses to "0" — the documented -0 mapping. A manual strip rather than the
+      // scanDecimal/toFixed round-trip: the string shape is fixed, so no parse is needed, and it
+      // is ~90 ns/call cheaper (see tests/perf float_to_wire).
+      let end = wire.length;
+      while (wire.charCodeAt(end - 1) === 48) end--; // "0"
+      if (wire.charCodeAt(end - 1) === 46) end--; // "."
+      wire = wire.slice(0, end);
+      if (wire === "-0") wire = "0";
+      // Python: `if abs(float(rounded) - x) >= 1e-12: raise ValueError("float_to_wire causes rounding")`.
+      // Python's `float()` is the nearest double to the decimal string — exactly what `Number()` parses.
+      if (Math.abs(Number(wire) - x) >= 1e-12) {
+        throw new FormatError(`floatToWire causes rounding: ${x}`);
+      }
+      return wire;
     }
-    return wire;
   }
 
   // Exact path: render the double's exact binary value via {@linkcode exactDecimalParts} — CPython's

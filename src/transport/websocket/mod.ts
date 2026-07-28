@@ -163,9 +163,9 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
    * const mids = await transport.request("info", { type: "allMids" });
    * ```
    */
-  async request<T>(endpoint: "info" | "exchange", payload: unknown, signal?: AbortSignal): Promise<T> {
+  request<T>(endpoint: "info" | "exchange", payload: unknown, signal?: AbortSignal): Promise<T> {
     const wrapped = { type: endpoint === "exchange" ? "action" : endpoint, payload };
-    return await this._dispatcher.request<T>("post", wrapped, signal);
+    return this._dispatcher.request<T>("post", wrapped, signal);
   }
 
   /**

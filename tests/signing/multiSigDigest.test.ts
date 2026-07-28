@@ -397,7 +397,7 @@ describe("signMultiSigUserSigned() fast path", () => {
     }
   });
 
-  test("routes only the inner signature through signTypedData; the outer uses the digest", async () => {
+  test("routes both the inner and outer signatures through raw digests, never signTypedData", async () => {
     const account = privateKeyToAccount(PRIVATE_KEYS[0]);
     const signedDigests: `0x${string}`[] = [];
     let typedDataCalls = 0;
@@ -421,14 +421,48 @@ describe("signMultiSigUserSigned() fast path", () => {
       types: APPROVE_AGENT_TYPES,
     });
 
-    // Inner: one typed-data signature (user-signed actions have no digest fast path).
+    // Inner: one raw-digest signature over exactly viem's ApproveAgent digest with the multi-sig
+    // fields injected after the first field (see `getMultiSigExtendedTypes` in `_userSigned.ts`).
+    const innerOracle = hashTypedData({
+      domain: {
+        name: "HyperliquidSignTransaction",
+        version: "1",
+        chainId: parseInt(signatureChainId, 16),
+        verifyingContract: "0x0000000000000000000000000000000000000000",
+      },
+      types: {
+        EIP712Domain: [
+          { name: "name", type: "string" },
+          { name: "version", type: "string" },
+          { name: "chainId", type: "uint256" },
+          { name: "verifyingContract", type: "address" },
+        ],
+        "HyperliquidTransaction:ApproveAgent": [
+          { name: "hyperliquidChain", type: "string" },
+          { name: "payloadMultiSigUser", type: "address" },
+          { name: "outerSigner", type: "address" },
+          { name: "agentAddress", type: "address" },
+          { name: "agentName", type: "string" },
+          { name: "nonce", type: "uint64" },
+        ],
+      },
+      primaryType: "HyperliquidTransaction:ApproveAgent",
+      message: {
+        hyperliquidChain: "Testnet",
+        payloadMultiSigUser: MULTI_SIG_USERS[0],
+        outerSigner: account.address.toLowerCase(),
+        agentAddress: "0x0000000000000000000000000000000000000001",
+        agentName: "Agent",
+        nonce: NONCE,
+      },
+    } as never);
     // Outer: one raw-digest signature over exactly viem's SendMultiSig digest.
     const { type: _, ...wrapperWithoutType } = wrapper;
     const multiSigActionHash = createL1ActionHash({ action: wrapperWithoutType, nonce: NONCE });
-    const oracle = hashTypedData(
+    const outerOracle = hashTypedData(
       oracleTypedData({ multiSigActionHash, nonce: NONCE, signatureChainId, isTestnet: true }) as never,
     );
-    expect(typedDataCalls).toBe(1);
-    expect(signedDigests).toEqual([oracle]);
+    expect(typedDataCalls).toBe(0);
+    expect(signedDigests).toEqual([innerOracle, outerOracle]);
   });
 });

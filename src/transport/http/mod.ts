@@ -8,7 +8,7 @@
  * ```text
  * HttpTransport.request():
  *   rateLimit? ◄─ token bucket wait for the request's weight (opt-in; abort-aware; disabled by default)
- *   controller ◄─ timeout / user signal / fetchOptions.signal
+ *   controller ◄─ timeout / user signal / fetchOptions.signal (none allocated when all are absent)
  *    └─► fetch ┬─► non-OK or non-JSON body ─► HttpRequestError; 429 ─► HttpRateLimitError
  *              └─► parse JSON ─► T
  *     catch: classify by reference ─► finally: cancel timer, detach
@@ -160,9 +160,16 @@ export class HttpRequestError extends TransportError {
    *
    * The message is the response status line, extended with `detail` when given;
    * without a response, `detail` alone or a description of `cause` is used.
+   *
+   * `signatureFree` asserts that `request` carries no `signature`/`signatures` value anywhere,
+   * letting the constructor skip the redaction walk. The transports set it only after scanning
+   * the serialized wire form for a `"signature"` key; leave it unset for a payload of unknown
+   * provenance, so every `request` is walked and redacted.
    */
-  constructor(options?: ErrorOptions & { detail?: string; response?: Response; request?: unknown }) {
-    const { detail, response, request, ...errorOptions } = options ?? {};
+  constructor(
+    options?: ErrorOptions & { detail?: string; response?: Response; request?: unknown; signatureFree?: boolean },
+  ) {
+    const { detail, response, request, signatureFree, ...errorOptions } = options ?? {};
 
     let message: string;
     if (response) {
@@ -182,7 +189,7 @@ export class HttpRequestError extends TransportError {
     this.name = "HttpRequestError";
     this.response = response;
     this.status = response?.status;
-    this.request = redactSignature(request);
+    this.request = signatureFree === true ? request : redactSignature(request);
   }
 }
 
@@ -224,7 +231,9 @@ export class HttpRateLimitError extends HttpRequestError {
    *
    * Accepts the same options as {@linkcode HttpRequestError}.
    */
-  constructor(options?: ErrorOptions & { detail?: string; response?: Response; request?: unknown }) {
+  constructor(
+    options?: ErrorOptions & { detail?: string; response?: Response; request?: unknown; signatureFree?: boolean },
+  ) {
     super(options);
     this.name = "HttpRateLimitError";
     this.retryAfter = parseRetryAfter(options?.response?.headers.get("Retry-After") ?? null);
@@ -306,25 +315,29 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
    * ```
    */
   async request<T>(endpoint: "info" | "exchange" | "explorer", payload: unknown, signal?: AbortSignal): Promise<T> {
-    // One controller per request: the caller's signals relay into it FIRST, so they also cancel
-    // a rate-limit wait; the timeout timer is armed only after the wait, so deliberate pacing
+    // One controller per request — but only when something can actually abort it: a caller or
+    // fetchOptions signal, or a finite timeout. With none of those there is nothing to relay or
+    // arm, so no controller, relay, or wheel entry is allocated and fetch runs unsignaled. When
+    // the controller exists, the caller's signals relay into it FIRST, so they also cancel a
+    // rate-limit wait; the timeout timer is armed only after the wait, so deliberate pacing
     // never trips it; and `finally` detaches everything, so no listener or timer outlives the
     // request.
-    const controller = new AbortController();
     const fetchSignal = this.fetchOptions.signal;
-    const detachRelay =
-      signal !== undefined || (fetchSignal !== undefined && fetchSignal !== null)
-        ? abort.relay([signal, fetchSignal], controller)
-        : noop; // no signals to relay, so nothing to wire up
+    const hasSignal = signal !== undefined || (fetchSignal !== undefined && fetchSignal !== null);
     // Captured now, so the error message reports the value the timer was armed with even
     // if the field is reassigned mid-flight. The exchange endpoint honors its own override.
     const timeoutMs =
       endpoint === "exchange" && this.exchangeTimeout !== undefined ? this.exchangeTimeout : this.timeout;
+    // Mirrors the wheel's own disabling rule, so a null/non-finite timeout costs no entry either.
+    const hasTimeout = timeoutMs !== null && Number.isFinite(timeoutMs);
+    const controller = hasSignal || hasTimeout ? new AbortController() : undefined;
+    const detachRelay = controller !== undefined && hasSignal ? abort.relay([signal, fetchSignal], controller) : noop;
     let timeout: ReturnType<typeof abort.scheduleTimeout> | undefined;
     // The one serialization of the payload — wire form, weight source, and error snapshot all
     // derive from it, so getters/proxies/toJSON run exactly once per request.
     let body: string | undefined;
-    // The parsed form of `body`, computed when the limiter needs the weight; `undefined` until then.
+    // The parsed form of `body`, materialized lazily: up front when the limiter needs an
+    // info/exchange weight, otherwise only if a response surcharge or an error requires it.
     let snapshot: unknown;
 
     try {
@@ -339,11 +352,14 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       // debit is the conservative reading.
       const rateLimit = this._rateLimit;
       if (rateLimit !== null) {
-        snapshot = JSON.parse(body); // plain data: billing is immune to getters/proxies/toJSON
-        await rateLimit.acquire(requestWeight(endpoint, snapshot), controller.signal);
+        // The parsed wire form — never the live payload — is the billing source, so
+        // getters/proxies/toJSON cannot move the weight off what was actually sent. Explorer
+        // requests are a flat 40 whatever the payload, so they skip the parse entirely.
+        const weight = endpoint === "explorer" ? 40 : requestWeight(endpoint, (snapshot = JSON.parse(body)));
+        await rateLimit.acquire(weight, controller?.signal);
       }
 
-      timeout = this._timeouts.schedule(controller, timeoutMs);
+      if (controller !== undefined && hasTimeout) timeout = this._timeouts.schedule(controller, timeoutMs);
 
       // --- Request init ------------------------------------------------------
       const url = this._endpointUrl(endpoint === "explorer" ? this.rpcUrl : this.apiUrl, endpoint);
@@ -354,7 +370,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
             body,
             headers: { "Content-Type": "application/json" },
             method: "POST",
-            signal: controller.signal,
+            signal: controller?.signal,
           }
         : mergeRequestInit(
             {
@@ -365,7 +381,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
               method: "POST",
             },
             this.fetchOptions,
-            { signal: controller.signal },
+            { signal: controller?.signal },
           );
 
       // --- Send and validate -------------------------------------------------
@@ -378,7 +394,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
         throw new ErrorClass({
           response: clone,
           detail: text ? truncate(text) : undefined,
-          request: requestSnapshot(body, snapshot),
+          ...errorRequest(body, snapshot),
         });
       }
 
@@ -388,7 +404,8 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
         const parsed = JSON.parse(text);
         // Response-size surcharges can only be billed after the fact: debit the bucket so
         // later requests wait off the real cost instead of the pre-request estimate.
-        if (rateLimit !== null) {
+        if (rateLimit !== null && Array.isArray(parsed) && parsed.length > 0) {
+          snapshot ??= JSON.parse(body); // explorer skipped the pre-send parse (flat weight 40)
           const surcharge = responseSurcharge(endpoint, snapshot, parsed);
           if (surcharge > 0) rateLimit.charge(surcharge);
         }
@@ -398,7 +415,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
           response: recreateResponse(response, text),
           detail: "Invalid JSON response body",
           cause: error,
-          request: requestSnapshot(body, snapshot),
+          ...errorRequest(body, snapshot),
         });
       }
     } catch (error) {
@@ -407,17 +424,17 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
         throw new HttpRequestError({
           detail: `Request timed out after ${timeoutMs} ms`,
           cause: error,
-          request: requestSnapshot(body, snapshot),
+          ...errorRequest(body, snapshot),
         });
       }
-      if (controller.signal.aborted && error === controller.signal.reason) {
+      if (controller?.signal.aborted && error === controller.signal.reason) {
         throw new HttpRequestError({
           detail: "Request aborted",
           cause: error,
-          request: requestSnapshot(body, snapshot),
+          ...errorRequest(body, snapshot),
         });
       }
-      throw new HttpRequestError({ cause: error, request: requestSnapshot(body, snapshot) });
+      throw new HttpRequestError({ cause: error, ...errorRequest(body, snapshot) });
     } finally {
       timeout?.cancel();
       detachRelay();
@@ -451,14 +468,22 @@ function truncate(text: string, limit = 1024): string {
 // https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
 
 /**
- * The `request` carried by an error: the parsed form of the one wire serialization, so it is
- * always a plain-data snapshot — never the live payload (getters, proxies, and stateful `toJSON`
- * run exactly once, inside the serialization itself). When serialization failed there is no
- * snapshot, and the original is never traversed as a fallback: a safe constant remains.
+ * The error options carrying the request: the parsed form of the one wire serialization, so it
+ * is always a plain-data snapshot — never the live payload (getters, proxies, and stateful
+ * `toJSON` run exactly once, inside the serialization itself). When serialization failed there
+ * is no snapshot, and the original is never traversed as a fallback: a safe constant remains.
+ *
+ * `signatureFree` comes from scanning the wire string for a `"signature` key (a prefix of
+ * `"signatures"` too): `JSON.stringify` always emits keys quoted, so a signature-bearing payload
+ * cannot slip past, and the signature-free majority — every info request — skips the error
+ * constructor's redaction walk.
  */
-function requestSnapshot(body: string | undefined, snapshot: unknown): unknown {
-  if (body === undefined) return UNSERIALIZABLE_REQUEST;
-  return snapshot !== undefined ? snapshot : JSON.parse(body);
+function errorRequest(body: string | undefined, snapshot: unknown): { request: unknown; signatureFree: boolean } {
+  if (body === undefined) return { request: UNSERIALIZABLE_REQUEST, signatureFree: true };
+  return {
+    request: snapshot !== undefined ? snapshot : JSON.parse(body),
+    signatureFree: !body.includes('"signature'),
+  };
 }
 
 /** Info requests with weight 2. */

@@ -491,6 +491,23 @@ export async function signRawDigestBytes(args: {
 }
 
 /**
+ * Whether the wallet can sign a raw 32-byte digest locally (memoized per wallet object by the
+ * adapter cache). Package-internal — not re-exported from `mod.ts`: callers use it to skip
+ * COMPUTING a digest the wallet would only discard, when the digest is data-dependent enough
+ * that the lazy-thunk form of {@linkcode signRawDigestBytes} cannot express the fallback
+ * (the user-signed path, where an unencodable action must still reach `signTypedData`).
+ * Signing itself still goes through {@linkcode signRawDigestBytes}.
+ *
+ * @param wallet The wallet to inspect.
+ * @return `true` when {@linkcode signRawDigestBytes} would sign for this wallet.
+ *
+ * @throws {AbstractWalletError} If the wallet type is unknown.
+ */
+export function canSignRawDigest(wallet: AbstractWallet): boolean {
+  return adapt(wallet).signDigest !== undefined;
+}
+
+/**
  * Gets the lowercase wallet address from various wallet types.
  *
  * Concurrent calls for the same wallet share a single lookup. For a local account the resolved

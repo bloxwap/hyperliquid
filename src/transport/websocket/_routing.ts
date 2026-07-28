@@ -48,11 +48,26 @@ function stringProp(value: unknown, key: string): string | undefined {
   return typeof read === "string" ? read : undefined;
 }
 
+/**
+ * Matches any uppercase ASCII letter: the gate that lets a case-folding reader skip its
+ * `toLowerCase` — and the fresh string it allocates — when the value is already lowercase, which
+ * server-sent hex addresses virtually always are.
+ */
+const HAS_UPPERCASE = /[A-Z]/;
+
+/** Case-folds a user-reading key reader, allocating only when an uppercase char actually occurs. */
+function caseFolded(reader: KeyReader): KeyReader {
+  return (value: unknown): string | undefined => {
+    const key = reader(value);
+    return key === undefined || !HAS_UPPERCASE.test(key) ? key : key.toLowerCase();
+  };
+}
+
 /** Route key of a payload's `coin`. */
 const payloadCoin: KeyReader = (payload: unknown): string | undefined => stringProp(payload, "coin");
 
 /** Route key of a payload's `user`, case-folded because addresses are case-insensitive. */
-const payloadUser: KeyReader = (payload: unknown): string | undefined => stringProp(payload, "user")?.toLowerCase();
+const payloadUser: KeyReader = caseFolded((payload: unknown): string | undefined => stringProp(payload, "user"));
 
 /** `payload.coin` against `data.coin`: the shape most asset channels use. */
 const BY_COIN: ChannelRoute = {
@@ -63,7 +78,7 @@ const BY_COIN: ChannelRoute = {
 /** `payload.user` against `data.user`. */
 const BY_USER: ChannelRoute = {
   fromPayload: payloadUser,
-  fromEvent: (data: unknown): string | undefined => stringProp(data, "user")?.toLowerCase(),
+  fromEvent: caseFolded((data: unknown): string | undefined => stringProp(data, "user")),
 };
 
 /**
@@ -84,7 +99,7 @@ const BY_TRADES_COIN: ChannelRoute = {
 /** `webData3.ts`: `e.detail.userState.user === payload.user`. */
 const BY_USER_STATE: ChannelRoute = {
   fromPayload: payloadUser,
-  fromEvent: (data: unknown): string | undefined => stringProp(prop(data, "userState"), "user")?.toLowerCase(),
+  fromEvent: caseFolded((data: unknown): string | undefined => stringProp(prop(data, "userState"), "user")),
 };
 
 /**
@@ -163,6 +178,29 @@ export function payloadEventType(channel: string, payload: unknown): string {
 }
 
 /**
+ * Interned routed types, `channel → key → routedType`: repeat frames on one route reuse a single
+ * string instead of allocating `channel + KEY_SEPARATOR + key` per frame, and the shared identity
+ * also speeds the listener-map hashing the routed type feeds into. Keys are bounded by the
+ * coins/users actually seen on the wire, so no eviction is needed.
+ */
+const ROUTED_TYPES: Map<string, Map<string, string>> = new Map();
+
+/** The interned routed type of `channel` + `key`. */
+function internRoutedType(channel: string, key: string): string {
+  let byKey = ROUTED_TYPES.get(channel);
+  if (byKey === undefined) {
+    byKey = new Map();
+    ROUTED_TYPES.set(channel, byKey);
+  }
+  let routed = byKey.get(key);
+  if (routed === undefined) {
+    routed = channel + KEY_SEPARATOR + key;
+    byKey.set(key, routed);
+  }
+  return routed;
+}
+
+/**
  * Routed event type of an incoming frame, or `undefined` when the frame carries no route key and
  * must be broadcast on its channel instead.
  *
@@ -176,5 +214,5 @@ export function frameEventType(channel: string, data: unknown): string | undefin
   const route = ROUTES.get(channel);
   if (route === undefined) return undefined;
   const key = route.fromEvent(data);
-  return key === undefined ? undefined : channel + KEY_SEPARATOR + key;
+  return key === undefined ? undefined : internRoutedType(channel, key);
 }

@@ -393,9 +393,39 @@ export async function signL1Inner(args: {
    */
   isTestnet?: boolean;
 }): Promise<Signature> {
+  return signL1InnerBytes({
+    signer: args.signer,
+    actionHashBytes: hexToBytes(args.actionHash.slice(2)),
+    isTestnet: args.isTestnet,
+  });
+}
+
+/**
+ * Bytes-level variant of {@linkcode signL1Inner}: takes the precomputed hash as `Uint8Array`, so
+ * the multi-sig orchestrator passes its `createL1ActionHashBytes` output straight through instead
+ * of round-tripping the 32-byte hash through hex per signer. Package-internal — not re-exported
+ * from `mod.ts`.
+ *
+ * @param args The signer and signing parameters.
+ * @return The trimmed ECDSA signature.
+ *
+ * @throws {AbstractWalletError} If signing fails.
+ */
+export async function signL1InnerBytes(args: {
+  /** Inner signer (one of the multi-sig authorized users). */
+  signer: AbstractWallet;
+  /** Precomputed 32-byte hash of `[multiSigUser, outerSigner, action]` (addresses lowercased) with the request nonce. */
+  actionHashBytes: Uint8Array;
+  /**
+   * Indicates if the action is for the testnet.
+   *
+   * Default: `false`
+   */
+  isTestnet?: boolean;
+}): Promise<Signature> {
   const signature = await signL1ActionHash({
     wallet: args.signer,
-    actionHashBytes: hexToBytes(args.actionHash.slice(2)),
+    actionHashBytes: args.actionHashBytes,
     isTestnet: args.isTestnet,
   });
   return trimSignature(signature);

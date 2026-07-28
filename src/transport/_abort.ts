@@ -32,6 +32,22 @@ export function scheduleTimeout(target: AbortController, ms: number | null): { r
 /** Longest delay `setTimeout` accepts without clamping to ~1 ms: 2^31-1, the same bound the rate limiter slices at. */
 const MAX_TIMEOUT_DELAY_MS = 2_147_483_647;
 
+/** Lazily-created reason behind {@linkcode DISABLED_TIMEOUT}; memoized so reference classification holds. */
+let disabledReason: Error | undefined;
+
+/**
+ * The handle every disabled timeout shares: no queue entry and no timer exist for it, so one
+ * frozen object serves all callers instead of a fresh allocation per schedule. `reason` stays
+ * lazy and memoized like a live handle's — callers classify timeouts by reference — and
+ * `cancel` is a no-op.
+ */
+const DISABLED_TIMEOUT: { reason: Error; cancel: () => void } = Object.freeze({
+  get reason(): Error {
+    return (disabledReason ??= new DOMException_("Signal timed out.", "TimeoutError"));
+  },
+  cancel: noop,
+});
+
 /** A pending timeout: one node of the {@linkcode TimeoutWheel}'s deadline-sorted queue. */
 interface TimeoutEntry {
   /**
@@ -86,18 +102,11 @@ export class TimeoutWheel {
    * `reason` is the lazily-created, memoized `TimeoutError` the abort fires with, and `cancel`
    * withdraws the entry (clear-on-settle).
    *
-   * `null` — and any non-finite value — disables the timeout: no queue entry, no timer.
+   * `null` — and any non-finite value — disables the timeout: no queue entry, no timer, just
+   * the shared frozen DISABLED_TIMEOUT handle.
    */
   schedule(target: AbortController, ms: number | null): { reason: Error; cancel: () => void } {
-    if (ms === null || !Number.isFinite(ms)) {
-      let reason: Error | undefined;
-      return {
-        get reason(): Error {
-          return (reason ??= new DOMException_("Signal timed out.", "TimeoutError"));
-        },
-        cancel: noop,
-      };
-    }
+    if (ms === null || !Number.isFinite(ms)) return DISABLED_TIMEOUT;
     const entry: TimeoutEntry = {
       deadline: Date.now() + (ms > MAX_TIMEOUT_DELAY_MS ? 1 : ms),
       target,

@@ -204,15 +204,31 @@ export function executeUserSignedAction<T>(
 // Helpers
 // ============================================================
 
-/** Extracts the nonce field name ("nonce" or "time") from EIP-712 type definitions. */
+/** Cache of the nonce field name per `types` object (keyed by object identity). */
+const nonceFieldNameCache = new WeakMap<Record<string, readonly { name: string; type: string }[]>, "nonce" | "time">();
+
+/** Extracts the nonce field name ("nonce" or "time") from EIP-712 type definitions (memoized per `types` object). */
 function extractNonceFieldName(types: Record<string, readonly { name: string; type: string }[]>): "nonce" | "time" {
-  const primaryType = Object.keys(types)[0];
-  const field = types[primaryType].find((f) => f.name === "nonce" || f.name === "time");
-  if (!field) {
-    throw new HyperliquidError(`EIP-712 types must contain a "nonce" or "time" field in "${primaryType}"`);
+  let name = nonceFieldNameCache.get(types);
+  if (name === undefined) {
+    const primaryType = Object.keys(types)[0];
+    const field = types[primaryType].find((f) => f.name === "nonce" || f.name === "time");
+    if (!field) {
+      throw new HyperliquidError(`EIP-712 types must contain a "nonce" or "time" field in "${primaryType}"`);
+    }
+    name = field.name as "nonce" | "time";
+    nonceFieldNameCache.set(types, name);
   }
-  return field.name as "nonce" | "time";
+  return name;
 }
+
+/**
+ * Cache of the parsed static `signatureChainId` per config object (keyed by object identity).
+ * A function-valued `signatureChainId` is re-resolved on every request instead — it may return a
+ * different value each time, which is precisely why the config accepts a function. The raw string
+ * is kept alongside the parsed value so a mutated config re-parses instead of signing stale.
+ */
+const staticSignatureChainIdCache = new WeakMap<ExchangeConfig, { raw: string; parsed: `0x${string}` }>();
 
 /**
  * Resolves signature chain ID from config, or falls back to the leader wallet's chain ID.
@@ -225,9 +241,17 @@ function extractNonceFieldName(types: Record<string, readonly { name: string; ty
  */
 async function resolveSignatureChainId(config: ExchangeConfig): Promise<`0x${string}`> {
   if (config.signatureChainId) {
-    const id =
-      typeof config.signatureChainId === "function" ? await config.signatureChainId() : config.signatureChainId;
-    return parse(Hex, id);
+    if (typeof config.signatureChainId === "function") {
+      return parse(Hex, await config.signatureChainId());
+    }
+    // Static string: the valibot parse result is a pure function of the string, so cache it.
+    const raw = config.signatureChainId;
+    let entry = staticSignatureChainIdCache.get(config);
+    if (entry === undefined || entry.raw !== raw) {
+      entry = { raw, parsed: parse(Hex, raw) };
+      staticSignatureChainIdCache.set(config, entry);
+    }
+    return entry.parsed;
   }
   const leader = "wallet" in config ? config.wallet : config.signers[0];
   return await getWalletChainId(leader);

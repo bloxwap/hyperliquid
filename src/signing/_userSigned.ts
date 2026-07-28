@@ -3,7 +3,14 @@
  * @module
  */
 
-import { type AbstractWallet, type Signature, signTypedData } from "./_abstractWallet.ts";
+import {
+  type AbstractWallet,
+  canSignRawDigest,
+  type Signature,
+  signRawDigestBytes,
+  signTypedData,
+} from "./_abstractWallet.ts";
+import { createUserSignedDigestBytes } from "./_fastDigest.ts";
 import { trimSignature } from "./_multiSig.ts";
 
 /** EIP-712 type definitions; the hash depends on key and field order. */
@@ -110,7 +117,44 @@ export async function signUserSignedAction<
   /** The types of the action (hash depends on key order). */
   types: Record<string, readonly { name: string; type: string }[]>;
 }): Promise<Signature> {
+  return signUserSignedActionDigest(args);
+}
+
+/**
+ * Shared by {@linkcode signUserSignedAction} and {@linkcode signUserSignedInner}.
+ *
+ * Fast path: a wallet that can sign a raw digest (viem local accounts expose `sign`) signs the
+ * hand-rolled digest directly and skips viem's whole EIP-712 encoding (~43 µs → a few µs). The
+ * digest is byte-identical — `tests/signing/userSignedDigest.test.ts` pins it against viem's
+ * `hashTypedData`. Two kinds of miss fall through to the unchanged typed-data path: a wallet
+ * without the raw-digest capability (ledger/remote signers), and a `types` shape or field value
+ * the hand-rolled encoder does not reproduce exactly (nested structs, arrays, checksummed
+ * mixed-case addresses, …) yields no digest.
+ *
+ * The capability check comes FIRST: the digest is data-dependent and costs several keccak calls,
+ * so computing it for a wallet that would discard it (every remote/ledger wallet) is pure waste —
+ * and the lazy-thunk form of `signRawDigestBytes` cannot express "no digest → fall back", so
+ * gating on `canSignRawDigest` is how the waste is avoided. `digestThunk`, when given, produces
+ * the digest at most once across all signers of one multi-sig call (they all sign the same one).
+ */
+async function signUserSignedActionDigest(args: {
+  wallet: AbstractWallet;
+  action: { signatureChainId: `0x${string}`; [key: string]: unknown };
+  types: Record<string, readonly { name: string; type: string }[]>;
+  digestThunk?: () => Uint8Array | undefined;
+}): Promise<Signature> {
   const { wallet, action, types } = args;
+
+  if (canSignRawDigest(wallet)) {
+    const digest = args.digestThunk
+      ? args.digestThunk()
+      : createUserSignedDigestBytes(action, types, action.signatureChainId);
+    if (digest !== undefined) {
+      const fast = await signRawDigestBytes({ wallet, digest: () => digest });
+      if (fast !== undefined) return fast;
+    }
+  }
+
   return await signTypedData({
     wallet,
     domain: {
@@ -125,6 +169,62 @@ export async function signUserSignedAction<
     primaryType: Object.keys(types)[0],
     message: action,
   });
+}
+
+/**
+ * Builds the multi-sig-extended types and the action with the multi-sig fields injected — the
+ * exact pair the inner per-signer signatures commit to. Shared by {@linkcode signUserSignedInner}
+ * and {@linkcode createUserSignedInnerDigestThunk} so the digest and any typed-data fallback can
+ * never diverge.
+ */
+function buildMultiSigInner(args: {
+  action: { signatureChainId: `0x${string}`; [key: string]: unknown };
+  types: Record<string, readonly { name: string; type: string }[]>;
+  multiSigUser: `0x${string}`;
+  outerSigner: `0x${string}`;
+}): {
+  action: { signatureChainId: `0x${string}`; [key: string]: unknown };
+  types: Record<string, readonly { name: string; type: string }[]>;
+} {
+  return {
+    // Inject fields for multi-sig; shared across signers of one action, see the memo above.
+    types: getMultiSigExtendedTypes(args.types),
+    action: {
+      payloadMultiSigUser: args.multiSigUser.toLowerCase(),
+      outerSigner: args.outerSigner.toLowerCase(),
+      ...args.action,
+    },
+  };
+}
+
+/**
+ * Returns a thunk producing the digest every inner signer of one multi-sig user-signed action
+ * commits to — they all sign the SAME digest, so the thunk computes it on first invocation and
+ * memoizes. Invoked only for signers that can actually sign a raw digest (see
+ * {@linkcode signUserSignedActionDigest}): when no signer can, the digest is never computed.
+ * Package-internal — not re-exported from `mod.ts`.
+ *
+ * @param args The action, types, and multi-sig parameters (as passed to {@linkcode signUserSignedInner}).
+ * @return A memoized thunk producing the 32-byte digest, or `undefined` when the shape is unsupported.
+ */
+export function createUserSignedInnerDigestThunk(args: {
+  /** The action to be authorized (must include `signatureChainId`). */
+  action: { signatureChainId: `0x${string}`; [key: string]: unknown };
+  /** The types of the action. */
+  types: Record<string, readonly { name: string; type: string }[]>;
+  /** The multi-sig account address. */
+  multiSigUser: `0x${string}`;
+  /** The leader address (address of the wallet that signs the outer wrapper). */
+  outerSigner: `0x${string}`;
+}): () => Uint8Array | undefined {
+  let digest: Uint8Array | null | undefined;
+  return () => {
+    if (digest === undefined) {
+      const inner = buildMultiSigInner(args);
+      digest = createUserSignedDigestBytes(inner.action, inner.types, inner.action.signatureChainId) ?? null;
+    }
+    return digest ?? undefined;
+  };
 }
 
 /**
@@ -150,18 +250,19 @@ export async function signUserSignedInner(args: {
   multiSigUser: `0x${string}`;
   /** The leader address (address of the wallet that signs the outer wrapper). */
   outerSigner: `0x${string}`;
+  /**
+   * Shared digest thunk from {@linkcode createUserSignedInnerDigestThunk}: every signer of one
+   * multi-sig call signs the same digest, so the caller computes it at most once. When omitted,
+   * the digest is computed per call.
+   */
+  digestThunk?: () => Uint8Array | undefined;
 }): Promise<Signature> {
-  // Inject fields for multi-sig; shared across signers of one action, see the memo above.
-  const extendedTypes = getMultiSigExtendedTypes(args.types);
-
-  const signature = await signUserSignedAction({
+  const inner = buildMultiSigInner(args);
+  const signature = await signUserSignedActionDigest({
     wallet: args.signer,
-    action: {
-      payloadMultiSigUser: args.multiSigUser.toLowerCase(),
-      outerSigner: args.outerSigner.toLowerCase(),
-      ...args.action,
-    },
-    types: extendedTypes,
+    action: inner.action,
+    types: inner.types,
+    digestThunk: args.digestThunk,
   });
   return trimSignature(signature);
 }

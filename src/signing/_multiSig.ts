@@ -12,8 +12,8 @@ import {
   signTypedData,
 } from "./_abstractWallet.ts";
 import { createMultiSigDigestBytes } from "./_fastDigest.ts";
-import { createL1ActionHash, createL1ActionHashBytes, preadjustL1Action, signL1Inner } from "./_l1.ts";
-import { signUserSignedInner } from "./_userSigned.ts";
+import { createL1ActionHashBytes, preadjustL1Action, signL1InnerBytes } from "./_l1.ts";
+import { createUserSignedInnerDigestThunk, signUserSignedInner } from "./_userSigned.ts";
 
 /** EIP-712 types for the multi-sig outer wrapper. */
 const MULTI_SIG_TYPES = {
@@ -234,7 +234,8 @@ export async function signMultiSigL1(args: {
   const adjustedAction = preadjustL1Action(args.action);
 
   // --- Hash the inner payload (identical for every signer) -
-  const innerActionHash = createL1ActionHash({
+  // Bytes end-to-end: the hash feeds straight into the per-signer digests without a hex round trip.
+  const innerActionHashBytes = createL1ActionHashBytes({
     action: [args.multiSigUser.toLowerCase(), outerSigner.toLowerCase(), adjustedAction],
     nonce: args.nonce,
     vaultAddress: args.vaultAddress,
@@ -244,9 +245,9 @@ export async function signMultiSigL1(args: {
   // --- Collect inner signatures from all signers -----------
   const innerSignatures = await Promise.all(
     args.signers.map((signer) =>
-      signL1Inner({
+      signL1InnerBytes({
         signer,
-        actionHash: innerActionHash,
+        actionHashBytes: innerActionHashBytes,
         isTestnet: args.isTestnet,
       }),
     ),
@@ -381,6 +382,14 @@ export async function signMultiSigUserSigned(args: {
   const outerSigner = await getWalletAddress(args.signers[0]);
 
   // --- Collect inner signatures from all signers -----------
+  // Every inner signer commits to the SAME digest, so share one memoized thunk: it computes at
+  // most once per call, and only if some signer can actually sign a raw digest.
+  const innerDigestThunk = createUserSignedInnerDigestThunk({
+    action: args.action,
+    types: args.types,
+    multiSigUser: args.multiSigUser,
+    outerSigner,
+  });
   const innerSignatures = await Promise.all(
     args.signers.map((signer) =>
       signUserSignedInner({
@@ -389,6 +398,7 @@ export async function signMultiSigUserSigned(args: {
         types: args.types,
         multiSigUser: args.multiSigUser,
         outerSigner,
+        digestThunk: innerDigestThunk,
       }),
     ),
   );
