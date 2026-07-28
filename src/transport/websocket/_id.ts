@@ -85,6 +85,13 @@ export function normalize(value: unknown): unknown {
     const result: Record<string, unknown> = {};
     for (const key of Object.keys(value).sort()) {
       const item = normalize((value as Record<string, unknown>)[key]);
+      // Drop `undefined`-valued keys, matching what `JSON.stringify` does to this object on its
+      // way to the wire. Keeping them would leave the id and the echo carrying a field the server
+      // never receives and so can never echo back — and `isSubset` requires every key of the
+      // pending request to be present in the response, so such a subscription could never be
+      // matched to its own confirmation. A payload built as `{ dex: params.dex || undefined }`
+      // is the shape that hits this.
+      if (item === undefined) continue;
       // `__proto__` is the one key with a setter on `Object.prototype`: plain assignment would
       // invoke it and silently drop an own `__proto__` key a `JSON.parse`d payload can carry,
       // collapsing two logically distinct payloads onto the same id. Define it as a data
