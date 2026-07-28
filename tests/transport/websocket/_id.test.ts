@@ -25,6 +25,17 @@ describe("requestToId", () => {
     assert(requestToId([1, 2]) !== requestToId([2, 1]));
   });
 
+  test("drops undefined-valued keys, matching what reaches the wire", () => {
+    // `JSON.stringify` omits an `undefined` value, so a payload built as
+    // `{ dex: params.dex || undefined }` goes out as `{"type":"allMids"}`. Keeping the key in the
+    // normalized form left the pending request demanding a field the server can never echo back,
+    // and `isSubset` then refused to match the subscription to its own confirmation — `allMids()`
+    // never resolved. The normalized form has to describe what was actually sent.
+    assertEquals(requestToId({ type: "allMids", dex: undefined }), requestToId({ type: "allMids" }));
+    assertEquals(requestToId({ type: "allMids", dex: undefined }), '{"type":"allMids"}');
+    assert(isSubset(normalize({ type: "allMids", dex: undefined }), { type: "allMids" }));
+  });
+
   test("keeps an own __proto__ key from a parsed payload", () => {
     const payload = JSON.parse('{"type":"l2Book","__proto__":{"coin":"BTC"}}') as Record<string, unknown>;
     assertEquals(requestToId(payload), '{"__proto__":{"coin":"BTC"},"type":"l2Book"}');
