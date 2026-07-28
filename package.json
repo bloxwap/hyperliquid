@@ -1,6 +1,6 @@
 {
   "name": "@bloxwap/hyperliquid",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Blazing fast TypeScript Hyperliquid SDK.",
   "license": "MIT",
   "type": "module",

@@ -17,6 +17,11 @@
  * `signTypedData` (user-signed actions, multi-sig wrappers) is not accelerated: it delegates to a
  * viem local account created from the same key, imported lazily on first use. A wallet used only
  * for L1 actions therefore never loads viem at all.
+ *
+ * viem is not a dependency of this package, so both viem-dependent paths reach it through
+ * `import()`. Environments that cannot service a dynamic import (Jest without
+ * `--experimental-vm-modules`, some React Native bundlers) supply `options.privateKeyToAccount`
+ * instead; without it those paths throw an error saying so.
  * @module
  */
 
@@ -70,6 +75,39 @@ export async function loadTinySecp256k1(
 /** The loader the factory uses; replaced only by tests through {@linkcode _setEccLoaderForTests}. */
 let eccLoader: () => Promise<TinySecp256k1 | undefined> = loadTinySecp256k1;
 
+/** `privateKeyToAccount` from `viem/accounts`, however the caller obtained it. */
+export type PrivateKeyToAccount = (privateKey: `0x${string}`) => AbstractViemLocalAccount;
+
+/**
+ * Resolves `privateKeyToAccount`, preferring one the caller supplied.
+ *
+ * `viem` is not a dependency of this package — not even an optional one — so it can only be
+ * reached through `import()`, and the specifier has to stay dynamic or every consumer who does not
+ * use viem would fail to resolve this module at load time. Some environments cannot service a
+ * dynamic import at all: Jest without `--experimental-vm-modules` rejects it with "A dynamic
+ * import callback was invoked without --experimental-vm-modules", and bundlers targeting React
+ * Native may drop it. Those callers pass `privateKeyToAccount` in and never reach the import.
+ *
+ * When neither is possible the failure is reported for what it is, rather than surfacing the
+ * host's opaque message from somewhere deep in the signing path.
+ */
+async function resolvePrivateKeyToAccount(provided: PrivateKeyToAccount | undefined): Promise<PrivateKeyToAccount> {
+  if (provided !== undefined) return provided;
+  try {
+    const { privateKeyToAccount } = await import("viem/accounts");
+    return privateKeyToAccount as PrivateKeyToAccount;
+  } catch (cause) {
+    throw new AbstractWalletError(
+      "createFastLocalWallet: could not load `viem/accounts`. It is imported dynamically because " +
+        "viem is not a dependency of this package, and this environment cannot service a dynamic " +
+        "import (Jest without `--experimental-vm-modules` is the usual cause). Import " +
+        "`privateKeyToAccount` from `viem/accounts` yourself and pass it as " +
+        "`options.privateKeyToAccount`, or install `tiny-secp256k1` so signing never needs viem.",
+      { cause },
+    );
+  }
+}
+
 /**
  * Internal test hook: swaps the `tiny-secp256k1` loader (pass `undefined` to restore the real one)
  * and resets the one-time warning latch. Module mocking cannot reliably simulate a missing
@@ -116,15 +154,23 @@ function toChecksumAddress(address: `0x${string}`): `0x${string}` {
  *
  * Fallbacks, in order:
  * - `tiny-secp256k1` missing or broken → a one-time `console.warn`, and the factory returns the
- *   plain viem local account (the noble path) — never a hard failure.
+ *   plain viem local account (the noble path).
  * - `signTypedData` → always delegated to viem (imported lazily on first use), since the WASM
  *   module accelerates raw digests only.
  *
+ * Both fallbacks need `viem/accounts`, which this package can only reach through a dynamic import
+ * (viem is not a dependency of it). Environments that cannot service one — Jest without
+ * `--experimental-vm-modules`, some React Native bundlers — must pass `options.privateKeyToAccount`;
+ * otherwise those two paths throw with an explanation. With `tiny-secp256k1` present and only L1
+ * actions signed, viem is never needed at all.
+ *
  * @param privateKey The 32-byte private key as a hex string.
- * @param options Set `wasm: false` to skip the WASM accelerator and use the viem/noble path directly.
+ * @param options Set `wasm: false` to skip the WASM accelerator and use the viem/noble path directly,
+ * and `privateKeyToAccount` to supply viem's factory where a dynamic import is unavailable.
  * @return The wallet, WASM-accelerated when available.
  *
- * @throws {AbstractWalletError} If the private key is not a valid 32-byte secp256k1 scalar.
+ * @throws {AbstractWalletError} If the private key is not a valid 32-byte secp256k1 scalar, or if
+ * viem is needed but can neither be imported nor was supplied.
  *
  * @example
  * ```ts
@@ -141,6 +187,13 @@ export async function createFastLocalWallet(
   options?: {
     /** Set `false` to skip the WASM accelerator and use the viem/noble path. Default: `true`. */
     wasm?: boolean;
+    /**
+     * `privateKeyToAccount` from `viem/accounts`, for environments where this package cannot
+     * `import()` it (Jest without `--experimental-vm-modules`, some React Native bundlers). When
+     * supplied it is used instead of the dynamic import on both viem-dependent paths: the
+     * `tiny-secp256k1` fallback and `signTypedData`.
+     */
+    privateKeyToAccount?: PrivateKeyToAccount;
   },
 ): Promise<AbstractViemLocalAccount> {
   if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
@@ -157,7 +210,7 @@ export async function createFastLocalWallet(
           "falling back to the viem/noble signing path. Install `tiny-secp256k1` to enable WASM acceleration.",
       );
     }
-    const { privateKeyToAccount } = await import("viem/accounts");
+    const privateKeyToAccount = await resolvePrivateKeyToAccount(options?.privateKeyToAccount);
     return privateKeyToAccount(privateKey);
   }
 
@@ -169,7 +222,7 @@ export async function createFastLocalWallet(
   let delegate: AbstractViemLocalAccount | undefined;
   const viemDelegate = async (): Promise<AbstractViemLocalAccount> => {
     if (delegate === undefined) {
-      const { privateKeyToAccount } = await import("viem/accounts");
+      const privateKeyToAccount = await resolvePrivateKeyToAccount(options?.privateKeyToAccount);
       delegate = privateKeyToAccount(privateKey);
     }
     return delegate;
