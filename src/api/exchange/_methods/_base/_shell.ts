@@ -98,14 +98,32 @@ const nonceKeyCache = new WeakMap<
 >();
 
 /**
+ * Per-`(walletAddress × isTestnet)` dispatch chain: resolves once the request holding the previous
+ * nonce has been handed to the transport.
+ *
+ * The nonce lock guarantees the order nonces are ISSUED in; this guarantees the order they reach
+ * the WIRE in, which is what the server actually requires. Keeping the two separate is what lets
+ * signing — a network round trip for any remote wallet — run outside the lock and overlap across
+ * callers, while a later nonce still cannot overtake an earlier one.
+ *
+ * Entries are dropped as soon as the chain goes idle, so a long-lived process that touches many
+ * wallets does not accumulate one per key forever.
+ */
+const dispatchChains = new Map<string, Promise<void>>();
+
+/**
  * Common shell for executing an Exchange API request:
  * acquires per-`(walletAddress × isTestnet)` lock, generates nonce, calls `build` to construct
  * the signed payload, sends to the Exchange endpoint, and validates the response.
  *
- * The lock covers only nonce issuance and signing, plus request INITIATION (`transport.request`
- * runs synchronously up to its first `await`), so requests are dispatched to the server in
- * strictly increasing nonce order. The lock is released as soon as the request is in flight —
- * network responses resolve concurrently, unblocking order throughput beyond 1/RTT per wallet.
+ * The lock covers only nonce issuance and claiming a slot in the per-wallet dispatch chain — both
+ * synchronous. Signing happens outside it, so concurrent callers on one wallet sign at the same
+ * time; for a remote wallet, where signing is an `eth_signTypedData_v4` round trip, that is the
+ * difference between one order in flight per wallet and all of them.
+ *
+ * Wire order is preserved by {@linkcode dispatchChains} rather than by the lock: a request waits
+ * for its predecessor to reach `transport.request` before making its own call, so the server still
+ * sees strictly increasing nonces per wallet. Network responses resolve concurrently.
  *
  * @param config Exchange API configuration.
  * @param build Callback that, given the nonce, returns the action, signature, and any extras.
@@ -146,24 +164,44 @@ export async function executeWithShell<T>(
     const nonceOrPromise = config.nonceManager?.(walletAddress) ?? globalNonceManager.getNonce(key);
     const nonce = typeof nonceOrPromise === "number" ? nonceOrPromise : await nonceOrPromise;
 
-    // --- Build signed payload --------------------------------
-    const { action, signature, extras } = await build(nonce);
+    // --- Claim this nonce's slot in the dispatch order --------
+    // Taken under the lock, so slots are claimed in the same order nonces are issued.
+    const predecessor = dispatchChains.get(key);
+    let openGate!: () => void;
+    const dispatched = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    dispatchChains.set(key, dispatched);
 
-    // --- Initiate the request --------------------------------
+    // --- Sign and dispatch, outside the lock ------------------
+    // Signing is a network round trip for a remote wallet; running it here rather than inside the
+    // lock lets concurrent callers on one wallet sign at the same time. The `predecessor` await
+    // then restores order at the only point it matters — handing the request to the transport.
+    const pending = (async (): Promise<T> => {
+      let response: Promise<T> | undefined;
+      try {
+        const { action, signature, extras } = await build(nonce);
+        if (predecessor !== undefined) await predecessor;
+        // `transport.request` runs synchronously up to its first await, so wire order is fixed
+        // here. It is assigned rather than awaited so the gate below opens on dispatch, not on
+        // the response.
+        response = config.transport.request<T>("exchange", { action, signature, nonce, ...extras }, signal);
+      } finally {
+        // Wait for our turn even when this request never reached the wire. A rejected signature
+        // or an abort burns its nonce, which the server tolerates as a gap — but opening the gate
+        // early would let a later nonce overtake an earlier one that is still being signed.
+        if (predecessor !== undefined) await predecessor;
+        openGate();
+        // Idle chain: drop the entry so the map does not grow one slot per key forever. Compared
+        // by identity, so a successor that has already claimed the slot is left alone.
+        if (dispatchChains.get(key) === dispatched) dispatchChains.delete(key);
+      }
+      return await response;
+    })();
+
     // Hand the pending promise out in a plain (non-thenable) box, so the lock releases
-    // without awaiting the network response.
-    return {
-      pending: config.transport.request<T>(
-        "exchange",
-        {
-          action,
-          signature,
-          nonce,
-          ...extras,
-        },
-        signal,
-      ),
-    };
+    // without awaiting either the signature or the network response.
+    return { pending };
   });
 
   // --- Await response (concurrently across calls) and validate

@@ -254,7 +254,17 @@ export class MsgpackWriter {
    */
   uint64(value: number | bigint): void {
     this.ensure(8);
-    this.dataView.setBigUint64(this.offset, BigInt(value));
+    if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 2 ** 64) {
+      // Fast arm: two 32-bit writes skip the BigInt allocation/conversion on the nonce hot path.
+      // Exact for every integer double in range: scaling by 2**32 is an exponent shift and `%`
+      // by a power of two is exact, so the bytes match `BigInt(value)` bit for bit.
+      this.dataView.setUint32(this.offset, Math.floor(value / 2 ** 32));
+      this.dataView.setUint32(this.offset + 4, value % 2 ** 32);
+    } else {
+      // Preserves the original error surface: `BigInt()` rejects non-integers and
+      // `setBigUint64` rejects out-of-range values with the same `RangeError`s as before.
+      this.dataView.setBigUint64(this.offset, BigInt(value));
+    }
     this.offset += 8;
   }
 

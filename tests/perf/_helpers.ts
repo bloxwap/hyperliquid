@@ -102,7 +102,17 @@ export class MockInfoTransport implements IRequestTransport {
  * Server-to-client frames are injected with {@linkcode MockWebSocket.serverSend}.
  */
 export class MockWebSocket extends EventTarget {
-  static instances: MockWebSocket[] = [];
+  /**
+   * The most recently constructed instance, which is all {@linkcode lastMockWebSocket} ever needs.
+   *
+   * Deliberately a single reference rather than a list: scenarios that build a transport per
+   * sample would otherwise pile every socket — and, through the listeners registered on it, every
+   * transport and its keep-alive timers — into a static array that nothing releases until the
+   * scenario ends. That turns a per-sample measurement into a function of how many samples have
+   * already run, and leaves enough retained garbage that whether a major GC lands inside the
+   * measured window changes the result.
+   */
+  static last: MockWebSocket | undefined;
 
   readonly url: string;
   binaryType: BinaryType = "blob";
@@ -114,7 +124,7 @@ export class MockWebSocket extends EventTarget {
   constructor(url: string | URL, _protocols?: string | string[]) {
     super();
     this.url = String(url);
-    MockWebSocket.instances.push(this);
+    MockWebSocket.last = this;
     queueMicrotask(() => {
       if (this.readyState !== 0) return;
       this.readyState = 1; // OPEN
@@ -170,7 +180,7 @@ const OriginalWebSocket: typeof globalThis.WebSocket = globalThis.WebSocket;
 
 /** Replaces `globalThis.WebSocket` with {@linkcode MockWebSocket} (picked up by `ReconnectingWebSocket`). */
 export function installMockWebSocket(): void {
-  MockWebSocket.instances = [];
+  MockWebSocket.last = undefined;
   // The mock implements only what the transport touches, so it is not structurally a
   // `WebSocket`; the double assertion is the whole point of installing a stand-in.
   globalThis.WebSocket = MockWebSocket as unknown as typeof globalThis.WebSocket;
@@ -183,7 +193,7 @@ export function restoreWebSocket(): void {
 
 /** Returns the most recently created {@linkcode MockWebSocket} (i.e. the one backing the transport). */
 export function lastMockWebSocket(): MockWebSocket {
-  const socket = MockWebSocket.instances.at(-1);
+  const socket = MockWebSocket.last;
   if (!socket) throw new Error("No MockWebSocket instance was created");
   return socket;
 }

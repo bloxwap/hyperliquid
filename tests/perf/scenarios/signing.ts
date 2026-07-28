@@ -591,3 +591,107 @@ if (hashWasmAvailable) {
     },
   });
 }
+
+// --- EIP-712 user-signed digest -------------------------------------------------
+// User-signed actions (approveAgent, usdSend, …) share the fixed `HyperliquidSignTransaction`
+// domain with the multi-sig outer but vary in shape, so their digests are hand-rolled from a
+// plan compiled once per `types` object (`createUserSignedDigestBytes`, domain separator shared
+// with the multi-sig cache) instead of viem's generic `hashTypedData`. The pair is measured side
+// by side so the saving stays visible in the report; byte-equality is pinned by
+// `tests/signing/userSignedDigest.test.ts`, not here. (The import declaration is hoisted; keeping
+// it next to the scenarios keeps this file append-only.)
+
+import { createUserSignedDigestBytes } from "../../../src/signing/_fastDigest.ts";
+
+/** An approveAgent action exactly as `executeUserSignedAction` signs it (testnet). */
+const APPROVE_AGENT_ACTION = {
+  type: "approveAgent",
+  signatureChainId: "0x66eee",
+  hyperliquidChain: "Testnet",
+  agentAddress: "0x0000000000000000000000000000000000000001",
+  agentName: "Agent",
+  nonce: NONCE,
+} as const;
+
+/** The typed-data envelope viem's `hashTypedData` is benchmarked on (same action). */
+const APPROVE_AGENT_TYPED_DATA = {
+  domain: {
+    name: "HyperliquidSignTransaction",
+    version: "1",
+    chainId: 0x66eee,
+    verifyingContract: "0x0000000000000000000000000000000000000000",
+  },
+  types: {
+    EIP712Domain: [
+      { name: "name", type: "string" },
+      { name: "version", type: "string" },
+      { name: "chainId", type: "uint256" },
+      { name: "verifyingContract", type: "address" },
+    ],
+    "HyperliquidTransaction:ApproveAgent": [
+      { name: "hyperliquidChain", type: "string" },
+      { name: "agentAddress", type: "address" },
+      { name: "agentName", type: "string" },
+      { name: "nonce", type: "uint64" },
+    ],
+  },
+  primaryType: "HyperliquidTransaction:ApproveAgent",
+  message: {
+    hyperliquidChain: "Testnet",
+    agentAddress: "0x0000000000000000000000000000000000000001",
+    agentName: "Agent",
+    nonce: NONCE,
+  },
+} as const;
+
+scenario({
+  name: "signing/eip712_user_signed_digest",
+  group: "signing",
+  description: "createUserSignedDigestBytes(): hand-rolled EIP-712 digest of an approveAgent action",
+  unit: "digest",
+  iterations: 5000,
+  run: () => {
+    createUserSignedDigestBytes(APPROVE_AGENT_ACTION, ApproveAgentTypes, "0x66eee");
+  },
+});
+
+scenario({
+  name: "signing/eip712_user_signed_digest_viem",
+  group: "signing",
+  description: "viem hashTypedData() over the same approveAgent action (the oracle the fast digest replaces)",
+  unit: "digest",
+  iterations: 2000,
+  run: () => {
+    hashTypedData(APPROVE_AGENT_TYPED_DATA as never);
+  },
+});
+
+// --- End-to-end user-signed action without ECDSA --------------------------------
+// Counterpart of `signing/order_e2e_no_ecdsa` for the user-signed path: the stub wallet's
+// raw-digest `sign` takes the fast digest path, so validation, nonce issuance, the hand-rolled
+// digest, and dispatch are what remains on the clock. Grounds the user-signed digest work end to
+// end through `executeUserSignedAction`; the per-digest view is the pair above.
+
+scenario({
+  name: "signing/approve_agent_e2e_no_ecdsa",
+  group: "signing",
+  description:
+    "ExchangeClient.approveAgent() with a stub wallet (fixed signature): SDK shell overhead without secp256k1",
+  unit: "request",
+  iterations: 200,
+  samples: 15,
+  setup: () => {
+    const transport = new MockExchangeTransport(0);
+    const client = new ExchangeClient({
+      transport,
+      wallet: digestStubWallet("0x1111111111111111111111111111111111111111"),
+    });
+    return { client };
+  },
+  run: async ({ client }: { client: ExchangeClient }) => {
+    await client.approveAgent({
+      agentAddress: "0x0000000000000000000000000000000000000001",
+      agentName: "Agent",
+    });
+  },
+});

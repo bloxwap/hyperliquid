@@ -163,10 +163,13 @@ export class WebSocketDispatcher {
    * re-subscription echoes cost N² subset checks.
    */
   private readonly _byEchoId: Map<string, PendingRequest[]> = new Map();
+  /** Shared request-timeout scheduler: at most one armed native timer, however many requests are in flight. */
+  private readonly _timeouts: abort.TimeoutWheel;
 
   constructor(socket: ReconnectingWebSocket, hlEvents: HyperliquidEventTarget, timeout: number | null) {
     this.timeout = timeout;
     this._socket = socket;
+    this._timeouts = new abort.TimeoutWheel();
 
     // --- Hyperliquid event handlers ------------------------------------------
     hlEvents.addEventListener("subscriptionResponse", (event) => this._handleSubscriptionResponse(event.detail));
@@ -223,7 +226,7 @@ export class WebSocketDispatcher {
     // no listener or timer outlives the request.
     const controller = new AbortController();
     const timeoutMs = this.timeout; // for correct error message after user changes
-    const timeout = abort.scheduleTimeout(controller, timeoutMs);
+    const timeout = this._timeouts.schedule(controller, timeoutMs);
     const detachRelay = abort.relay([signal, this._socket.terminationSignal], controller);
 
     let entry: PendingRequest | undefined;

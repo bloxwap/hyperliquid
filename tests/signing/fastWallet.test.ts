@@ -300,10 +300,29 @@ describe("createFastLocalWallet() fallback", () => {
     const wrongKeyFactory = (): ReturnType<typeof privateKeyToAccount> => privateKeyToAccount(PRIVATE_KEYS[1]);
     const fast = await createFastLocalWallet(PRIVATE_KEYS[0], { privateKeyToAccount: wrongKeyFactory });
 
-    // The wallet itself is fine; only the typed-data delegate is wrong, so it fails there.
+    // The wallet itself is fine; only the typed-data delegate is wrong, so it fails there. The
+    // action must reach `signTypedData` to trigger that: approveAgent takes the raw-digest fast
+    // path now, so this uses types with an array field — a shape the hand-rolled digest does not
+    // cover, forcing the typed-data fallback where the delegate is resolved and validated.
     expect(fast.address).toBe(privateKeyToAccount(PRIVATE_KEYS[0]).address);
     await expect(
-      signUserSignedAction({ wallet: fast, action: { ...APPROVE_AGENT }, types: ApproveAgentTypes }),
+      signUserSignedAction({
+        wallet: fast,
+        action: {
+          type: "custom",
+          signatureChainId: "0x66eee",
+          hyperliquidChain: "Testnet",
+          payloads: ["0x1111111111111111111111111111111111111111111111111111111111111111"],
+          nonce: NONCE,
+        },
+        types: {
+          "HyperliquidTransaction:Custom": [
+            { name: "hyperliquidChain", type: "string" },
+            { name: "payloads", type: "bytes32[]" },
+            { name: "nonce", type: "uint64" },
+          ],
+        },
+      }),
     ).rejects.toThrow("must derive the account from the private key it is given");
   });
 
