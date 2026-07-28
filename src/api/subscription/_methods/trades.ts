@@ -75,11 +75,8 @@ export function trades(
   return config.transport.subscribe<TradesEvent>(
     payload.type,
     payload,
-    (e) => {
-      if (e.detail[0]?.coin === payload.coin) {
-        listener(e.detail);
-      }
-    },
+    // Routing delivers only this coin's frames (`trades\0{coin}`); no post-filter needed.
+    (e) => listener(e.detail),
     options,
   );
 }

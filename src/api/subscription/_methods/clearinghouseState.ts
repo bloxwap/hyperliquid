@@ -92,10 +92,9 @@ export function clearinghouseState(
   return config.transport.subscribe<ClearinghouseStateEvent>(
     payload.type,
     payload,
+    // Routing keys only by user; dex still needs a local filter.
     (e) => {
-      if (e.detail.user === payload.user && e.detail.dex === payload.dex) {
-        listener(e.detail);
-      }
+      if (e.detail.dex === payload.dex) listener(e.detail);
     },
     options,
   );

@@ -47,7 +47,11 @@ export type MsgpackValue =
  * Only meaningful inside L1 action-hash preimages — never place it in a wire payload.
  */
 export class Adjusted {
-  constructor(/** The adjusted subtree. */ readonly value: MsgpackValue) {}
+  readonly value: MsgpackValue;
+  constructor(/** The adjusted subtree. */ value: MsgpackValue) {
+    // Marker only — the wrapped subtree is already L1-normalized.
+    this.value = value;
+  }
 }
 
 /**
@@ -89,9 +93,15 @@ const BIGINT_UINT64_MAX = 2n ** 64n;
  */
 export class MsgpackWriter {
   /** 1 KiB covers a single-order action without a grow; batches double up from there. */
-  private buffer: Uint8Array<ArrayBuffer> = new Uint8Array(1024);
-  private dataView: DataView<ArrayBuffer> = new DataView(this.buffer.buffer);
-  private offset = 0;
+  private buffer: Uint8Array<ArrayBuffer>;
+  private dataView: DataView<ArrayBuffer>;
+  private offset: number;
+
+  constructor() {
+    this.buffer = new Uint8Array(1024);
+    this.dataView = new DataView(this.buffer.buffer);
+    this.offset = 0;
+  }
 
   /** Rewinds to an empty payload, retaining the allocated storage. */
   reset(): void {
@@ -368,29 +378,50 @@ export class MsgpackWriter {
    * the UTF-8 length equals `.length` and the bytes are the char codes — so the header can be written before
    * the body with no `TextEncoder` round trip. Anything else defers to `TextEncoder` rather than hand-rolling
    * UTF-8, which also keeps lone-surrogate replacement identical to the reference implementation.
+   *
+   * The ASCII path is a single pass: header bytes are reserved, the body is written while scanning, and on
+   * the first non-ASCII code unit the write is rewound and the `TextEncoder` path takes over. A separate
+   * "is this ASCII?" scan before the write used to walk every character twice on the hot path.
    */
   private string(value: string): void {
-    let ascii = true;
-    for (let i = 0; i < value.length; i++) {
-      if (value.charCodeAt(i) > 0x7f) {
-        ascii = false;
-        break;
+    const length = value.length;
+    if (length >= 4294967296) {
+      throw new Error("Cannot safely encode string with size larger than 32 bits");
+    }
+    // Header sizes match {@linkcode stringHeader}: fixstr / str8 / str16 / str32.
+    const headerSize = length < 32 ? 1 : length < 256 ? 2 : length < 65536 ? 3 : 5;
+    this.ensure(headerSize + length);
+    const start = this.offset;
+    const bodyAt = start + headerSize;
+
+    for (let i = 0; i < length; i++) {
+      const c = value.charCodeAt(i);
+      if (c > 0x7f) {
+        // Non-ASCII: discard the reserved slot and encode via TextEncoder (handles multi-byte UTF-8
+        // and lone-surrogate replacement identically to the reference implementation).
+        this.offset = start;
+        const bytes = TEXT_ENCODER.encode(value);
+        this.stringHeader(bytes.length);
+        this.raw(bytes);
+        return;
       }
+      this.buffer[bodyAt + i] = c;
     }
 
-    if (!ascii) {
-      const bytes = TEXT_ENCODER.encode(value);
-      this.stringHeader(bytes.length);
-      this.raw(bytes);
-      return;
+    // All ASCII: backpatch the header and commit the body.
+    if (headerSize === 1) {
+      this.buffer[start] = 0xa0 | length;
+    } else if (headerSize === 2) {
+      this.buffer[start] = 0xd9;
+      this.buffer[start + 1] = length;
+    } else if (headerSize === 3) {
+      this.buffer[start] = 0xda;
+      this.dataView.setUint16(start + 1, length);
+    } else {
+      this.buffer[start] = 0xdb;
+      this.dataView.setUint32(start + 1, length);
     }
-
-    this.stringHeader(value.length);
-    this.ensure(value.length);
-    for (let i = 0; i < value.length; i++) {
-      this.buffer[this.offset + i] = value.charCodeAt(i);
-    }
-    this.offset += value.length;
+    this.offset = bodyAt + length;
   }
 
   private stringHeader(length: number): void {

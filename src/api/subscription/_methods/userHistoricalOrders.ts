@@ -86,11 +86,8 @@ export function userHistoricalOrders(
   return config.transport.subscribe<UserHistoricalOrdersEvent>(
     payload.type,
     payload,
-    (e) => {
-      if (e.detail.user === payload.user) {
-        listener(e.detail);
-      }
-    },
+    // Routing delivers only this user's frames; no post-filter needed.
+    (e) => listener(e.detail),
     options,
   );
 }

@@ -5,7 +5,7 @@
   </picture>
   <br>
   <strong>Blazing fast typescript
-    <a href="https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api">Hyperliquid SDK</a></strong>
+    <a href="https://bloxwap.gitbook.io/hyperliquid">Hyperliquid SDK</a></strong>
 </p>
 
 <p align="center">
@@ -26,7 +26,8 @@
 
 ## Documentation
 
-Browse the [SDK documentation](docs/README.md) for installation, clients, transports, signing, utilities, and guides.
+Browse the [SDK documentation](https://bloxwap.gitbook.io/hyperliquid) for installation, clients, transports, signing,
+utilities, and guides.
 
 ## Installation
 
@@ -55,7 +56,7 @@ yarn add @bloxwap/hyperliquid
 ```
 
 > React Native needs polyfills for the `fastAssetCtxs` subscription and for versions below 0.86 — see the
-> [documentation](https://nktkas.gitbook.io/hyperliquid).
+> [documentation](https://bloxwap.gitbook.io/hyperliquid).
 
 ## Quick Example
 
@@ -116,6 +117,12 @@ await exchange.updateLeverage({ asset: 0, isCross: true, leverage: 5 });
 await exchange.withdraw3({ destination: "0x...", amount: "1" });
 ```
 
+For low-latency bots, prefer
+[`createFastLocalWallet`](https://bloxwap.gitbook.io/hyperliquid/docs/signing#fast-local-wallet-wasm-secp256k1) (WASM
+secp256k1) and install the optional `hash-wasm` package for ambient keccak acceleration. Trusted callers can also pass
+`{ skipValidation: true }` — see the
+[low-latency recipe](https://bloxwap.gitbook.io/hyperliquid/docs/signing#low-latency-recipe-bots--hft).
+
 ### Subscribe
 
 ```ts
@@ -150,4 +157,4 @@ await subs.l2Book({ coin: "ETH" }, (data) => {
 >   store (Bun auto-loads a local `.env`, which is gitignored in this repo).
 > - For trading bots, prefer a Hyperliquid **agent wallet** (API wallet) over the master account key: an agent key can
 >   trade but cannot withdraw, and it can be revoked without rotating the master key.
-> - See [Signing](docs/signing.md) for how wallets, signatures, and nonces work.
+> - See [Signing](https://bloxwap.gitbook.io/hyperliquid/docs/signing) for how wallets, signatures, and nonces work.

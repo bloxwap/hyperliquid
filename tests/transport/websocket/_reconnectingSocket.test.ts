@@ -148,6 +148,66 @@ describe("ReconnectingWebSocket", () => {
       ws.close();
     });
 
+    test("delivers frames to the internal hook and to public listeners independently", () => {
+      const ws = createSocket();
+      lastSocket().serverOpen();
+
+      // The internal hook is how the SDK's own frame consumer reads every frame.
+      const hooked: unknown[] = [];
+      (ws as unknown as { _onFrame: (data: unknown) => void })._onFrame = (data) => hooked.push(data);
+
+      // With no public `message` listener, the hook still sees every frame.
+      lastSocket().serverMessage("only-hook");
+      assertEquals(hooked, ["only-hook"]);
+
+      // Adding a public listener must not disturb the hook, and must receive frames itself.
+      const seen: unknown[] = [];
+      const listener = (event: MessageEvent): void => void seen.push(event.data);
+      ws.addEventListener("message", listener);
+      lastSocket().serverMessage("both");
+      assertEquals(hooked, ["only-hook", "both"]);
+      assertEquals(seen, ["both"]);
+
+      // Removing it stops its deliveries while the hook keeps receiving.
+      ws.removeEventListener("message", listener);
+      lastSocket().serverMessage("hook-again");
+      assertEquals(seen, ["both"]);
+      assertEquals(hooked, ["only-hook", "both", "hook-again"]);
+
+      ws.close();
+    });
+
+    test("the onmessage attribute handler still receives frames", () => {
+      const ws = createSocket();
+      lastSocket().serverOpen();
+
+      const seen: unknown[] = [];
+      ws.onmessage = (event) => void seen.push(event.data);
+      lastSocket().serverMessage("via-attribute");
+      assertEquals(seen, ["via-attribute"]);
+
+      ws.onmessage = null;
+      lastSocket().serverMessage("after-clear");
+      assertEquals(seen, ["via-attribute"]);
+
+      ws.close();
+    });
+
+    test("every public message listener receives the frame", () => {
+      const ws = createSocket();
+      lastSocket().serverOpen();
+
+      const a: unknown[] = [];
+      const b: unknown[] = [];
+      ws.addEventListener("message", (event) => void a.push(event.data));
+      ws.addEventListener("message", (event) => void b.push(event.data));
+      lastSocket().serverMessage("fan-out");
+
+      assertEquals(a, ["fan-out"]);
+      assertEquals(b, ["fan-out"]);
+      ws.close();
+    });
+
     test("resolves the url through an async factory before connecting", async () => {
       const ws = createSocket(() => Promise.resolve("ws://localhost/from-factory"));
       assertEquals(ws.url, "");

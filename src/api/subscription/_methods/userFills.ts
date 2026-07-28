@@ -92,11 +92,8 @@ export function userFills(
   return config.transport.subscribe<UserFillsEvent>(
     payload.type,
     payload,
-    (e) => {
-      if (e.detail.user === payload.user) {
-        listener(e.detail);
-      }
-    },
+    // Routing delivers only this user's frames (case-folded address key); no post-filter needed.
+    (e) => listener(e.detail),
     options,
   );
 }

@@ -266,9 +266,9 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   /** Opt-in token-bucket rate limiter; `null` keeps requests unthrottled (the default). */
   private readonly _rateLimit: TokenBucketRateLimiter | null;
   /** Shared request-timeout scheduler: at most one armed native timer, however many requests are in flight. */
-  private readonly _timeouts = new abort.TimeoutWheel();
+  private readonly _timeouts: abort.TimeoutWheel;
   /** Memoized endpoint URLs, keyed by base and endpoint; mutating `apiUrl`/`rpcUrl` simply misses the cache. */
-  private readonly _urlCache = new Map<string, URL>();
+  private readonly _urlCache: Map<string, URL>;
 
   constructor(options?: HttpTransportOptions) {
     this.isTestnet = options?.isTestnet ?? false;
@@ -281,6 +281,8 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       options?.rateLimit === undefined
         ? null
         : new TokenBucketRateLimiter(options.rateLimit.capacity ?? 1200, options.rateLimit.refillPerMinute ?? 1200);
+    this._timeouts = new abort.TimeoutWheel();
+    this._urlCache = new Map();
   }
 
   /**
@@ -736,7 +738,10 @@ function recreateResponse(original: Response, text: string): Response {
 }
 
 /** Shared no-op used when no abort relay is needed. */
-function noop(): void {}
+function noop(): void {
+  // Intentionally empty; a statement keeps coverage tooling from treating the call as unhit.
+  return;
+}
 
 /** True when `init` has no own enumerable properties, i.e. merging it would change nothing. */
 function isEmptyRequestInit(init: RequestInit): boolean {

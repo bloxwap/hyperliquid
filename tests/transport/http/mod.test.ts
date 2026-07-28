@@ -172,6 +172,25 @@ describe("HttpTransport", () => {
         await assertRejects(() => transport.request("info", {}), HttpRequestError);
       });
 
+      test("non-200 status tolerates a body that fails to read", async () => {
+        // Covers `response.text().catch(() => undefined)` on the error path.
+        mockFetch(
+          () =>
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  controller.error(new Error("body gone"));
+                },
+              }),
+              { status: 500, headers: { "Content-Type": "text/plain" } },
+            ),
+        );
+
+        const transport = new HttpTransport();
+        const error = await assertRejects(() => transport.request("info", {}), HttpRequestError);
+        assertEquals(error.status, 500);
+      });
+
       test("invalid Content-Type throws HttpRequestError", async () => {
         mockFetch(() => new Response("", { status: 200, headers: { "Content-Type": "text/html" } }));
 

@@ -265,5 +265,241 @@ describe("HyperliquidEventTarget", () => {
 
       assertEquals(calls, 1);
     });
+
+    test("addEventListener({ once: true }) fires once then detaches (function listener)", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      let calls = 0;
+      target.addEventListener("testChannel", () => calls++, { once: true });
+
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: { n: 1 } }));
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: { n: 2 } }));
+      assertEquals(calls, 1);
+    });
+
+    test("addEventListener({ once: true }) fires once then detaches (EventListenerObject)", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      let calls = 0;
+      const listener: EventListenerObject = {
+        handleEvent() {
+          calls++;
+        },
+      };
+      target.addEventListener("testChannel", listener, { once: true });
+
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+      assertEquals(calls, 1);
+    });
+
+    test("addEventListener with an already-aborted signal never delivers", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const signal = AbortSignal.abort();
+
+      let calls = 0;
+      target.addEventListener("testChannel", () => calls++, { signal });
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+      assertEquals(calls, 0);
+    });
+
+    test("addEventListener signal abort detaches a live listener", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const controller = new AbortController();
+
+      let calls = 0;
+      target.addEventListener("testChannel", () => calls++, { signal: controller.signal });
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+      assertEquals(calls, 1);
+
+      controller.abort();
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+      assertEquals(calls, 1);
+    });
+
+    test("null listener is a no-op for add and remove", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      target.addEventListener("testChannel", null);
+      target.removeEventListener("testChannel", null);
+      // No throw, and no listener to fire.
+      dispatchMessage(socket, JSON.stringify({ channel: "testChannel", data: {} }));
+    });
+
+    test("EventListenerObject is invoked via handleEvent on single- and multi-listener channels", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      let a = 0;
+      let b = 0;
+      target.addEventListener("solo", {
+        handleEvent() {
+          a++;
+        },
+      });
+      target.addEventListener("multi", {
+        handleEvent() {
+          b++;
+        },
+      });
+      target.addEventListener("multi", () => b++);
+
+      dispatchMessage(socket, JSON.stringify({ channel: "solo", data: {} }));
+      dispatchMessage(socket, JSON.stringify({ channel: "multi", data: {} }));
+      assertEquals(a, 1);
+      assertEquals(b, 2);
+    });
+  });
+
+  describe("listener registry", () => {
+    /** Dispatches on `channel` and returns the labels the listeners recorded. */
+    function emit(socket: WebSocket, channel: string): void {
+      dispatchMessage(socket, JSON.stringify({ channel, data: {} }));
+    }
+
+    test("fan-out follows registration order", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const seen: string[] = [];
+      for (const name of ["a", "b", "c"]) target.addEventListener("chan", () => seen.push(name));
+
+      emit(socket, "chan");
+      assertEquals(seen, ["a", "b", "c"]);
+    });
+
+    test("registering the same listener twice fires it once", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      let calls = 0;
+      const listener = (): void => {
+        calls++;
+      };
+      target.addEventListener("chan", listener);
+      target.addEventListener("chan", listener);
+
+      emit(socket, "chan");
+      assertEquals(calls, 1);
+    });
+
+    test("a listener unsubscribed by an earlier listener does not receive the in-flight frame", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const seen: string[] = [];
+      const second = (): void => {
+        seen.push("second");
+      };
+      target.addEventListener("chan", () => {
+        seen.push("first");
+        target.removeEventListener("chan", second);
+      });
+      target.addEventListener("chan", second);
+
+      emit(socket, "chan");
+      // Matches EventTarget: removal during dispatch takes effect immediately.
+      assertEquals(seen, ["first"]);
+    });
+
+    test("a listener added during dispatch skips the in-flight frame and runs on the next", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const seen: string[] = [];
+      let added = false;
+      target.addEventListener("chan", () => {
+        seen.push("first");
+        if (added) return;
+        added = true;
+        target.addEventListener("chan", () => seen.push("late"));
+      });
+
+      emit(socket, "chan");
+      assertEquals(seen, ["first"]);
+      emit(socket, "chan");
+      assertEquals(seen, ["first", "first", "late"]);
+    });
+
+    test("a listener that removes itself stops receiving frames", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      let calls = 0;
+      const self = (): void => {
+        calls++;
+        target.removeEventListener("chan", self);
+      };
+      target.addEventListener("chan", self);
+
+      emit(socket, "chan");
+      emit(socket, "chan");
+      assertEquals(calls, 1);
+    });
+
+    test("removing listeners down to one and back up keeps the right set live", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const seen: string[] = [];
+      const a = (): void => void seen.push("a");
+      const b = (): void => void seen.push("b");
+      const c = (): void => void seen.push("c");
+
+      target.addEventListener("chan", a);
+      target.addEventListener("chan", b);
+      target.addEventListener("chan", c);
+      target.removeEventListener("chan", b); // 3 listeners -> 2
+      emit(socket, "chan");
+      target.removeEventListener("chan", a); // 2 -> 1, back to the unboxed form
+      emit(socket, "chan");
+      target.removeEventListener("chan", c); // 1 -> 0, entry dropped
+      emit(socket, "chan");
+      target.addEventListener("chan", a); // re-registering from empty
+      emit(socket, "chan");
+
+      assertEquals(seen, ["a", "c", "c", "a"]);
+    });
+
+    test("removing a listener that was never registered leaves the live one alone", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const seen: string[] = [];
+      const live = (): void => void seen.push("live");
+      target.addEventListener("chan", live);
+
+      target.removeEventListener("chan", () => {});
+      target.removeEventListener("otherChan", live);
+
+      emit(socket, "chan");
+      assertEquals(seen, ["live"]);
+    });
+
+    test("`once` fires exactly one frame", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      let calls = 0;
+      target.addEventListener("chan", () => calls++, { once: true });
+
+      emit(socket, "chan");
+      emit(socket, "chan");
+      assertEquals(calls, 1);
+    });
+
+    test("an AbortSignal detaches the listener, and an already-aborted one never attaches", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+
+      const controller = new AbortController();
+      let live = 0;
+      target.addEventListener("chan", () => live++, { signal: controller.signal });
+      emit(socket, "chan");
+      controller.abort();
+      emit(socket, "chan");
+      assertEquals(live, 1);
+
+      let never = 0;
+      target.addEventListener("chan", () => never++, { signal: AbortSignal.abort() });
+      emit(socket, "chan");
+      assertEquals(never, 0);
+    });
   });
 });

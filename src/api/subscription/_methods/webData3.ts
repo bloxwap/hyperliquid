@@ -54,7 +54,14 @@ export type WebData3Event = {
     optOutOfSpotDusting?: true;
     /** Whether DEX abstraction is enabled. */
     dexAbstractionEnabled?: boolean;
-    /** Abstraction mode for the user account. */
+    /**
+     * Abstraction mode for the user account.
+     *
+     * Omitted by the server when the account is in the default state: the REST
+     * `userAbstraction` request reports `"default"` for exactly the accounts whose
+     * `webData3` frames lack this field, and matches it value-for-value otherwise
+     * (verified live against mainnet — `.dev/verify_webdata3_abstraction.ts`).
+     */
     abstraction?: "unifiedAccount" | "portfolioMargin" | "disabled" | "dexAbstraction";
   };
   /** Array of perpetual DEX states. */
@@ -120,11 +127,8 @@ export function webData3(
   return config.transport.subscribe<WebData3Event>(
     payload.type,
     payload,
-    (e) => {
-      if (e.detail.userState.user === payload.user) {
-        listener(e.detail);
-      }
-    },
+    // Routing delivers only this user's frames (`userState.user` key); no post-filter needed.
+    (e) => listener(e.detail),
     options,
   );
 }

@@ -111,11 +111,8 @@ export function bbo(
   return config.transport.subscribe<BboEvent>(
     payload.type,
     payload,
-    (e) => {
-      if (e.detail.coin === payload.coin) {
-        listener(e.detail);
-      }
-    },
+    // Routing delivers only this coin's frames (`bbo\0{coin}`); no post-filter needed.
+    (e) => listener(e.detail),
     options,
   );
 }

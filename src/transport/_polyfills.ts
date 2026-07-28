@@ -5,20 +5,31 @@
  * @module
  */
 
+/** Fallback for {@link Promise.withResolvers} on platforms that lack it. */
+function withResolversFallback<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: any) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: any) => void;
+  const promise = new Promise<T>((res, rej) => ((resolve = res), (reject = rej)));
+  return { promise, resolve, reject };
+}
+
 /** @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise */
-export const Promise_ = /* @__PURE__ */ (() => {
-  return {
-    /** @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/withResolvers */
-    withResolvers: Promise.withResolvers
-      ? <T>() => Promise.withResolvers<T>()
-      : <T>() => {
-          let resolve!: (value: T | PromiseLike<T>) => void;
-          let reject!: (reason?: any) => void;
-          const promise = new Promise<T>((res, rej) => ((resolve = res), (reject = rej)));
-          return { promise, resolve, reject };
-        },
-  };
-})();
+export const Promise_ = {
+  /** @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/withResolvers */
+  withResolvers: <T>(): {
+    promise: Promise<T>;
+    resolve: (value: T | PromiseLike<T>) => void;
+    reject: (reason?: any) => void;
+  } => {
+    // Call-time dispatch so deleting `Promise.withResolvers` in tests exercises the fallback
+    // on the same module instance.
+    return typeof Promise.withResolvers === "function" ? Promise.withResolvers<T>() : withResolversFallback<T>();
+  },
+};
 
 /** @see https://developer.mozilla.org/en-US/docs/Web/API/DOMException */
 export const DOMException_ = /* @__PURE__ */ (() => {
@@ -43,7 +54,10 @@ export const CustomEvent_ = /* @__PURE__ */ (() => {
         super(type, eventInitDict);
         this.detail = eventInitDict?.detail ?? null;
       }
-      initCustomEvent(): void {}
+      initCustomEvent(): void {
+        // Deprecated DOM API stub; kept for interface parity with native CustomEvent.
+        return;
+      }
     }
   );
 })();

@@ -68,6 +68,29 @@ describe("WebSocketKeepAlive", () => {
     assertEquals(socket.sentMessages.length, sentBeforeTick);
   });
 
+  test("a socket error also clears the watchdog", () => {
+    const { socket } = createKeepAlive();
+
+    socket.open();
+    time.tick(5_000);
+    // The error listener is a distinct arrow from the close handler — both call `_stop`.
+    socket.dispatchEvent(new Event("error"));
+
+    const sentBeforeTick = socket.sentMessages.length;
+    time.tick(60_000);
+    assertEquals(socket.reconnectCalls, 0);
+    assertEquals(socket.sentMessages.length, sentBeforeTick);
+  });
+
+  test("a second open while the interval is armed is a no-op", () => {
+    const { socket } = createKeepAlive();
+    socket.open();
+    // Re-fire open: `_start` early-returns when the interval is already set.
+    socket.dispatchEvent(new Event("open"));
+    time.tick(5_000);
+    assertEquals(getLastSent(socket).method, "ping");
+  });
+
   test("honors custom interval and timeout", () => {
     const { socket } = createKeepAlive({ interval: 5_000, timeout: 1_000 });
 

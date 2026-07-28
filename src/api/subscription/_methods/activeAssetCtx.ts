@@ -80,11 +80,8 @@ export function activeAssetCtx(
   return config.transport.subscribe<ActiveAssetCtxEvent>(
     payload.type,
     payload,
-    (e) => {
-      if (e.detail.coin === payload.coin) {
-        listener(e.detail);
-      }
-    },
+    // Routing delivers only this coin's frames; no post-filter needed.
+    (e) => listener(e.detail),
     options,
   );
 }

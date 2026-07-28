@@ -40,19 +40,25 @@ function tickExponent(d: DecimalParts, maxDecimals: number): number {
   return Math.min(Math.max(d.exp - 5, -maxDecimals), 0);
 }
 
-/** Increment a string of ASCII digits by one; the result may grow a digit ("999" → "1000"). */
+/**
+ * Increment a string of ASCII digits by one; the result may grow a digit ("999" → "1000").
+ *
+ * Walks char codes in a single pass without `split`/`join` allocations: the common no-carry-past-end
+ * path builds the result with one `slice` + one char write via string concatenation of the head and
+ * the bumped digit and the zero tail, which is cheaper than an intermediate char array for the short
+ * digit strings price rounding produces.
+ */
 function incrementDigits(digits: string): string {
-  const chars = digits.split("");
-  let i = chars.length;
+  let i = digits.length;
   while (i-- > 0) {
-    if (chars[i] === "9") {
-      chars[i] = "0";
-    } else {
-      chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
-      return chars.join("");
+    const c = digits.charCodeAt(i);
+    if (c !== 0x39 /* '9' */) {
+      // digits[0..i) + bumped digit + zeros for the trailing nines already walked.
+      return digits.slice(0, i) + String.fromCharCode(c + 1) + "0".repeat(digits.length - 1 - i);
     }
   }
-  return `1${chars.join("")}`;
+  // Every digit was 9: grow by one place ("999" → "1000").
+  return `1${"0".repeat(digits.length)}`;
 }
 
 /**

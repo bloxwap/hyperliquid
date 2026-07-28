@@ -6,7 +6,10 @@
 import { DOMException_, Promise_ } from "./_polyfills.ts";
 
 /** Shared detach function for relays that need no cleanup. */
-function noop(): void {}
+function noop(): void {
+  // Intentionally empty; a statement keeps coverage tooling from treating the call as unhit.
+  return;
+}
 
 /** Aborts `target` with a `TimeoutError` after `ms`; `cancel` clears the timer, `reason` identifies the abort. */
 export function scheduleTimeout(target: AbortController, ms: number | null): { reason: Error; cancel: () => void } {
@@ -66,11 +69,17 @@ interface TimeoutEntry {
  */
 export class TimeoutWheel {
   /** Live and spent entries, sorted by deadline ascending; equal deadlines keep insertion order. */
-  private readonly _entries: TimeoutEntry[] = [];
+  private readonly _entries: TimeoutEntry[];
   /** The single armed native timer, or `undefined` when nothing is armed. */
   private _timer: ReturnType<typeof setTimeout> | undefined;
   /** The deadline {@linkcode _timer} is armed for; never later than the head entry's deadline. */
-  private _timerDeadline = 0;
+  private _timerDeadline: number;
+
+  constructor() {
+    this._entries = [];
+    this._timer = undefined;
+    this._timerDeadline = 0;
+  }
 
   /**
    * Arms a timeout for `target`, returning the same handle shape as {@linkcode scheduleTimeout}:

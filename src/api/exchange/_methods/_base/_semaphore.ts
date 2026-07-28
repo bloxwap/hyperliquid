@@ -8,10 +8,24 @@
  *
  * Replaces `@jsr/std__async`'s `Semaphore(1)`, which was only ever used as a
  * single-permit (and itself FIFO) lock.
+ *
+ * Waiters sit in a grow-only array with a head index rather than `Array.shift()`:
+ * under a contended wallet (hundreds of concurrent orders) each release would
+ * otherwise copy the remaining queue — O(n) per wake-up, O(n²) for a burst.
+ * Compaction runs only when the head has walked past half the storage, so the
+ * amortized cost of enqueue/dequeue stays O(1).
  */
 class Mutex {
-  private _locked = false;
-  private _waiters: (() => void)[] = [];
+  private _locked: boolean;
+  private _waiters: (() => void)[];
+  /** Index of the next waiter to wake; advanced on release, never decremented mid-burst. */
+  private _head: number;
+
+  constructor() {
+    this._locked = false;
+    this._waiters = [];
+    this._head = 0;
+  }
 
   /**
    * Acquires the lock, waiting until it is free.
@@ -28,9 +42,25 @@ class Mutex {
 
   /** Releases the lock, waking the longest-waiting waiter if any. */
   release(): void {
-    const next = this._waiters.shift();
-    if (next) next();
-    else this._locked = false;
+    if (this._head < this._waiters.length) {
+      const next = this._waiters[this._head];
+      // Drop the reference so a long-lived mutex does not pin resolved closures.
+      this._waiters[this._head++] = undefined as unknown as () => void;
+      // Compact when half the storage is dead so the array cannot grow without bound
+      // across many contended bursts on the same key.
+      if (this._head > 16 && this._head * 2 >= this._waiters.length) {
+        this._waiters = this._waiters.slice(this._head);
+        this._head = 0;
+      }
+      next();
+    } else {
+      this._locked = false;
+      // Idle: drop any residual storage so a quiet wallet costs nothing.
+      if (this._waiters.length > 0) {
+        this._waiters = [];
+        this._head = 0;
+      }
+    }
   }
 }
 
@@ -41,7 +71,7 @@ class Mutex {
  * @template V Stored value type.
  */
 class RefCountedRegistry<K, V> {
-  private _map = new Map<K, { value: V; refs: number }>();
+  private _map: Map<K, { value: V; refs: number }>;
   private _factory: () => V;
 
   /**
@@ -50,6 +80,7 @@ class RefCountedRegistry<K, V> {
    * @param factory Factory function used to create a new value when a key is first referenced.
    */
   constructor(factory: () => V) {
+    this._map = new Map();
     this._factory = factory;
   }
 

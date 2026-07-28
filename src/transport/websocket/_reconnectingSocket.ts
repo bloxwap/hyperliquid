@@ -184,29 +184,6 @@ function assertValidCloseParams(code?: number, reason?: string): void {
   }
 }
 
-export interface ReconnectingWebSocket {
-  addEventListener<K extends keyof WebSocketEventMap>(
-    type: K,
-    listener: (this: ReconnectingWebSocket, ev: WebSocketEventMap[K]) => any,
-    options?: boolean | AddEventListenerOptions,
-  ): void;
-  addEventListener(
-    type: string,
-    listener: EventListenerOrEventListenerObject,
-    options?: boolean | AddEventListenerOptions,
-  ): void;
-  removeEventListener<K extends keyof WebSocketEventMap>(
-    type: K,
-    listener: (this: ReconnectingWebSocket, ev: WebSocketEventMap[K]) => any,
-    options?: boolean | EventListenerOptions,
-  ): void;
-  removeEventListener(
-    type: string,
-    listener: EventListenerOrEventListenerObject,
-    options?: boolean | EventListenerOptions,
-  ): void;
-}
-
 /**
  * Drop-in replacement for [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) that automatically reconnects.
  *
@@ -226,6 +203,27 @@ export interface ReconnectingWebSocket {
  * ```
  */
 export class ReconnectingWebSocket extends EventTarget implements WebSocket {
+  /**
+   * Package-internal frame hook, called with the raw `data` of every inbound frame.
+   *
+   * The SDK's own frame consumer reads every frame but needs nothing an `Event` carries beyond
+   * `data`, so it attaches here instead of through `addEventListener("message")`. That skips a
+   * `MessageEvent` allocation and a full `EventTarget.dispatchEvent` on the single hottest path in
+   * the library. The public `message` event is still dispatched whenever anything is listening for
+   * it — see {@linkcode ReconnectingWebSocket._messageListeners}.
+   */
+  _onFrame: ((data: unknown) => void) | undefined = undefined;
+
+  /**
+   * Registrations seen for the `message` event through the public API.
+   *
+   * Deliberately an upper bound rather than an exact count: `EventTarget` collapses duplicate
+   * registrations and drops `once` listeners without a `removeEventListener` call, so this can sit
+   * above the true number. Erring high only costs an event nobody reads; erring low would drop
+   * frames from a live listener.
+   */
+  private _messageListeners = 0;
+
   /** URL provider for creating new connections. */
   private readonly _urlProvider: UrlProvider;
   /** Protocols provider for creating new connections. */
@@ -367,9 +365,12 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     });
     socket.addEventListener("message", (event) => {
       if (this._socket !== socket) return;
-      // A fresh event: the incoming one is mid-dispatch on the underlying socket and
-      // cannot be redispatched, and consumers only read `data`.
-      this.dispatchEvent(new MessageEvent("message", { data: event.data }));
+      const data = event.data;
+      this._onFrame?.(data);
+      // A fresh event: the incoming one is mid-dispatch on the underlying socket and cannot be
+      // redispatched, and consumers only read `data`. Built only when someone is actually
+      // listening — the SDK's own consumer takes the hook above.
+      if (this._messageListeners > 0) this.dispatchEvent(new MessageEvent("message", { data }));
     });
     socket.addEventListener("error", () => {
       if (this._socket !== socket) return;
@@ -657,6 +658,49 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
   /** Set the attribute-style handler for `open` events. */
   set onopen(handler: ((this: WebSocket, ev: Event) => any) | null) {
     this._setAttributeListener("open", handler);
+  }
+
+  /**
+   * Tracks `message` registrations so inbound frames only pay for a `MessageEvent` when something
+   * outside the SDK reads one, then defers to `EventTarget`.
+   */
+  addEventListener<K extends keyof WebSocketEventMap>(
+    type: K,
+    listener: (this: ReconnectingWebSocket, ev: WebSocketEventMap[K]) => any,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    if (type === "message" && listener !== null) this._messageListeners++;
+    super.addEventListener(type, listener, options);
+  }
+
+  /** Counterpart to {@linkcode ReconnectingWebSocket.addEventListener}'s `message` bookkeeping. */
+  removeEventListener<K extends keyof WebSocketEventMap>(
+    type: K,
+    listener: (this: ReconnectingWebSocket, ev: WebSocketEventMap[K]) => any,
+    options?: boolean | EventListenerOptions,
+  ): void;
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ): void;
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    if (type === "message" && listener !== null && this._messageListeners > 0) this._messageListeners--;
+    super.removeEventListener(type, listener, options);
   }
 
   /** Attaches or detaches the dispatcher for an attribute-style event handler. */
