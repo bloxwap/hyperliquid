@@ -225,7 +225,7 @@ scenario({
     "for one user — the calls a feed makes at session start and on every reconnect",
   unit: "subscription",
   unitsPerIteration: 3,
-  iterations: 1,
+  iterations: 20,
   samples: 25,
   warmupSamples: 3,
   setup: () => {
