@@ -28,11 +28,13 @@ import { formatNs, type PerfReport, registeredScenarios, runScenario, type Scena
 // --- Scenario registration -------------------------------------------------
 // Importing a module registers its scenarios. Keep this list alphabetical.
 import "./scenarios/data_parse.ts";
+import "./scenarios/fast_asset_ctxs.ts";
 import "./scenarios/signing.ts";
 import "./scenarios/subscription.ts";
 import "./scenarios/symbol_converter.ts";
 import "./scenarios/transaction.ts";
 import "./scenarios/transport.ts";
+import "./scenarios/user_account_channels.ts";
 
 /** Reads a `--flag value` pair from the argument list. */
 function flag(args: readonly string[], name: string): string | undefined {

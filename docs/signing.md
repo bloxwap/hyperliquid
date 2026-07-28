@@ -636,6 +636,36 @@ The acceleration needs no code changes:
 Unlike `createFastLocalWallet`, the dispatch is ambient: every signing entry point benefits, including wallets you
 already create today.
 
+## Low-latency recipe (bots / HFT)
+
+Stack the accelerators when signature latency is on the critical path:
+
+1. **`createFastLocalWallet`** — halves ECDSA (~55 µs vs ~85 µs). ECDSA is ~90% of a single-order `signL1Action`.
+2. **`hash-wasm`** — ambient keccak speedup on every L1 hash and Agent digest (install the optional dep; no code change).
+3. **`skipValidation: true`** — skip the valibot parse + key canonicalization on trusted, already-canonical wire input
+   (~3× less non-ECDSA CPU). See [ExchangeClient](clients.md#skipping-validation-unsafe) for the contract.
+
+```ts
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
+import { createFastLocalWallet } from "@bloxwap/hyperliquid/signing";
+
+// npm i tiny-secp256k1 hash-wasm   # optional deps; install explicitly if your package manager skips them
+const wallet = await createFastLocalWallet("0x...");
+const exchange = new ExchangeClient({ transport: new HttpTransport(), wallet });
+
+// Action must already be in canonical wire form (schema key order, normalized decimals, lowercase hex, defaults filled).
+await exchange.order(
+  {
+    orders: [{ a: 0, b: true, p: "95000", s: "0.01", r: false, t: { limit: { tif: "Gtc" } } }],
+    grouping: "na",
+  },
+  { skipValidation: true },
+);
+```
+
+Without step 3 the first two still apply and are safe for any input. Step 3 is an escape hatch: invalid input is no
+longer a client-side `ValidationError` — the server rejects it instead.
+
 ## Helpers
 
 These functions work with any supported wallet type:

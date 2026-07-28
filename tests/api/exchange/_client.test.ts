@@ -121,6 +121,57 @@ const METHOD_CASES: Record<string, MethodCase> = {
     action: { type: "batchModify", modifies: [{ oid: 123, order: LIMIT_ORDER }] },
     invalid: (c) => c.batchModify({} as never),
   },
+  // Trigger branch exercises the second `v.check` on `triggerPx` (limit-only path only hits `p`).
+  batchModifyTrigger: {
+    run: (c) =>
+      c.batchModify({
+        modifies: [
+          {
+            oid: 123,
+            order: {
+              a: 0,
+              b: true,
+              p: "30000",
+              s: "0.1",
+              r: false,
+              t: { trigger: { isMarket: true, triggerPx: "29000", tpsl: "sl" } },
+            },
+          },
+        ],
+      }),
+    action: {
+      type: "batchModify",
+      modifies: [
+        {
+          oid: 123,
+          order: {
+            a: 0,
+            b: true,
+            p: "30000",
+            s: "0.1",
+            r: false,
+            t: { trigger: { isMarket: true, triggerPx: "29000", tpsl: "sl" } },
+          },
+        },
+      ],
+    },
+    invalid: (c) =>
+      c.batchModify({
+        modifies: [
+          {
+            oid: 123,
+            order: {
+              a: 0,
+              b: true,
+              p: "30000",
+              s: "0.1",
+              r: false,
+              t: { trigger: { isMarket: true, triggerPx: "0", tpsl: "sl" } },
+            },
+          },
+        ],
+      } as never),
+  },
   borrowLend: {
     run: (c) => c.borrowLend({ operation: "supply", token: 0, amount: "30" }),
     action: { type: "borrowLend", operation: "supply", token: 0, amount: "30" },
@@ -229,6 +280,45 @@ const METHOD_CASES: Record<string, MethodCase> = {
     run: (c) => c.modify({ oid: 123, order: LIMIT_ORDER }),
     action: { type: "modify", oid: 123, order: LIMIT_ORDER },
     invalid: (c) => c.modify({} as never),
+  },
+  // Trigger branch exercises the second `v.check` on `triggerPx` (limit-only path only hits `p`).
+  modifyTrigger: {
+    run: (c) =>
+      c.modify({
+        oid: 123,
+        order: {
+          a: 0,
+          b: true,
+          p: "30000",
+          s: "0.1",
+          r: false,
+          t: { trigger: { isMarket: true, triggerPx: "29000", tpsl: "tp" } },
+        },
+      }),
+    action: {
+      type: "modify",
+      oid: 123,
+      order: {
+        a: 0,
+        b: true,
+        p: "30000",
+        s: "0.1",
+        r: false,
+        t: { trigger: { isMarket: true, triggerPx: "29000", tpsl: "tp" } },
+      },
+    },
+    invalid: (c) =>
+      c.modify({
+        oid: 123,
+        order: {
+          a: 0,
+          b: true,
+          p: "30000",
+          s: "0.1",
+          r: false,
+          t: { trigger: { isMarket: true, triggerPx: "0", tpsl: "tp" } },
+        },
+      } as never),
   },
   noop: {
     run: (c) => c.noop({ nonce: 12345 }),

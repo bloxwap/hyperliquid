@@ -122,11 +122,8 @@ export function l2Book(
   return config.transport.subscribe<L2BookEvent>(
     payload.type,
     payload,
-    (e) => {
-      if (e.detail.coin === payload.coin) {
-        listener(e.detail);
-      }
-    },
+    // Routing delivers only this coin's frames (`l2Book\0{coin}`); no post-filter needed.
+    (e) => listener(e.detail),
     options,
   );
 }

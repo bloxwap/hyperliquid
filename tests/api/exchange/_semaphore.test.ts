@@ -118,4 +118,26 @@ describe("withLock", () => {
     await Promise.all([first, second]);
     assert(events.length === 2);
   });
+
+  test("a long waiter queue compacts without dropping FIFO order", async () => {
+    // Drive head past 16 so release() slices the dead prefix off the waiters array.
+    const order: number[] = [];
+    const gate = createGate();
+    const holder = withLock("compact-key", async () => {
+      await gate.promise;
+      order.push(0);
+    });
+    const waiters = Array.from({ length: 20 }, (_, i) =>
+      withLock("compact-key", async () => {
+        order.push(i + 1);
+      }),
+    );
+    await flush();
+    gate.open();
+    await Promise.all([holder, ...waiters]);
+    assertEquals(
+      order,
+      Array.from({ length: 21 }, (_, i) => i),
+    );
+  });
 });

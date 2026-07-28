@@ -249,6 +249,11 @@ export class WebSocketDispatcher {
         // and its id plain concatenation — no re-normalize of the subscription subtree.
         id = `{"method":"${request.method}","subscription":${hint.subscriptionId}}`;
         echo = echoData({ method: request.method, subscription: payload });
+        // That concatenation is character-for-character what `JSON.stringify(request)` produces:
+        // the envelope is `{method, subscription}` in that order and the hint's id is the
+        // stringified snapshot `payload` points at. Reusing it skips a second serialization of the
+        // whole subscription subtree on every subscribe, unsubscribe and reconnect resubscribe.
+        frame = id;
       } else {
         const normalized = normalize(request);
         id = JSON.stringify(normalized);
@@ -256,7 +261,7 @@ export class WebSocketDispatcher {
       }
 
       // --- Send or queue -----------------------------------------------------
-      frame = JSON.stringify(request);
+      frame ??= JSON.stringify(request);
       const sent = this._socket.readyState === ReconnectingWebSocket.OPEN;
       if (sent) this._socket.send(frame);
 

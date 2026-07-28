@@ -81,6 +81,13 @@ reports **`invocationsPerTick`**: how many listeners a single frame runs.
 | Pre-fix (this tree) | 50 (every listener runs, 49 discard)    |
 | Post-fix (expected) | 1 (routed to the matching subscription) |
 
+`subscription/*_frame_dispatch_e2e` times a raw frame's full path — socket JSON text through parse and routing to the
+subscribed listener — for `l2Book` and for the three user-account channels a balance feed lives on:
+`clearinghouseState`, `spotState`, and `webData3` (`scenarios/user_account_channels.ts`). `subscription/user_dispatch_15_users`
+crowds the maximum allowed 15 users onto one channel and asserts a frame for one user still runs exactly one listener
+(the `BY_USER` route); `subscription/subscribe_user_trio` measures establishing the three account subscriptions a feed
+makes at session start and on every reconnect.
+
 ### `data` — inbound Info-response cost
 
 `InfoClient` reads (`l2Book`, `allMids`, `clearinghouseState`, `metaAndAssetCtxs`) over a transport that answers from a

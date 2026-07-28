@@ -93,3 +93,40 @@ test("fastAssetCtxs: deliveries continue after a listener throws", async () => {
     restoreWebSocket();
   }
 });
+
+test("fastAssetCtxs: frames stay in arrival order when sync and queued decodes interleave", async () => {
+  // Where a native inflater exists, a frame is decoded synchronously and delivered in the
+  // dispatch tick; the `DecompressionStream` path still goes through the promise queue. A frame
+  // taking the fast path must never overtake one still queued ahead of it.
+  const { _setForceStreamDecompressForTests } = await import("../../src/api/subscription/_methods/fastAssetCtxs.ts");
+
+  installMockWebSocket();
+  try {
+    const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+    await transport.ready();
+    const socket = lastMockWebSocket();
+    const client = new SubscriptionClient({ transport });
+
+    const delivered: number[] = [];
+    await client.fastAssetCtxs((data) => {
+      delivered.push(Number(Object.keys(data)[0]!.slice(4)));
+    });
+
+    // Alternate the two decode paths frame by frame.
+    for (let i = 1; i <= 6; i++) {
+      const data = await compressToBase64({ [`COIN${i}`]: { markPx: String(i) } });
+      _setForceStreamDecompressForTests(i % 2 === 1);
+      socket.serverSend({ channel: "fastAssetCtxs", data });
+    }
+    _setForceStreamDecompressForTests(false);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    transport.close();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assertEquals(delivered, [1, 2, 3, 4, 5, 6], "a synchronously decoded frame overtook a queued one");
+  } finally {
+    _setForceStreamDecompressForTests(false);
+    restoreWebSocket();
+  }
+});

@@ -71,6 +71,18 @@ export function createL1AgentDigest(actionHash: `0x${string}`, isTestnet: boolea
 }
 
 /**
+ * Reused struct/digest preimage buffers for {@linkcode createL1AgentDigestBytes}. Safe because the
+ * function is synchronous; {@linkcode AGENT_SCRATCH_BUSY} covers the one way it can still overlap
+ * with itself (a getter on a caller-supplied array buffer is impossible here — the inputs are
+ * plain `Uint8Array`s — but a re-entrant call through a mocked `keccak256` is not).
+ */
+const AGENT_STRUCT = new Uint8Array(32 * 3);
+const AGENT_DIGEST = new Uint8Array(2 + 32 + 32);
+AGENT_DIGEST[0] = 0x19;
+AGENT_DIGEST[1] = 0x01;
+let AGENT_SCRATCH_BUSY = false;
+
+/**
  * Bytes-level variant of {@linkcode createL1AgentDigest}: takes the action hash and returns the
  * digest as `Uint8Array`, so the L1 signing path passes bytes end-to-end instead of round-tripping
  * through hex. Package-internal — not re-exported from `mod.ts`.
@@ -80,18 +92,24 @@ export function createL1AgentDigest(actionHash: `0x${string}`, isTestnet: boolea
  * @return The 32-byte digest, byte-identical to viem's `hashTypedData`.
  */
 export function createL1AgentDigestBytes(actionHash: Uint8Array, isTestnet: boolean): Uint8Array {
-  const struct = new Uint8Array(32 * 3);
-  struct.set(AGENT_TYPEHASH, 0);
-  struct.set(isTestnet ? SOURCE_HASH_TESTNET : SOURCE_HASH_MAINNET, 32);
-  struct.set(actionHash, 64);
-  const structHash = keccak256(struct);
+  const nested = AGENT_SCRATCH_BUSY;
+  const struct = nested ? new Uint8Array(32 * 3) : AGENT_STRUCT;
+  const digest = nested ? new Uint8Array(2 + 32 + 32) : AGENT_DIGEST;
+  AGENT_SCRATCH_BUSY = true;
+  try {
+    struct.set(AGENT_TYPEHASH, 0);
+    struct.set(isTestnet ? SOURCE_HASH_TESTNET : SOURCE_HASH_MAINNET, 32);
+    struct.set(actionHash, 64);
+    const structHash = keccak256(struct);
 
-  const digest = new Uint8Array(2 + 32 + 32);
-  digest[0] = 0x19;
-  digest[1] = 0x01;
-  digest.set(L1_DOMAIN_SEPARATOR, 2);
-  digest.set(structHash, 34);
-  return keccak256(digest);
+    digest[0] = 0x19;
+    digest[1] = 0x01;
+    digest.set(L1_DOMAIN_SEPARATOR, 2);
+    digest.set(structHash, 34);
+    return keccak256(digest);
+  } finally {
+    AGENT_SCRATCH_BUSY = nested;
+  }
 }
 
 // --- Multi-sig outer digest --------------------------------------------------
@@ -160,6 +178,17 @@ export function createMultiSigDigest(
 }
 
 /**
+ * Reused struct/digest preimage buffers for {@linkcode createMultiSigDigestBytes}. Same reentrancy
+ * contract as {@linkcode AGENT_STRUCT}: the function is synchronous, and a nested call gets its own
+ * buffers so two digests never share storage mid-write.
+ */
+const MULTI_SIG_STRUCT = new Uint8Array(32 * 4);
+const MULTI_SIG_DIGEST = new Uint8Array(2 + 32 + 32);
+MULTI_SIG_DIGEST[0] = 0x19;
+MULTI_SIG_DIGEST[1] = 0x01;
+let MULTI_SIG_SCRATCH_BUSY = false;
+
+/**
  * Bytes-level variant of {@linkcode createMultiSigDigest}: takes the wrapper hash and returns the
  * digest as `Uint8Array`, so the multi-sig signing path passes bytes end-to-end instead of
  * round-tripping through hex. Package-internal — not re-exported from `mod.ts`.
@@ -176,22 +205,30 @@ export function createMultiSigDigestBytes(
   signatureChainId: `0x${string}`,
   isTestnet: boolean,
 ): Uint8Array {
-  const struct = new Uint8Array(32 * 4);
-  struct.set(SEND_MULTI_SIG_TYPEHASH, 0);
-  struct.set(isTestnet ? HYPERLIQUID_CHAIN_HASH_TESTNET : HYPERLIQUID_CHAIN_HASH_MAINNET, 32);
-  struct.set(multiSigActionHash, 64);
-  // uint64(nonce) zero-padded to a 32-byte word, big-endian
-  for (let i = 96 + 31, remaining = nonce; remaining > 0; i--, remaining = Math.floor(remaining / 256)) {
-    struct[i] = remaining % 256;
-  }
-  const structHash = keccak256(struct);
+  const nested = MULTI_SIG_SCRATCH_BUSY;
+  const struct = nested ? new Uint8Array(32 * 4) : MULTI_SIG_STRUCT;
+  const digest = nested ? new Uint8Array(2 + 32 + 32) : MULTI_SIG_DIGEST;
+  MULTI_SIG_SCRATCH_BUSY = true;
+  try {
+    // Clear the nonce word: a previous call may have left high bytes set for a larger nonce.
+    struct.fill(0, 96, 128);
+    struct.set(SEND_MULTI_SIG_TYPEHASH, 0);
+    struct.set(isTestnet ? HYPERLIQUID_CHAIN_HASH_TESTNET : HYPERLIQUID_CHAIN_HASH_MAINNET, 32);
+    struct.set(multiSigActionHash, 64);
+    // uint64(nonce) zero-padded to a 32-byte word, big-endian
+    for (let i = 96 + 31, remaining = nonce; remaining > 0; i--, remaining = Math.floor(remaining / 256)) {
+      struct[i] = remaining % 256;
+    }
+    const structHash = keccak256(struct);
 
-  const digest = new Uint8Array(2 + 32 + 32);
-  digest[0] = 0x19;
-  digest[1] = 0x01;
-  // `signatureChainId` is a `0x`-prefixed hex string, so radix 16 is the only correct base here:
-  // radix 10 would parse it as `0` and silently sign under the wrong EIP-712 domain.
-  digest.set(multiSigDomainSeparator(parseInt(signatureChainId, 16)), 2);
-  digest.set(structHash, 34);
-  return keccak256(digest);
+    digest[0] = 0x19;
+    digest[1] = 0x01;
+    // `signatureChainId` is a `0x`-prefixed hex string, so radix 16 is the only correct base here:
+    // radix 10 would parse it as `0` and silently sign under the wrong EIP-712 domain.
+    digest.set(multiSigDomainSeparator(parseInt(signatureChainId, 16)), 2);
+    digest.set(structHash, 34);
+    return keccak256(digest);
+  } finally {
+    MULTI_SIG_SCRATCH_BUSY = nested;
+  }
 }

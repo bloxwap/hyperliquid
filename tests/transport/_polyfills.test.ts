@@ -2,11 +2,11 @@
  * Tests for the platform shims: the native pass-throughs used on Node/Bun/browser, and the
  * fallback implementations selected on platforms missing the API (mainly React Native).
  *
- * The fallbacks are chosen once at module evaluation, so covering them takes a fresh module
- * instance: the platform globals are deleted and the module is re-imported through a
- * cache-busting query string (`_polyfills.ts?…`), which Bun treats as a distinct module record.
- * The globals are restored before the test ends, and the re-import never touches the instance
- * the rest of the SDK already holds, so no other test observes the simulated platform.
+ * The fallbacks for DOMException/CustomEvent are chosen once at module evaluation, so covering
+ * them takes a fresh module instance: the platform globals are deleted and the module is
+ * re-imported through a cache-busting query string (`_polyfills.ts?…`), which Bun treats as a
+ * distinct module record. `Promise_.withResolvers` dispatches at call time, so its fallback can
+ * be exercised on the primary module by temporarily deleting `Promise.withResolvers`.
  * @module
  */
 
@@ -25,6 +25,19 @@ describe("platform shims on a full platform", () => {
     const { promise, reject } = Promise_.withResolvers<number>();
     reject(new Error("nope"));
     await expect(promise).rejects.toThrow("nope");
+  });
+
+  test("Promise_.withResolvers() falls back when Promise.withResolvers is missing", async () => {
+    const original = Promise.withResolvers;
+    delete (Promise as unknown as Record<string, unknown>).withResolvers;
+    try {
+      const { promise, resolve, reject } = Promise_.withResolvers<number>();
+      expect(typeof reject).toBe("function");
+      resolve(7);
+      expect(await promise).toBe(7);
+    } finally {
+      Promise.withResolvers = original;
+    }
   });
 
   test("DOMException_ and CustomEvent_ are the native classes", () => {

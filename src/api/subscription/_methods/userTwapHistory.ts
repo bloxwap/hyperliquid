@@ -86,11 +86,8 @@ export function userTwapHistory(
   return config.transport.subscribe<UserTwapHistoryEvent>(
     payload.type,
     payload,
-    (e) => {
-      if (e.detail.user === payload.user) {
-        listener(e.detail);
-      }
-    },
+    // Routing delivers only this user's frames; no post-filter needed.
+    (e) => listener(e.detail),
     options,
   );
 }

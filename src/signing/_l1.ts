@@ -11,6 +11,49 @@ import { Adjusted, type L1Value, type MsgpackValue, MsgpackWriter } from "./_msg
 import { trimSignature } from "./_multiSig.ts";
 
 /**
+ * Scratch for decoding a 20-byte vault/sub-account address into the L1 hash preimage without a
+ * per-call `hexToBytes` allocation. Safe: {@linkcode createL1ActionHashBytes} is synchronous and
+ * the bytes are copied into the msgpack buffer before the next call.
+ */
+const VAULT_ADDR_BYTES = new Uint8Array(20);
+
+/** Decode one ASCII hex nibble; assumes the caller already validated the address shape. */
+function hexNibble(code: number): number {
+  // '0'-'9' → 0-9; 'a'-'f' / 'A'-'F' → 10-15
+  return code < 58 ? code - 48 : (code | 32) - 87;
+}
+
+/** Whether `code` is an ASCII hex digit. */
+function isHexCode(code: number): boolean {
+  return (code >= 48 && code <= 57) || (code >= 97 && code <= 102) || (code >= 65 && code <= 70);
+}
+
+/**
+ * Decode a `0x`-prefixed 20-byte address into {@linkcode VAULT_ADDR_BYTES} and return that scratch.
+ *
+ * The shape is checked here rather than trusted from the schema: `createL1ActionHash` is public and
+ * takes `vaultAddress` straight from the caller, and a `0x${string}` template type constrains
+ * neither length nor charset at runtime (and constrains nothing at all for JavaScript callers).
+ * Without this, a malformed address would silently hash to a different action than the caller
+ * described — and a 32-byte address would hash identically to its 20-byte truncation. The scan is
+ * 42 character compares against a keccak, so it does not register on the signing path.
+ */
+function decodeAddressIntoScratch(address: `0x${string}`): Uint8Array {
+  if (address.length !== 42 || address.charCodeAt(0) !== 48 || (address.charCodeAt(1) | 32) !== 120) {
+    throw new Error("Invalid vault address: expected a 0x-prefixed 20-byte hex string");
+  }
+  for (let i = 0; i < 20; i++) {
+    const hiCode = address.charCodeAt(2 + i * 2);
+    const loCode = address.charCodeAt(3 + i * 2);
+    if (!isHexCode(hiCode) || !isHexCode(loCode)) {
+      throw new Error("Invalid vault address: expected a 0x-prefixed 20-byte hex string");
+    }
+    VAULT_ADDR_BYTES[i] = (hexNibble(hiCode) << 4) | hexNibble(loCode);
+  }
+  return VAULT_ADDR_BYTES;
+}
+
+/**
  * Input shape of {@linkcode adjust}. Mirrors {@linkcode MsgpackValue}, except that the `Uint8Array` arm is
  * intersected with a string index signature so `adjust`'s rebuild of exotic objects type-checks
  * without a cast. Kept local because it is a quirk of `adjust`, not of the encoder.
@@ -116,7 +159,8 @@ export function createL1ActionHashBytes(args: {
 
     if (vaultAddress) {
       writer.byte(1);
-      writer.raw(hexToBytes(vaultAddress.slice(2)));
+      // Inline hex decode into a retained scratch — avoids a 20-byte alloc per vault order.
+      writer.raw(decodeAddressIntoScratch(vaultAddress));
     } else {
       writer.byte(0);
     }

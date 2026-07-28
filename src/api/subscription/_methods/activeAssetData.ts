@@ -78,10 +78,9 @@ export function activeAssetData(
   return config.transport.subscribe<ActiveAssetDataEvent>(
     payload.type,
     payload,
+    // Routing keys only by coin; user still needs a local filter (shared coin costs at most one discard).
     (e) => {
-      if (e.detail.coin === payload.coin && e.detail.user === payload.user) {
-        listener(e.detail);
-      }
+      if (e.detail.user === payload.user) listener(e.detail);
     },
     options,
   );

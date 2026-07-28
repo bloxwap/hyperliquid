@@ -615,4 +615,200 @@ describe("fastAssetCtxs", () => {
       errorSpy.mockRestore();
     }
   });
+
+  test("table-driven base64 path runs when Buffer is unavailable", async () => {
+    const transport = new MockSubscriptionTransport();
+    const client = new SubscriptionClient({ transport });
+    const received: unknown[] = [];
+    await client.fastAssetCtxs((data) => received.push(data));
+
+    const frame = await compressToBase64({ ETH: { markPx: "1" } });
+    const originalBuffer = globalThis.Buffer;
+    // Hide Buffer so decodeBase64 takes the pure-JS LUT path (browser / RN without a polyfill).
+    delete (globalThis as { Buffer?: unknown }).Buffer;
+    try {
+      transport.emit(frame);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      globalThis.Buffer = originalBuffer;
+    }
+    expect(received).toEqual([{ ETH: { markPx: "1" } }]);
+  });
+
+  test("table-driven base64 rejects invalid alphabet and odd padding shapes", async () => {
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    const transport = new MockSubscriptionTransport();
+    const client = new SubscriptionClient({ transport });
+    const received: unknown[] = [];
+    await client.fastAssetCtxs((data) => received.push(data));
+
+    const originalBuffer = globalThis.Buffer;
+    delete (globalThis as { Buffer?: unknown }).Buffer;
+    try {
+      // Valid length, invalid character → LUT miss (255).
+      transport.emit("!!!!");
+      // Empty / non-multiple-of-4 lengths.
+      transport.emit("");
+      transport.emit("abc");
+      // One- and two-byte padding groups (still valid alphabet, table path).
+      transport.emit("YQ=="); // "a"
+      transport.emit(await compressToBase64({ OK: { markPx: "2" } }));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      // Only the final valid compressed frame is delivered; bad frames are logged.
+      expect(received).toEqual([{ OK: { markPx: "2" } }]);
+      expect(errorSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+    } finally {
+      globalThis.Buffer = originalBuffer;
+      errorSpy.mockRestore();
+    }
+  });
+
+  test("multi-chunk inflate merges into the retained scratch buffer", async () => {
+    const { _setForceStreamDecompressForTests } = await import(
+      "../../../src/api/subscription/_methods/fastAssetCtxs.ts"
+    );
+    const transport = new MockSubscriptionTransport();
+    const client = new SubscriptionClient({ transport });
+    const received: unknown[] = [];
+    await client.fastAssetCtxs((data) => received.push(data));
+
+    const payload = new TextEncoder().encode(JSON.stringify({ BTC: { markPx: "100", midPx: "101" } }));
+    // Force three stream chunks so the multi-chunk merge + while-loop arms all run.
+    const parts = [payload.subarray(0, 4), payload.subarray(4, 10), payload.subarray(10)];
+
+    const RealDS = globalThis.DecompressionStream;
+    globalThis.DecompressionStream = class {
+      readable: ReadableStream<Uint8Array>;
+      writable: WritableStream<BufferSource>;
+      constructor(_format: CompressionFormat) {
+        this.writable = new WritableStream({
+          write() {},
+          close() {},
+        });
+        let i = 0;
+        this.readable = new ReadableStream({
+          pull(controller) {
+            if (i < parts.length) controller.enqueue(parts[i++]);
+            else controller.close();
+          },
+        });
+      }
+    } as unknown as typeof DecompressionStream;
+
+    _setForceStreamDecompressForTests(true);
+    try {
+      // Wire payload is unused by the fake inflater; any valid base64 string is fine.
+      transport.emit("AAAA");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(received).toEqual([{ BTC: { markPx: "100", midPx: "101" } }]);
+    } finally {
+      _setForceStreamDecompressForTests(false);
+      globalThis.DecompressionStream = RealDS;
+    }
+  });
+
+  test("stream write failures are absorbed without poisoning the queue", async () => {
+    const { _setForceStreamDecompressForTests } = await import(
+      "../../../src/api/subscription/_methods/fastAssetCtxs.ts"
+    );
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    const transport = new MockSubscriptionTransport();
+    const client = new SubscriptionClient({ transport });
+    const received: unknown[] = [];
+    await client.fastAssetCtxs((data) => received.push(data));
+
+    const RealDS = globalThis.DecompressionStream;
+    let rejectWrite = true;
+    globalThis.DecompressionStream = class {
+      readable: ReadableStream<Uint8Array>;
+      writable: WritableStream<BufferSource>;
+      constructor(format: CompressionFormat) {
+        if (!rejectWrite) {
+          const real = new RealDS(format);
+          this.readable = real.readable as ReadableStream<Uint8Array>;
+          this.writable = real.writable;
+          return;
+        }
+        this.writable = new WritableStream({
+          write() {
+            return Promise.reject(new Error("write failed"));
+          },
+          close() {},
+        });
+        // Reader still needs to settle so decompress can fail via empty/error read.
+        this.readable = new ReadableStream({
+          start(controller) {
+            controller.error(new Error("inflate failed"));
+          },
+        });
+      }
+    } as unknown as typeof DecompressionStream;
+
+    _setForceStreamDecompressForTests(true);
+    try {
+      transport.emit("AAAA");
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      rejectWrite = false;
+      transport.emit(await compressToBase64({ ETH: { markPx: "3" } }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(received).toEqual([{ ETH: { markPx: "3" } }]);
+      expect(errorSpy).toHaveBeenCalled();
+    } finally {
+      _setForceStreamDecompressForTests(false);
+      globalThis.DecompressionStream = RealDS;
+      errorSpy.mockRestore();
+    }
+  });
+
+  test("empty inflate stream is logged and does not poison the queue", async () => {
+    const { _setForceStreamDecompressForTests } = await import(
+      "../../../src/api/subscription/_methods/fastAssetCtxs.ts"
+    );
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    const transport = new MockSubscriptionTransport();
+    const client = new SubscriptionClient({ transport });
+    const received: unknown[] = [];
+    await client.fastAssetCtxs((data) => received.push(data));
+
+    const RealDS = globalThis.DecompressionStream;
+    let useEmpty = true;
+    globalThis.DecompressionStream = class {
+      readable: ReadableStream<Uint8Array>;
+      writable: WritableStream<BufferSource>;
+      constructor(format: CompressionFormat) {
+        if (!useEmpty) {
+          const real = new RealDS(format);
+          this.readable = real.readable as ReadableStream<Uint8Array>;
+          this.writable = real.writable;
+          return;
+        }
+        this.writable = new WritableStream({
+          write() {},
+          close() {},
+        });
+        this.readable = new ReadableStream({
+          start(controller) {
+            controller.close(); // first read is immediately done
+          },
+        });
+      }
+    } as unknown as typeof DecompressionStream;
+
+    _setForceStreamDecompressForTests(true);
+    try {
+      transport.emit("AAAA");
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      useEmpty = false;
+      transport.emit(await compressToBase64({ ETH: { markPx: "9" } }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(received).toEqual([{ ETH: { markPx: "9" } }]);
+      expect(errorSpy).toHaveBeenCalled();
+    } finally {
+      _setForceStreamDecompressForTests(false);
+      globalThis.DecompressionStream = RealDS;
+      errorSpy.mockRestore();
+    }
+  });
 });

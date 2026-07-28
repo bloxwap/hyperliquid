@@ -111,10 +111,9 @@ export function candle(
   return config.transport.subscribe<CandleEvent>(
     payload.type,
     payload,
+    // Routing keys only by coin; interval still needs a local filter (two intervals share a route).
     (e) => {
-      if (e.detail.s === payload.coin && e.detail.i === payload.interval) {
-        listener(e.detail);
-      }
+      if (e.detail.i === payload.interval) listener(e.detail);
     },
     options,
   );
