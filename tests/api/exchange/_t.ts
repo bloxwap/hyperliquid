@@ -30,6 +30,16 @@ const TIMEOUT = 120_000;
 const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}` | undefined;
 const MAIN_WALLET = PRIVATE_KEY ? privateKeyToAccount(PRIVATE_KEY) : undefined;
 
+/**
+ * Whether {@linkcode createTempExchangeClient} can run, i.e. whether a funded `PRIVATE_KEY` is
+ * configured to pay for the throwaway account.
+ *
+ * Exported as a predicate rather than exporting `MAIN_WALLET` itself: every caller outside this
+ * module wants the guard, not the key. Harnesses in other API families that create a temporary
+ * account MUST skip on it — see the note on {@linkcode createTempExchangeClient}.
+ */
+export const CAN_FUND_TEMP_ACCOUNT: boolean = MAIN_WALLET !== undefined;
+
 // ============================================================
 // Preparation
 // ============================================================
@@ -97,11 +107,25 @@ export function runTest(options: {
 // Helpers
 // ============================================================
 
-/** Funds a throwaway testnet account and returns a client for it, optionally as a multi-sig user. */
+/**
+ * Funds a throwaway testnet account and returns a client for it, optionally as a multi-sig user.
+ *
+ * Requires a funded `PRIVATE_KEY`. Callers must skip on {@linkcode CAN_FUND_TEMP_ACCOUNT} rather
+ * than calling this without one — an unguarded call used to reach `ExchangeClient` with
+ * `MAIN_WALLET!` as `undefined`, where the non-null assertion silenced the type error and the
+ * test failed several frames later with `TypeError: wallet is not an Object`, which names
+ * neither the missing key nor the harness that forgot to check.
+ */
 export async function createTempExchangeClient(
   type: "user" | "multisig",
 ): Promise<ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>> {
-  const mainExchClient = new ExchangeClient({ wallet: MAIN_WALLET!, transport });
+  if (MAIN_WALLET === undefined) {
+    throw new Error(
+      "createTempExchangeClient() needs a funded PRIVATE_KEY to activate the throwaway account. " +
+        "Set PRIVATE_KEY, or skip the test on CAN_FUND_TEMP_ACCOUNT.",
+    );
+  }
+  const mainExchClient = new ExchangeClient({ wallet: MAIN_WALLET, transport });
 
   // Create temporary account
   const tempWallet = privateKeyToAccount(generatePrivateKey());

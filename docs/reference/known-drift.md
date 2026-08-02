@@ -53,17 +53,23 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   listeners separate even though they share one server-side subscription
   (`src/transport/websocket/_subscriptionManager.ts`).
 
-### 6. Unique users per connection — docs say 10, server allows 15
+### 6. Unique users — docs say 10, the server's error says 15, the server enforces 14
 
-- **Observed:** 2026-07-26 (live mainnet).
+- **Observed:** 2026-08-02 (live mainnet), superseding a 2026-07-26 observation.
 - **Docs claim:** maximum of 10 unique users across user-specific WebSocket subscriptions (updated ~2026-07;
   [rate limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits)).
-- **Server reality:** the 15th unique user was acknowledged; the 16th was rejected with
-  `Cannot track more than 15 total users.`
-- **SDK behavior:** matches the server — the subscription manager enforces 15 unique users per connection
-  client-side (`MAX_UNIQUE_USERS = 15`, `src/transport/websocket/_subscriptionManager.ts`) and throws the same
-  message before wasting a round trip. Note [Clients → Unsubscribe](../clients.md#unsubscribe) still quotes the
-  docs' "10 unique users".
+- **Server reality:** **14** distinct users are accepted; the **15th** is refused with an `error` frame reading
+  `Cannot track more than 15 total users.` — the message is off by one from the enforcement. Measured by subscribing
+  distinct users one at a time with the client-side guard disabled, twice, on two independent connections; both runs
+  stopped at 14.
+- **Scope:** **per IP, not per connection.** With one connection holding 14 users, a second connection from the same
+  host was refused a 15th distinct user, while still being allowed to subscribe a user the first connection already
+  held. Sharding user channels across sockets therefore buys no additional user slots.
+- **SDK behavior:** enforces the measured 14 (`MAX_UNIQUE_USERS = 14`, `src/transport/websocket/_quota.ts`), counted
+  against a per-IP [`WebSocketQuota`](../transports.md#websocket-limits) shared by every transport on the network.
+  The earlier value of 15 was taken from the server's error text and was one too high — the 15th subscription passed
+  the client guard, and because the server's refusal carries no echoed request, it could not be matched to the
+  pending subscribe and surfaced only as a request timeout ~10 s later.
 
 ### 7. `TwapState` frames gained `trigger` / `stopPx`
 
@@ -87,6 +93,29 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   `src/api/info/_methods/outcomeMeta.ts`), and [`SymbolConverter`](../utilities.md#asset-id--symbolconverter)
   resolves outcome asset IDs (`100000000 + outcomeId * 10 + sideIndex`) from `outcomeMeta` alone. Format prices and
   sizes for outcome markets with the spot-like model above, at your own risk.
+
+### 9. `outcomeMeta` outcomes gained a `deployer` field
+
+- **Observed:** 2026-08-02 (live mainnet), via the `outcomeMeta` schema-coverage test.
+- **Docs claim:** each entry of `outcomes` carries no `deployer`.
+- **Server reality:** every outcome in the response now includes `deployer`; the schema-coverage check reports
+  `additionalProperty: "deployer"` across the whole `outcomes` array (observed at indices 0 through 157+).
+- **SDK behavior:** runtime unaffected — Info responses are delivered to callers as received, so the field is present
+  on the objects you get. The `OutcomeMetaResponse` **type** in `src/api/info/_methods/outcomeMeta.ts` does not
+  declare it yet, so it is invisible to TypeScript and `tests/api/info/outcomeMeta.test.ts` fails online until the
+  type is widened. Per [Versioning](../README.md#versioning) that type change ships in a patch release.
+
+### 10. `validatorL1Votes` actions gained `registerTemplate`
+
+- **Observed:** 2026-08-02 (live mainnet), via the `validatorL1Votes` schema-coverage test.
+- **Docs claim:** the validator action union covers `registerTokensAndStandaloneOutcome` among its variants.
+- **Server reality:** a live vote carried an action whose `O` object holds `registerTemplate` and omits
+  `registerTokensAndStandaloneOutcome`, so it matches no variant of the documented union — the check reports both
+  `missingProperty: "registerTokensAndStandaloneOutcome"` and `additionalProperty: "registerTemplate"` for the same
+  sample.
+- **SDK behavior:** runtime unaffected for the same reason as #9; the union in
+  `src/api/info/_methods/validatorL1Votes.ts` needs a `registerTemplate` variant, and
+  `tests/api/info/validatorL1Votes.test.ts` fails online until it has one.
 
 ## Resolved
 

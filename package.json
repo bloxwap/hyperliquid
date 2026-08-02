@@ -1,6 +1,6 @@
 {
   "name": "@bloxwap/hyperliquid",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "Blazing fast TypeScript Hyperliquid SDK.",
   "license": "MIT",
   "type": "module",
@@ -31,18 +31,26 @@
     "node": ">=22.12.0"
   },
   "//exports": "Points at TypeScript sources: Bun consumes them directly, and self-referential imports (`@bloxwap/hyperliquid/...`) in tests, docs and JSDoc examples resolve without a build. The publishable package is emitted by `bun run build`, which writes dist/ with its own package.json whose exports point at .js/.d.ts.",
+  "//exports:narrow": "The `.` barrel re-exports all four clients plus the transports, so importing it evaluates the exchange and signing graph even for a read-only process: 69.5 ms on Node, 22.0 ms on Bun, against 41.0 / 8.3 ms for an info-only consumer entering through `./api/info/client` + `./transport`. The `./transport*` and `./api/*/client` keys below exist for that consumer — `.` stays the compatible default and nothing under src/ changed to add them.",
   "exports": {
     ".": "./src/mod.ts",
     "./signing": "./src/signing/mod.ts",
     "./utils": "./src/utils/mod.ts",
+    "./transport": "./src/transport/mod.ts",
+    "./transport/http": "./src/transport/http/mod.ts",
+    "./transport/websocket": "./src/transport/websocket/mod.ts",
     "./api/exchange": "./src/api/exchange/mod.ts",
+    "./api/exchange/client": "./src/api/exchange/client.ts",
     "./api/explorer": "./src/api/explorer/mod.ts",
+    "./api/explorer/client": "./src/api/explorer/client.ts",
     "./api/info": "./src/api/info/mod.ts",
-    "./api/subscription": "./src/api/subscription/mod.ts"
+    "./api/info/client": "./src/api/info/client.ts",
+    "./api/subscription": "./src/api/subscription/mod.ts",
+    "./api/subscription/client": "./src/api/subscription/client.ts"
   },
   "scripts": {
     "//check": "Everything CI gates on.",
-    "check": "bun run check:format && bun run check:lint && bun run check:docs && bun run check:types && bun run check:ts7 && bun run check:jsdoc && bun run check:export",
+    "check": "bun run check:format && bun run check:lint && bun run check:docs && bun run check:types && bun run check:ts7 && bun run check:jsdoc && bun run check:export && bun run check:imports",
     "check:format": "biome format .",
     "check:lint": "biome lint .",
     "//check:docs": "Verifies Markdown formatting, the docs index, and GitHub-compatible syntax. External links are checked by the Documentation workflow.",
@@ -55,6 +63,8 @@
     "check:jsdoc": "bun run .dev/jsdoc_sync_check.ts",
     "//check:export": "Verifies every module is reachable from the package exports.",
     "check:export": "bun run .dev/export_sync_check.ts",
+    "//check:imports": "Budgets how many modules each entry point loads at runtime, so a barrel import cannot silently reattach a large subgraph to a small entry point.",
+    "check:imports": "bun run .dev/import_graph_check.ts",
     "format": "biome format --write .",
     "lint": "biome lint --write .",
     "test": "bun test tests/",

@@ -71,6 +71,24 @@ scenario({
 // stays at 1. If the lock covers only nonce issuance and signing, requests overlap and
 // `maxInFlight` approaches 100. `maxInFlight` is reported so the shape of the win is
 // visible in the report, not just the wall time.
+//
+// ┌─ READ THIS BEFORE COMPARING THE NUMBER TO `order_sequential` ─────────────────────────┐
+// │ This scenario runs at LATENCY_MS = 20 while `order_sequential` runs at 0, and the      │
+// │ harness divides the whole burst's wall time by CONCURRENT_ORDERS. One round trip       │
+// │ cannot be amortized below itself, so 20 ms / 100 = **200 µs of pure waiting is         │
+// │ charged to every order** before any SDK cost is counted.                               │
+// │                                                                                        │
+// │ Wall time is `RTT + N x C`, where C is the serialized per-order CPU (secp256k1 is      │
+// │ single-threaded, so the N signatures queue). At N=100 that predicts                    │
+// │ 20 ms + 100 x ~110 µs = ~31 ms, i.e. ~310 µs/order — which is what the suite reports.  │
+// │ The gap to `order_sequential` is arithmetic, NOT lock or queue contention: with        │
+// │ LATENCY_MS flipped to 0 the same scenario measures ~142 µs/order against               │
+// │ `order_sequential`'s ~157 µs, so concurrency is measurably CHEAPER per order.          │
+// │                                                                                        │
+// │ Four separate audits have "discovered" a phantom 200 µs regression here. Compare       │
+// │ against `order_100_concurrent_instant` below, which is the apples-to-apples number,    │
+// │ and read this one for `maxInFlight` — the overlap guard it was written to be.          │
+// └────────────────────────────────────────────────────────────────────────────────────────┘
 
 const LATENCY_MS = 20;
 const CONCURRENT_ORDERS = 100;
@@ -80,7 +98,8 @@ scenario({
   group: "transaction",
   description:
     `${CONCURRENT_ORDERS} concurrent ExchangeClient.order() calls at ${LATENCY_MS} ms transport latency; ` +
-    `reports peak in-flight requests`,
+    `reports peak in-flight requests. ${(LATENCY_MS * 1000) / CONCURRENT_ORDERS} µs/order of the figure is ` +
+    `amortized RTT — see order_100_concurrent_instant for SDK CPU`,
   unit: "order",
   unitsPerIteration: CONCURRENT_ORDERS,
   iterations: 1,
@@ -90,6 +109,47 @@ scenario({
     // A fresh client per sample: the transport accumulates call history and a
     // high-water mark, both of which must not carry across samples.
     const transport = new MockExchangeTransport(LATENCY_MS);
+    const client = new ExchangeClient({ transport, wallet: privateKeyToAccount(TEST_PRIVATE_KEY) });
+
+    await Promise.all(
+      Array.from({ length: CONCURRENT_ORDERS }, (_, i) => client.order({ orders: [order(i)], grouping: "na" })),
+    );
+
+    // `latencyMs` and `rttPerOrderUs` are reported so the report itself carries the arithmetic
+    // above — a reader who never opens this file still sees how much of the figure is waiting.
+    return {
+      maxInFlight: transport.maxInFlight,
+      calls: transport.calls.length,
+      latencyMs: LATENCY_MS,
+      rttPerOrderUs: Math.round((LATENCY_MS * 1000) / CONCURRENT_ORDERS),
+    };
+  },
+});
+
+// The apples-to-apples counterpart: identical shape, zero transport latency, so the figure is
+// the SDK's own per-order CPU under 100-way concurrency and is directly comparable to
+// `order_sequential`. Added alongside the 20 ms scenario rather than replacing it — the perf
+// gate joins baselines by scenario name, so renaming or re-parameterizing the existing one
+// would silently invalidate every recorded baseline.
+//
+// `maxInFlight` is 1 here, and that is correct rather than a lock regression: a zero-latency
+// transport resolves on a microtask, so each order settles before the next one's signature
+// finishes. The 100 calls are still genuinely concurrent through validate → lock → nonce →
+// sign, which is the part this scenario measures; overlap ON THE WIRE is what the 20 ms
+// sibling exists to assert, and only its `maxInFlight` carries that meaning.
+scenario({
+  name: "transaction/order_100_concurrent_instant",
+  group: "transaction",
+  description:
+    `${CONCURRENT_ORDERS} concurrent ExchangeClient.order() calls at 0 ms transport latency ` +
+    `(SDK CPU per order under concurrency; compare directly against order_sequential)`,
+  unit: "order",
+  unitsPerIteration: CONCURRENT_ORDERS,
+  iterations: 1,
+  samples: 5,
+  warmupSamples: 1,
+  run: async () => {
+    const transport = new MockExchangeTransport(0);
     const client = new ExchangeClient({ transport, wallet: privateKeyToAccount(TEST_PRIVATE_KEY) });
 
     await Promise.all(

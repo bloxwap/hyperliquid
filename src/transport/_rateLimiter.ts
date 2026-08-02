@@ -1,15 +1,20 @@
 /**
- * Token-bucket rate limiter for the HTTP transport.
+ * Token-bucket rate limiter shared by both transports.
  *
  * Hyperliquid budgets REST requests at 1200 weight per minute per IP; exceeding it yields
- * HTTP 429 and ultimately an IP ban. An opt-in instance of this bucket on {@linkcode HttpTransport}
+ * HTTP 429 and ultimately an IP ban. An opt-in instance of this bucket on `HttpTransport`
  * paces outgoing requests: each request acquires its weight before sending and WAITS (instead of
  * throwing) until the bucket has refilled enough to cover it. Weights that only become knowable
  * after the fact (response-size surcharges) are debited with {@linkcode TokenBucketRateLimiter.charge}.
+ *
+ * The WebSocket transport budgets a different quantity against the same machinery — outbound
+ * *messages*, capped at 2000/minute per IP across every connection — through
+ * `WebSocketQuota`. Both callers need the identical FIFO-with-debt semantics, so the
+ * bucket lives at the transport root rather than under either one.
  * @module
  */
 
-import { Promise_ } from "../_polyfills.ts";
+import { Promise_ } from "./_polyfills.ts";
 
 /**
  * A queued acquisition waiting for enough tokens to accumulate.

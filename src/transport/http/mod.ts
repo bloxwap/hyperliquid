@@ -30,7 +30,7 @@
 import { type IRequestTransport, TransportError } from "../_base.ts";
 import * as abort from "../_abort.ts";
 import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
-import { TokenBucketRateLimiter } from "./_rateLimiter.ts";
+import { TokenBucketRateLimiter } from "../_rateLimiter.ts";
 
 /** Configuration options for the HTTP transport layer. */
 export interface HttpTransportOptions {

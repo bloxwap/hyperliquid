@@ -14,7 +14,7 @@ import {
 } from "@bloxwap/hyperliquid";
 import { OFFLINE } from "../../_offline.ts";
 import { createTestContext, type TestContext } from "../../_testContext.ts";
-import { cleanupTempExchangeClient, createTempExchangeClient } from "../exchange/_t.ts";
+import { CAN_FUND_TEMP_ACCOUNT, cleanupTempExchangeClient, createTempExchangeClient } from "../exchange/_t.ts";
 
 // =============================================================
 // Arguments
@@ -70,6 +70,14 @@ export function runTest(options: {
 /**
  * Runs a subscription test that also needs to place real actions from a temporary funded account.
  *
+ * Skipped without a funded `PRIVATE_KEY` as well as offline, matching
+ * `runTest` in `../exchange/_t.ts`: this harness funds a throwaway account through
+ * {@linkcode createTempExchangeClient}, so it has exactly the same precondition the exchange
+ * suite guards on. Before that guard existed these four tests did not skip — they ran, reached
+ * `ExchangeClient` with an `undefined` wallet, and failed with `TypeError: wallet is not an
+ * Object`, which is why an online run with no key reported four failures that looked like
+ * subscription bugs.
+ *
  * @param options Test options.
  * @param options.name Name of the subscription under test.
  * @param options.fn Test body; receives a test context plus subscription, exchange and info clients.
@@ -87,7 +95,7 @@ export function runTestWithExchange(options: {
 }): void {
   const { name, fn } = options;
 
-  test.skipIf(OFFLINE)(
+  test.skipIf(OFFLINE || !CAN_FUND_TEMP_ACCOUNT)(
     name,
     async () => {
       await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits

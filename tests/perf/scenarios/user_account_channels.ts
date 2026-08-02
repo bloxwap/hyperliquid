@@ -28,10 +28,10 @@ const POSITIONS = 10;
 const BALANCES = 20;
 /**
  * Users sharing the channel in the BY_USER routing scenario, in addition to the target user.
- * The server tracks at most 15 unique users per connection (mirrored client-side by
- * `MAX_UNIQUE_USERS`), so 14 + the target saturates the allowed crowd exactly.
+ * The server tracks at most 14 unique users per IP (mirrored client-side by
+ * `MAX_UNIQUE_USERS`), so 13 + the target saturates the allowed crowd exactly.
  */
-const USER_SUBSCRIPTIONS = 14;
+const USER_SUBSCRIPTIONS = 13;
 
 const USER = "0x1111111111111111111111111111111111111111" as const;
 
@@ -176,11 +176,15 @@ frameDispatchScenario("spotState", (client, listener) => client.spotState({ user
 
 frameDispatchScenario("webData3", (client, listener) => client.webData3({ user: USER }, listener));
 
+// The name says 15 because that is what the crowd was when the scenario was written and the
+// perf gate joins baselines by scenario name — renaming it would silently invalidate every
+// recorded baseline. The crowd is now `USER_SUBSCRIPTIONS + 1` = the real per-IP cap; the
+// description below is the accurate figure.
 scenario({
   name: "subscription/user_dispatch_15_users",
   group: "subscription",
   description:
-    `clearinghouseState dispatch with ${USER_SUBSCRIPTIONS} users on one channel; ` +
+    `clearinghouseState dispatch with ${USER_SUBSCRIPTIONS + 1} users on one channel (the per-IP cap); ` +
     `a frame for one user must run exactly one listener (BY_USER route)`,
   unit: "frame",
   unitsPerIteration: FRAMES,

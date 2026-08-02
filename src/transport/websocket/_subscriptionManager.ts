@@ -1,6 +1,9 @@
 /**
  * Subscription lifecycle manager: tracks listeners per subscription payload,
- * resubscribes on reconnect, and enforces per-connection subscription limits.
+ * resubscribes on reconnect, and enforces Hyperliquid's per-IP subscription limits.
+ *
+ * The limits are enforced against a {@linkcode WebSocketQuota} shared with every other
+ * connection to the same deployment, because that is the scope the server counts in.
  *
  * @module
  */
@@ -11,6 +14,7 @@ import type { ISubscription } from "../_base.ts";
 import type { HyperliquidEventTarget } from "./_events.ts";
 import { type WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
 import { normalize } from "./_id.ts";
+import { WebSocketQuota } from "./_quota.ts";
 import { payloadEventType } from "./_routing.ts";
 
 /** A live reference to a registration: one per subscribing call, until its waiter settles or its handle unsubscribes. */
@@ -91,30 +95,6 @@ interface SubscriptionState {
   failure?: WebSocketRequestError;
 }
 
-/**
- * Maximum number of subscriptions; the server rejects the excess without
- * echoing the request, so the guard must run client-side.
- *
- * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
- */
-const MAX_SUBSCRIPTIONS = 1000;
-
-/**
- * Maximum number of unique users across subscriptions; the server rejects the
- * excess without echoing the request, so the guard must run client-side.
- *
- * The official docs say 10 (updated ~17 days before the probe), but a live
- * mainnet probe on 2026-07-26 observed the server accepting 15 users and
- * rejecting the 16th with an `error` frame "Cannot track more than 15 total
- * users." — the server is the authority here and the docs lag. The rejection
- * carries no echoed request, so it cannot be matched to the pending subscribe
- * and would surface only via the request timeout — another reason the
- * client-side guard must fire first.
- *
- * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
- */
-const MAX_UNIQUE_USERS = 15;
-
 /** Lowercased `user` of a subscription payload, or `undefined` when the payload tracks no user. */
 function userOf(payload: unknown): string | undefined {
   return typeof payload === "object" && payload !== null && "user" in payload && typeof payload.user === "string"
@@ -132,21 +112,26 @@ export class WebSocketSubscriptionManager {
   private readonly _hlEvents: HyperliquidEventTarget;
   private _subscriptions: Map<string, SubscriptionState> = new Map();
   /**
-   * Live subscription count per tracked user, maintained incrementally so the unique-user guard
-   * stays O(1) per subscribe instead of rescanning (and re-parsing) every registered id.
+   * The per-IP budget this connection draws from.
+   *
+   * Subscription and unique-user counts live here rather than on the manager because the
+   * server counts them per IP, across every connection from this host — a manager-local
+   * count admitted N x 1000 subscriptions against a limit of 1000. See {@linkcode WebSocketQuota}.
    */
-  private readonly _users: Map<string, number> = new Map();
+  private readonly _quota: WebSocketQuota;
 
   constructor(
     socket: ReconnectingWebSocket,
     dispatcher: WebSocketDispatcher,
     hlEvents: HyperliquidEventTarget,
     resubscribe: boolean,
+    quota: WebSocketQuota = new WebSocketQuota(),
   ) {
     this._socket = socket;
     this._dispatcher = dispatcher;
     this._hlEvents = hlEvents;
     this.resubscribe = resubscribe;
+    this._quota = quota;
 
     socket.addEventListener("open", () => this._handleOpen());
     socket.addEventListener("close", () => this._handleClose());
@@ -197,13 +182,18 @@ export class WebSocketSubscriptionManager {
     // --- Subscription state --------------------------------------------------
     let subscription = this._subscriptions.get(id);
     if (!subscription) {
-      if (this._subscriptions.size >= MAX_SUBSCRIPTIONS) {
-        throw new WebSocketRequestError(`Cannot subscribe to more than ${MAX_SUBSCRIPTIONS} channels.`, {
+      // Reserved against the shared per-IP budget before the request goes out. The reservation
+      // is released again by `_deleteSubscription` on every exit path — unsubscribe, refusal,
+      // disconnect — so an abandoned subscribe never leaks a slot to the other connections.
+      const user = userOf(snapshot);
+      const refusal = this._quota.reserveSubscription(user);
+      if (refusal === "subscriptions") {
+        throw new WebSocketRequestError(`Cannot subscribe to more than ${this._quota.maxSubscriptions} channels.`, {
           request: payload,
         });
       }
-      if (this._exceedsUserLimit(payload)) {
-        throw new WebSocketRequestError(`Cannot track more than ${MAX_UNIQUE_USERS} total users.`, {
+      if (refusal === "users") {
+        throw new WebSocketRequestError(`Cannot track more than ${this._quota.maxUniqueUsers} total users.`, {
           request: payload,
         });
       }
@@ -215,7 +205,7 @@ export class WebSocketSubscriptionManager {
         .finally(() => (created.promiseFinished = true));
       const created: SubscriptionState = {
         payload: snapshot,
-        user: userOf(snapshot),
+        user,
         listeners: new Map(),
         promise,
         promiseFinished: false,
@@ -357,26 +347,22 @@ export class WebSocketSubscriptionManager {
   // Registry
   // ===========================================================================
 
-  /** Registers a subscription and counts its user towards the unique-user limit. */
+  /**
+   * Registers a subscription whose quota slot the caller has already reserved.
+   *
+   * The reservation happens in `subscribe()` rather than here, because it must run — and be
+   * able to refuse — before the subscribe request is put on the wire.
+   */
   private _addSubscription(id: string, subscription: SubscriptionState): void {
     this._subscriptions.set(id, subscription);
-    const user = subscription.user;
-    if (user !== undefined) this._users.set(user, (this._users.get(user) ?? 0) + 1);
   }
 
-  /** Removes a subscription and releases its user from the unique-user count. */
+  /** Removes a subscription and returns its slot to the shared per-IP budget. */
   private _deleteSubscription(id: string): void {
     const subscription = this._subscriptions.get(id);
     if (subscription === undefined) return;
     this._subscriptions.delete(id);
-
-    const user = subscription.user;
-    if (user === undefined) return;
-    const count = this._users.get(user);
-    // The count is only ever absent if a registration was lost, in which case forgetting the user
-    // is the safe direction: the server rejects a genuine overflow, a stuck count would not.
-    if (count === undefined || count <= 1) this._users.delete(user);
-    else this._users.set(user, count - 1);
+    this._quota.releaseSubscription(subscription.user);
   }
 
   /**
@@ -445,16 +431,5 @@ export class WebSocketSubscriptionManager {
         }
       }
     }
-  }
-
-  // ===========================================================================
-  // Subscription limit checks
-  // ===========================================================================
-
-  /** True when subscribing `payload` would track one user above the limit. */
-  private _exceedsUserLimit(payload: unknown): boolean {
-    const user = userOf(payload);
-    if (user === undefined) return false;
-    return !this._users.has(user) && this._users.size >= MAX_UNIQUE_USERS;
   }
 }
