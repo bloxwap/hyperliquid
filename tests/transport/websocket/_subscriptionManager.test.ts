@@ -276,19 +276,19 @@ describe("WebSocketSubscriptionManager", () => {
     test("limit errors carry the request payload", async () => {
       const { socket, manager } = createManager();
 
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 14; i++) {
         const payload = { type: "userEvents", user: `0x${i.toString().padStart(40, "0")}` };
         const promise = manager.subscribe("userEvents", payload, () => {});
         socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
         await promise;
       }
 
-      const payload16 = { type: "userEvents", user: "0x000000000000000000000000000000000000000f" };
+      const payload15 = { type: "userEvents", user: "0x000000000000000000000000000000000000000f" };
       const err = await assertRejects(
-        () => manager.subscribe("userEvents", payload16, () => {}),
+        () => manager.subscribe("userEvents", payload15, () => {}),
         WebSocketRequestError,
       );
-      assertEquals(err.request, payload16);
+      assertEquals(err.request, payload15);
     });
   });
 
@@ -1041,21 +1041,24 @@ describe("WebSocketSubscriptionManager", () => {
   });
 
   describe("unique user subscription limit", () => {
-    test("rejects when exceeding 15 unique users", async () => {
+    // 14, not 15: a 2026-08-02 mainnet probe had the server refuse the 15th distinct user on
+    // two independent connections, despite its own error frame saying "more than 15". See
+    // MAX_UNIQUE_USERS in _quota.ts.
+    test("rejects when exceeding 14 unique users", async () => {
       const { socket, manager } = createManager();
 
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 14; i++) {
         const payload = { type: "userEvents", user: `0x${i.toString().padStart(40, "0")}` };
         const promise = manager.subscribe("userEvents", payload, () => {});
         socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
         await promise;
       }
 
-      const payload16 = { type: "userEvents", user: "0x000000000000000000000000000000000000000f" };
+      const payload15 = { type: "userEvents", user: "0x000000000000000000000000000000000000000f" };
       await assertRejects(
-        () => manager.subscribe("userEvents", payload16, () => {}),
+        () => manager.subscribe("userEvents", payload15, () => {}),
         WebSocketRequestError,
-        "Cannot track more than 15 total users.",
+        "Cannot track more than 14 total users.",
       );
     });
 
@@ -1063,7 +1066,7 @@ describe("WebSocketSubscriptionManager", () => {
       const { socket, manager } = createManager();
 
       const subs = [];
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 14; i++) {
         const payload = { type: "userEvents", user: `0x${i.toString().padStart(40, "0")}` };
         const promise = manager.subscribe("userEvents", payload, () => {});
         socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
@@ -1079,7 +1082,8 @@ describe("WebSocketSubscriptionManager", () => {
       socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", newUserPayload));
       await promise;
 
-      assertEquals(manager._subscriptions.size, 15);
+      // 14 subscribed, one unsubscribed, one added back into the freed slot.
+      assertEquals(manager._subscriptions.size, 14);
     });
 
     test("does not count subscriptions without user parameter", async () => {
@@ -1101,14 +1105,14 @@ describe("WebSocketSubscriptionManager", () => {
     test("allows a new channel of an already tracked user at the limit", async () => {
       const { socket, manager } = createManager();
 
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 14; i++) {
         const payload = { type: "userEvents", user: `0x${i.toString().padStart(40, "0")}` };
         const promise = manager.subscribe("userEvents", payload, () => {});
         socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
         await promise;
       }
 
-      // A new channel of user 0 does not add a 16th user.
+      // A new channel of user 0 does not add a 15th user.
       const payload = { type: "userFills", user: `0x${"0".padStart(40, "0")}` };
       const promise = manager.subscribe("userFills", payload, () => {});
       socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
@@ -1119,14 +1123,14 @@ describe("WebSocketSubscriptionManager", () => {
       const { socket, manager } = createManager();
 
       const mixedCase = "0x00000000000000000000000000000000000000AB";
-      for (const user of [mixedCase, ...Array.from({ length: 14 }, (_, i) => `0x${`${i}`.padStart(40, "0")}`)]) {
+      for (const user of [mixedCase, ...Array.from({ length: 13 }, (_, i) => `0x${`${i}`.padStart(40, "0")}`)]) {
         const payload = { type: "userEvents", user };
         const promise = manager.subscribe("userEvents", payload, () => {});
         socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
         await promise;
       }
 
-      // The same address in a different case is not a 16th user.
+      // The same address in a different case is not a 15th user.
       const payload = { type: "userFills", user: mixedCase.toLowerCase() };
       const promise = manager.subscribe("userFills", payload, () => {});
       socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
@@ -1136,7 +1140,7 @@ describe("WebSocketSubscriptionManager", () => {
     test("allows multiple listeners on same user subscription", async () => {
       const { socket, manager } = createManager();
 
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 14; i++) {
         const payload = { type: "userEvents", user: `0x${i.toString().padStart(40, "0")}` };
         const promise = manager.subscribe("userEvents", payload, () => {});
         socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
@@ -1171,7 +1175,7 @@ describe("WebSocketSubscriptionManager", () => {
       const { socket, manager } = createManager();
 
       const subs = [];
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 14; i++) {
         const payload = { type: "userEvents", user: `0x${i.toString().padStart(40, "0")}` };
         const promise = manager.subscribe("userEvents", payload, () => {});
         socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
@@ -1196,9 +1200,9 @@ describe("WebSocketSubscriptionManager", () => {
       await unsubPromise;
 
       // The original user's slot was released: a 16th unique user fits again.
-      const payload16 = { type: "userEvents", user: "0x000000000000000000000000000000000000000f" };
-      const promise = manager.subscribe("userEvents", payload16, () => {});
-      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload16));
+      const payload15 = { type: "userEvents", user: "0x000000000000000000000000000000000000000f" };
+      const promise = manager.subscribe("userEvents", payload15, () => {});
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload15));
       await promise;
     });
   });

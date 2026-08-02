@@ -7,6 +7,7 @@
 
 import type { ReconnectingWebSocket } from "./_reconnectingSocket.ts";
 import type { HyperliquidEventTarget } from "./_events.ts";
+import type { WebSocketQuota } from "./_quota.ts";
 
 /** Configuration options for the keep-alive watchdog. */
 export interface WebSocketKeepAliveOptions {
@@ -31,13 +32,28 @@ export class WebSocketKeepAlive {
   private readonly _socket: ReconnectingWebSocket;
   private readonly _interval: number;
   private readonly _timeout: number;
+  /**
+   * The per-IP outbound message budget pings are billed to, or `undefined` when unbudgeted.
+   *
+   * Pings are not free: at the 5 s default each open socket spends 12 of the 2000 messages
+   * a minute allows, and that budget is shared by every connection from this host. They are
+   * charged rather than paced — delaying the watchdog is how a half-open socket goes
+   * unnoticed — so heavy ping traffic slows subscribes instead of itself.
+   */
+  private readonly _quota: WebSocketQuota | undefined;
   private _pingInterval: ReturnType<typeof setInterval> | undefined;
   private _pongTimeout: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(socket: ReconnectingWebSocket, hlEvents: HyperliquidEventTarget, options?: WebSocketKeepAliveOptions) {
+  constructor(
+    socket: ReconnectingWebSocket,
+    hlEvents: HyperliquidEventTarget,
+    options?: WebSocketKeepAliveOptions,
+    quota?: WebSocketQuota,
+  ) {
     this._socket = socket;
     this._interval = options?.interval ?? 5_000;
     this._timeout = options?.timeout ?? 3_000;
+    this._quota = quota;
 
     hlEvents.addEventListener("pong", () => this._disarm());
     socket.addEventListener("open", () => this._start());
@@ -49,6 +65,7 @@ export class WebSocketKeepAlive {
     if (this._pingInterval) return;
     this._pingInterval = setInterval(() => {
       this._socket.send('{"method":"ping"}');
+      this._quota?.chargeSend();
       // A half-open connection never answers: reconnect once a ping stays unanswered.
       this._pongTimeout ??= setTimeout(() => this._socket.reconnect(), this._timeout);
     }, this._interval);

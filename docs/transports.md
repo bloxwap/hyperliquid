@@ -255,3 +255,56 @@ const transport = new WebSocketTransport({ resubscribe: false });
 
 If a subscription then fails to re-establish, its `onError` callback is invoked. Handle it as shown under
 [subscription errors](clients.md#errors).
+
+### WebSocket limits
+
+Hyperliquid scopes every documented WebSocket limit to your **IP address**, not to the connection — two of them say so
+in their own text ("across all websocket connections"):
+
+| Limit                                  | Value       | Scope                          |
+| -------------------------------------- | ----------- | ------------------------------ |
+| Connections                            | 10          | per IP                         |
+| New connections                        | 30/minute   | per IP                         |
+| Subscriptions                          | 1000        | per IP                         |
+| Unique users across user-specific subs | 14          | per IP                         |
+| Messages sent to Hyperliquid           | 2000/minute | per IP, across all connections |
+| Simultaneous inflight post requests    | 100         | per IP, across all connections |
+
+Because that scope is the IP and not the socket, every `WebSocketTransport` on a network **shares one budget** by
+default, and the subscription and unique-user guards count what the server counts. Two transports no longer admit 2000
+subscriptions against a limit of 1000 — the excess is refused locally with a clear
+[`WebSocketRequestError`](error-handling.md) instead of by the server, whose refusal carries no echoed request and
+therefore surfaces only as a request timeout ten seconds later.
+
+Reservations are released when a subscription is unsubscribed or when its connection is permanently closed, which is
+when the server frees them too. Call `transport.close()` on a transport you are done with.
+
+Pass your own `quota` when the default's assumption does not hold — a process behind several egress IPs needs one per
+IP, and tests usually want isolation:
+
+```ts
+import { WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
+
+const transport = new WebSocketTransport({ quota: new WebSocketQuota() });
+```
+
+### WebSocket rate limiting
+
+Outbound messages are budgeted but **not paced by default**. Opt into pacing when you approach the 2000/minute ceiling
+— most easily by holding many subscriptions, since one reconnect re-subscribes all of them at once and 1000
+subscriptions spend half the minute's budget instantly:
+
+```ts
+import { WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
+
+const quota = new WebSocketQuota({ rateLimit: { capacity: 2000, refillPerMinute: 2000 } });
+const transport = new WebSocketTransport({ quota });
+```
+
+Pacing only ever delays `subscribe` and `unsubscribe` frames. **`post` requests and keep-alive pings never wait**: an
+exchange action's wire order — and therefore per-wallet nonce ordering — depends on reaching the socket synchronously,
+and delaying the keep-alive watchdog is how a half-open connection goes unnoticed. Both still *debit* the budget, so a
+burst of orders correctly slows subscription traffic rather than silently overrunning the shared limit.
+
+As with [HTTP rate limiting](#rate-limiting), the budget is client-side bookkeeping: other processes, other machines
+behind the same IP, and traffic the SDK cannot see all draw on the same server-side bucket.

@@ -78,6 +78,36 @@ function flag(args: readonly string[], name: string): string | undefined {
   return i >= 0 && i + 1 < args.length ? args[i + 1] : undefined;
 }
 
+/** Sampling noise above which a recorded entry is not worth comparing against, in percent. */
+const NOISY_RME_PCT = 15;
+
+/**
+ * Warns about entries recorded with too much sampling noise to be a useful baseline.
+ *
+ * A high-`rme` entry is worse than no entry: the gate compares against it for months, and
+ * anyone reading the report treats it as the truth. The recorded
+ * `signing/order_e2e_no_ecdsa_unchecked` sat at 3031.9 ns with **41.0% rme** — a figure that
+ * does not reproduce (the same scenario measures 8–12 µs across a dozen fresh processes) — and
+ * three separate performance audits each spent effort explaining a 7.7 µs "validation cost"
+ * that only existed because that one number was noise.
+ *
+ * This warns rather than fails: a noisy machine is a reason to re-record, not to block the
+ * person doing it, and some scenarios are legitimately jittery.
+ */
+export async function warnOnNoisyEntries(path: string): Promise<void> {
+  const report = (await Bun.file(path).json()) as { scenarios?: { name: string; nsPerUnit: number; rme: number }[] };
+  const noisy = (report.scenarios ?? []).filter((s) => s.rme > NOISY_RME_PCT).sort((a, b) => b.rme - a.rme);
+  if (noisy.length === 0) return;
+
+  console.warn(
+    `\n${noisy.length} scenario(s) recorded above ${NOISY_RME_PCT}% rme. A baseline entry this noisy will produce` +
+      ` false regressions and false all-clears for as long as it is committed:`,
+  );
+  for (const s of noisy)
+    console.warn(`  ${s.rme.toFixed(1).padStart(5)}%  ${s.nsPerUnit.toFixed(1).padStart(10)} ns  ${s.name}`);
+  console.warn("Re-record on an idle machine before committing, or accept these entries deliberately.\n");
+}
+
 if (import.meta.main) {
   const args = Bun.argv.slice(2);
 
@@ -85,6 +115,7 @@ if (import.meta.main) {
   if (args.includes("--record")) {
     await runSuite(BASELINE, "baseline");
     console.log(`\nRecorded baseline: ${BASELINE}`);
+    await warnOnNoisyEntries(BASELINE);
     process.exit(0);
   }
 

@@ -71,6 +71,22 @@ is where per-wallet lock scope shows up:
 | Pre-fix             | 1 (per-wallet semaphore wraps signing **and** the request) | ~20 ms      |
 | Post-fix (this tree)| ~100                                                       | ~hundreds of µs |
 
+> [!IMPORTANT]
+>
+> **Do not compare `order_100_concurrent`'s per-order figure against `order_sequential`.** It runs at
+> `LATENCY_MS = 20` while `order_sequential` runs at 0, and the harness divides the whole burst's wall time by 100 —
+> so **200 µs/order of the figure is amortized round trip** before any SDK cost is counted. The scenario now reports
+> `latencyMs` and `rttPerOrderUs` in its `extra` column so the arithmetic is visible without opening the file.
+>
+> Read `order_100_concurrent` for `maxInFlight` — the wire-overlap guard it was written to be — and read
+> **`transaction/order_100_concurrent_instant`** (same shape, 0 ms latency) for per-order SDK CPU. That one is
+> directly comparable to `order_sequential`, and measures *lower*: concurrency is slightly cheaper per order, not 3×
+> more expensive. Four independent audits have each "discovered" a phantom 200 µs regression here.
+>
+> `order_100_concurrent_instant` reports `maxInFlight=1`, which is also correct rather than a lock regression: a
+> zero-latency transport resolves on a microtask, so each order settles before the next signature finishes. The calls
+> are still concurrent through validate → lock → nonce → sign, which is what that scenario measures.
+
 ### `subscription` — WebSocket fan-out cost
 
 `subscription/l2book_dispatch_50_coins` subscribes 50 coins on one channel, injects 500 frames for **one** coin, and

@@ -1,13 +1,19 @@
-import {
-  meta,
-  type MetaResponse,
-  outcomeMeta,
-  type OutcomeMetaResponse,
-  perpDexs,
-  type PerpDexsResponse,
-  spotMeta,
-  type SpotMetaResponse,
-} from "../api/info/mod.ts";
+// Imported from the four method modules directly, NOT from `../api/info/mod.ts`.
+//
+// That barrel re-exports every Info method, and this was the only value import of it anywhere in
+// `src/` — so importing four functions pulled the whole Info surface, and with it valibot's
+// schema graph for ~90 endpoints, into anyone who imported `@bloxwap/hyperliquid/utils`. Measured
+// on the built package: 91 modules loaded and 22.71 ms on Node / 6.88 ms on Bun, against 10
+// modules and 5.50 / 4.06 ms importing the same four modules directly. The type-only imports
+// below cost nothing either way and are listed here for locality.
+//
+// `.dev/import_graph_check.ts` gates this: it fails if `dist/utils/mod.js` ever pulls in more
+// than a handful of modules again, which is the only thing standing between this file and a
+// future `import { … } from "../api/info/mod.ts"` quietly restoring the 22 ms.
+import { meta, type MetaResponse } from "../api/info/_methods/meta.ts";
+import { outcomeMeta, type OutcomeMetaResponse } from "../api/info/_methods/outcomeMeta.ts";
+import { perpDexs, type PerpDexsResponse } from "../api/info/_methods/perpDexs.ts";
+import { spotMeta, type SpotMetaResponse } from "../api/info/_methods/spotMeta.ts";
 import type { IRequestTransport } from "../transport/mod.ts";
 import { type DecimalParts, FormatError, stripTrailingZeros, toDecimal, toFixed } from "./_decimal.ts";
 

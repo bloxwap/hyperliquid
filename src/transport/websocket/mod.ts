@@ -26,9 +26,15 @@ import type { IRequestTransport, ISubscription, ISubscriptionTransport } from ".
 import { WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
 import { HyperliquidEventTarget } from "./_events.ts";
 import { WebSocketKeepAlive, type WebSocketKeepAliveOptions } from "./_keepAlive.ts";
+import {
+  sharedWebSocketQuota,
+  WebSocketQuota,
+  type WebSocketQuotaOptions,
+  type WebSocketRateLimitOptions,
+} from "./_quota.ts";
 import { WebSocketSubscriptionManager } from "./_subscriptionManager.ts";
 
-export { WebSocketRequestError };
+export { WebSocketQuota, type WebSocketQuotaOptions, type WebSocketRateLimitOptions, WebSocketRequestError };
 
 /** Configuration options for the WebSocket transport layer. */
 export interface WebSocketTransportOptions {
@@ -66,6 +72,26 @@ export interface WebSocketTransportOptions {
    * Default: `true`
    */
   resubscribe?: boolean;
+  /**
+   * The per-IP budget this transport draws from: subscriptions, unique users, and outbound
+   * messages.
+   *
+   * Hyperliquid scopes every WebSocket limit to the client IP rather than to the connection,
+   * so by default all transports on the same network share one {@linkcode WebSocketQuota} and
+   * the guards count what the server counts. Pass an instance to override that — a process
+   * behind several egress IPs needs one quota per IP, and a test usually wants isolation.
+   *
+   * @example Pace outbound messages against the documented 2000/minute budget
+   * ```ts
+   * import { WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
+   *
+   * const quota = new WebSocketQuota({ rateLimit: { capacity: 2000, refillPerMinute: 2000 } });
+   * const transport = new WebSocketTransport({ quota });
+   * ```
+   *
+   * Default: {@linkcode sharedWebSocketQuota} for this network
+   */
+  quota?: WebSocketQuota;
 }
 
 /** Mainnet API WebSocket URL. */
@@ -113,6 +139,9 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
     this._dispatcher.timeout = value;
   }
 
+  /** The per-IP budget this transport draws from; shared with every transport that was not given its own. */
+  readonly quota: WebSocketQuota;
+
   private readonly _hlEvents: HyperliquidEventTarget;
   private readonly _dispatcher: WebSocketDispatcher;
   private readonly _subscriptionManager: WebSocketSubscriptionManager;
@@ -120,6 +149,7 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
   /** Creates the transport and immediately starts connecting. */
   constructor(options?: WebSocketTransportOptions) {
     this.isTestnet = options?.isTestnet ?? false;
+    this.quota = options?.quota ?? sharedWebSocketQuota(this.isTestnet);
 
     this.socket = new ReconnectingWebSocket(
       options?.url ?? (this.isTestnet ? TESTNET_API_WS_URL : MAINNET_API_WS_URL),
@@ -131,15 +161,17 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
       this.socket,
       this._hlEvents,
       options?.timeout === undefined ? 10_000 : options.timeout,
+      this.quota,
     );
     // The keep-alive watchdog is fully self-contained: it exposes no API and drives itself from the
     // socket's own "open"/"close"/"error" events, which keep it reachable. Nothing to hold on to.
-    new WebSocketKeepAlive(this.socket, this._hlEvents, options?.keepAlive);
+    new WebSocketKeepAlive(this.socket, this._hlEvents, options?.keepAlive, this.quota);
     this._subscriptionManager = new WebSocketSubscriptionManager(
       this.socket,
       this._dispatcher,
       this._hlEvents,
       options?.resubscribe ?? true,
+      this.quota,
     );
   }
 

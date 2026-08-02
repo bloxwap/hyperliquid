@@ -12,6 +12,7 @@ import { Promise_ } from "../_polyfills.ts";
 import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import type { HyperliquidEventTarget, PostResponse, SubscribeUnsubscribeResponse } from "./_events.ts";
 import { isSubset, normalize, requestToId, specificity } from "./_id.ts";
+import type { WebSocketQuota } from "./_quota.ts";
 
 // =============================================================================
 // Errors
@@ -165,11 +166,43 @@ export class WebSocketDispatcher {
   private readonly _byEchoId: Map<string, PendingRequest[]> = new Map();
   /** Shared request-timeout scheduler: at most one armed native timer, however many requests are in flight. */
   private readonly _timeouts: abort.TimeoutWheel;
+  /**
+   * Controllers to abort when the socket terminates permanently: every in-flight request that
+   * was not already settled by its own signal.
+   *
+   * The socket's `terminationSignal` is ONE `AbortSignal` shared by every request. Relaying it
+   * per request — `abort.relay([signal, terminationSignal], controller)` — put one listener per
+   * in-flight request on that single signal, and `AbortSignal` is an `EventTarget` whose
+   * per-type listener list is scanned linearly by both `addEventListener` and
+   * `removeEventListener`. Each request's attach/detach pair was therefore O(in-flight), making
+   * a burst O(n^2): measured at 195 ns per pair with the list empty and 13.1 µs with 5000
+   * listeners resident on Bun (40.4 µs on Node). A reconnect at the 1000-subscription cap —
+   * exactly the storm the {@linkcode PendingRequest.echo} comment describes — paid it worst.
+   *
+   * One listener on the signal plus a `Set` of controllers makes attach and detach O(1), and
+   * costs ~300 ns less per request even at an in-flight count of one.
+   */
+  private readonly _terminating: Set<AbortController> = new Set();
+  /**
+   * The per-IP outbound message budget, or `undefined` when this dispatcher is not budgeted.
+   *
+   * Hyperliquid caps messages sent at 2000/minute per IP across every connection, and the
+   * SDK can overrun it in one burst: at the 1000-subscription cap a single reconnect
+   * re-subscribes everything at once, spending half the minute's budget instantly, and a
+   * socket flapping under `maxRetries: Infinity` repeats that.
+   */
+  private readonly _quota: WebSocketQuota | undefined;
 
-  constructor(socket: ReconnectingWebSocket, hlEvents: HyperliquidEventTarget, timeout: number | null) {
+  constructor(
+    socket: ReconnectingWebSocket,
+    hlEvents: HyperliquidEventTarget,
+    timeout: number | null,
+    quota?: WebSocketQuota,
+  ) {
     this.timeout = timeout;
     this._socket = socket;
     this._timeouts = new abort.TimeoutWheel();
+    this._quota = quota;
 
     // --- Hyperliquid event handlers ------------------------------------------
     hlEvents.addEventListener("subscriptionResponse", (event) => this._handleSubscriptionResponse(event.detail));
@@ -203,6 +236,23 @@ export class WebSocketDispatcher {
         this._socket.send(entry.frame);
       }
     });
+
+    // --- Termination fan-out -------------------------------------------------
+    // ONE listener on the socket's shared termination signal for this dispatcher's whole life,
+    // fanning out to the in-flight requests. See {@linkcode _terminating} for why a per-request
+    // listener here was quadratic.
+    socket.terminationSignal.addEventListener(
+      "abort",
+      () => {
+        const reason = socket.terminationSignal.reason;
+        // Snapshot before aborting: each `abort` runs its request's `finally`, which deletes
+        // from this set while it is being iterated.
+        const pending = [...this._terminating];
+        this._terminating.clear();
+        for (const controller of pending) controller.abort(reason);
+      },
+      { once: true },
+    );
   }
 
   // ===========================================================================
@@ -221,13 +271,41 @@ export class WebSocketDispatcher {
     signal?: AbortSignal,
     hint?: RequestHint,
   ): Promise<T> {
+    // --- Outbound budget ------------------------------------------------------
+    // Paced before the timeout is armed, so deliberate throttling never trips the request
+    // timeout — the same ordering `HttpTransport` uses.
+    //
+    // `post` is deliberately excluded: `_shell.ts` fixes the wire order of an exchange
+    // action on `transport.request` reaching `send` synchronously, so awaiting here would
+    // let a later nonce overtake an earlier one. Posts debit the budget without waiting
+    // (below), which still slows subscription traffic when orders are heavy but can never
+    // delay or reorder an order. `acquireSend` returns `undefined` rather than a resolved
+    // promise when nothing needs waiting on, keeping this function synchronous to `send`
+    // for every request that is not actually being throttled.
+    if (method !== "post") {
+      const paced = this._quota?.acquireSend(signal);
+      if (paced !== undefined) await paced;
+    }
+
     // One controller per request: the timeout timer, the user signal, and the
     // socket termination relay into it, and `finally` detaches everything, so
     // no listener or timer outlives the request.
     const controller = new AbortController();
     const timeoutMs = this.timeout; // for correct error message after user changes
     const timeout = this._timeouts.schedule(controller, timeoutMs);
-    const detachRelay = abort.relay([signal, this._socket.terminationSignal], controller);
+    // The caller's signal is relayed first, and the termination branch below runs only while the
+    // controller is still unaborted. Together those reproduce `relay([signal, terminationSignal])`
+    // exactly, INCLUDING its reason precedence: `relay` aborts with the first already-aborted
+    // source in argument order, so when the caller's signal and the socket's termination are both
+    // aborted before the request starts, the caller's reason is the one that surfaces. Reversing
+    // these two lines silently changes the error a caller sees in that case.
+    const detachRelay = abort.relay([signal], controller);
+    if (!controller.signal.aborted) {
+      // A shared listener with an O(1) Set membership, rather than a listener per request on a
+      // signal every request shares — see {@linkcode _terminating}.
+      if (this._socket.terminationSignal.aborted) controller.abort(this._socket.terminationSignal.reason);
+      else this._terminating.add(controller);
+    }
 
     let entry: PendingRequest | undefined;
     // The one serialization of the request envelope — wire form and error snapshot source.
@@ -266,7 +344,13 @@ export class WebSocketDispatcher {
       // --- Send or queue -----------------------------------------------------
       frame ??= JSON.stringify(request);
       const sent = this._socket.readyState === ReconnectingWebSocket.OPEN;
-      if (sent) this._socket.send(frame);
+      if (sent) {
+        this._socket.send(frame);
+        // A `post` never waited above, so it debits the shared budget here instead —
+        // driving it into debt when orders outpace the refill, which later `subscribe`
+        // frames wait off. Subscribes already paid in `acquireSend`.
+        if (method === "post") this._quota?.chargeSend();
+      }
 
       const { promise, resolve, reject } = Promise_.withResolvers<T>();
       const pending = (entry = { id, frame, sent, echo, resolve, reject });
@@ -312,6 +396,8 @@ export class WebSocketDispatcher {
       if (entry) this._dequeue(entry);
       timeout.cancel();
       detachRelay();
+      // O(1) — this is the detach that used to scan the shared signal's listener list.
+      this._terminating.delete(controller);
     }
   }
 

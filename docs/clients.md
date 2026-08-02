@@ -283,6 +283,54 @@ Beyond callback settle, enforcement is **best-effort**:
 > later nonce does NOT invalidate it. The payload goes **stale** only once 100 newer nonces have been consumed.
 > Prepare immediately before use anyway.
 
+### Placing many orders at once
+
+An `order` action carries an **array** of orders, and the whole array is covered by **one signature** and costs
+**one request**. Fanning the same orders out into N concurrent `order()` calls pays N signatures and N requests for
+the same result, and secp256k1 is ~90% of the cost of an order — so this is by a wide margin the largest performance
+decision available to a caller.
+
+```ts
+// One action, one signature, one request.
+await client.order({
+  orders: [
+    { a: 0, b: true, p: "30000", s: "0.1", r: false, t: { limit: { tif: "Gtc" } } },
+    { a: 1, b: false, p: "2000", s: "1.5", r: false, t: { limit: { tif: "Gtc" } } },
+    // ... up to the venue's per-action limit
+  ],
+  grouping: "na",
+});
+```
+
+Measured on this tree for 100 orders (Bun 1.4.0, Apple M3 Max, zero-latency in-memory transport;
+median of 9, so the numbers isolate SDK CPU from the network):
+
+| Approach                                     | Wall time      | Rate-limit weight |
+| -------------------------------------------- | -------------- | ----------------- |
+| One batched action (either wallet)           | **0.3–0.4 ms** | **3**             |
+| 100 concurrent `order()` calls, fast wallet  | 7.2 ms         | 100               |
+| 100 concurrent `order()` calls, viem account | 12.1 ms        | 100               |
+
+Batching is ~20–35× less CPU, and it makes the wallet choice stop mattering: one signature
+amortized over 100 orders leaves the curve implementation contributing nothing measurable
+(0.43 ms fast vs 0.32 ms viem, ranges overlapping). Choosing
+[`createFastLocalWallet`](signing.md#fast-local-wallet-wasm-secp256k1) matters most for orders you *cannot* batch.
+
+The weight column is the part that bites first in production: the exchange endpoint charges
+`1 + floor(batchLength / 40)`, so 100 orders in one action cost **3** of your
+[1200 weight/minute per IP](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits),
+while 100 separate actions cost **100**. Batching raises the ceiling on how often you can act by ~33×, independently
+of any CPU saving.
+
+> [!NOTE]
+>
+> `grouping: "na"` is **not** atomic — it is documented as "standard order without grouping", and the orders in the
+> array are accepted or rejected individually. You do not need separate actions to avoid all-or-nothing behavior.
+> Use `"normalTpsl"` or `"positionTpsl"` only when you actually want the take-profit/stop-loss grouping semantics.
+
+Separate actions are genuinely required only when the orders differ in a field the action carries once rather than
+per order — `vaultAddress`, `expiresAfter`, `builder`, or `grouping` itself.
+
 ### Orders over WebSocket (low latency)
 
 Every `ExchangeClient` method also works over [`WebSocketTransport`](transports.md#websocket) — the server accepts
@@ -372,11 +420,12 @@ const subscription = await client.allMids(
 
 ### Unsubscribe
 
-A single connection supports up to
-[1000 active subscriptions and 15 unique users](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits)
-(the official docs, updated ~17 days earlier, say 10 — but a live mainnet probe on 2026-07-26 observed the server
-accepting 15 users and rejecting the 16th with "Cannot track more than 15 total users."; the server is the authority
-here, the docs lag).
+Hyperliquid allows
+[1000 active subscriptions and 14 unique users](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits)
+**per IP address** — not per connection, so every `WebSocketTransport` on a network shares one budget (see
+[WebSocket limits](transports.md#websocket-limits)). The official docs say 10 unique users and the server's own
+refusal says 15; a live mainnet probe on 2026-08-02 measured the enforced ceiling at 14 on two independent
+connections, which is what the SDK guards against — see [known drift](reference/known-drift.md).
 Call `unsubscribe()` to remove a listener and free these slots:
 
 ```ts

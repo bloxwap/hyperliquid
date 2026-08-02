@@ -208,6 +208,20 @@ export async function runScenario(def: Scenario): Promise<ScenarioResult> {
   const ctx = (await def.setup?.()) as never;
 
   // One sample: `iterations` calls, timed as a block, reduced to per-unit nanoseconds.
+  //
+  // Iterations are STRICTLY SEQUENTIAL — each `run` is awaited before the next begins — so a
+  // scenario's peak concurrency is whatever a single `run` body creates, and is 1 for any
+  // scenario whose body performs one request. That is a deliberate property (it isolates
+  // per-operation CPU from queueing effects), but it has a sharp consequence worth knowing
+  // before reading any result: **these scenarios cannot surface a cost that scales with the
+  // number of in-flight operations.**
+  //
+  // A real instance: the WebSocket dispatcher registered one abort listener per in-flight
+  // request on a single `AbortSignal` shared by the whole socket, which is O(n^2) across a
+  // burst. `transport/ws_request_round_trip` never saw it — at an in-flight count of 1 the
+  // defect is a ~300 ns constant — and it went unnoticed until a burst was measured outside
+  // the suite. A scenario that needs to catch that class of defect has to build the
+  // concurrency inside its own `run` body, the way `transaction/order_100_concurrent` does.
   const sample = async (): Promise<{ nsPerUnit: number; extra?: ExtraMetrics }> => {
     let extra: ExtraMetrics | undefined;
     const start = performance.now();

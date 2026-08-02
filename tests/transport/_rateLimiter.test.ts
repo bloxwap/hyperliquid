@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, test } from "bun:test";
 import { assert, assertEquals, assertRejects, assertThrows } from "@jsr/std__assert";
 import { FakeTime } from "@jsr/std__testing/time";
-import { TokenBucketRateLimiter } from "../../../src/transport/http/_rateLimiter.ts";
+import { TokenBucketRateLimiter } from "../../src/transport/_rateLimiter.ts";
 
 /** Waits until queued promise reactions have settled. */
 async function flush(): Promise<void> {

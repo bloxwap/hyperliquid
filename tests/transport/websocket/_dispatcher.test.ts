@@ -613,6 +613,74 @@ describe("WebSocketDispatcher", () => {
       assertEquals(err.cause, socket.terminationSignal.reason);
     });
 
+    test("rejects every in-flight request when permanently closed, not just the first", async () => {
+      // The termination signal is fanned out from ONE listener to a Set of in-flight
+      // controllers, rather than relayed per request. A fan-out that aborts while iterating
+      // its own backing set — each abort runs a `finally` that deletes from it — drops
+      // requests; this asserts all of them settle.
+      const { socket, requester } = createRequester();
+
+      const promises = Array.from({ length: 50 }, (_, i) =>
+        assertRejects(
+          () => requester.request("post", { seq: i }),
+          WebSocketRequestError,
+          "WebSocket connection permanently terminated",
+        ),
+      );
+      socket.terminate(new Error("Permanently closed"));
+
+      await Promise.all(promises);
+    });
+
+    test("a caller's own abort reason outranks the socket's when both are already aborted", async () => {
+      // Reason precedence. `relay([signal, terminationSignal])` aborted with the first
+      // already-aborted source in argument order, so the caller's reason won. Splitting the
+      // relay from the termination branch must preserve that: gating the termination branch on
+      // the controller still being unaborted is what keeps the caller's reason on top. Reversing
+      // the two silently changes the error a caller sees — and nothing else in this suite covers it.
+      const { socket, requester } = createRequester();
+
+      socket.terminate(new Error("Permanently closed"));
+      const controller = new AbortController();
+      controller.abort(new Error("Caller gave up first"));
+
+      const err = await assertRejects(
+        () => requester.request("post", { foo: "bar" }, controller.signal),
+        WebSocketRequestError,
+        "Request aborted",
+      );
+      assertEquals((err.cause as Error).message, "Caller gave up first");
+    });
+
+    test("the socket's reason is used when only the socket is already aborted", async () => {
+      const { socket, requester } = createRequester();
+
+      socket.terminate(new Error("Permanently closed"));
+      const controller = new AbortController(); // live, never aborted
+
+      const err = await assertRejects(
+        () => requester.request("post", { foo: "bar" }, controller.signal),
+        WebSocketRequestError,
+        "WebSocket connection permanently terminated",
+      );
+      assertEquals(err.cause, socket.terminationSignal.reason);
+    });
+
+    test("a settled request is not aborted by a later termination", async () => {
+      // The `finally` must remove the controller from the fan-out set; otherwise a terminate
+      // after the response would abort an already-resolved request's controller.
+      const { socket, requester } = createRequester();
+
+      const promise = requester.request("post", { foo: "bar" });
+      socket.mockMessage(RESPONSES.info(1, { ok: true }));
+      await promise;
+
+      socket.terminate(new Error("Permanently closed"));
+      await drain();
+      // Resolving twice or rejecting after resolve would surface as an unhandled rejection.
+      assertEquals(await promise, { ok: true });
+    });
+
     describe("AbortSignal", () => {
       test("rejects if aborted before call", async () => {
         const { requester } = createRequester();
