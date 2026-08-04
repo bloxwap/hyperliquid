@@ -16,13 +16,15 @@ export interface SubscriptionOptions {
   /** Stops waiting for the confirmation and detaches the listener. */
   signal?: AbortSignal;
   /**
-   * Callback invoked at most once, when an already confirmed subscription fails:
+   * Callback invoked at most once per subscribe call, when an already confirmed subscription fails:
    * - the server rejects a re-subscription after a reconnect;
    * - the connection is permanently terminated;
    * - the connection goes down while re-subscription is disabled.
    *
+   * When several calls share one underlying subscription, every caller's callback fires.
    * Failures before the confirmation reject the subscribe promise instead.
    * After the callback fires, the subscription is removed and no further events or errors follow.
+   * The same failure also aborts the resolved handle's `failureSignal`.
    */
   onError?: (error: TransportError) => void;
 }

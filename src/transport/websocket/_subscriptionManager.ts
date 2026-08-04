@@ -22,12 +22,27 @@ interface RegistrationHandle {
   /** The call's error callback, invoked on subscription failure only while this lease is live. */
   onError?: (error: WebSocketRequestError) => void;
   /**
-   * Whether this lease's `subscribe()` call resolved with the subscription live. A failure
-   * is reported through exactly one channel: the pending `subscribe()` promise before that
-   * (an unconfirmed lease never became a subscriber — its `onError` does not fire), the
-   * first live confirmed lease's `onError` after.
+   * Whether this lease's `subscribe()` call resolved with the subscription live. Each lease
+   * observes a failure through exactly one stage: the pending `subscribe()` promise rejects
+   * before that (an unconfirmed lease never became a subscriber — its `onError` does not fire,
+   * and no handle carrying a `failureSignal` was ever returned, so nothing dangles), while
+   * every live confirmed lease gets its `onError` call and its `failureSignal` abort after.
    */
   confirmed: boolean;
+  /**
+   * Lazily created controller behind the returned handle's `failureSignal`: most subscribers
+   * never read the signal, so the common path allocates no AbortController. `_failSubscription`
+   * aborts it (with the failure as reason) for a live confirmed lease; a voluntary
+   * `unsubscribe()` leaves it untouched.
+   */
+  failureController?: AbortController;
+  /**
+   * The failure this live confirmed lease was torn down with, recorded by `_failSubscription`
+   * so a `failureSignal` first accessed after the failure is created already aborted with the
+   * same reason a pre-failure access would have observed. Never set on a lease that retired
+   * voluntarily before the failure — its signal must stay inert.
+   */
+  failure?: WebSocketRequestError;
 }
 
 /** Per-listener registration: its routed event type, live leases, and confirmation state. */
@@ -49,9 +64,9 @@ interface ListenerRegistration {
    * aborting waiter can therefore never roll back a registration an identical joiner still
    * awaits, and one handle's `unsubscribe()` cannot cut off another live handle.
    *
-   * Error ownership is first-live-owner: the first live confirmed lease in insertion order
-   * owns the failure callback, and when it retires the next live lease promotes — a failure
-   * fires exactly one `onError`, never a dead lease's.
+   * A failure notifies every live confirmed lease — each one's `onError` and `failureSignal`,
+   * once per `subscribe()` call — and never a dead or unconfirmed lease's; see
+   * `_failSubscription`.
    */
   handles: Set<RegistrationHandle>;
 }
@@ -146,13 +161,17 @@ export class WebSocketSubscriptionManager {
    * Subscribes to a Hyperliquid event channel.
    *
    * @param options.signal Stops waiting for the confirmation and detaches the listener.
-   * @param options.onError Callback invoked at most once, when an already confirmed subscription fails:
+   * @param options.onError Callback invoked at most once per `subscribe()` call, when an already confirmed subscription fails:
    *                        - the server rejects a re-subscription after a reconnect;
    *                        - the connection is permanently terminated;
    *                        - the connection goes down while re-subscription is disabled.
    *
+   *                        When several calls share one underlying subscription, every caller's callback fires.
    *                        Failures before the confirmation reject the `subscribe()` promise instead.
    *                        After the callback fires, the subscription is removed and no further events or errors follow.
+   * @return A handle whose `failureSignal` aborts with the same failure `onError` reports — and
+   *         never on a voluntary `unsubscribe()` — so a subscriber without `onError` still
+   *         observes a dying feed.
    *
    * @throws {WebSocketRequestError} When the subscription request fails or limits are exceeded.
    */
@@ -280,7 +299,21 @@ export class WebSocketSubscriptionManager {
       throw error;
     }
 
-    return { unsubscribe };
+    return {
+      unsubscribe,
+      // Lazily materialized: most subscribers never read the signal, so the common path pays
+      // no AbortController per call. Repeat accesses return the same signal object; a first
+      // access after the failure creates the controller already aborted with the recorded
+      // reason, indistinguishable from one aborted while being observed.
+      get failureSignal(): AbortSignal {
+        let controller = handle.failureController;
+        if (controller === undefined) {
+          controller = handle.failureController = new AbortController();
+          if (handle.failure !== undefined) controller.abort(handle.failure);
+        }
+        return controller.signal;
+      },
+    };
   }
 
   // ===========================================================================
@@ -402,10 +435,11 @@ export class WebSocketSubscriptionManager {
   // ===========================================================================
 
   /**
-   * Removes the subscription with all its listeners, then notifies each
-   * confirmed listener's `onError` once. Sends nothing to the server: every
-   * caller deals with a subscription the server no longer serves — refused,
-   * or cut off by a close.
+   * Removes the subscription with all its listeners, then notifies every live
+   * confirmed lease: aborts its `failureSignal` and invokes its `onError`, each
+   * callback isolated so one throwing `onError` cannot silence the rest.
+   * Sends nothing to the server: every caller deals with a subscription the
+   * server no longer serves — refused, or cut off by a close.
    */
   private _failSubscription(id: string, subscription: SubscriptionState, error: WebSocketRequestError): void {
     if (this._subscriptions.get(id) !== subscription) return;
@@ -414,21 +448,38 @@ export class WebSocketSubscriptionManager {
     // with this failure instead of resolving a handle into the dead subscription.
     subscription.failure = error;
 
+    // Pass 1 — detach listeners and snapshot every live confirmed lease, recording the
+    // failure on each BEFORE any user code runs. Both notification channels invoke user
+    // code synchronously (`AbortController.abort` runs abort listeners, `onError` is a
+    // callback), and that code can re-enter `unsubscribe()` on a sibling lease — mutating
+    // `registration.handles` mid-iteration would then skip a lease that was live at
+    // failure time. The snapshot fixes the notified set at exactly that moment, and the
+    // pre-recorded failure means a `failureSignal` first accessed inside an earlier
+    // callback already observes the reason, whichever lease it belongs to.
+    const confirmed: RegistrationHandle[] = [];
     for (const [listener, registrations] of subscription.listeners) {
       for (const registration of registrations.values()) {
         this._hlEvents.removeEventListener(registration.eventType, listener);
-        // First-live-owner: exactly one live, confirmed lease — the first in insertion
-        // order — is notified. Unconfirmed leases observe the failure through their
-        // subscribe() rejection; dead leases were removed from the set already.
+        // Every live confirmed lease is notified, through both of its channels. Unconfirmed
+        // leases observe the failure through their subscribe() rejection; dead leases were
+        // removed from the set already.
         for (const handle of registration.handles) {
           if (!handle.confirmed) continue;
-          try {
-            handle.onError?.(error);
-          } catch {
-            // A throwing onError must not affect other listeners.
-          }
-          break;
+          handle.failure = error;
+          confirmed.push(handle);
         }
+      }
+    }
+
+    // Pass 2 — notify off the snapshot. A lease another callback retired mid-teardown is
+    // still notified: it was live when the subscription died, and its `unsubscribe()`
+    // against the already-removed subscription was a no-op, not a disavowal of the failure.
+    for (const handle of confirmed) {
+      handle.failureController?.abort(error);
+      try {
+        handle.onError?.(error);
+      } catch {
+        // A throwing onError must not affect the other leases or listeners.
       }
     }
   }
