@@ -78,15 +78,21 @@ export interface WebSocketTransportOptions {
    *
    * Hyperliquid scopes every WebSocket limit to the client IP rather than to the connection,
    * so by default all transports on the same network share one {@linkcode WebSocketQuota} and
-   * the guards count what the server counts. Pass an instance to override that — a process
-   * behind several egress IPs needs one quota per IP, and a test usually wants isolation.
+   * the guards count what the server counts. The shared default also paces outbound messages
+   * against the documented 2000/minute budget: `subscribe`/`unsubscribe` frames wait for a
+   * token when the budget is spent, while `post` frames and keep-alive pings only ever debit
+   * it, so pacing can delay subscription traffic but never an order.
    *
-   * @example Pace outbound messages against the documented 2000/minute budget
+   * Pass an instance to override the default — a process behind several egress IPs needs one
+   * quota per IP, a test usually wants isolation, and a directly constructed
+   * `new WebSocketQuota()` (no `rateLimit`) is the opt-out from pacing: it keeps the
+   * subscription and unique-user guards but never delays a frame client-side.
+   *
+   * @example Opt out of outbound message pacing (accounting only; nothing waits)
    * ```ts
    * import { WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
    *
-   * const quota = new WebSocketQuota({ rateLimit: { capacity: 2000, refillPerMinute: 2000 } });
-   * const transport = new WebSocketTransport({ quota });
+   * const transport = new WebSocketTransport({ quota: new WebSocketQuota() });
    * ```
    *
    * Default: {@linkcode sharedWebSocketQuota} for this network

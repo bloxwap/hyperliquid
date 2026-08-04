@@ -20,7 +20,11 @@
  *
  * One instance of this class is shared by every transport pointed at the same deployment
  * (see {@linkcode sharedWebSocketQuota}), so the counts the guards read are the counts the
- * server keeps.
+ * server keeps. That shared instance also paces outbound messages against the 2000/minute
+ * budget by default: the default transport is exactly the one that overruns it, since at the
+ * 1000-subscription cap one reconnect re-sends every subscribe frame instantly and a flapping
+ * socket repeats the burst. A directly constructed `new WebSocketQuota()` stays
+ * accounting-only, which is the opt-out (pass it via `WebSocketTransportOptions.quota`).
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
  * @module
@@ -94,14 +98,18 @@ export interface WebSocketRateLimitOptions {
 /** Configuration options for a {@linkcode WebSocketQuota}. */
 export interface WebSocketQuotaOptions {
   /**
-   * Opt-in pacing of outbound messages against Hyperliquid's 2000-per-minute per-IP budget.
+   * Pacing of outbound messages against Hyperliquid's 2000-per-minute per-IP budget.
    *
    * When set, `subscribe` and `unsubscribe` frames wait for a token before going out.
    * `post` frames and keep-alive pings never wait — they debit the bucket without blocking
    * (see {@linkcode WebSocketQuota.chargeSend}) — so enabling this can only ever delay
    * subscription traffic, never an order.
    *
-   * Default: `undefined` (accounting only; nothing waits)
+   * Default: `undefined` (accounting only; nothing waits). That default governs direct
+   * construction only — the {@linkcode sharedWebSocketQuota} instance every transport uses
+   * unless given its own is created with pacing enabled (`{}`: capacity 2000, refilling
+   * 2000/minute). Opting out of pacing therefore means passing an accounting-only
+   * `new WebSocketQuota()` via `WebSocketTransportOptions.quota`.
    */
   rateLimit?: WebSocketRateLimitOptions;
   /**
@@ -230,11 +238,21 @@ export class WebSocketQuota {
   /**
    * Waits until the outbound budget covers one message, then deducts it.
    *
-   * Returns `undefined` — not a resolved promise — whenever the wait is unnecessary, so the
-   * caller can skip the `await` entirely and stay synchronous. That distinction is load
-   * bearing: `_shell.ts` fixes the wire order of an exchange action on `transport.request`
-   * running synchronously up to its first await, so a promise handed back here where none
-   * was needed would let a later nonce overtake an earlier one.
+   * Returns `undefined` — not a resolved promise — whenever the wait is unnecessary: when
+   * pacing is off, and on the {@linkcode TokenBucketRateLimiter.tryAcquire} fast path when
+   * the bucket covers the message with no queue in front of it. The caller can then skip
+   * the `await` entirely and stay synchronous. That distinction is load bearing:
+   * `_shell.ts` fixes the wire order of an exchange action on `transport.request` running
+   * synchronously up to its first await, so a promise handed back here where none was
+   * needed would let a later nonce overtake an earlier one — and with pacing on by default
+   * (see {@linkcode sharedWebSocketQuota}), a plain `acquire` would hand back exactly such
+   * a promise for every uncontended send.
+   *
+   * "Unnecessary" is judged by the synchronous probe: in the sliver between a failed probe
+   * and the queued `acquire`, the clock can cross a refill boundary and hand back an
+   * already-resolved promise instead of `undefined`. That costs the subscribe frame one
+   * microtask and nothing else — a `post` never enters this path, so no order can be
+   * delayed or reordered by it.
    *
    * Only `subscribe` / `unsubscribe` frames go through this path. See
    * {@linkcode WebSocketQuota.chargeSend} for the frames that must never wait.
@@ -243,6 +261,15 @@ export class WebSocketQuota {
    */
   acquireSend(signal?: AbortSignal): Promise<void> | undefined {
     if (this._limiter === null) return undefined;
+    // An already-aborted caller must not spend budget: its frame will never be sent, and
+    // repeated aborted attempts would drain the shared bucket and throttle the legitimate
+    // subscription traffic behind it. Mirrors `acquire`'s own already-aborted contract,
+    // which the synchronous probe below would otherwise bypass.
+    if (signal?.aborted) return Promise.reject(signal.reason);
+    // The synchronous probe deducts the token inline whenever it can do so without stealing
+    // a queued waiter's turn; only a genuinely empty bucket — or one with a queue in front
+    // of it — costs the caller a promise.
+    if (this._limiter.tryAcquire(1)) return undefined;
     return this._limiter.acquire(1, signal);
   }
 
@@ -279,8 +306,17 @@ export class WebSocketQuota {
  */
 const SHARED: { mainnet?: WebSocketQuota; testnet?: WebSocketQuota } = {};
 
-/** The quota every transport on `isTestnet` shares unless it was given its own. */
+/**
+ * The quota every transport on `isTestnet` shares unless it was given its own.
+ *
+ * Created with pacing enabled ({@linkcode WebSocketQuotaOptions.rateLimit} `{}`: capacity
+ * 2000, refilling 2000/minute — the server's own budget), because the default transport is
+ * exactly the one that trips the limit: at the 1000-subscription cap a single reconnect
+ * re-sends every subscribe frame instantly, spending half the minute's budget in one burst,
+ * and a socket flapping under `maxRetries: Infinity` repeats it. To opt out of pacing, pass
+ * an accounting-only `new WebSocketQuota()` via `WebSocketTransportOptions.quota`.
+ */
 export function sharedWebSocketQuota(isTestnet: boolean): WebSocketQuota {
   const key = isTestnet ? "testnet" : "mainnet";
-  return (SHARED[key] ??= new WebSocketQuota());
+  return (SHARED[key] ??= new WebSocketQuota({ rateLimit: {} }));
 }
