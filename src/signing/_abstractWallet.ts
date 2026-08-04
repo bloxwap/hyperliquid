@@ -126,7 +126,13 @@ interface ViemTypedDataParams {
   message: Record<string, unknown>;
 }
 
-/** Abstract interface for a {@link https://viem.sh/docs/accounts/jsonRpc#json-rpc-account | viem JSON-RPC Account}. */
+/**
+ * Abstract interface for a {@link https://viem.sh/docs/accounts/jsonRpc#json-rpc-account | viem JSON-RPC Account}.
+ *
+ * Detection is structural and by member PRESENCE only — declared parameter counts are never
+ * inspected — so a hand-rolled adapter declaring `signTypedData(...args)` or using default
+ * parameters (e.g. around an embedded-wallet provider) qualifies just like a real viem client.
+ */
 export interface AbstractViemJsonRpcAccount {
   /**
    * `options` is not in {@link https://viem.sh/docs/actions/wallet/signTypedData | base viem};
@@ -137,11 +143,18 @@ export interface AbstractViemJsonRpcAccount {
   getChainId(): Promise<number>;
 }
 
+/**
+ * Structural guard for the JSON-RPC shape: callable `signTypedData` + callable `getAddresses` +
+ * callable `getChainId`. Membership only — `Function.length` is deliberately not consulted,
+ * because it counts declared parameters before the first default/rest parameter and therefore
+ * misreports wrapped or adapted wallets (a `signTypedData(...args)` adapter has length 0).
+ * The one shape membership cannot separate — a positional ethers-style `signTypedData(domain,
+ * types, value)` — is rejected up front in {@linkcode createSigner}.
+ */
 function isViemJsonRpc(wallet: AbstractWallet): wallet is AbstractViemJsonRpcAccount {
   return (
     "signTypedData" in wallet &&
     typeof wallet.signTypedData === "function" &&
-    (wallet.signTypedData.length === 1 || wallet.signTypedData.length === 2) &&
     "getAddresses" in wallet &&
     typeof wallet.getAddresses === "function" &&
     "getChainId" in wallet &&
@@ -233,7 +246,13 @@ function adaptViemJsonRpc(wallet: AbstractViemJsonRpcAccount): Signer {
 // Viem Local Account
 // ============================================================
 
-/** Abstract interface for a {@link https://viem.sh/docs/accounts/local | viem Local Account}. */
+/**
+ * Abstract interface for a {@link https://viem.sh/docs/accounts/local | viem Local Account}.
+ *
+ * Detection is structural and by member PRESENCE only — declared parameter counts are never
+ * inspected — so a custom signer (HSM, MPC, remote service) or a wrapped adapter declaring
+ * `signTypedData(...args)` or default parameters qualifies just like a real viem account.
+ */
 export interface AbstractViemLocalAccount {
   /**
    * `options` is not in {@link https://viem.sh/docs/actions/wallet/signTypedData | base viem};
@@ -264,11 +283,14 @@ export interface DigestBytesCapable {
   [SIGN_DIGEST_BYTES]?(digest: Uint8Array): Promise<`0x${string}`>;
 }
 
+/**
+ * Structural guard for the local shape: callable `signTypedData` + string `address`. Membership
+ * only — see {@linkcode isViemJsonRpc} for why `Function.length` is deliberately not consulted.
+ */
 function isViemLocal(wallet: AbstractWallet): wallet is AbstractViemLocalAccount {
   return (
     "signTypedData" in wallet &&
     typeof wallet.signTypedData === "function" &&
-    (wallet.signTypedData.length === 1 || wallet.signTypedData.length === 2) &&
     "address" in wallet &&
     typeof wallet.address === "string"
   );
@@ -319,11 +341,62 @@ function adapt(wallet: AbstractWallet): Signer {
   return signer;
 }
 
-/** Build the uniform {@link Signer} adapter for a wallet of any supported kind. */
+/**
+ * Build the uniform {@link Signer} adapter for a wallet of any supported kind.
+ *
+ * Only viem-shaped wallets are supported: `signTypedData` must take a single params object
+ * (`{ domain, types, primaryType, message }`). The guards match on member presence, never on
+ * declared parameter count — but a positional ethers-style `signTypedData(domain, types, value)`
+ * would satisfy the local guard's membership and then fail cryptically at sign time (its first
+ * positional argument would receive the whole params object). Declaring >= 3 parameters is a
+ * signature no viem-style wallet or adapter has, so that shape is rejected up front with an
+ * explanation instead. When neither guard matches, the error enumerates exactly which members
+ * are missing so an integrator can fix their adapter from the message alone.
+ *
+ * @throws {AbstractWalletError} If the wallet is ethers-shaped or matches neither supported shape.
+ */
 function createSigner(wallet: AbstractWallet): Signer {
+  const signTypedData = (wallet as Partial<Record<"signTypedData", unknown>>).signTypedData;
+  if (typeof signTypedData === "function" && signTypedData.length >= 3) {
+    throw new AbstractWalletError(
+      "Failed to adapt wallet: signTypedData declares 3+ parameters, which looks like the positional" +
+        " ethers-style signTypedData(domain, types, value). That shape is not supported — provide a" +
+        " viem-style wallet whose signTypedData takes a single params object" +
+        " ({ domain, types, primaryType, message }), or wrap the wallet in an adapter with that signature.",
+    );
+  }
   if (isViemJsonRpc(wallet)) return adaptViemJsonRpc(wallet);
   if (isViemLocal(wallet)) return adaptViemLocal(wallet);
-  throw new AbstractWalletError("Failed to adapt wallet: unknown wallet type");
+  // Neither guard matched. Enumerate what is missing — for BOTH shapes, whatever the entry
+  // point of the failure: an integrator must be able to fix the adapter from the message
+  // alone, in one iteration (JSON-RPC needs callable signTypedData + getAddresses +
+  // getChainId; local needs callable signTypedData + a string address).
+  const members = wallet as Partial<Record<"getAddresses" | "getChainId" | "address", unknown>>;
+  const jsonRpcMissing = (["getAddresses", "getChainId"] as const)
+    .filter((name) => typeof members[name] !== "function")
+    .map((name) => `callable ${name} (found ${typeof members[name]})`);
+  if (typeof signTypedData !== "function") {
+    // The other members are enumerated too: a wallet already carrying getAddresses and
+    // getChainId (or a string address) learns that adding viem-style signTypedData alone
+    // completes its shape.
+    const jsonRpcRest = jsonRpcMissing.length === 0 ? "nothing else" : jsonRpcMissing.join(" and ");
+    const localRest =
+      typeof members.address === "string"
+        ? "nothing else"
+        : `a string address property (found ${typeof members.address})`;
+    throw new AbstractWalletError(
+      `Failed to adapt wallet: no callable signTypedData (found ${typeof signTypedData}). A supported wallet` +
+        " exposes viem-style signTypedData({ domain, types, primaryType, message }) plus either callable" +
+        " getAddresses and getChainId (JSON-RPC shape) or a string address property (local shape). Besides" +
+        ` signTypedData, the JSON-RPC shape is missing ${jsonRpcRest}; the local shape is missing ${localRest}.`,
+    );
+  }
+  throw new AbstractWalletError(
+    "Failed to adapt wallet: signTypedData is callable, but the wallet completes neither supported" +
+      ` shape. The JSON-RPC shape is missing ${jsonRpcMissing.join(" and ")};` +
+      ` the local shape is missing a string address property (found ${typeof members.address}).` +
+      " Add one of those member sets to the wallet or its adapter.",
+  );
 }
 
 // ============================================================
