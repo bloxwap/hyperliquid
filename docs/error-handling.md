@@ -21,16 +21,16 @@ Error
       └─ WebSocketRequestError
 ```
 
-| Class                   | Thrown from                                      | Inspect                         |
-| ----------------------- | ------------------------------------------------ | ------------------------------- |
-| `ValidationError`       | Schema parsing, before any network I/O           | `message`, `cause.issues`       |
-| `FormatError`           | `formatPrice` / `formatSize`, before network I/O | `message`                       |
-| `AbstractWalletError`   | Signing layer (viem / custom adapter)            | `cause`                         |
-| `CanonicalizeError`     | `canonicalize()` helper during low-level signing | `message`                       |
-| `ApiRequestError`       | Hyperliquid API returned an error response       | `message`, `response`           |
-| `HttpRequestError`      | `fetch` failed or returned non-2xx / non-JSON    | `response`, `status`, `cause`   |
-| `HttpRateLimitError`    | Server answered 429 (rate limited)               | `status`, `retryAfter`, `cause` |
-| `WebSocketRequestError` | WebSocket operation failed                       | `message`, `cause`              |
+| Class                   | Thrown from                                                                    | Inspect                         |
+| ----------------------- | ------------------------------------------------------------------------------ | ------------------------------- |
+| `ValidationError`       | Schema parsing, before any network I/O                                         | `message`, `cause.issues`       |
+| `FormatError`           | `formatPrice` / `formatSize`, before network I/O                               | `message`                       |
+| `AbstractWalletError`   | Signing layer (viem / custom adapter)                                          | `cause`                         |
+| `CanonicalizeError`     | `canonicalize()` helper during low-level signing                               | `message`                       |
+| `ApiRequestError`       | Hyperliquid API returned an error response                                     | `message`, `response`           |
+| `HttpRequestError`      | `fetch` failed, non-2xx / non-JSON, or a 200-OK `{ "type": "error" }` envelope | `response`, `status`, `cause`   |
+| `HttpRateLimitError`    | Server answered 429 (rate limited)                                             | `status`, `retryAfter`, `cause` |
+| `WebSocketRequestError` | WebSocket operation failed                                                     | `message`, `cause`              |
 
 Both transport errors also carry a `request` field with the request payload **as it went over the wire**: a snapshot
 of the exact serialization the transport sent, with every `signature`/`signatures` value replaced by
@@ -154,8 +154,10 @@ try {
 
 ### `HttpRequestError`
 
-Thrown by `HttpTransport` when `fetch` itself rejects, or when the server returns a non-2xx / non-JSON response. When
-the server did respond, `response` is a [`Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response) object —
+Thrown by `HttpTransport` when `fetch` itself rejects, when the server returns a non-2xx / non-JSON response, or when
+a 200-OK body is Hyperliquid's `{ "type": "error", "message": "..." }` failure envelope — some server failures arrive
+that way instead of as an HTTP error status, and the error's `message` then carries the server's own text. When the
+server did respond, `response` is a [`Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response) object —
 you can read its status and body — and `status` mirrors the HTTP status code. For network-level failures (DNS,
 connection reset, offline), both are `undefined` and the underlying cause is in `cause`.
 

@@ -245,6 +245,71 @@ describe("HttpTransport", () => {
         assertIsError(error.cause, Error, "network error");
       });
     });
+
+    describe("200-OK error envelopes", () => {
+      // Hyperliquid reports some failures inside a 200 OK as `{ type: "error", message }`.
+      // The transport must reject those with the server's message, while every other 200-OK
+      // body — including the exchange endpoint's `{ status: "err" }` envelope, handled at the
+      // API layer — keeps resolving.
+      test("{ type: 'error' } envelope rejects with the server's message", async () => {
+        const envelope = { type: "error", message: "Order must have minimum value of $10." };
+        mockFetch(() => jsonResponse(envelope));
+
+        const transport = new HttpTransport();
+        const error = await assertRejects(
+          () => transport.request("info", { type: "allMids" }),
+          HttpRequestError,
+          "Order must have minimum value of $10.",
+        );
+        assertEquals(error.status, 200);
+        // The response stays readable (the transport consumed the original body stream).
+        assert(error.response);
+        assertEquals(error.response.bodyUsed, false);
+        assertEquals(await error.response.json(), envelope);
+        // The request snapshot carries the payload as it went over the wire.
+        assertEquals(error.request, { type: "allMids" });
+      });
+
+      test("an envelope without a string message falls back to the body text", async () => {
+        mockFetch(() => jsonResponse({ type: "error", code: 42 }));
+
+        const transport = new HttpTransport();
+        const error = await assertRejects(() => transport.request("info", {}), HttpRequestError);
+        assert(error.message.includes('{"type":"error","code":42}'));
+      });
+
+      test("a nested type: 'error' does not reject — only the top level matters", async () => {
+        const body = { data: { type: "error", message: "nested, not an envelope" } };
+        mockFetch(() => jsonResponse(body));
+
+        const transport = new HttpTransport();
+        assertEquals(await transport.request("info", {}), body);
+      });
+
+      test("an array body never matches the envelope shape", async () => {
+        const body = [{ type: "error", message: "an item, not an envelope" }];
+        mockFetch(() => jsonResponse(body));
+
+        const transport = new HttpTransport();
+        assertEquals(await transport.request("info", {}), body);
+      });
+
+      test("normal object bodies still resolve", async () => {
+        const body = { type: "allMids", mids: { BTC: "50000" } };
+        mockFetch(() => jsonResponse(body));
+
+        const transport = new HttpTransport();
+        assertEquals(await transport.request("info", {}), body);
+      });
+
+      test("the exchange { status: 'err' } envelope resolves — the API layer owns it", async () => {
+        const body = { status: "err", response: "Insufficient margin." };
+        mockFetch(() => jsonResponse(body));
+
+        const transport = new HttpTransport();
+        assertEquals(await transport.request("exchange", { action: { type: "order" } }), body);
+      });
+    });
   });
 
   describe("fetchOptions", () => {

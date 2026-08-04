@@ -10,7 +10,8 @@
  *   rateLimit? ◄─ token bucket wait for the request's weight (opt-in; abort-aware; disabled by default)
  *   controller ◄─ timeout / user signal / fetchOptions.signal (none allocated when all are absent)
  *    └─► fetch ┬─► non-OK or non-JSON body ─► HttpRequestError; 429 ─► HttpRateLimitError
- *              └─► parse JSON ─► T
+ *              └─► parse JSON ┬─► 200-OK `{ type: "error" }` envelope ─► HttpRequestError
+ *                             └─► T
  *     catch: classify by reference ─► finally: cancel timer, detach
  * ```
  *
@@ -130,7 +131,8 @@ export const TESTNET_RPC_URL = "https://rpc.hyperliquid-testnet.xyz";
  *
  * const transport = new HttpTransport();
  * try {
- *   // Throws on a non-OK response, a timeout, an abort, or a network failure.
+ *   // Throws on a non-OK response, a 200-OK `{ type: "error" }` envelope, a timeout,
+ *   // an abort, or a network failure.
  *   await transport.request("info", { type: "allMids" });
  * } catch (error) {
  *   if (error instanceof HttpRequestError) {
@@ -304,7 +306,9 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
    * @return A promise that resolves with the parsed JSON response body.
    *
-   * @throws {HttpRequestError} When the HTTP request fails ({@linkcode HttpRateLimitError} on a 429 response).
+   * @throws {HttpRequestError} When the HTTP request fails ({@linkcode HttpRateLimitError} on a 429 response) —
+   * including when a 200-OK body is Hyperliquid's `{ type: "error", message }` failure envelope, in which case
+   * the error message carries the server's own text.
    *
    * @example
    * ```ts
@@ -399,17 +403,12 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       }
 
       // --- Parse -------------------------------------------------------------
+      // The try covers ONLY the parse itself: the envelope check below throws HttpRequestError,
+      // which this catch would otherwise rewrap as an "Invalid JSON response body".
       const text = await response.text();
+      let parsed: unknown;
       try {
-        const parsed = JSON.parse(text);
-        // Response-size surcharges can only be billed after the fact: debit the bucket so
-        // later requests wait off the real cost instead of the pre-request estimate.
-        if (rateLimit !== null && Array.isArray(parsed) && parsed.length > 0) {
-          snapshot ??= JSON.parse(body); // explorer skipped the pre-send parse (flat weight 40)
-          const surcharge = responseSurcharge(endpoint, snapshot, parsed);
-          if (surcharge > 0) rateLimit.charge(surcharge);
-        }
-        return parsed;
+        parsed = JSON.parse(text);
       } catch (error) {
         throw new HttpRequestError({
           response: recreateResponse(response, text),
@@ -418,6 +417,30 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
           ...errorRequest(body, snapshot),
         });
       }
+
+      // Hyperliquid reports some failures inside a 200 OK: a top-level `{ type: "error", message }`
+      // envelope (the explorer/rpc failure shape). Surface it here with the server's own message,
+      // instead of handing the envelope to callers as data — where schema-validated methods would
+      // fail with a confusing ValidationError and unvalidated ones would return it as a "result".
+      // Exchange-level failures use a different envelope — `{ status: "err", response }`, handled
+      // at the API layer — so they still resolve here, as do array bodies and objects that merely
+      // nest a `type: "error"` somewhere below the top level.
+      if (isErrorEnvelope(parsed)) {
+        throw new HttpRequestError({
+          response: recreateResponse(response, text), // the body stream is already consumed
+          detail: typeof parsed.message === "string" ? parsed.message : truncate(text),
+          ...errorRequest(body, snapshot),
+        });
+      }
+
+      // Response-size surcharges can only be billed after the fact: debit the bucket so
+      // later requests wait off the real cost instead of the pre-request estimate.
+      if (rateLimit !== null && Array.isArray(parsed) && parsed.length > 0) {
+        snapshot ??= JSON.parse(body); // explorer skipped the pre-send parse (flat weight 40)
+        const surcharge = responseSurcharge(endpoint, snapshot, parsed);
+        if (surcharge > 0) rateLimit.charge(surcharge);
+      }
+      return parsed as T;
     } catch (error) {
       if (error instanceof TransportError) throw error;
       if (timeout !== undefined && error === timeout.reason) {
@@ -461,6 +484,17 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
 function truncate(text: string, limit = 1024): string {
   if (text.length <= limit) return text;
   return `${text.slice(0, limit)}… (${text.length} chars total)`;
+}
+
+/**
+ * True when a parsed 200-OK body is Hyperliquid's failure envelope: a top-level non-array object
+ * with `type === "error"` (the explorer/rpc shape, `{ type: "error", message: string }`). Only
+ * the top level is inspected — a `type: "error"` nested inside a normal response never matches —
+ * and `JSON.parse` output aside, the explicit array guard keeps an array with a stray `type`
+ * property from matching either.
+ */
+function isErrorEnvelope(body: unknown): body is { type: "error"; message?: unknown } {
+  return isRecord(body) && !Array.isArray(body) && body.type === "error";
 }
 
 // --- Rate-limit weights -------------------------------------------------------
