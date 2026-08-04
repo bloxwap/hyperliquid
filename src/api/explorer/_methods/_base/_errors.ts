@@ -15,6 +15,11 @@ function isErrorResponse(r: unknown): r is { type: "error"; message?: unknown } 
 /**
  * Throws {@linkcode ApiRequestError} if the response is an error; otherwise returns void.
  *
+ * A safety net for transports that hand the envelope through as data: `HttpTransport` already
+ * rejects 200-OK `{ type: "error" }` bodies at transport level with `HttpRequestError`, so over
+ * HTTP this never fires — it protects explorer calls made through custom `IRequestTransport`
+ * implementations without that check.
+ *
  * @param response Raw API response to validate.
  *
  * @throws {ApiRequestError} If the response contains an error.
