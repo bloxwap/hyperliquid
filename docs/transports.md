@@ -253,8 +253,8 @@ by hand. Delivery pauses while the connection is down and resumes once it's back
 const transport = new WebSocketTransport({ resubscribe: false });
 ```
 
-If a subscription then fails to re-establish, its `onError` callback is invoked. Handle it as shown under
-[subscription errors](clients.md#errors).
+If a subscription then fails to re-establish, every subscriber's `onError` callback is invoked and each subscription
+handle's `failureSignal` aborts. Handle it as shown under [subscription errors](clients.md#errors).
 
 ### WebSocket limits
 

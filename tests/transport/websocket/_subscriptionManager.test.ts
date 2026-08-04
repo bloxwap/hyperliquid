@@ -790,7 +790,7 @@ describe("WebSocketSubscriptionManager", () => {
       assertEquals((errors[0] as WebSocketRequestError).cause, socket.terminationSignal.reason);
     });
 
-    test("onError: only the first live owner's callback fires on failure", async () => {
+    test("onError: every live confirmed lease on a shared registration fires on failure", async () => {
       const { socket, manager } = createManager(true);
       const payload = { channel: "test", extra: "data" };
 
@@ -810,9 +810,31 @@ describe("WebSocketSubscriptionManager", () => {
       socket.terminate(new Error("x"));
       await drain();
 
-      // First-live-owner: the first live confirmed lease owns the failure callback.
+      // Both calls subscribed, so both observe the failure — once each, never more.
       assertEquals(first, 1);
-      assertEquals(second, 0);
+      assertEquals(second, 1);
+    });
+
+    test("onError: every subscriber fires on failure across different listeners", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { channel: "test", extra: "data" };
+
+      // Two subscribe calls with distinct listener callbacks: two registrations on one entry.
+      const seenA: unknown[] = [];
+      const seenB: unknown[] = [];
+      const p1 = manager.subscribe("test", payload, () => {}, { onError: (e) => seenA.push(e) });
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      await p1;
+      await manager.subscribe("test", payload, () => {}, { onError: (e) => seenB.push(e) });
+
+      socket.terminate(new Error("gone for good"));
+      await drain();
+
+      assertEquals(seenA.length, 1);
+      assertEquals(seenB.length, 1);
+      assert(seenA[0] instanceof WebSocketRequestError);
+      assert(seenB[0] instanceof WebSocketRequestError);
+      assertEquals(manager._subscriptions.size, 0);
     });
 
     test("onError: an unconfirmed joiner rejects on a synchronous terminate instead of resolving a zombie", async () => {
@@ -832,13 +854,13 @@ describe("WebSocketSubscriptionManager", () => {
       socket.terminate(new Error("gone for good"));
 
       // No zombie resolution: B's subscribe() rejects with the failure; its onError never
-      // fires (it never became a live subscriber). A, the live confirmed owner, fires once.
+      // fires (it never became a live subscriber). A, the live confirmed lease, fires once.
       await assertRejects(() => subBPromise, WebSocketRequestError, "permanently terminated");
       assertEquals(errorsB.length, 0);
       assertEquals(errorsA.length, 1);
     });
 
-    test("onError: when the owner retires the next live lease promotes", async () => {
+    test("onError: a lease retired before the failure is not notified, the survivor is", async () => {
       const { socket, manager } = createManager(true);
       const payload = { type: "l2Book", coin: "BTC" };
       const listener = () => {};
@@ -851,15 +873,15 @@ describe("WebSocketSubscriptionManager", () => {
       const subA = await subAPromise;
       await subBPromise;
 
-      // A retires while B is live: no teardown, and B becomes the owner.
+      // A retires while B is live: no teardown, and B alone remains a subscriber.
       await subA.unsubscribe();
       assertEquals(manager._subscriptions.size, 1);
 
       socket.terminate(new Error("gone for good"));
       await drain();
 
-      assertEquals(errorsA.length, 0); // retired owner: never notified
-      assertEquals(errorsB.length, 1); // promoted owner: exactly once
+      assertEquals(errorsA.length, 0); // retired lease: never notified
+      assertEquals(errorsB.length, 1); // live lease: exactly once
     });
 
     test("onError: the same callback ref is safe across leases through the whole lifecycle", async () => {
@@ -880,7 +902,7 @@ describe("WebSocketSubscriptionManager", () => {
       socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "BTC", levels: [] }));
       assertEquals(events, 1);
 
-      // A retires; B's lease keeps the delivery and the ownership.
+      // A retires; B's lease keeps the delivery and the failure notification.
       await subA.unsubscribe();
       socket.mockMessage(RESPONSES.channelEvent("l2Book", { coin: "BTC", levels: [] }));
       assertEquals(events, 2);
@@ -1037,6 +1059,148 @@ describe("WebSocketSubscriptionManager", () => {
       assertEquals(eventCount2, 1);
 
       socket.terminate();
+    });
+  });
+
+  describe("failureSignal", () => {
+    /** Subscribes to `payload` and confirms it, returning the live handle. */
+    async function subscribeConfirmed(
+      socket: MockWebSocket,
+      manager: ManagerWithInternals,
+      payload: unknown,
+      options?: { onError?: (error: WebSocketRequestError) => void },
+    ): Promise<ISubscription> {
+      const promise = manager.subscribe("test", payload, () => {}, options);
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      return await promise;
+    }
+
+    test("aborts with the WebSocketRequestError when a confirmed subscription fails", async () => {
+      const { socket, manager } = createManager(true);
+      const sub = await subscribeConfirmed(socket, manager, { channel: "test", extra: "data" });
+
+      // Observed before the failure: live and stable across accesses.
+      const signal = sub.failureSignal;
+      assert(signal !== undefined);
+      assert(signal === sub.failureSignal); // repeat access returns the same signal object
+      assertFalse(signal.aborted);
+
+      let abortEvents = 0;
+      signal.addEventListener("abort", () => abortEvents++);
+
+      socket.terminate(new Error("gone for good"));
+      await drain();
+
+      assert(signal.aborted);
+      assertEquals(abortEvents, 1);
+      assert(signal.reason instanceof WebSocketRequestError);
+      assertEquals((signal.reason as WebSocketRequestError).cause, socket.terminationSignal.reason);
+    });
+
+    test("every subscriber's signal aborts on a shared failure", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { channel: "test", extra: "data" };
+      const subA = await subscribeConfirmed(socket, manager, payload);
+      const subB = await subscribeConfirmed(socket, manager, payload);
+
+      const signalA = subA.failureSignal;
+      const signalB = subB.failureSignal;
+      assert(signalA !== undefined && signalB !== undefined);
+      assert(signalA !== signalB); // one signal per subscribe() call, not per subscription
+
+      socket.terminate(new Error("gone for good"));
+      await drain();
+
+      assert(signalA.aborted);
+      assert(signalB.aborted);
+      assertEquals(signalA.reason, signalB.reason); // both carry the one shared failure
+    });
+
+    test("a callback that unsubscribes a sibling mid-failure does not rob it of its notification", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { channel: "test", extra: "data" };
+
+      // A's onError re-enters unsubscribe() on B while the manager is still notifying.
+      // The notified set must be the leases live at failure time — B was — so B's
+      // onError and failureSignal still fire even though A retired it mid-teardown.
+      const notified: string[] = [];
+      let subB: ISubscription | undefined;
+      const subA = await subscribeConfirmed(socket, manager, payload, {
+        onError: () => {
+          notified.push("A");
+          void subB?.unsubscribe();
+        },
+      });
+      subB = await subscribeConfirmed(socket, manager, payload, { onError: () => notified.push("B") });
+      const signalB = subB.failureSignal;
+      assert(signalB !== undefined);
+
+      socket.terminate(new Error("gone for good"));
+      await drain();
+
+      assertEquals(notified, ["A", "B"]);
+      assert(signalB.aborted);
+      assertFalse(subA.failureSignal === undefined);
+    });
+
+    test("does not abort on a voluntary unsubscribe()", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { channel: "test", extra: "data" };
+      const sub = await subscribeConfirmed(socket, manager, payload);
+      const signal = sub.failureSignal;
+      assert(signal !== undefined);
+
+      const unsubPromise = sub.unsubscribe();
+      socket.mockMessage(RESPONSES.subscriptionResponse("unsubscribe", payload));
+      await unsubPromise;
+      assertFalse(signal.aborted);
+
+      // Even a later termination does not revive the retired lease's signal.
+      socket.terminate(new Error("gone for good"));
+      await drain();
+      assertFalse(signal.aborted);
+    });
+
+    test("a lease retired before the failure keeps an inert signal, the survivor's aborts", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { channel: "test", extra: "data" };
+      const subA = await subscribeConfirmed(socket, manager, payload);
+      const subB = await subscribeConfirmed(socket, manager, payload);
+      const signalA = subA.failureSignal;
+      assert(signalA !== undefined);
+
+      // A retires voluntarily; the shared subscription stays live for B.
+      await subA.unsubscribe();
+      assertEquals(manager._subscriptions.size, 1);
+
+      socket.terminate(new Error("gone for good"));
+      await drain();
+
+      assertFalse(signalA.aborted); // voluntary unsubscribe: never aborts
+      assert(subB.failureSignal?.aborted);
+    });
+
+    test("accessed only after the failure it is already aborted with the same reason", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { channel: "test", extra: "data" };
+
+      const seen: unknown[] = [];
+      const sub = await subscribeConfirmed(socket, manager, payload, { onError: (e) => seen.push(e) });
+
+      // Reconnect, then the server refuses the re-subscription on the live socket.
+      socket.disconnect();
+      socket.open();
+      socket.mockMessage(RESPONSES.errorChannel(JSON.stringify({ method: "subscribe", subscription: payload })));
+      await drain();
+      assertEquals(seen.length, 1);
+
+      // First access happens after the failure: the signal comes back already
+      // aborted, with the identical error object onError received as its reason.
+      const signal = sub.failureSignal;
+      assert(signal !== undefined);
+      assert(signal.aborted);
+      assertEquals(signal.reason, seen[0]);
+      assert(signal === sub.failureSignal); // and stays the same object afterwards
     });
   });
 

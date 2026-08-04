@@ -50,13 +50,15 @@ export interface ISubscriptionTransport {
       /** Stops waiting for the confirmation and detaches the listener. */
       signal?: AbortSignal;
       /**
-       * Callback invoked at most once, when an already confirmed subscription fails:
+       * Callback invoked at most once per `subscribe()` call, when an already confirmed subscription fails:
        * - the server rejects a re-subscription after a reconnect;
        * - the connection is permanently terminated;
        * - the connection goes down while re-subscription is disabled.
        *
+       * When several calls share one underlying subscription, every caller's callback fires.
        * Failures before the confirmation reject the `subscribe()` promise instead.
        * After the callback fires, the subscription is removed and no further events or errors follow.
+       * The same failure also aborts the resolved handle's {@linkcode ISubscription.failureSignal}.
        */
       onError?: (error: TransportError) => void;
     },
@@ -67,6 +69,15 @@ export interface ISubscriptionTransport {
 export interface ISubscription {
   /** Removes the event listener and unsubscribes from the event channel. */
   unsubscribe(): Promise<void>;
+  /**
+   * Aborts — with the failure {@linkcode TransportError} as its reason — when this already
+   * confirmed subscription fails, making a dying feed observable without passing `onError`.
+   * Never aborts on a voluntary {@linkcode ISubscription.unsubscribe | unsubscribe()}.
+   *
+   * Optional so that {@linkcode ISubscriptionTransport} implementations outside this package
+   * stay valid; the built-in WebSocket transport always provides it.
+   */
+  readonly failureSignal?: AbortSignal;
 }
 
 /**

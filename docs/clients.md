@@ -395,12 +395,13 @@ const subscription = await client.allMids((data) => {
 ### Errors
 
 Each subscription method takes an optional `options` argument — `{ signal?, onError? }`. The `onError` callback runs at
-most once, when an already confirmed subscription fails:
+most once per subscribe call, when an already confirmed subscription fails:
 
 - the server rejects a re-subscription after a [reconnect](transports.md#reconnection);
 - the connection is permanently terminated;
 - the connection goes down while [re-subscription](transports.md#resubscription) is disabled.
 
+When several calls share one underlying subscription (see [unsubscribe](#unsubscribe)), every caller's `onError` fires.
 Failures before confirmation reject the subscribe promise instead. After `onError` fires, the subscription is removed
 and no further events arrive:
 
@@ -416,6 +417,22 @@ const subscription = await client.allMids(
     },
   },
 );
+```
+
+The same failure is also exposed on the subscription handle as `failureSignal` — an `AbortSignal` that aborts with the
+failure `TransportError` as its reason, and never on a voluntary `unsubscribe()`. It makes a dead feed observable even
+when no `onError` was passed. The signal is always present on a `WebSocketTransport` subscription (it is optional only
+for third-party transports):
+
+```ts
+const subscription = await client.allMids((data) => {
+  console.log(data.mids);
+});
+
+subscription.failureSignal?.addEventListener("abort", () => {
+  // The subscription is gone — inspect the reason and re-subscribe if needed
+  console.error(subscription.failureSignal?.reason);
+});
 ```
 
 ### Unsubscribe

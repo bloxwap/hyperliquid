@@ -214,7 +214,10 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
    * @param payload The payload to send with the subscription request.
    * @param listener The function to call when the event is dispatched.
    * @param options Subscription options; see {@linkcode WebSocketSubscriptionManager.subscribe}.
-   * @return A promise that resolves with a subscription handle once the server confirms the subscription.
+   * @return A promise that resolves with a subscription handle once the server confirms the
+   *         subscription. On this transport the handle always carries a `failureSignal`, which
+   *         aborts with the same failure `onError` reports — and never on a voluntary
+   *         `unsubscribe()` — so a subscriber without `onError` still observes a dying feed.
    *
    * @throws {WebSocketRequestError} An error that occurs when the subscription request fails.
    *
@@ -238,13 +241,15 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
       /** Stops waiting for the confirmation and detaches the listener. */
       signal?: AbortSignal;
       /**
-       * Callback invoked at most once, when an already confirmed subscription fails:
+       * Callback invoked at most once per `subscribe()` call, when an already confirmed subscription fails:
        * - the server rejects a re-subscription after a reconnect;
        * - the connection is permanently terminated;
        * - the connection goes down while re-subscription is disabled.
        *
+       * When several calls share one underlying subscription, every caller's callback fires.
        * Failures before the confirmation reject the `subscribe()` promise instead.
        * After the callback fires, the subscription is removed and no further events or errors follow.
+       * The same failure also aborts the resolved handle's `failureSignal`.
        */
       onError?: (error: WebSocketRequestError) => void;
     },
