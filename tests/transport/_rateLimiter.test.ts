@@ -292,6 +292,41 @@ describe("TokenBucketRateLimiter", () => {
     assert(next.resolved);
   });
 
+  test("tryAcquire deducts synchronously while the bucket covers the weight", () => {
+    const bucket = new TokenBucketRateLimiter(2, 60);
+
+    assert(bucket.tryAcquire(1));
+    assert(bucket.tryAcquire(1));
+    // The bucket is now empty: the probe refuses without queueing anything.
+    assertEquals(bucket.tryAcquire(1), false);
+
+    // A refused probe spent nothing and armed no timer: the refill alone re-covers it.
+    time.tick(1_000); // 1 token at 60/minute
+    assert(bucket.tryAcquire(1));
+  });
+
+  test("tryAcquire never bypasses queued waiters, even when the tokens would cover it", async () => {
+    const bucket = new TokenBucketRateLimiter(5, 300); // 5 tokens per second
+
+    bucket.acquire(5); // empties the bucket
+    const large = track(bucket.acquire(4)); // queued: needs 800 ms
+    await flush();
+
+    time.tick(600); // 3 tokens: enough for a weight-1 probe on its own, not for the head
+    // FIFO is not bypassed: the head waiter keeps its turn, so the probe refuses even
+    // though the bucket covers its weight.
+    assertEquals(bucket.tryAcquire(1), false);
+
+    // And the refusal deducted nothing: the head is served on its original schedule.
+    time.tick(200); // 4 tokens
+    await flush();
+    assert(large.resolved);
+
+    // With the queue drained, the same probe succeeds again.
+    time.tick(200); // 1 token
+    assert(bucket.tryAcquire(1));
+  });
+
   test("rejects non-positive, non-finite, or underflowing configuration", () => {
     // Zero and negatives would stall the queue forever.
     assertThrows(() => new TokenBucketRateLimiter(0, 60), RangeError, "capacity=0");

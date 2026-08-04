@@ -10,7 +10,9 @@
  * The WebSocket transport budgets a different quantity against the same machinery — outbound
  * *messages*, capped at 2000/minute per IP across every connection — through
  * `WebSocketQuota`. Both callers need the identical FIFO-with-debt semantics, so the
- * bucket lives at the transport root rather than under either one.
+ * bucket lives at the transport root rather than under either one. `WebSocketQuota`
+ * additionally probes the bucket synchronously ({@linkcode TokenBucketRateLimiter.tryAcquire})
+ * so an uncontended send never pays for a promise it did not need.
  * @module
  */
 
@@ -137,6 +139,24 @@ export class TokenBucketRateLimiter {
     this._push(waiter);
     this._schedule();
     return promise;
+  }
+
+  /**
+   * Deducts `weight` tokens synchronously when that costs no queued acquisition its turn:
+   * after a refill, the deduction happens only when no waiter is pending and the bucket
+   * covers the cost. Returns whether the tokens were deducted.
+   *
+   * A pending FIFO always wins: even a bucket that covers `weight` refuses while any
+   * acquisition is queued, because serving the newcomer first would let a later arrival
+   * overtake an earlier one — exactly the reordering the queue in
+   * {@linkcode TokenBucketRateLimiter.acquire} exists to prevent. A refused caller falls
+   * back to `acquire` and takes its place at the tail.
+   */
+  tryAcquire(weight: number): boolean {
+    this._refill();
+    if (this._head !== undefined || this._tokens < weight) return false;
+    this._tokens -= weight;
+    return true;
   }
 
   /**

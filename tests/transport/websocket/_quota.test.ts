@@ -1,11 +1,13 @@
 /**
  * Tests for the per-IP WebSocket budget: subscription and unique-user reservations shared
- * across connections, and outbound message pacing that must never delay or reorder a `post`.
+ * across connections, outbound message pacing that must never delay or reorder a `post`,
+ * and the reconnect flush's exactly-once charging of held-back frames.
  * @module
  */
 
 import { describe, test } from "bun:test";
 import { assert, assertEquals, assertRejects } from "@jsr/std__assert";
+import { TokenBucketRateLimiter } from "../../../src/transport/_rateLimiter.ts";
 import type { ReconnectingWebSocket } from "../../../src/transport/websocket/_reconnectingSocket.ts";
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
@@ -190,11 +192,113 @@ describe("WebSocketQuota", () => {
   });
 
   describe("outbound message budget", () => {
-    test("accounting-only by default: nothing waits", () => {
+    test("direct construction is accounting-only: nothing waits", () => {
+      // The pacing default belongs to `sharedWebSocketQuota` alone; a directly constructed
+      // quota without `rateLimit` is the documented opt-out and must never delay a frame.
       const quota = new WebSocketQuota();
       // `undefined` rather than a resolved promise, so the caller can stay synchronous.
       assertEquals(quota.acquireSend(), undefined);
       quota.chargeSend();
+    });
+
+    test("pacing on: acquireSend stays synchronous until the bucket drains", async () => {
+      // `rateLimit: {}` is exactly how the shared default enables pacing (there it means
+      // capacity 2000, refilling 2000/minute); a tiny bucket with a glacial refill keeps
+      // the drain cheap and the token arithmetic immune to elapsed wall time.
+      const quota = new WebSocketQuota({ rateLimit: { capacity: 2, refillPerMinute: 1 } });
+
+      // Sync fast path: the bucket covers the message, so no promise is handed back — a
+      // resolved one would cost every uncontended subscribe its synchronicity, the
+      // load-bearing property documented on `acquireSend`.
+      assertEquals(quota.acquireSend(), undefined);
+
+      // Drain the last token the way a post would.
+      quota.chargeSend();
+
+      // Now the wait is real: a promise comes back and the caller must await it.
+      const controller = new AbortController();
+      const paced = quota.acquireSend(controller.signal);
+      assert(paced instanceof Promise);
+      // Abandon the wait rather than letting a refill timer resolve it after the test.
+      controller.abort(new Error("drained"));
+      await assertRejects(() => paced, Error, "drained");
+    });
+
+    test("an already-aborted signal rejects without spending a token", async () => {
+      // Capacity 1 with a glacial refill: if the aborted call below spent the only token,
+      // the follow-up probe could not stay synchronous. The synchronous fast path must not
+      // bypass `acquire`'s already-aborted contract — an aborted request's frame is never
+      // sent, so budget spent on it would only throttle the legitimate traffic behind it.
+      const quota = new WebSocketQuota({ rateLimit: { capacity: 1, refillPerMinute: 1 } });
+      const aborted = AbortSignal.abort(new Error("gone before pacing"));
+
+      const paced = quota.acquireSend(aborted);
+      assert(paced instanceof Promise);
+      await assertRejects(() => paced, Error, "gone before pacing");
+
+      // The token is still there: the fast path answers synchronously.
+      assertEquals(quota.acquireSend(), undefined);
+    });
+
+    test("terminating the connection abandons a paced wait and frees its queue slot", async () => {
+      const quota = new WebSocketQuota({ rateLimit: { capacity: 1, refillPerMinute: 1 } });
+      const { socket, manager } = createManager(quota);
+
+      await subscribeConfirmed(socket, manager, { channel: "one" }); // spends the only token
+      assertEquals(socket.sentMessages.length, 1);
+
+      // Parked in the limiter FIFO: the bucket is empty and the refill is glacial. A closed
+      // transport must not leave this waiter behind — it would eventually spend a token on a
+      // frame that can never send, and hold its FIFO slot ahead of live transports sharing
+      // the quota.
+      const parked = manager.subscribe("test", { channel: "two" }, () => {});
+      parked.catch(() => {});
+      assertEquals(socket.sentMessages.length, 1); // never reached the socket
+
+      socket.terminate();
+      await assertRejects(() => parked, WebSocketRequestError, "permanently terminated");
+
+      // The waiter left the FIFO without spending: no head remains to block other callers.
+      const limiter = (quota as unknown as { _limiter: { _head?: unknown } })._limiter;
+      assertEquals(limiter._head, undefined);
+    });
+
+    test("termination is observed even while a live caller signal rides the paced wait", async () => {
+      // A caller-supplied signal must compose with — not replace — the termination signal:
+      // were it the only abort source, a terminated transport's paced request would sit in
+      // the FIFO until the caller aborted or a refill granted it a token for a dead frame.
+      const quota = new WebSocketQuota({ rateLimit: { capacity: 1, refillPerMinute: 1 } });
+      const socket = new MockWebSocket() as ReconnectingWebSocket & MockWebSocket;
+      const hlEvents = new HyperliquidEventTarget(socket);
+      const dispatcher = new WebSocketDispatcher(socket, hlEvents, 10_000, quota);
+
+      quota.chargeSend(); // drain the only token, so the request below parks
+      const caller = new AbortController(); // live for the whole test, never aborted
+      const parked = dispatcher.request("subscribe", { channel: "late" }, caller.signal);
+      parked.catch(() => {});
+
+      socket.terminate();
+      await assertRejects(() => parked, WebSocketRequestError, "permanently terminated");
+
+      // The waiter left the FIFO without spending its token.
+      const limiter = (quota as unknown as { _limiter: { _head?: unknown } })._limiter;
+      assertEquals(limiter._head, undefined);
+    });
+
+    test("the shared default quota paces outbound messages", () => {
+      const testnet = sharedWebSocketQuota(true);
+
+      // One synchronous probe, spending a single token of 2000: the fast path holds on the
+      // shared instance without disturbing the process-wide budget other tests draw on
+      // (every default-quota transport in this run shares these instances).
+      assertEquals(testnet.acquireSend(), undefined);
+
+      // Proving the limiter exists *behaviourally* would mean draining 2000 tokens of
+      // process-wide state and throttling every offline test still to run, so pacing is
+      // asserted structurally here; the drain behaviour is covered above on isolated
+      // instances built with the same `rateLimit` shape.
+      const limiter = (testnet as unknown as { _limiter: TokenBucketRateLimiter | null })._limiter;
+      assert(limiter instanceof TokenBucketRateLimiter);
     });
 
     test("subscribe waits once the bucket is empty", async () => {
@@ -289,6 +393,79 @@ describe("WebSocketQuota", () => {
       assertEquals(socket.sentMessages.length, sent);
       // The abandoned reservation is returned rather than stranded.
       assertEquals(quota.subscriptions, 1);
+    });
+  });
+
+  describe("reconnect flush charging", () => {
+    /** A dispatcher over a mock socket that has already lost its connection. */
+    function createDisconnectedDispatcher(quota: WebSocketQuota): {
+      socket: MockWebSocket;
+      dispatcher: WebSocketDispatcher;
+    } {
+      const socket = new MockWebSocket() as ReconnectingWebSocket & MockWebSocket;
+      const hlEvents = new HyperliquidEventTarget(socket);
+      const dispatcher = new WebSocketDispatcher(socket, hlEvents, 10_000, quota);
+      socket.disconnect(); // the drop happens before any request below is made
+      return { socket, dispatcher };
+    }
+
+    /**
+     * Asserts the bucket holds exactly `tokens` more whole tokens, by probing: that many
+     * synchronous acquires must succeed and the next must park. The glacial refills the
+     * tests below configure keep the count a step function of the charges made.
+     */
+    async function assertRemainingTokens(quota: WebSocketQuota, tokens: number): Promise<void> {
+      for (let i = 0; i < tokens; i++) assertEquals(quota.acquireSend(), undefined);
+      const controller = new AbortController();
+      const parked = quota.acquireSend(controller.signal);
+      assert(parked instanceof Promise);
+      // Abandon the wait rather than letting a refill timer resolve it after the test.
+      controller.abort(new Error("probe done"));
+      await assertRejects(() => parked, Error, "probe done");
+    }
+
+    test("a post queued while disconnected debits the budget exactly once when flushed", async () => {
+      const quota = new WebSocketQuota({ rateLimit: { capacity: 3, refillPerMinute: 1 } });
+      const { socket, dispatcher } = createDisconnectedDispatcher(quota);
+
+      const post = dispatcher.request("post", { type: "test" });
+      post.catch(() => {});
+      // Held back while disconnected: nothing on the wire, and — posts pay only when their
+      // frame reaches the socket — nothing charged yet.
+      assertEquals(socket.sentMessages.length, 0);
+
+      socket.open(); // reconnect: the `open` flush sends the held-back frame
+      assertEquals(socket.sentMessages.length, 1);
+
+      // Exactly one token of three is spent. A double charge would leave one; a missed
+      // charge (the original bug: the flush skipped the debit entirely) would leave three.
+      await assertRemainingTokens(quota, 2);
+
+      // Settle the flushed post so its request timeout does not outlive the test.
+      socket.mockMessage(RESPONSES.info(1, "ok"));
+      assertEquals(await post, "ok");
+    });
+
+    test("a subscribe flushed on open is not charged again — it paid at request() time", async () => {
+      const quota = new WebSocketQuota({ rateLimit: { capacity: 2, refillPerMinute: 1 } });
+      const { socket, dispatcher } = createDisconnectedDispatcher(quota);
+
+      // The token is acquired synchronously in `acquireSend` at request() time, even
+      // though the frame itself is held back until the connection returns.
+      const pending = dispatcher.request("subscribe", { channel: "one" });
+      pending.catch(() => {});
+      assertEquals(socket.sentMessages.length, 0);
+
+      socket.open(); // reconnect: the `open` flush sends the held-back frame
+      assertEquals(socket.sentMessages.length, 1);
+
+      // Still exactly one token of two spent: the flush charges only posts, so the
+      // subscribe was not double-charged for reaching the socket late.
+      await assertRemainingTokens(quota, 1);
+
+      // Settle the flushed subscribe.
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { channel: "one" }));
+      await pending;
     });
   });
 });

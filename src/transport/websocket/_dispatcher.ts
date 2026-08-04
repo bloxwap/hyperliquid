@@ -186,10 +186,11 @@ export class WebSocketDispatcher {
   /**
    * The per-IP outbound message budget, or `undefined` when this dispatcher is not budgeted.
    *
-   * Hyperliquid caps messages sent at 2000/minute per IP across every connection, and the
-   * SDK can overrun it in one burst: at the 1000-subscription cap a single reconnect
-   * re-subscribes everything at once, spending half the minute's budget instantly, and a
-   * socket flapping under `maxRetries: Infinity` repeats that.
+   * Hyperliquid caps messages sent at 2000/minute per IP across every connection, and
+   * without pacing the SDK overruns it in one burst: at the 1000-subscription cap a single
+   * reconnect re-subscribes everything at once, spending half the minute's budget instantly,
+   * and a socket flapping under `maxRetries: Infinity` repeats that — which is why the
+   * shared default quota paces outbound messages (see `sharedWebSocketQuota` in `_quota.ts`).
    */
   private readonly _quota: WebSocketQuota | undefined;
 
@@ -234,6 +235,12 @@ export class WebSocketDispatcher {
       for (const entry of this._queue) {
         entry.sent = true;
         this._socket.send(entry.frame);
+        // Only `post` entries (numeric id) debit the message budget here: their frame is
+        // reaching the socket for the first time and the send-immediately charge in
+        // `request` never ran. Subscription entries already paid a token in `acquireSend`
+        // at request() time; charging them again would double-count every flushed frame.
+        // See the send-immediately branch in `request` for the full charging story.
+        if (typeof entry.id === "number") this._quota?.chargeSend();
       }
     });
 
@@ -277,14 +284,41 @@ export class WebSocketDispatcher {
     //
     // `post` is deliberately excluded: `_shell.ts` fixes the wire order of an exchange
     // action on `transport.request` reaching `send` synchronously, so awaiting here would
-    // let a later nonce overtake an earlier one. Posts debit the budget without waiting
-    // (below), which still slows subscription traffic when orders are heavy but can never
-    // delay or reorder an order. `acquireSend` returns `undefined` rather than a resolved
-    // promise when nothing needs waiting on, keeping this function synchronous to `send`
-    // for every request that is not actually being throttled.
-    if (method !== "post") {
-      const paced = this._quota?.acquireSend(signal);
-      if (paced !== undefined) await paced;
+    // let a later nonce overtake an earlier one. Posts debit the budget without waiting —
+    // when their frame reaches the socket, in the send-immediately branch below or in the
+    // `open` flush — which still slows subscription traffic when orders are heavy but can
+    // never delay or reorder an order. `acquireSend` returns `undefined` rather than a
+    // resolved promise when nothing needs waiting on, keeping this function synchronous to
+    // `send` for every request that is not actually being throttled.
+    if (method !== "post" && this._quota !== undefined) {
+      // The wait must not outlive the connection: the socket's termination signal abandons
+      // the wait when the transport closes for good. Otherwise each paced waiter of a
+      // closed transport would still consume a token for a frame that can never send — and
+      // hold its FIFO slot ahead of live transports sharing the quota. A caller signal
+      // composes with it via `AbortSignal.any`, with the caller's reason winning when both
+      // are already aborted — the same precedence the controller relay below reproduces.
+      // No in-repo paced caller passes a signal today (the subscription manager never
+      // does), so the common path allocates no composite.
+      const pacingSignal =
+        signal === undefined
+          ? this._socket.terminationSignal
+          : AbortSignal.any([signal, this._socket.terminationSignal]);
+      const paced = this._quota.acquireSend(pacingSignal);
+      if (paced !== undefined) {
+        try {
+          await paced;
+        } catch (error) {
+          // Wrapped here because this await runs before the main try — whose catch would
+          // never see this rejection — and the dispatcher's contract is to reject only
+          // with WebSocketRequestError. `payload` is safe to attach: only the subscription
+          // manager reaches this path, and it always hands over its own plain-data snapshot.
+          const terminated = this._socket.terminationSignal.aborted && error === this._socket.terminationSignal.reason;
+          throw new WebSocketRequestError(
+            terminated ? "WebSocket connection permanently terminated" : "Request aborted",
+            { cause: error, request: payload },
+          );
+        }
+      }
     }
 
     // One controller per request: the timeout timer, the user signal, and the
@@ -346,9 +380,12 @@ export class WebSocketDispatcher {
       const sent = this._socket.readyState === ReconnectingWebSocket.OPEN;
       if (sent) {
         this._socket.send(frame);
-        // A `post` never waited above, so it debits the shared budget here instead —
-        // driving it into debt when orders outpace the refill, which later `subscribe`
-        // frames wait off. Subscribes already paid in `acquireSend`.
+        // The charging story, stated once: every frame debits the message budget exactly
+        // one time. `subscribe`/`unsubscribe` paid a token in `acquireSend` above, whether
+        // the frame goes out here or from the `open` flush. A `post` never waited there, so
+        // it debits when its frame reaches the socket — here when connected, in the `open`
+        // flush when queued while disconnected. Post debits can drive the bucket into debt
+        // when orders outpace the refill, which later `subscribe` frames wait off.
         if (method === "post") this._quota?.chargeSend();
       }
 

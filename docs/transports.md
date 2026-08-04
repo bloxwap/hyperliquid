@@ -280,31 +280,41 @@ Reservations are released when a subscription is unsubscribed or when its connec
 when the server frees them too. Call `transport.close()` on a transport you are done with.
 
 Pass your own `quota` when the default's assumption does not hold — a process behind several egress IPs needs one per
-IP, and tests usually want isolation:
+IP, and tests usually want isolation. Pass `rateLimit` to keep the default's [message pacing](#websocket-rate-limiting)
+on the replacement; a `WebSocketQuota` constructed without it is accounting-only:
 
 ```ts
 import { WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
 
-const transport = new WebSocketTransport({ quota: new WebSocketQuota() });
+const transport = new WebSocketTransport({ quota: new WebSocketQuota({ rateLimit: {} }) });
 ```
 
 ### WebSocket rate limiting
 
-Outbound messages are budgeted but **not paced by default**. Opt into pacing when you approach the 2000/minute ceiling
-— most easily by holding many subscriptions, since one reconnect re-subscribes all of them at once and 1000
-subscriptions spend half the minute's budget instantly:
-
-```ts
-import { WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
-
-const quota = new WebSocketQuota({ rateLimit: { capacity: 2000, refillPerMinute: 2000 } });
-const transport = new WebSocketTransport({ quota });
-```
+Outbound messages are **paced by default**: the shared quota runs a token bucket sized to the server's budget (capacity
+2000, refilling 2000/minute), because the default transport is exactly the one that trips the limit — one reconnect
+re-subscribes every held subscription at once, so 1000 subscriptions spend half the minute's budget instantly, and a
+flapping socket repeats the burst until the server refuses.
 
 Pacing only ever delays `subscribe` and `unsubscribe` frames. **`post` requests and keep-alive pings never wait**: an
 exchange action's wire order — and therefore per-wallet nonce ordering — depends on reaching the socket synchronously,
 and delaying the keep-alive watchdog is how a half-open connection goes unnoticed. Both still *debit* the budget, so a
 burst of orders correctly slows subscription traffic rather than silently overrunning the shared limit.
+
+To opt out of pacing — or to resize the bucket — pass your own `quota`; constructed without `rateLimit`, it keeps the
+subscription and unique-user guards but never delays a frame client-side:
+
+```ts
+import { WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
+
+// Accounting only: nothing waits client-side.
+const transport = new WebSocketTransport({ quota: new WebSocketQuota() });
+
+// Or keep pacing with a custom burst size and refill rate.
+const paced = new WebSocketTransport({
+  quota: new WebSocketQuota({ rateLimit: { capacity: 1000, refillPerMinute: 2000 } }),
+});
+```
 
 As with [HTTP rate limiting](#rate-limiting), the budget is client-side bookkeeping: other processes, other machines
 behind the same IP, and traffic the SDK cannot see all draw on the same server-side bucket.
