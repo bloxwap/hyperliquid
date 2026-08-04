@@ -41,7 +41,7 @@ function createHarness(): Harness {
         return { status: "ok", response: { type: "default" } };
       },
     },
-    // Minimal viem local-account shape: `signTypedData` arity 1 plus an address.
+    // Minimal viem local-account shape: callable `signTypedData` plus a string address.
     wallet: {
       address: "0x1111111111111111111111111111111111111111" as const,
       signTypedData: async (_params: unknown): Promise<`0x${string}`> => `0x${"11".repeat(65)}` as `0x${string}`,

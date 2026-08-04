@@ -419,8 +419,8 @@ describe("viem WalletClient over a local account", () => {
 
     let clientTypedDataCalls = 0;
     const originalSignTypedData = client.signTypedData.bind(client);
-    // Declared with one parameter on purpose: the JSON-RPC guard checks `signTypedData.length`,
-    // so a rest-args wrapper would make the client stop looking like a wallet at all.
+    // The JSON-RPC guard matches on member presence only (a rest-args wrapper would qualify
+    // too); one declared parameter simply mirrors the real client method being wrapped.
     client.signTypedData = ((params: Parameters<typeof originalSignTypedData>[0]) => {
       clientTypedDataCalls++;
       return originalSignTypedData(params);

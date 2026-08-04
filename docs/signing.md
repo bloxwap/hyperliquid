@@ -574,13 +574,19 @@ await fetch("https://api.hyperliquid.xyz/exchange", {
 
 All signing functions accept `AbstractWallet` — a union of supported wallet interfaces:
 
-|                                                                                | `signTypedData`  | Address            | Chain ID                |
-| ------------------------------------------------------------------------------ | ---------------- | ------------------ | ----------------------- |
-| [viem Local Account](https://viem.sh/docs/accounts/local)                      | 1 param (object) | `address` property | fallback `0x1`          |
-| [viem JSON-RPC Account](https://viem.sh/docs/clients/wallet#json-rpc-accounts) | 1 param (object) | `getAddresses()`   | `getChainId()`          |
+|                                                                                | `signTypedData`      | Address            | Chain ID                |
+| ------------------------------------------------------------------------------ | -------------------- | ------------------ | ----------------------- |
+| [viem Local Account](https://viem.sh/docs/accounts/local)                      | single params object | `address` property | fallback `0x1`          |
+| [viem JSON-RPC Account](https://viem.sh/docs/clients/wallet#json-rpc-accounts) | single params object | `getAddresses()`   | `getChainId()`          |
 
-Any object matching one of these interfaces works — for a custom signer (HSM, MPC, remote service), implement the viem
-Local Account shape (`address` and `signTypedData`), as in the [Custom tab](#l1-actions).
+Any object matching one of these interfaces works. Detection is by member presence only — declared parameter counts
+are never inspected — so wrapped or adapted wallets qualify too, e.g. a hand-rolled adapter around an embedded-wallet
+provider (Privy-style) declaring `signTypedData(...args)` or default parameters. For a custom signer (HSM, MPC, remote
+service), implement the viem Local Account shape (`address` and `signTypedData`), as in the [Custom tab](#l1-actions).
+
+Ethers-style wallets with positional `signTypedData(domain, types, value)` are **not** supported and are rejected with
+an explicit error — wrap them in an adapter whose `signTypedData` takes a single viem-style params object
+(`{ domain, types, primaryType, message }`).
 
 ## Fast local wallet (WASM secp256k1)
 
