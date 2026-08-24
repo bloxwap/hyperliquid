@@ -273,6 +273,40 @@ describe("WebSocketSubscriptionManager", () => {
       await retry;
     });
 
+    test("concurrent subscriptions differing only in an optional field do not match each other's echo", async () => {
+      const { socket, manager } = createManager();
+
+      // The looser pending is a subset of the stricter one, so a rewritten echo of the
+      // strict confirmation also subset-matches the loose one — the echo must go to the
+      // most specific pending, not to the first subset match (upstream nktkas#137).
+      const loose = { type: "l2Book", coin: "BTC" };
+      const strict = { type: "l2Book", coin: "BTC", nSigFigs: 5 };
+      const loosePromise = manager.subscribe("l2Book", loose, () => {});
+      const strictPromise = manager.subscribe("l2Book", strict, () => {});
+      assertEquals(socket.sentMessages.length, 2); // distinct payloads: two wire subscriptions
+
+      let looseSettled = false;
+      void loosePromise.then(
+        () => (looseSettled = true),
+        () => (looseSettled = true),
+      );
+
+      // The server rewrites the strict confirmation with an added field, so only the
+      // subset scan can match it — and the looser pending must not swallow it.
+      socket.mockMessage(
+        RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin: "BTC", nSigFigs: 5, mantissa: null }),
+      );
+      await strictPromise;
+      await drain();
+      assertFalse(looseSettled); // still waiting for its own echo
+
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", loose));
+      await loosePromise;
+      assertEquals(manager._subscriptions.size, 2);
+
+      socket.terminate();
+    });
+
     test("limit errors carry the request payload", async () => {
       const { socket, manager } = createManager();
 

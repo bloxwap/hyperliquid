@@ -586,6 +586,40 @@ describe("WebSocketDispatcher", () => {
       assertEquals(socket.sentMessages.length, 0);
     });
 
+    test("a sent request rejected on disconnect is never re-sent after reconnect", async () => {
+      const { socket, requester } = createRequester();
+
+      // The frame already reached the server, but the connection drops before the
+      // response: the caller believes the request failed. Replaying the frame after
+      // the reconnect would execute it a second time — the double-execution hazard
+      // of an order the client recorded as failed (upstream nktkas#137).
+      const promise = requester.request("post", { foo: "bar" });
+      assertEquals(socket.sentMessages.length, 1);
+
+      socket.disconnect();
+      await assertRejects(() => promise, WebSocketRequestError, "WebSocket connection closed");
+
+      socket.open();
+      assertEquals(socket.sentMessages.length, 1); // no replay of the rejected frame
+    });
+
+    test("a synchronous re-open inside a close listener does not replay a rejected frame", async () => {
+      const { socket, requester } = createRequester();
+
+      const promise = requester.request("post", { foo: "bar" });
+      assertEquals(socket.sentMessages.length, 1);
+
+      // This listener is registered after the dispatcher's own close handler, so it
+      // runs after the rejections but before their `finally` dequeues (microtasks).
+      // A synchronous re-open in that window flushes whatever the queue still holds —
+      // only clearing the queue before rejecting keeps the rejected frame unsent.
+      socket.addEventListener("close", () => socket.open());
+      socket.disconnect();
+
+      await assertRejects(() => promise, WebSocketRequestError, "WebSocket connection closed");
+      assertEquals(socket.sentMessages.length, 1);
+    });
+
     test("rejects if permanently closed", async () => {
       const { socket, requester } = createRequester();
 
