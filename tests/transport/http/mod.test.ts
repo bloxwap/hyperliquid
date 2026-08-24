@@ -782,6 +782,234 @@ describe("HttpTransport", () => {
     });
   });
 
+  describe("retryOnRateLimit", () => {
+    // Same FakeTime hook pattern as the rateLimit block: retry waits are real timers,
+    // ticked deterministically here.
+    let time: FakeTime;
+
+    beforeEach(() => {
+      time = new FakeTime();
+    });
+
+    afterEach(() => {
+      time.restore();
+    });
+
+    /** A 429 response carrying the given Retry-After value (or none). */
+    const rateLimited = (retryAfter?: string): Response =>
+      new Response("Too Many Requests", {
+        status: 429,
+        headers: retryAfter === undefined ? {} : { "Retry-After": retryAfter },
+      });
+
+    test("disabled by default: a 429 throws on the first attempt", async () => {
+      const stub = stubFetch(() => rateLimited("0"));
+      try {
+        const transport = new HttpTransport();
+        await assertRejects(() => transport.request("info", {}), HttpRateLimitError);
+        assertEquals(stub.calls, 1);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("retries a 429 and resolves once the server recovers", async () => {
+      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("0") : jsonResponse({ ok: true })));
+      try {
+        const transport = new HttpTransport({ retryOnRateLimit: true });
+        const pending = transport.request("info", {});
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        time.tick(1_000); // Retry-After 0 plus up to 1 s of jitter
+        assertEquals(await pending, { ok: true });
+        assertEquals(stub.calls, 2);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("honors Retry-After: no retry before the asked delay (the jitter only ever adds wait)", async () => {
+      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("2") : jsonResponse()));
+      try {
+        const transport = new HttpTransport({ retryOnRateLimit: true });
+        const pending = transport.request("info", {});
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        time.tick(1_999); // 1 ms short of the asked 2 s
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        time.tick(1_001); // past 2 s plus the worst-case 1 s of jitter
+        await pending;
+        assertEquals(stub.calls, 2);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("without Retry-After falls back to bounded exponential backoff", async () => {
+      const stub = stubFetch(() => (stub.calls < 3 ? rateLimited() : jsonResponse()));
+      try {
+        const transport = new HttpTransport({ retryOnRateLimit: true });
+        const pending = transport.request("info", {});
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        time.tick(1_000); // first backoff: a random wait within [0, 1 s)
+        await flush();
+        assertEquals(stub.calls, 2);
+
+        time.tick(2_000); // second backoff: within [0, 2 s)
+        await pending;
+        assertEquals(stub.calls, 3);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("gives up after maxRetries and throws the last 429", async () => {
+      const stub = stubFetch(() => rateLimited());
+      try {
+        const transport = new HttpTransport({ retryOnRateLimit: { maxRetries: 2 } });
+        const pending = transport.request("info", {});
+        const rejection = assertRejects(() => pending, HttpRateLimitError);
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        time.tick(1_000); // retry 1
+        await flush();
+        assertEquals(stub.calls, 2);
+
+        time.tick(2_000); // retry 2 — the next 429 is final
+        const error = await rejection;
+        assertEquals(error.status, 429);
+        assertEquals(stub.calls, 3); // maxRetries + 1 attempts in total
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("a Retry-After beyond maxDelayMs surfaces the 429 instead of waiting", async () => {
+      const stub = stubFetch(() => rateLimited("60"));
+      try {
+        const transport = new HttpTransport({ retryOnRateLimit: true }); // default maxDelayMs: 30 s
+        await assertRejects(() => transport.request("info", {}), HttpRateLimitError);
+        assertEquals(stub.calls, 1);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("maxDelayMs is configurable", async () => {
+      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("60") : jsonResponse()));
+      try {
+        // timeout: null — otherwise the default 10 s timeout (which spans retry waits) fires first.
+        const transport = new HttpTransport({ timeout: null, retryOnRateLimit: { maxDelayMs: 120_000 } });
+        const pending = transport.request("info", {});
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        time.tick(61_000); // the asked 60 s plus up to 1 s of jitter
+        await pending;
+        assertEquals(stub.calls, 2);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("the overall request timeout spans every retry wait", async () => {
+      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("5") : jsonResponse()));
+      try {
+        const transport = new HttpTransport({ timeout: 100, retryOnRateLimit: true });
+        const pending = transport.request("info", {});
+        const rejection = assertRejects(() => pending, HttpRequestError, "Request timed out after 100 ms");
+        await flush();
+        assertEquals(stub.calls, 1); // first attempt 429'd; the ~5 s retry wait is pending
+
+        time.tick(100); // the timeout fires mid-wait — the retry never goes out
+        await rejection;
+        assertEquals(stub.calls, 1);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("a caller abort during the retry wait cancels the request", async () => {
+      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("5") : jsonResponse()));
+      try {
+        const controller = new AbortController();
+        const reason = new DOMException("user cancel", "AbortError");
+        const transport = new HttpTransport({ retryOnRateLimit: true });
+        const pending = transport.request("info", {}, controller.signal);
+        const rejection = assertRejects(() => pending, HttpRequestError, "Request aborted");
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        controller.abort(reason);
+        const error = await rejection;
+        assertEquals(error.cause, reason);
+        assertEquals(stub.calls, 1); // the retry never went out
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("only a 429 is retried: other failures surface on the first attempt", async () => {
+      const stub = stubFetch(() => new Response("nope", { status: 500 }));
+      try {
+        const transport = new HttpTransport({ retryOnRateLimit: true });
+        const error = await assertRejects(() => transport.request("info", {}), HttpRequestError);
+        assert(!(error instanceof HttpRateLimitError));
+        assertEquals(stub.calls, 1);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("a 200-OK error envelope is not retried either", async () => {
+      const stub = stubFetch(() => jsonResponse({ type: "error", message: "server-side failure" }));
+      try {
+        const transport = new HttpTransport({ retryOnRateLimit: true });
+        await assertRejects(() => transport.request("info", {}), HttpRequestError, "server-side failure");
+        assertEquals(stub.calls, 1);
+      } finally {
+        stub.restore();
+      }
+    });
+
+    test("composed with rateLimit, each retry debits the bucket again", async () => {
+      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("0") : jsonResponse()));
+      try {
+        // 1 weight per second: the first attempt acquires 1 (bucket 0), the retry charges 1
+        // more (bucket -1), and the ~1 s retry wait refills exactly that token (bucket 0).
+        const transport = new HttpTransport({
+          rateLimit: { capacity: 1, refillPerMinute: 60 },
+          retryOnRateLimit: true,
+        });
+        const pending = transport.request("exchange", { action: { type: "noop" } });
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        time.tick(1_000); // Retry-After 0 plus jitter — the retry goes out and succeeds
+        await pending;
+        assertEquals(stub.calls, 2);
+
+        // The retry's debit left the bucket empty: the next request waits one refill second.
+        // (Had the retry not been charged, the refilled token would send it immediately.)
+        const followUp = transport.request("exchange", { action: { type: "noop" } });
+        await flush();
+        assertEquals(stub.calls, 2);
+        time.tick(1_000);
+        await followUp;
+        assertEquals(stub.calls, 3);
+      } finally {
+        stub.restore();
+      }
+    });
+  });
+
   describe("request payload redaction", () => {
     const signedPayload = {
       action: { type: "order", orders: [{ a: 0, b: true }] },
@@ -1148,6 +1376,101 @@ describe("HttpTransport", () => {
             },
           },
           2,
+        );
+      });
+
+      test("exchange batch: cancel and cancelByCloid share the cancels key", async () => {
+        await assertWeight("exchange", { action: { type: "cancel", cancels: Array.from({ length: 41 }) } }, 2);
+        await assertWeight("exchange", { action: { type: "cancelByCloid", cancels: Array.from({ length: 41 }) } }, 2);
+      });
+
+      test("exchange batch: batchModify (modifies)", async () => {
+        await assertWeight("exchange", { action: { type: "batchModify", modifies: Array.from({ length: 80 }) } }, 3);
+      });
+
+      // #108: the docs define batch_length as "the length of the array in the action" without
+      // closing the set, so every array bills — by the longest one found, never under-billing.
+      test("perpDeploy setter arrays bill as a batch (setOracle)", async () => {
+        await assertWeight(
+          "exchange",
+          {
+            action: {
+              type: "perpDeploy",
+              setOracle: {
+                dex: "TEST",
+                oraclePxs: Array.from({ length: 41 }),
+                markPxs: [],
+                externalPerpPxs: [],
+              },
+            },
+          },
+          2,
+        );
+      });
+
+      test("spotDeploy nested genesis arrays bill as a batch (userGenesis)", async () => {
+        await assertWeight(
+          "exchange",
+          {
+            action: {
+              type: "spotDeploy",
+              userGenesis: { token: 1, userAndWei: Array.from({ length: 41 }), existingTokenAndWei: [] },
+            },
+          },
+          2,
+        );
+      });
+
+      test("arrays of arrays bill by the longest inner array (perpDeploy markPxs)", async () => {
+        await assertWeight(
+          "exchange",
+          {
+            action: {
+              type: "perpDeploy",
+              setOracle: { dex: "TEST", oraclePxs: [], markPxs: [Array.from({ length: 41 })], externalPerpPxs: [] },
+            },
+          },
+          2,
+        );
+      });
+
+      test("arrays shorter than 40 keep the minimum weight of 1", async () => {
+        await assertWeight(
+          "exchange",
+          { action: { type: "perpDeploy", setFundingMultipliers: Array.from({ length: 39 }) } },
+          1,
+        );
+        await assertWeight("exchange", { action: { type: "spotDeploy", registerSpot: { tokens: [1, 2] } } }, 1);
+      });
+
+      test("twapOrder: a single twap object is not a batch", async () => {
+        await assertWeight("exchange", { action: { type: "twapOrder", twap: { a: 1 } } }, 1);
+      });
+
+      test("convertToMultiSigUser: signers is a string on the wire, not an array", async () => {
+        await assertWeight(
+          "exchange",
+          {
+            action: {
+              type: "convertToMultiSigUser",
+              signers: JSON.stringify({ authorizedUsers: Array.from({ length: 100 }), threshold: 2 }),
+            },
+          },
+          1,
+        );
+      });
+
+      test("multi-sig: the wrapper's signatures array is never billed, only the inner action", async () => {
+        await assertWeight(
+          "exchange",
+          {
+            action: {
+              type: "multiSig",
+              signatures: Array.from({ length: 100 }),
+              payload: { action: { type: "noop" } },
+            },
+          },
+          1,
         );
       });
 
