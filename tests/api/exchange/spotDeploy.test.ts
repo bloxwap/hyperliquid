@@ -121,6 +121,70 @@ runTest({
           evmExtraWeiDecimals: 0,
         },
       },
+      {
+        outcome: {
+          registerStandaloneOutcomeFromTemplate: {
+            id: "binaryPrice",
+            keywordToValue: [
+              ["perp", "BTC"],
+              ["threshold", "1000000"],
+              ["time", "20260901-0600"],
+            ],
+          },
+        },
+      },
+      {
+        outcome: {
+          registerQuestionFromTemplate: {
+            questionTemplateInstance: {
+              id: "binaryPrice",
+              keywordToValue: [
+                ["perp", "BTC"],
+                ["threshold", "1000000"],
+                ["time", "20260901-0600"],
+              ],
+            },
+            namedOutcomeTemplateInstances: [
+              {
+                id: "binaryPrice",
+                keywordToValue: [
+                  ["perp", "BTC"],
+                  ["threshold", "1000000"],
+                  ["time", "20260901-0600"],
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        outcome: {
+          settleOutcome: {
+            outcome: 0,
+            settleFraction: "1",
+            details: "",
+            nameAndDescription: ["template:binaryPrice", "perp:BTC"],
+            sideNames: ["Yes", "No"],
+          },
+        },
+      },
+      {
+        outcome: {
+          settleQuestion2: {
+            question: 0,
+            outcomeSettlements: [
+              {
+                outcome: 0,
+                settleFraction: "1",
+                details: "",
+                nameAndDescription: ["template:binaryPrice", "perp:BTC"],
+                sideNames: ["Yes", "No"],
+              },
+            ],
+            nameAndDescription: ["template:binaryPrice", "perp:BTC"],
+          },
+        },
+      },
     ];
 
     await Promise.all(
@@ -159,6 +223,125 @@ describe("spotDeploy (offline)", () => {
       [
         { type: "spotDeploy", enableAlignedQuoteToken: { token: 1 } },
         { type: "spotDeploy", disableAlignedQuoteToken: { token: 1 } },
+      ],
+    );
+  });
+
+  test("outcome sub-actions are accepted and posted", async () => {
+    const wallet = privateKeyToAccount("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    const payloads: { action: Record<string, unknown> }[] = [];
+    const transport: IRequestTransport = {
+      isTestnet: true,
+      request<T>(_endpoint: "info" | "exchange", payload: unknown): Promise<T> {
+        payloads.push(payload as { action: Record<string, unknown> });
+        return Promise.resolve({ status: "ok", response: { type: "default" } } as T);
+      },
+    };
+
+    const templateInstance: { id: string; keywordToValue: [string, string][] } = {
+      id: "binaryPrice",
+      keywordToValue: [
+        ["perp", "BTC"],
+        ["threshold", "1000000"],
+        ["time", "20260901-0600"],
+      ],
+    };
+
+    await spotDeploy(
+      { transport, wallet },
+      {
+        outcome: { registerStandaloneOutcomeFromTemplate: templateInstance },
+      },
+    );
+    await spotDeploy(
+      { transport, wallet },
+      {
+        outcome: {
+          registerQuestionFromTemplate: {
+            questionTemplateInstance: templateInstance,
+            namedOutcomeTemplateInstances: [templateInstance],
+          },
+        },
+      },
+    );
+    await spotDeploy(
+      { transport, wallet },
+      {
+        outcome: {
+          settleOutcome: {
+            outcome: 0,
+            settleFraction: "1",
+            details: "",
+            nameAndDescription: ["template:binaryPrice", "perp:BTC"],
+            sideNames: ["Yes", "No"],
+          },
+        },
+      },
+    );
+    await spotDeploy(
+      { transport, wallet },
+      {
+        outcome: {
+          settleQuestion2: {
+            question: 0,
+            outcomeSettlements: [
+              {
+                outcome: 0,
+                settleFraction: "1",
+                details: "",
+                nameAndDescription: ["template:binaryPrice", "perp:BTC"],
+                sideNames: ["Yes", "No"],
+              },
+            ],
+            nameAndDescription: ["template:binaryPrice", "perp:BTC"],
+          },
+        },
+      },
+    );
+
+    assertEquals(
+      payloads.map((p) => p.action),
+      [
+        { type: "spotDeploy", outcome: { registerStandaloneOutcomeFromTemplate: templateInstance } },
+        {
+          type: "spotDeploy",
+          outcome: {
+            registerQuestionFromTemplate: {
+              questionTemplateInstance: templateInstance,
+              namedOutcomeTemplateInstances: [templateInstance],
+            },
+          },
+        },
+        {
+          type: "spotDeploy",
+          outcome: {
+            settleOutcome: {
+              outcome: 0,
+              settleFraction: "1",
+              details: "",
+              nameAndDescription: ["template:binaryPrice", "perp:BTC"],
+              sideNames: ["Yes", "No"],
+            },
+          },
+        },
+        {
+          type: "spotDeploy",
+          outcome: {
+            settleQuestion2: {
+              question: 0,
+              outcomeSettlements: [
+                {
+                  outcome: 0,
+                  settleFraction: "1",
+                  details: "",
+                  nameAndDescription: ["template:binaryPrice", "perp:BTC"],
+                  sideNames: ["Yes", "No"],
+                },
+              ],
+              nameAndDescription: ["template:binaryPrice", "perp:BTC"],
+            },
+          },
+        },
       ],
     );
   });

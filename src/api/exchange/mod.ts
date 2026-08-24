@@ -50,6 +50,7 @@ export {
 
 export { cloidFromInt } from "../_schemas.ts";
 
+export * from "./_methods/activateOutcomeDeployer.ts";
 export * from "./_methods/agentEnableDexAbstraction.ts";
 export * from "./_methods/agentSendAsset.ts";
 export * from "./_methods/agentSetAbstraction.ts";
