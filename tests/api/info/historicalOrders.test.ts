@@ -23,6 +23,9 @@ runTest({
 
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data, [
+      "#/items/properties/order/properties/orderType/enum/6",
+      "#/items/properties/order/properties/orderType/enum/7",
+      "#/items/properties/order/properties/orderType/enum/8",
       "#/items/properties/order/properties/tif/enum/5",
       "#/items/properties/status/enum/5",
       "#/items/properties/status/enum/6",
@@ -47,6 +50,9 @@ runTest({
       "#/items/properties/status/enum/26",
       "#/items/properties/status/enum/27",
       "#/items/properties/status/enum/28",
+      "#/items/properties/status/enum/29",
+      "#/items/properties/status/enum/30",
+      "#/items/properties/status/enum/31",
       "#/items/properties/order/properties/children/*",
     ]);
   },

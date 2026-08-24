@@ -29,7 +29,11 @@ runTest({
     const data = await Promise.all(params.map((p) => client.userFillsByTime(p)));
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data, ["#/items/properties/twapId/defined"]);
+    schemaCoverage(responseSchema, data, [
+      "#/items/properties/twapId/defined",
+      "#/items/properties/feeTrialEscrow/present",
+      "#/items/properties/liquidation/properties/liquidatedUser/missing",
+    ]);
   },
 });
 

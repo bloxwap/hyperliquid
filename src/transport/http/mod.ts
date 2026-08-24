@@ -10,6 +10,7 @@
  *   rateLimit? ◄─ token bucket wait for the request's weight (opt-in; abort-aware; disabled by default)
  *   controller ◄─ timeout / user signal / fetchOptions.signal (none allocated when all are absent)
  *    └─► fetch ┬─► non-OK or non-JSON body ─► HttpRequestError; 429 ─► HttpRateLimitError
+ *              │      retryOnRateLimit? ◄─ wait Retry-After (+jitter) / jittered backoff, re-fetch
  *              └─► parse JSON ┬─► 200-OK `{ type: "error" }` envelope ─► HttpRequestError
  *                             └─► T
  *     catch: classify by reference ─► finally: cancel timer, detach
@@ -62,9 +63,11 @@ export interface HttpTransportOptions {
    *
    * When set, every request acquires its weight from a token bucket before sending and WAITS
    * (async) while the bucket is empty, instead of failing with HTTP 429 after the fact. Weights
-   * follow the server rules: `1 + floor(batchLength / 40)` for exchange batches — the batch
-   * length read from the action's `orders`/`cancels`/`modifies` array, unwrapping multi-sig
-   * actions — the documented per-`type` weight for info requests (2/20/60), and 40 for explorer
+   * follow the server rules: `1 + floor(batchLength / 40)` for exchange requests — the
+   * batch length being the longest array in the action (`orders`/`cancels`/`modifies` for the
+   * documented batch actions; deployer arrays like `spotDeploy`/`perpDeploy` setter lists count
+   * too, so the client never under-bills), unwrapping multi-sig actions — the documented
+   * per-`type` weight for info requests (2/20/60), and 40 for explorer
    * requests. Response-size surcharges (per 20/60 returned items, per block on `blockList`) are
    * debited after the response arrives, so later requests wait off the real cost.
    *
@@ -81,6 +84,31 @@ export interface HttpTransportOptions {
    * ```
    */
   rateLimit?: HttpRateLimitOptions;
+  /**
+   * Opt-in automatic retry of requests the server answers with `429 Too Many Requests`.
+   *
+   * When set, a rate-limited attempt waits and retries instead of throwing
+   * {@linkcode HttpRateLimitError} right away: the wait honors the server's `Retry-After` (plus up
+   * to 1 s of jitter), falling back to full-jitter exponential backoff when the header is absent.
+   * Retries are bounded ({@linkcode HttpRateLimitRetryOptions.maxRetries}, default 3) and every
+   * single wait is capped ({@linkcode HttpRateLimitRetryOptions.maxDelayMs}, default 30 s) — a
+   * `Retry-After` beyond the cap surfaces the 429 rather than retrying sooner than the server
+   * allowed. The overall request timeout still spans every attempt and wait, and when
+   * {@linkcode HttpTransportOptions.rateLimit} is also enabled each retry debits the bucket again:
+   * the server bills attempts, not logical requests.
+   *
+   * `true` enables the defaults; an object overrides them.
+   *
+   * Default: `false` (a 429 throws {@linkcode HttpRateLimitError} on the first attempt)
+   *
+   * @example
+   * ```ts
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   *
+   * const transport = new HttpTransport({ retryOnRateLimit: { maxRetries: 5 } });
+   * ```
+   */
+  retryOnRateLimit?: boolean | HttpRateLimitRetryOptions;
   /**
    * Custom API URL for `info` and `exchange` requests.
    *
@@ -111,6 +139,25 @@ export interface HttpRateLimitOptions {
    * Default: `1200` (Hyperliquid's per-IP REST budget)
    */
   refillPerMinute?: number;
+}
+
+/** Configuration for the HTTP transport's opt-in 429 retry ({@linkcode HttpTransportOptions.retryOnRateLimit}). */
+export interface HttpRateLimitRetryOptions {
+  /**
+   * Maximum number of retries after the initial attempt, so at most `maxRetries + 1` requests go
+   * out for one call.
+   *
+   * Default: `3`
+   */
+  maxRetries?: number;
+  /**
+   * Longest single retry wait in ms. A `Retry-After` asking for more than this surfaces the 429
+   * instead of retrying sooner than the server allowed; the headerless exponential backoff is
+   * capped at this value too.
+   *
+   * Default: `30_000`
+   */
+  maxDelayMs?: number;
 }
 
 /** Mainnet API URL. */
@@ -201,7 +248,8 @@ export class HttpRequestError extends TransportError {
  * Extends {@linkcode HttpRequestError}, so existing `instanceof HttpRequestError` checks keep
  * matching; catch this subclass specifically to back off instead of surfacing a failure. Hyperliquid
  * answers rate-limit violations with 429 and ultimately bans repeat offenders' IPs, so backing off
- * on this error matters — or enable the transport's {@linkcode HttpTransportOptions.rateLimit} to
+ * on this error matters — enable {@linkcode HttpTransportOptions.retryOnRateLimit} to have the
+ * transport back off and retry automatically, and/or {@linkcode HttpTransportOptions.rateLimit} to
  * pace requests before they ever reach the limit.
  *
  * @example
@@ -276,6 +324,8 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   fetchOptions: Omit<RequestInit, "body" | "method">;
   /** Opt-in token-bucket rate limiter; `null` keeps requests unthrottled (the default). */
   private readonly _rateLimit: TokenBucketRateLimiter | null;
+  /** Opt-in 429 retry policy; `null` throws {@linkcode HttpRateLimitError} on the first 429 (the default). */
+  private readonly _retryOnRateLimit: { maxRetries: number; maxDelayMs: number } | null;
   /** Shared request-timeout scheduler: at most one armed native timer, however many requests are in flight. */
   private readonly _timeouts: abort.TimeoutWheel;
   /** Memoized endpoint URLs, keyed by base and endpoint; mutating `apiUrl`/`rpcUrl` simply misses the cache. */
@@ -292,6 +342,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       options?.rateLimit === undefined
         ? null
         : new TokenBucketRateLimiter(options.rateLimit.capacity ?? 1200, options.rateLimit.refillPerMinute ?? 1200);
+    this._retryOnRateLimit = normalizeRetryOnRateLimit(options?.retryOnRateLimit);
     this._timeouts = new abort.TimeoutWheel();
     this._urlCache = new Map();
   }
@@ -355,11 +406,13 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       // bills attempts, and its own accounting of failures is undocumented — keeping the
       // debit is the conservative reading.
       const rateLimit = this._rateLimit;
+      // Hoisted for the retry loop below: a retried attempt debits the bucket again.
+      let weight = 0;
       if (rateLimit !== null) {
         // The parsed wire form — never the live payload — is the billing source, so
         // getters/proxies/toJSON cannot move the weight off what was actually sent. Explorer
         // requests are a flat 40 whatever the payload, so they skip the parse entirely.
-        const weight = endpoint === "explorer" ? 40 : requestWeight(endpoint, (snapshot = JSON.parse(body)));
+        weight = endpoint === "explorer" ? 40 : requestWeight(endpoint, (snapshot = JSON.parse(body)));
         await rateLimit.acquire(weight, controller?.signal);
       }
 
@@ -388,59 +441,78 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
             { signal: controller?.signal },
           );
 
-      // --- Send and validate -------------------------------------------------
-      const response = await fetch(url, init);
-      if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) {
-        const clone = response.clone();
-        const text = await response.text().catch(() => undefined); // releases connection, clone stays readable
-        // 429 gets its own subclass so callers can back off programmatically.
-        const ErrorClass = clone.status === 429 ? HttpRateLimitError : HttpRequestError;
-        throw new ErrorClass({
-          response: clone,
-          detail: text ? truncate(text) : undefined,
-          ...errorRequest(body, snapshot),
-        });
-      }
+      // --- Send and validate, retrying 429s when opted in ----------------------
+      // The timeout armed above spans the WHOLE attempt loop, retry waits included, so an
+      // opted-in retry can never outlive the caller's timeout; the wait itself races the
+      // request's signal, so caller aborts interrupt it too.
+      const retry = this._retryOnRateLimit;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const response = await fetch(url, init);
+          if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) {
+            const clone = response.clone();
+            const text = await response.text().catch(() => undefined); // releases connection, clone stays readable
+            // 429 gets its own subclass so callers can back off programmatically.
+            const ErrorClass = clone.status === 429 ? HttpRateLimitError : HttpRequestError;
+            throw new ErrorClass({
+              response: clone,
+              detail: text ? truncate(text) : undefined,
+              ...errorRequest(body, snapshot),
+            });
+          }
 
-      // --- Parse -------------------------------------------------------------
-      // The try covers ONLY the parse itself: the envelope check below throws HttpRequestError,
-      // which this catch would otherwise rewrap as an "Invalid JSON response body".
-      const text = await response.text();
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(text);
-      } catch (error) {
-        throw new HttpRequestError({
-          response: recreateResponse(response, text),
-          detail: "Invalid JSON response body",
-          cause: error,
-          ...errorRequest(body, snapshot),
-        });
-      }
+          // --- Parse ---------------------------------------------------------
+          // The try covers ONLY the parse itself: the envelope check below throws HttpRequestError,
+          // which this catch would otherwise rewrap as an "Invalid JSON response body".
+          const text = await response.text();
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(text);
+          } catch (error) {
+            throw new HttpRequestError({
+              response: recreateResponse(response, text),
+              detail: "Invalid JSON response body",
+              cause: error,
+              ...errorRequest(body, snapshot),
+            });
+          }
 
-      // Hyperliquid reports some failures inside a 200 OK: a top-level `{ type: "error", message }`
-      // envelope (the explorer/rpc failure shape). Surface it here with the server's own message,
-      // instead of handing the envelope to callers as data — where schema-validated methods would
-      // fail with a confusing ValidationError and unvalidated ones would return it as a "result".
-      // Exchange-level failures use a different envelope — `{ status: "err", response }`, handled
-      // at the API layer — so they still resolve here, as do array bodies and objects that merely
-      // nest a `type: "error"` somewhere below the top level.
-      if (isErrorEnvelope(parsed)) {
-        throw new HttpRequestError({
-          response: recreateResponse(response, text), // the body stream is already consumed
-          detail: typeof parsed.message === "string" ? parsed.message : truncate(text),
-          ...errorRequest(body, snapshot),
-        });
-      }
+          // Hyperliquid reports some failures inside a 200 OK: a top-level `{ type: "error", message }`
+          // envelope (the explorer/rpc failure shape). Surface it here with the server's own message,
+          // instead of handing the envelope to callers as data — where schema-validated methods would
+          // fail with a confusing ValidationError and unvalidated ones would return it as a "result".
+          // Exchange-level failures use a different envelope — `{ status: "err", response }`, handled
+          // at the API layer — so they still resolve here, as do array bodies and objects that merely
+          // nest a `type: "error"` somewhere below the top level.
+          if (isErrorEnvelope(parsed)) {
+            throw new HttpRequestError({
+              response: recreateResponse(response, text), // the body stream is already consumed
+              detail: typeof parsed.message === "string" ? parsed.message : truncate(text),
+              ...errorRequest(body, snapshot),
+            });
+          }
 
-      // Response-size surcharges can only be billed after the fact: debit the bucket so
-      // later requests wait off the real cost instead of the pre-request estimate.
-      if (rateLimit !== null && Array.isArray(parsed) && parsed.length > 0) {
-        snapshot ??= JSON.parse(body); // explorer skipped the pre-send parse (flat weight 40)
-        const surcharge = responseSurcharge(endpoint, snapshot, parsed);
-        if (surcharge > 0) rateLimit.charge(surcharge);
+          // Response-size surcharges can only be billed after the fact: debit the bucket so
+          // later requests wait off the real cost instead of the pre-request estimate.
+          if (rateLimit !== null && Array.isArray(parsed) && parsed.length > 0) {
+            snapshot ??= JSON.parse(body); // explorer skipped the pre-send parse (flat weight 40)
+            const surcharge = responseSurcharge(endpoint, snapshot, parsed);
+            if (surcharge > 0) rateLimit.charge(surcharge);
+          }
+          return parsed as T;
+        } catch (error) {
+          // Only a 429 is retried, and only while attempts remain; every other failure —
+          // a non-429 HttpRequestError included — propagates to the outer classifier as-is.
+          if (!(error instanceof HttpRateLimitError) || retry === null || attempt >= retry.maxRetries) throw error;
+          const delayMs = retryDelayMs(error.retryAfter, attempt, retry.maxDelayMs);
+          if (delayMs === undefined) throw error; // the asked wait exceeds the configured bound
+          // A retry is another billed attempt (the server bills attempts, not logical
+          // requests): debit the bucket WITHOUT waiting, so later requests pace off the real
+          // cost while this retry waits out the server's own delay rather than the refill.
+          if (rateLimit !== null) rateLimit.charge(weight);
+          await abort.race(sleep(delayMs), controller?.signal);
+        }
       }
-      return parsed as T;
     } catch (error) {
       if (error instanceof TransportError) throw error;
       if (timeout !== undefined && error === timeout.reason) {
@@ -556,7 +628,8 @@ const INFO_SURCHARGE_PER_60_ITEMS: ReadonlySet<string> = new Set(["candleSnapsho
 /**
  * Weight of a request under Hyperliquid's REST rate limits, billed before sending: the
  * documented per-`type` weight for info requests (2/20/60), 40 for explorer requests, and
- * `1 + floor(batchLength / 40)` for exchange requests. Weights that depend on the response
+ * `1 + floor(batchLength / 40)` for exchange requests (see {@linkcode exchangeWeight} for what
+ * counts as the batch length). Weights that depend on the response
  * size cannot be known here — see {@linkcode responseSurcharge}.
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
@@ -573,26 +646,45 @@ function requestWeight(endpoint: "info" | "exchange" | "explorer", payload: unkn
 }
 
 /**
- * Exchange weight: `1 + floor(batchLength / 40)`, the batch length read from the action's
- * `orders`/`cancels`/`modifies` array. Actions without such a batch cost the documented
- * minimum of 1.
+ * Exchange weight: `1 + floor(batchLength / 40)`, where the docs define `batchLength` as "the
+ * length of the array in the action" (a batched order request is their example). The confirmed
+ * batch arrays are `orders` (order), `cancels` (cancel / cancelByCloid) and `modifies`
+ * (batchModify), but the docs never close the set, so the batch length here is the LONGEST array
+ * found anywhere in the action at any depth — which also bills the deployer arrays (`spotDeploy`
+ * genesis tuples, `perpDeploy` setter lists) and any future batch action. Over-billing only
+ * throttles the client harder while under-billing risks the server limit (429s, ultimately an IP
+ * ban), so the max is the conservative reading. Actions without arrays — or with only short ones
+ * (`< 40` entries: fixed tuples, a single `twap` object carries no array at all,
+ * `convertToMultiSigUser`'s wire-stringified `signers`) — cost the documented minimum of 1.
  *
- * The three keys are the DOCUMENTED batch subset: other actions carry arrays that are not
- * batch-billed (`spotDeploy`/`perpDeploy` payloads, the multi-sig `signatures` array), so a
- * generic "first array" rule would mis-bill them. Whether the protocol's `batch_length` covers
- * anything beyond these three is tracked in https://github.com/bloxwap/hyperliquid/issues/49.
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
  */
 function exchangeWeight(payload: unknown): number {
   const action = exchangeAction(payload);
   if (action === undefined) return 1;
-  for (const key of ["orders", "cancels", "modifies"] as const) {
-    const batch = action[key];
-    if (Array.isArray(batch)) return 1 + Math.floor(batch.length / 40);
-  }
-  return 1;
+  return 1 + Math.floor(maxArrayLength(action) / 40);
 }
 
-/** The action carrying the batch: the payload's `action`, unwrapped one level for multi-sig. */
+/** The length of the longest array found in `value` at any depth (0 when there is none). */
+function maxArrayLength(value: unknown): number {
+  if (Array.isArray(value)) {
+    let max = value.length;
+    for (const item of value) max = Math.max(max, maxArrayLength(item));
+    return max;
+  }
+  if (isRecord(value)) {
+    let max = 0;
+    for (const key in value) max = Math.max(max, maxArrayLength(value[key]));
+    return max;
+  }
+  return 0;
+}
+
+/**
+ * The action carrying the batch: the payload's `action`, unwrapped one level for multi-sig.
+ * Unwrapping also keeps the wrapper's `signatures` array — authentication material, not batch
+ * items — out of the billing walk.
+ */
 function exchangeAction(payload: unknown): Record<string, unknown> | undefined {
   if (!isRecord(payload) || !isRecord(payload.action)) return undefined;
   const action = payload.action;
@@ -610,11 +702,12 @@ function exchangeAction(payload: unknown): Record<string, unknown> | undefined {
  * `blockList`. Post-hoc accounting keeps the limiter honest on average: the response array is
  * the item count the server bills by.
  *
- * Two readings are interpretations the docs do not pin down (tracked in
- * https://github.com/bloxwap/hyperliquid/issues/49): the item count is taken as exactly the
- * top-level response array length, and partial chunks round UP (`ceil`, the conservative
- * choice — the docs say neither `ceil` nor `floor`). `blockList` is exact only for recent
- * blocks: the docs warn older blocks "may be weighted more heavily" without giving a formula.
+ * Two readings are deliberate over-estimates the docs do not pin down (the residual open
+ * questions of https://github.com/bloxwap/hyperliquid/issues/49, settled client-side by
+ * "never under-bill"): the item count is exactly the top-level response array length, and
+ * partial chunks round UP (`ceil`) — the docs say neither `ceil` nor `floor`, so a partial
+ * chunk is billed as a full one. `blockList` is exact only for recent blocks: the docs warn
+ * older blocks "may be weighted more heavily" without giving a formula.
  */
 function responseSurcharge(endpoint: "info" | "exchange" | "explorer", payload: unknown, response: unknown): number {
   if (!Array.isArray(response) || response.length === 0) return 0;
@@ -776,6 +869,54 @@ function parseRetryAfter(value: string | null): number | undefined {
   const date = parseHttpDate(trimmed);
   if (date === undefined) return undefined;
   return Math.max(0, (date - Date.now()) / 1000);
+}
+
+/**
+ * Normalizes {@linkcode HttpTransportOptions.retryOnRateLimit}: `true` maps to the defaults,
+ * `false`/`undefined` to `null` (a 429 throws on the first attempt). Both knobs are validated up
+ * front, the way {@linkcode TokenBucketRateLimiter} validates its own: a negative or non-integer
+ * `maxRetries` and a non-positive or non-finite `maxDelayMs` would otherwise fail silently —
+ * never retrying, or waiting an unbounded time.
+ */
+function normalizeRetryOnRateLimit(
+  option: boolean | HttpRateLimitRetryOptions | undefined,
+): { maxRetries: number; maxDelayMs: number } | null {
+  if (option === undefined || option === false) return null;
+  const { maxRetries = 3, maxDelayMs = 30_000 } = option === true ? {} : option;
+  if (!Number.isSafeInteger(maxRetries) || maxRetries < 0 || !Number.isFinite(maxDelayMs) || maxDelayMs <= 0) {
+    throw new RangeError(
+      `HttpTransport: retryOnRateLimit.maxRetries must be a non-negative integer and maxDelayMs a positive finite number (got maxRetries=${maxRetries}, maxDelayMs=${maxDelayMs})`,
+    );
+  }
+  return { maxRetries, maxDelayMs };
+}
+
+/**
+ * The wait before a retry: with a server-asked `retryAfter` (seconds), exactly that long plus up
+ * to 1 s of jitter — honoring the header while spreading a herd of simultaneous retries; without
+ * one, full-jitter exponential backoff: a random wait within `[0, 2^attempt seconds)`, capped at
+ * `maxDelayMs` (`attempt` is 0-based, so the waits bound at 1 s, 2 s, 4 s, …).
+ *
+ * Returns `undefined` when the server asked for more than `maxDelayMs`: retrying sooner than the
+ * server allowed would just burn attempts on another 429, so the error surfaces instead. A
+ * near-`MAX_SAFE_INTEGER` header lands here too, its millisecond conversion dwarfing any bound.
+ */
+function retryDelayMs(retryAfter: number | undefined, attempt: number, maxDelayMs: number): number | undefined {
+  if (retryAfter !== undefined) {
+    const askedMs = retryAfter * 1000;
+    if (askedMs > maxDelayMs) return undefined;
+    return askedMs + Math.random() * 1000;
+  }
+  return Math.random() * Math.min(1000 * 2 ** attempt, maxDelayMs);
+}
+
+/** Resolves after `ms`; the timer is `unref`'d where supported, so an abandoned wait never holds the process open. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    // Same guarded call as the TimeoutWheel: browser and fake timers return a plain number.
+    (timer as unknown as { unref?: () => void }).unref?.();
+  });
 }
 
 /** Resolves an endpoint against a base URL without dropping the base path or query. */

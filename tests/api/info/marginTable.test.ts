@@ -13,7 +13,11 @@ const paramsSchema = valibotToJsonSchema(v.omit(MarginTableRequest, ["type"]));
 runTest({
   name: "marginTable",
   codeTestFn: async (_t, client) => {
-    const params: MarginTableParameters[] = [{ id: 1 }];
+    const params: MarginTableParameters[] = [
+      { id: 1 },
+      { id: 51, dex: "" }, // main dex
+      { id: 51, dex: "flx" }, // other dex
+    ];
 
     const data = await Promise.all(params.map((p) => client.marginTable(p)));
 
@@ -30,6 +34,6 @@ runOfflineMethodTests({
   name: "marginTable",
   method: marginTable,
   signature: "params",
-  cases: [{ params: { id: 1 } }],
-  invalidParams: [{ id: -1 }, { id: "abc" }, {}],
+  cases: [{ params: { id: 1 } }, { params: { id: 51, dex: "" } }, { params: { id: 51, dex: "flx" } }],
+  invalidParams: [{ id: -1 }, { id: "abc" }, {}, { id: 1, dex: 5 }],
 });

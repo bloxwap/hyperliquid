@@ -14,6 +14,8 @@ runTest({
 
     schemaCoverage(responseSchema, data, [
       "#/properties/outcomes/items/properties/sideSpecs/items/properties/token/present",
+      // deployer is only present for outcomes deployed from a template (unobserved live).
+      "#/properties/outcomes/items/properties/deployer/present",
       "#/properties/questions/items/properties/settledNamedOutcomes/array",
     ]);
   },

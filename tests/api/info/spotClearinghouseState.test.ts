@@ -34,6 +34,7 @@ runTest({
       "#/properties/balances/items/anyOf/1",
       "#/properties/portfolioMarginRatio/present",
       "#/properties/tokenToPortfolioBorrowRatio/present",
+      "#/properties/tokenToPortfolioSupplyRatio/present",
       "#/properties/tokenToAvailableAfterMaintenance/present",
     ]);
   },

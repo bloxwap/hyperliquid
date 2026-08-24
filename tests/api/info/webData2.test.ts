@@ -27,6 +27,9 @@ runTest({
       "#/properties/openOrders/items/properties/orderType/enum/0",
       "#/properties/openOrders/items/properties/orderType/enum/4",
       "#/properties/openOrders/items/properties/orderType/enum/5",
+      "#/properties/openOrders/items/properties/orderType/enum/6",
+      "#/properties/openOrders/items/properties/orderType/enum/7",
+      "#/properties/openOrders/items/properties/orderType/enum/8",
       "#/properties/openOrders/items/properties/tif/enum/1",
       "#/properties/openOrders/items/properties/tif/enum/3",
       "#/properties/openOrders/items/properties/tif/enum/4",
@@ -36,9 +39,10 @@ runTest({
       "#/properties/meta/properties/universe/items/properties/growthMode/present",
       "#/properties/meta/properties/universe/items/properties/lastGrowthModeChangeTime/present",
       "#/properties/twapStates/array",
-      // trigger/stopPx always arrive as null on the wire (not settable via the current TWAP order
-      // action), so their missing/non-null branches are uncoverable live.
+      // trigger/stopPx always arrive as null for these accounts (no trigger/stop set), so
+      // their missing/non-null branches are uncoverable live.
       "#/properties/twapStates/items/items/1/properties/trigger/missing",
+      "#/properties/twapStates/items/items/1/properties/trigger/defined",
       "#/properties/twapStates/items/items/1/properties/stopPx/missing",
       "#/properties/twapStates/items/items/1/properties/stopPx/defined",
       "#/properties/perpsAtOpenInterestCap/present",
@@ -48,6 +52,7 @@ runTest({
       "#/properties/spotState/properties/portfolioMarginEnabled/present",
       "#/properties/spotState/properties/portfolioMarginRatio/present",
       "#/properties/spotState/properties/tokenToPortfolioBorrowRatio/present",
+      "#/properties/spotState/properties/tokenToPortfolioSupplyRatio/present",
       "#/properties/spotState/properties/tokenToAvailableAfterMaintenance/present",
       "#/properties/spotState/properties/balances/items/anyOf/0/properties/spotHold/present",
       "#/properties/spotState/properties/balances/items/anyOf/0/properties/ltv/present",

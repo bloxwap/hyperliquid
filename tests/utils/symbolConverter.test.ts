@@ -8,7 +8,7 @@ import { beforeAll, describe, test } from "bun:test";
 import { assertEquals } from "@jsr/std__assert";
 import { HttpTransport, type IRequestTransport } from "@bloxwap/hyperliquid";
 import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
-import type { OutcomeMetaResponse } from "@bloxwap/hyperliquid/api/info";
+import type { OutcomeMetaResponse, SpotMetaResponse } from "@bloxwap/hyperliquid/api/info";
 import { OFFLINE } from "../_offline.ts";
 
 // ============================================================
@@ -21,6 +21,22 @@ function createOutcomeTransport(outcomeMeta: OutcomeMetaResponse): IRequestTrans
     meta: { universe: [] },
     spotMeta: { tokens: [], universe: [] },
     outcomeMeta,
+  };
+  return {
+    isTestnet: false,
+    request<T>(_endpoint: "info" | "exchange" | "explorer", payload: unknown): Promise<T> {
+      const { type } = payload as { type: string };
+      return Promise.resolve(responses[type] as T);
+    },
+  };
+}
+
+/** Builds a request transport that serves a fixed `spotMeta` and empty perpetual/outcome metadata. */
+function createSpotTransport(spotMeta: SpotMetaResponse): IRequestTransport {
+  const responses: Record<string, unknown> = {
+    meta: { universe: [] },
+    spotMeta,
+    outcomeMeta: { outcomes: [], questions: [] },
   };
   return {
     isTestnet: false,
@@ -49,6 +65,35 @@ const DEX_EXPECTATIONS = {
   "test:ABC": { assetId: 110000 },
   "unit:ES": { assetId: 120000 },
 } as const;
+
+/** A trimmed `spotMeta` response with one canonical pair, modeled on real mainnet data. */
+const SPOT_META: SpotMetaResponse = {
+  tokens: [
+    {
+      name: "USDC",
+      szDecimals: 8,
+      weiDecimals: 8,
+      index: 0,
+      tokenId: "0x00000000000000000000000000000000",
+      isCanonical: true,
+      evmContract: null,
+      fullName: null,
+      deployerTradingFeeShare: "0",
+    },
+    {
+      name: "PURR",
+      szDecimals: 0,
+      weiDecimals: 0,
+      index: 1,
+      tokenId: "0x00000000000000000000000000000001",
+      isCanonical: true,
+      evmContract: null,
+      fullName: null,
+      deployerTradingFeeShare: "0",
+    },
+  ],
+  universe: [{ tokens: [1, 0], name: "@1", index: 0, isCanonical: true }],
+};
 
 /** A trimmed `outcomeMeta` response covering every supported market type, modeled on real mainnet data. */
 const OUTCOME_META: OutcomeMetaResponse = {
@@ -312,5 +357,25 @@ describe("SymbolConverter outcome markets", () => {
     // Outcome markets take integer sizes only (HIP-4): fractional sizes are rejected.
     assertEquals(converter.getSzDecimals("nba-finals-game-3-san-antonio"), 0);
     assertEquals(converter.getSzDecimals("2026-world-cup-champion-argentina-yes"), 0);
+  });
+});
+
+describe("SymbolConverter spot pair lookups", () => {
+  // Fed by a stub transport, so this group stays runnable offline.
+  let converter: SymbolConverter;
+
+  beforeAll(async () => {
+    converter = await SymbolConverter.create({ transport: createSpotTransport(SPOT_META) });
+  });
+
+  test("getSpotPairId()", () => {
+    assertEquals(converter.getSpotPairId("PURR/USDC"), "@1");
+    assertEquals(converter.getSpotPairId("NONE/EXISTENT"), undefined);
+  });
+
+  test("getSymbolBySpotPairId()", () => {
+    assertEquals(converter.getSymbolBySpotPairId("@1"), "PURR/USDC");
+    assertEquals(converter.getSymbolBySpotPairId("@999999"), undefined);
+    assertEquals(converter.getSymbolBySpotPairId("PURR/USDC"), undefined);
   });
 });

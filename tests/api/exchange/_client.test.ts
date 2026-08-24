@@ -68,6 +68,11 @@ interface MethodCase {
 // ============================================================
 
 const METHOD_CASES: Record<string, MethodCase> = {
+  activateOutcomeDeployer: {
+    run: (c) => c.activateOutcomeDeployer({ isDeactivate: false }),
+    action: { type: "activateOutcomeDeployer", isDeactivate: false },
+    invalid: (c) => c.activateOutcomeDeployer({} as never),
+  },
   agentEnableDexAbstraction: {
     run: (c) => c.agentEnableDexAbstraction(),
     action: { type: "agentEnableDexAbstraction" },

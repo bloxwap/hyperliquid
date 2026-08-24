@@ -102,6 +102,7 @@ import {
 import { openOrders, type OpenOrdersParameters, type OpenOrdersResponse } from "./_methods/openOrders.ts";
 import { orderStatus, type OrderStatusParameters, type OrderStatusResponse } from "./_methods/orderStatus.ts";
 import { outcomeMeta, type OutcomeMetaResponse } from "./_methods/outcomeMeta.ts";
+import { outcomeTemplates, type OutcomeTemplatesResponse } from "./_methods/outcomeTemplates.ts";
 import {
   perpAnnotation,
   type PerpAnnotationParameters,
@@ -152,6 +153,7 @@ import { subAccounts, type SubAccountsParameters, type SubAccountsResponse } fro
 import { subAccounts2, type SubAccounts2Parameters, type SubAccounts2Response } from "./_methods/subAccounts2.ts";
 import { tokenDetails, type TokenDetailsParameters, type TokenDetailsResponse } from "./_methods/tokenDetails.ts";
 import { twapHistory, type TwapHistoryParameters, type TwapHistoryResponse } from "./_methods/twapHistory.ts";
+import { usdcRouting, type UsdcRoutingResponse } from "./_methods/usdcRouting.ts";
 import {
   userAbstraction,
   type UserAbstractionParameters,
@@ -1223,6 +1225,31 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   }
 
   /**
+   * Request outcome templates.
+   *
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Array of templates that outcome deployers instantiate.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * const data = await client.outcomeTemplates();
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions#read-api
+   */
+  outcomeTemplates(signal?: AbortSignal): Promise<OutcomeTemplatesResponse> {
+    return outcomeTemplates(this.config_, signal);
+  }
+
+  /**
    * Request perp annotation.
    *
    * @param params Parameters specific to the API request.
@@ -1823,6 +1850,31 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   twapHistory(params: TwapHistoryParameters, signal?: AbortSignal): Promise<TwapHistoryResponse> {
     return twapHistory(this.config_, params, signal);
+  }
+
+  /**
+   * Request USDC transfer routing.
+   *
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Routes currently used to move USDC in and out of the platform.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * const data = await client.usdcRouting();
+   * ```
+   *
+   * @see null
+   */
+  usdcRouting(signal?: AbortSignal): Promise<UsdcRoutingResponse> {
+    return usdcRouting(this.config_, signal);
   }
 
   /**
@@ -2518,6 +2570,7 @@ export type { MetaAndAssetCtxsParameters, MetaAndAssetCtxsResponse } from "./_me
 export type { OpenOrdersParameters, OpenOrdersResponse } from "./_methods/openOrders.ts";
 export type { OrderStatusParameters, OrderStatusResponse } from "./_methods/orderStatus.ts";
 export type { OutcomeMetaResponse } from "./_methods/outcomeMeta.ts";
+export type { OutcomeTemplatesResponse } from "./_methods/outcomeTemplates.ts";
 export type { PerpAnnotationParameters, PerpAnnotationResponse } from "./_methods/perpAnnotation.ts";
 export type { PerpCategoriesResponse } from "./_methods/perpCategories.ts";
 export type { PerpConciseAnnotationsResponse } from "./_methods/perpConciseAnnotations.ts";
@@ -2547,6 +2600,7 @@ export type { SubAccountsParameters, SubAccountsResponse } from "./_methods/subA
 export type { SubAccounts2Parameters, SubAccounts2Response } from "./_methods/subAccounts2.ts";
 export type { TokenDetailsParameters, TokenDetailsResponse } from "./_methods/tokenDetails.ts";
 export type { TwapHistoryParameters, TwapHistoryResponse } from "./_methods/twapHistory.ts";
+export type { UsdcRoutingResponse } from "./_methods/usdcRouting.ts";
 export type { UserAbstractionParameters, UserAbstractionResponse } from "./_methods/userAbstraction.ts";
 export type {
   UserBorrowLendInterestParameters,

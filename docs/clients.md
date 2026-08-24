@@ -49,6 +49,44 @@ and cannot reach older history. `historicalOrders` (at most 2000 most recent ord
 paginated. `userFillsByTimeAll` rejects `reversed: true`: the walk moves forward from `startTime` and needs ascending
 pages.
 
+### Caching slow-changing metadata
+
+Info responses are never cached by default. If your app polls metadata endpoints (`meta`, `spotMeta`, …) in a loop,
+wrap the transport in `InfoCacheTransport` — an opt-in TTL cache that works over both HTTP and WebSocket transports and
+leaves every non-allowlisted request untouched:
+
+```ts
+import { HttpTransport, InfoCacheTransport, InfoClient } from "@bloxwap/hyperliquid";
+
+const transport = new InfoCacheTransport(new HttpTransport(), {
+  ttl: 60_000, // default TTL for every cached endpoint (1 minute)
+  ttlByType: { marginTable: 600_000 }, // per-endpoint overrides
+});
+const client = new InfoClient({ transport });
+
+await client.meta(); // hits the network
+await client.meta(); // served from cache until the TTL expires
+```
+
+Only a conservative allowlist of listing- or deployment-driven endpoints is cached — `meta`, `spotMeta`,
+`allPerpMetas`, `perpDexs`, `marginTable`, `tokenDetails`, `outcomeMeta`, `outcomeTemplates`. Responses with live
+market data (`metaAndAssetCtxs`, `spotMetaAndAssetCtxs`), exchange status, user state, and order books always pass
+through uncached. Cache keys incorporate the request params, so e.g. `marginTable` with different `id`/`dex` values
+never collide, and concurrent identical calls share one in-flight request.
+
+Metadata changes are rare but unannounced (new listings, new DEXs), so the useful TTL band is seconds to minutes:
+30 s – 5 min for the `meta` family and `outcomeMeta`; 5 – 10 min or more for the near-static `marginTable`,
+`perpDexs`, `tokenDetails`, and `outcomeTemplates`. The default is 60 s. Call `transport.clear()` to force a refetch
+of everything.
+
+Two interactions to be aware of:
+
+- `SymbolConverter` fetches `meta`/`spotMeta`/`perpDexs`/`outcomeMeta` through whatever transport it is given. With a
+  caching transport, its `reload()` serves cached data within the TTL — give the converter its own unwrapped transport,
+  or call `clear()` first, when a reload must see fresh listings.
+- `InfoCacheTransport` implements only the request interface. When wrapping a `WebSocketTransport`, pass the raw
+  WebSocket transport to `SubscriptionClient` and the wrapped one to `InfoClient`.
+
 ## Exchange endpoint
 
 `ExchangeClient` requires a wallet for [signing](signing.md#wallet-compatibility) and works with any transport. See all

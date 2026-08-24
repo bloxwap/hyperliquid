@@ -1,6 +1,7 @@
 import { userFees, type UserFeesParameters, UserFeesRequest } from "@bloxwap/hyperliquid/api/info";
 import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
+import { describe, test } from "bun:test";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -27,6 +28,56 @@ runTest({
       "#/properties/stakingLink/defined",
     ]);
   },
+});
+
+// ============================================================
+// Offline: response schema — stakingLink variants (issue #102)
+// ============================================================
+
+describe("userFees (offline)", () => {
+  test("all stakingLink variants satisfy the response schema", () => {
+    const base = {
+      dailyUserVlm: [{ date: "2026-01-01", userCross: "0.0", userAdd: "0.0", exchange: "0.0" }],
+      feeSchedule: {
+        cross: "0.00045",
+        add: "0.00015",
+        spotCross: "0.0007",
+        spotAdd: "0.0004",
+        tiers: {
+          vip: [{ ntlCutoff: "5000000.0", cross: "0.0004", add: "0.00012", spotCross: "0.0006", spotAdd: "0.0003" }],
+          mm: [{ makerFractionCutoff: "0.005", add: "0.00001" }],
+        },
+        referralDiscount: "0.04",
+        stakingDiscountTiers: [{ bpsOfMaxSupply: "0.0", discount: "0.0" }],
+      },
+      userCrossRate: "0.00045",
+      userAddRate: "0.00015",
+      userSpotCrossRate: "0.0007",
+      userSpotAddRate: "0.0004",
+      activeReferralDiscount: "0.04",
+      trial: null,
+      feeTrialEscrow: "0.0",
+      nextTrialAvailableTimestamp: null,
+      activeStakingDiscount: { bpsOfMaxSupply: "0.0", discount: "0.0" },
+    };
+    const samples = [
+      { ...base, stakingLink: null },
+      { ...base, trial: {}, nextTrialAvailableTimestamp: 1780000000000, stakingLink: null },
+      {
+        ...base,
+        stakingLink: { type: "requested", stakingUser: "0x0000000000000000000000000000000000000001" },
+      },
+      {
+        ...base,
+        stakingLink: { type: "tradingUser", stakingUser: "0x0000000000000000000000000000000000000001" },
+      },
+      {
+        ...base,
+        stakingLink: { type: "stakingUser", tradingUser: "0x0000000000000000000000000000000000000002" },
+      },
+    ];
+    schemaCoverage(responseSchema, samples);
+  });
 });
 
 // ============================================================

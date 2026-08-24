@@ -4,22 +4,20 @@ import * as v from "valibot";
 // API Schemas
 // ============================================================
 
-import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
+import { Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
- * Reserve additional rate-limited actions for a fee.
- * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#reserve-additional-actions
+ * Activate or deactivate the signer as an outcome deployer.
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions#activation
  */
-export const ReserveRequestWeightRequest = /* @__PURE__ */ (() => {
+export const ActivateOutcomeDeployerRequest = /* @__PURE__ */ (() => {
   return v.object({
     /** Action to perform. */
     action: v.object({
       /** Type of action. */
-      type: v.literal("reserveRequestWeight"),
-      /** Amount of request weight to reserve. */
-      weight: v.pipe(UnsignedInteger, v.maxValue(1844674407370955)), // Truncated max uint64 / 10000
-      /** Address of an existing user to reserve the weight for. */
-      destination: v.optional(Address),
+      type: v.literal("activateOutcomeDeployer"),
+      /** Deactivate instead of activate. */
+      isDeactivate: v.boolean(),
     }),
     /** Nonce (timestamp in ms) used to prevent replay attacks. */
     nonce: UnsignedInteger,
@@ -36,13 +34,13 @@ export const ReserveRequestWeightRequest = /* @__PURE__ */ (() => {
     expiresAfter: v.optional(UnsignedInteger),
   });
 })();
-export type ReserveRequestWeightRequest = v.InferOutput<typeof ReserveRequestWeightRequest>;
+export type ActivateOutcomeDeployerRequest = v.InferOutput<typeof ActivateOutcomeDeployerRequest>;
 
 /**
  * Successful response without specific data or error response.
- * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#reserve-additional-actions
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions#activation
  */
-export type ReserveRequestWeightResponse =
+export type ActivateOutcomeDeployerResponse =
   | {
       /** Successful status. */
       status: "ok";
@@ -72,21 +70,21 @@ import {
 } from "./_base/mod.ts";
 
 /** Schema for action fields (excludes request-level system fields). */
-const ReserveRequestWeightActionSchema = /* @__PURE__ */ (() => {
-  return v.object(ReserveRequestWeightRequest.entries.action.entries);
+const ActivateOutcomeDeployerActionSchema = /* @__PURE__ */ (() => {
+  return v.object(ActivateOutcomeDeployerRequest.entries.action.entries);
 })();
 
-/** Action parameters for the {@linkcode reserveRequestWeight} function. */
-export type ReserveRequestWeightParameters = Omit<v.InferInput<typeof ReserveRequestWeightActionSchema>, "type">;
+/** Action parameters for the {@linkcode activateOutcomeDeployer} function. */
+export type ActivateOutcomeDeployerParameters = Omit<v.InferInput<typeof ActivateOutcomeDeployerActionSchema>, "type">;
 
-/** Request options for the {@linkcode reserveRequestWeight} function. */
-export type ReserveRequestWeightOptions = ExtractRequestOptions<v.InferInput<typeof ReserveRequestWeightRequest>>;
+/** Request options for the {@linkcode activateOutcomeDeployer} function. */
+export type ActivateOutcomeDeployerOptions = ExtractRequestOptions<v.InferInput<typeof ActivateOutcomeDeployerRequest>>;
 
-/** Successful variant of {@linkcode ReserveRequestWeightResponse} without errors. */
-export type ReserveRequestWeightSuccessResponse = ExcludeErrorResponse<ReserveRequestWeightResponse>;
+/** Successful variant of {@linkcode ActivateOutcomeDeployerResponse} without errors. */
+export type ActivateOutcomeDeployerSuccessResponse = ExcludeErrorResponse<ActivateOutcomeDeployerResponse>;
 
 /**
- * Reserve additional rate-limited actions for a fee.
+ * Activate or deactivate the signer as an outcome deployer.
  *
  * Signing: L1 Action.
  *
@@ -102,24 +100,24 @@ export type ReserveRequestWeightSuccessResponse = ExcludeErrorResponse<ReserveRe
  * @example
  * ```ts
  * import { HttpTransport } from "@bloxwap/hyperliquid";
- * import { reserveRequestWeight } from "@bloxwap/hyperliquid/api/exchange";
+ * import { activateOutcomeDeployer } from "@bloxwap/hyperliquid/api/exchange";
  * import { privateKeyToAccount } from "viem/accounts";
  *
  * const wallet = privateKeyToAccount("0x...");
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
- * await reserveRequestWeight({ transport, wallet }, {
- *   weight: 10,
+ * await activateOutcomeDeployer({ transport, wallet }, {
+ *   isDeactivate: false,
  * });
  * ```
  *
- * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#reserve-additional-actions
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions#activation
  */
-export function reserveRequestWeight(
+export function activateOutcomeDeployer(
   config: ExchangeConfig,
-  params: ReserveRequestWeightParameters,
-  opts?: ReserveRequestWeightOptions,
-): Promise<ReserveRequestWeightSuccessResponse> {
-  const action = buildAction(ReserveRequestWeightActionSchema, { type: "reserveRequestWeight", ...params }, opts);
+  params: ActivateOutcomeDeployerParameters,
+  opts?: ActivateOutcomeDeployerOptions,
+): Promise<ActivateOutcomeDeployerSuccessResponse> {
+  const action = buildAction(ActivateOutcomeDeployerActionSchema, { type: "activateOutcomeDeployer", ...params }, opts);
   return executeL1Action(config, action, opts);
 }

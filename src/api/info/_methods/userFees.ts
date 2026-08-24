@@ -166,28 +166,36 @@ export type UserFeesResponse = {
    */
   feeTrialEscrow: string;
   /** Timestamp when next trial becomes available. */
-  nextTrialAvailableTimestamp: unknown | null;
+  nextTrialAvailableTimestamp: number | null;
   /**
    * Permanent link between staking and trading accounts.
    * Staking user gains full control of trading account funds.
    * Staking user forfeits own fee discounts.
    */
-  stakingLink: {
-    /**
-     * Linked account address:
-     * - When queried by staking account: contains trading account address.
-     * - When queried by trading account: contains staking account address.
-     * @pattern ^0x[a-fA-F0-9]{40}$
-     */
-    stakingUser: `0x${string}`;
-    /**
-     * Link status:
-     * - `requested` = link initiated by trading user, awaiting staking user confirmation.
-     * - `stakingUser` = response queried by staking account.
-     * - `tradingUser` = response queried by trading account.
-     */
-    type: "requested" | "stakingUser" | "tradingUser";
-  } | null;
+  stakingLink:
+    | {
+        /**
+         * Link status:
+         * - `"requested"`: Link initiated by trading user, awaiting staking user confirmation.
+         * - `"tradingUser"`: Response queried by trading account.
+         */
+        type: "requested" | "tradingUser";
+        /**
+         * Staking account address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        stakingUser: `0x${string}`;
+      }
+    | {
+        /** Link status: response queried by staking account. */
+        type: "stakingUser";
+        /**
+         * Trading account address.
+         * @pattern ^0x[a-fA-F0-9]{40}$
+         */
+        tradingUser: `0x${string}`;
+      }
+    | null;
   /** Active staking discount details. */
   activeStakingDiscount: {
     /**
