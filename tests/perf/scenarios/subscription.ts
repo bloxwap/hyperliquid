@@ -165,8 +165,10 @@ scenario({
   },
   run: async () => {
     // A fresh transport per sample: the burst's cost is a function of how many requests are in
-    // flight, and a reused transport would only accumulate settled subscriptions.
-    const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+    // flight, and a reused transport would only accumulate settled subscriptions. The default
+    // 10 s request timeout is disabled: outbound pacing spreads the burst over ~15 s, and this
+    // scenario measures echo dispatch, not timeout behavior.
+    const transport = new WebSocketTransport({ url: "wss://perf.local/ws", timeout: null });
     await transport.ready();
     const socket = lastMockWebSocket();
 
@@ -174,11 +176,25 @@ scenario({
     // arrive, which is exactly the reconnect shape this scenario measures.
     const frames: string[] = [];
     socket.send = (data: string | ArrayBufferLike | Blob | ArrayBufferView): void => {
-      frames.push(String(data));
+      const text = String(data);
+      // Pings are keep-alive traffic, not burst frames: answer them like the real server and
+      // keep them out of the echo list (an unanswered ping force-reconnects mid-scenario).
+      if (text === '{"method":"ping"}') {
+        queueMicrotask(() => socket.serverSend({ channel: "pong" }));
+        return;
+      }
+      frames.push(text);
     };
 
     const client = new SubscriptionClient({ transport });
     const subs = Array.from({ length: BURST_SUBSCRIPTIONS }, (_, i) => client.l2Book({ coin: `BURST${i}` }, () => {}));
+
+    // Outbound pacing trickles the burst out over real time, so `frames` is still filling when
+    // Array.from returns; wait for the last subscribe to hit the wire before echoing, or the
+    // tail of the burst would never be answered.
+    while (frames.length < BURST_SUBSCRIPTIONS) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
 
     // The server echoes each subscription verbatim, one frame per task; the microtask flushes
     // let each confirmed request dequeue before the next echo, as on a real socket.

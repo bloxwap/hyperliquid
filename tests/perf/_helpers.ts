@@ -142,6 +142,12 @@ export class MockWebSocket extends EventTarget {
     } catch {
       return; // not JSON: nothing to auto-answer
     }
+    if (frame?.method === "ping") {
+      // Keep-alive watchdog: the real server always pongs, and without this a long-paced
+      // scenario looks silent and gets force-reconnected mid-measurement.
+      queueMicrotask(() => this.serverSend({ channel: "pong" }));
+      return;
+    }
     if (frame?.method === "subscribe" || frame?.method === "unsubscribe") {
       const confirmation = {
         channel: "subscriptionResponse",
