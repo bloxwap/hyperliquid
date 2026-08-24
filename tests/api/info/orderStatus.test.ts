@@ -50,6 +50,9 @@ runTest({
 
     schemaCoverage(paramsSchema, params);
     schemaCoverage(responseSchema, data, [
+      "#/anyOf/0/properties/order/properties/order/properties/orderType/enum/6",
+      "#/anyOf/0/properties/order/properties/order/properties/orderType/enum/7",
+      "#/anyOf/0/properties/order/properties/order/properties/orderType/enum/8",
       "#/anyOf/0/properties/order/properties/order/properties/children/*",
       "#/anyOf/0/properties/order/properties/order/properties/tif/enum/5",
       "#/anyOf/0/properties/order/properties/status/enum/3",
@@ -76,6 +79,9 @@ runTest({
       "#/anyOf/0/properties/order/properties/status/enum/26",
       "#/anyOf/0/properties/order/properties/status/enum/27",
       "#/anyOf/0/properties/order/properties/status/enum/28",
+      "#/anyOf/0/properties/order/properties/status/enum/29",
+      "#/anyOf/0/properties/order/properties/status/enum/30",
+      "#/anyOf/0/properties/order/properties/status/enum/31",
     ]);
   },
 });

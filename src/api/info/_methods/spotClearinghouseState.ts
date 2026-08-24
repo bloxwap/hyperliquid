@@ -71,8 +71,12 @@ export type SpotClearinghouseStateResponse = {
         supplied?: string;
       }
     | {
-        /** Outcome market identifier ("+" followed by `assetId - 100000000`). */
-        coin: `+${number}`;
+        /**
+         * Outcome market identifier:
+         * - `+N`: `N` is `assetId - 100000000` of an active outcome market.
+         * - `oN`: `N` is the identifier of a settled outcome.
+         */
+        coin: `+${number}` | `o${number}`;
         /**
          * Total balance.
          * @pattern ^[0-9]+(\.[0-9]+)?$
@@ -113,6 +117,16 @@ export type SpotClearinghouseStateResponse = {
     token: number,
     /**
      * Borrow ratio.
+     * @pattern ^[0-9]+(\.[0-9]+)?$
+     */
+    ratio: string,
+  ][];
+  /** Portfolio supply ratio per token. */
+  tokenToPortfolioSupplyRatio?: [
+    /** Token identifier. */
+    token: number,
+    /**
+     * Supply ratio.
      * @pattern ^[0-9]+(\.[0-9]+)?$
      */
     ratio: string,

@@ -1,6 +1,7 @@
 import { legalCheck, type LegalCheckParameters, LegalCheckRequest } from "@bloxwap/hyperliquid/api/info";
 import { runOfflineMethodTests } from "./_offlineMethodTests.ts";
 import * as v from "valibot";
+import { describe, test } from "bun:test";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
 import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
 import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
@@ -18,12 +19,30 @@ runTest({
     const data = await Promise.all(params.map((p) => client.legalCheck(p)));
 
     schemaCoverage(paramsSchema, params);
+    // The live account only ever returns one restriction code; the offline block below
+    // covers all four.
     schemaCoverage(responseSchema, data, [
-      "#/properties/restrictions/missing",
       "#/properties/restrictions/enum/0",
       "#/properties/restrictions/enum/1",
+      "#/properties/restrictions/enum/2",
+      "#/properties/restrictions/enum/3",
     ]);
   },
+});
+
+// ============================================================
+// Offline: response schema — all restriction codes (issue #103)
+// ============================================================
+
+describe("legalCheck (offline)", () => {
+  test("all restriction codes satisfy the response schema", () => {
+    const samples = (["n", "a", "o", "u"] as const).map((restrictions) => ({
+      acceptedTerms: true,
+      userAllowed: restrictions === "n",
+      restrictions,
+    }));
+    schemaCoverage(responseSchema, samples);
+  });
 });
 
 // ============================================================

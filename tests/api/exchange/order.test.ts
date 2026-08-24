@@ -134,13 +134,35 @@ runTest({
 // ============================================================
 
 describe("order (offline)", () => {
+  const wallet = privateKeyToAccount("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+  const baseOrders = [{ a: 0, b: true, p: "1", s: "1", r: false, t: { limit: { tif: "Ioc" as const } } }];
+
   test("empty orders array fails validation before sending", () => {
-    const wallet = privateKeyToAccount("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
     const transport: IRequestTransport = {
       isTestnet: true,
       request: () => Promise.reject(new Error("must not be sent")),
     };
 
     assertThrows(() => order({ transport, wallet }, { orders: [] }), ValidationError, "Invalid length");
+  });
+
+  test("priority grouping cap is 1e8 (issue #99)", async () => {
+    const transport: IRequestTransport = {
+      isTestnet: true,
+      request: () => Promise.reject(new Error("validation passed")),
+    };
+
+    // Boundary: p = 1e8 (100%) passes client-side validation and reaches the transport.
+    await assertRejects(
+      () => order({ transport, wallet }, { orders: baseOrders, grouping: { p: 100_000_000 } }),
+      Error,
+      "validation passed",
+    );
+    // Above the cap: rejected by client-side validation before sending.
+    assertThrows(
+      () => order({ transport, wallet }, { orders: baseOrders, grouping: { p: 100_000_001 } }),
+      ValidationError,
+      "Invalid value",
+    );
   });
 });

@@ -19,11 +19,12 @@ runTest({
     const data = await Promise.all(params.map((p) => client.twapHistory(p)));
 
     schemaCoverage(paramsSchema, params);
-    // Live wire always carries trigger/stopPx as null (not settable via the current TWAP order
-    // action), so the missing/non-null branches are uncoverable live — the offline block below
+    // Live wire always carries trigger/stopPx as null for this account (no trigger/stop set),
+    // so the missing/non-null branches are uncoverable live — the offline block below
     // covers them.
     schemaCoverage(responseSchema, data, [
       "#/items/properties/state/properties/trigger/missing",
+      "#/items/properties/state/properties/trigger/defined",
       "#/items/properties/state/properties/stopPx/missing",
       "#/items/properties/state/properties/stopPx/defined",
     ]);
@@ -59,7 +60,8 @@ describe("twapHistory (offline)", () => {
 
   test("live-shaped states with trigger/stopPx satisfy the response schema", () => {
     // Covers every schema branch: side B/A, trigger present-null/present-non-null/absent,
-    // stopPx present-null/present-non-null/absent, all statuses, twapId present/absent.
+    // stopPx present-null/present-non-null/absent, all statuses (including waitingForTrigger
+    // and stopped from #100), twapId present/absent.
     const samples = [
       liveSample,
       {
@@ -75,7 +77,7 @@ describe("twapHistory (offline)", () => {
           reduceOnly: true,
           randomize: false,
           timestamp: 1784814835868,
-          // trigger and stopPx absent (not settable via the current TWAP order action)
+          // trigger and stopPx absent (not set on pre-field-availability responses)
         },
         status: { status: "activated" },
         // twapId absent on pre-id-availability responses
@@ -93,7 +95,7 @@ describe("twapHistory (offline)", () => {
           reduceOnly: false,
           randomize: true,
           timestamp: 1732937510435,
-          trigger: { isMarket: true, triggerPx: "25.5", tpsl: "sl" }, // shape unestablished; unknown accepts any
+          trigger: { px: "25.5", above: false }, // settable via twapOrder `details` (#100)
           stopPx: "25.5",
         },
         status: { status: "terminated" },
@@ -115,6 +117,44 @@ describe("twapHistory (offline)", () => {
         },
         status: { status: "error", description: "Twap fill failure: insufficient balance" },
         twapId: 1873181,
+      },
+      {
+        time: 1784814900,
+        state: {
+          coin: "HYPE",
+          user: "0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00",
+          side: "B",
+          sz: "144.36",
+          executedSz: "0.0",
+          executedNtl: "0.0",
+          minutes: 5,
+          reduceOnly: false,
+          randomize: false,
+          timestamp: 1732937510435,
+          trigger: { px: "30.0", above: true },
+          stopPx: null,
+        },
+        status: { status: "waitingForTrigger" },
+        twapId: 1873182,
+      },
+      {
+        time: 1784815000,
+        state: {
+          coin: "HYPE",
+          user: "0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00",
+          side: "B",
+          sz: "144.36",
+          executedSz: "50.13",
+          executedNtl: "348.294323",
+          minutes: 5,
+          reduceOnly: false,
+          randomize: false,
+          timestamp: 1732937510435,
+          trigger: null,
+          stopPx: "20.0",
+        },
+        status: { status: "stopped" },
+        twapId: 1873183,
       },
     ];
     schemaCoverage(responseSchema, [samples]);
