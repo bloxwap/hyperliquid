@@ -100,10 +100,9 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
 - **Docs claim:** each entry of `outcomes` carries no `deployer`.
 - **Server reality:** every outcome in the response now includes `deployer`; the schema-coverage check reports
   `additionalProperty: "deployer"` across the whole `outcomes` array (observed at indices 0 through 157+).
-- **SDK behavior:** runtime unaffected — Info responses are delivered to callers as received, so the field is present
-  on the objects you get. The `OutcomeMetaResponse` **type** in `src/api/info/_methods/outcomeMeta.ts` does not
-  declare it yet, so it is invisible to TypeScript and `tests/api/info/outcomeMeta.test.ts` fails online until the
-  type is widened. Per [Versioning](../README.md#versioning) that type change ships in a patch release.
+- **SDK behavior:** fixed — `OutcomeMetaResponse` in `src/api/info/_methods/outcomeMeta.ts` declares
+  `deployer` as an optional field, so it is typed and the schema-coverage test accepts it. The docs still don't
+  mention the field, so this entry stays open until they do.
 
 ### 10. `validatorL1Votes` actions gained `registerTemplate`
 
@@ -113,9 +112,25 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   `registerTokensAndStandaloneOutcome`, so it matches no variant of the documented union — the check reports both
   `missingProperty: "registerTokensAndStandaloneOutcome"` and `additionalProperty: "registerTemplate"` for the same
   sample.
-- **SDK behavior:** runtime unaffected for the same reason as #9; the union in
-  `src/api/info/_methods/validatorL1Votes.ts` needs a `registerTemplate` variant, and
-  `tests/api/info/validatorL1Votes.test.ts` fails online until it has one.
+- **SDK behavior:** fixed — the union in `src/api/info/_methods/validatorL1Votes.ts` includes the
+  `registerTemplate` variant (and the `settleQuestion2` variant added alongside it), so live votes validate. The
+  docs still don't show the variant, so this entry stays open until they do.
+
+### 11. Aug-2026 outcome-template surface is undocumented
+
+- **Observed:** 2026-08-23.
+- **Docs claim:** the info-endpoint and exchange-endpoint pages have no entries for `outcomeTemplates`,
+  `usdcRouting`, `activateOutcomeDeployer`, the `spotDeploy` outcome sub-actions
+  (`registerStandaloneOutcomeFromTemplate`, `registerQuestionFromTemplate`, `settleOutcome`, `settleQuestion2`),
+  `twapOrder`'s `details` (trigger/stop), `reserveRequestWeight`'s `destination`, or `marginTable`'s `dex`
+  parameter.
+- **Server reality:** all of the above are live — they shipped in the Aug-2026 "HIP-4 outcome templates" API drop.
+- **SDK behavior:** supported — schemas were implemented against the reference TypeScript SDK
+  ([nktkas/hyperliquid](https://github.com/nktkas/hyperliquid) v0.33.3), which tracks the deployed API, then
+  widened where live testnet responses went further: `outcomeTemplates` serves keyword formats `uDecimal`, `uInt`,
+  and `shortString` and a `role` union of `standaloneOutcome` / `questionOutcome` / `"question"` that the upstream
+  schema doesn't cover (observed 2026-08-24). If the official docs publish different shapes when they catch up,
+  reconcile the schemas then.
 
 ## Resolved
 

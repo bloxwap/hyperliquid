@@ -122,11 +122,13 @@ The limiter bills the documented weights:
 | `explorer`                                                                                                          | 40                                                                                    |
 | `exchange`                                                                                                          | `1 + floor(batchLength / 40)`                                                         |
 
-The exchange batch length is read from the action's `orders`/`cancels`/`modifies` array, unwrapping multi-sig
-actions (the batch lives inside `action.payload.action`). Those three keys are the documented batch subset — other
-actions carry arrays that are not batch-billed (`spotDeploy`/`perpDeploy` payloads, the multi-sig `signatures`
-array), so the limiter deliberately does not bill by a generic "first array" rule; whether the protocol's
-`batch_length` covers anything more is tracked in [issue #49](https://github.com/bloxwap/hyperliquid/issues/49).
+The exchange batch length is the longest array found anywhere in the action at any depth, unwrapping multi-sig
+actions (the batch lives inside `action.payload.action`; the wrapper's `signatures` array is auth material, never
+billed). That covers the documented batch keys (`orders`/`cancels`/`modifies`) and also bills deployer arrays
+(`spotDeploy` genesis tuples, `perpDeploy` setter lists) and any future batch action — the docs define
+`batch_length` as "the length of the array in the action" without closing the set, and over-billing is the safe
+side. Arrays shorter than 40 entries (fixed tuples), `twapOrder`'s single `twap` object, and
+`convertToMultiSigUser`'s wire-stringified `signers` keep the minimum weight of 1.
 
 Response-size surcharges can only be known once the response arrives, so they are debited from the bucket **after**
 the response: 1 extra weight per 20 returned items on the documented list endpoints (`recentTrades`, `userFills`,
@@ -135,7 +137,8 @@ then wait off the real cost rather than the estimate the request was sent with. 
 that older `blockList` blocks "may be weighted more heavily" server-side, so the +1-per-block debit is exact only
 for recent blocks; and the item-count rule is an interpretation — the docs do not say whether the count is exactly
 the top-level response array length (what the limiter bills) nor whether partial chunks round up or down (the
-limiter rounds up, the conservative choice). Both are tracked in [issue #49](https://github.com/bloxwap/hyperliquid/issues/49).
+limiter rounds up). Both are settled client-side as deliberate conservative over-estimates; only the server-side
+truth remains outstanding ([issue #49](https://github.com/bloxwap/hyperliquid/issues/49)).
 
 - The wait happens before the request timeout is armed, so throttling never trips `timeout` / `exchangeTimeout`;
   aborting the request's signal cancels the wait instead — an aborted request never reaches the wire.
@@ -151,8 +154,44 @@ exceed what one instance can see still hit the server limit, and there is no end
 state. Handle [`HttpRateLimitError`](error-handling.md#httpratelimiterror) (which carries `status` and, when the
 server sends a `Retry-After` header, a `retryAfter` hint in seconds) as the backstop.
 
+### Automatic retry on 429
+
+For hands-off 429 handling, opt into `retryOnRateLimit`:
+
+```ts
+const transport = new HttpTransport({
+  retryOnRateLimit: true, // or { maxRetries: 3, maxDelayMs: 30_000 } — the defaults
+});
+```
+
+When the server answers 429, the transport waits and retries instead of throwing: if the response carried a
+`Retry-After` header it waits exactly that long (plus up to 1 s of jitter to spread herds); otherwise it falls back
+to full-jitter exponential backoff. A `Retry-After` longer than `maxDelayMs` surfaces the `HttpRateLimitError`
+rather than retrying sooner than the server allowed, and after `maxRetries` attempts the error propagates. The
+overall `timeout` / `exchangeTimeout` spans every attempt and wait, caller aborts interrupt the wait, and when
+`rateLimit` is also enabled each retry re-debits the bucket (the server bills attempts, not logical requests). The
+two options complement each other: the limiter prevents 429s, the retry absorbs the rest. Off by default.
+
 The separate **address-based** limits (requests allowed per user, growing with cumulative trading volume) are what
 the [`userRateLimit`](clients.md) info method reports — it has no view of the shared per-IP weight budget either.
+Per the official docs, an address gets 1 request per 1 USDC traded cumulatively since inception, on top of an
+initial buffer of 10,000 requests; once limited, it is allowed one request every 10 seconds. Sub-accounts count as
+separate users, and the limit applies to actions only, not info requests. Cancels get their own cumulative limit of
+`min(limit + 100000, limit * 2)`, so hitting the address-based limit still leaves room to cancel open orders.
+Batching interacts differently with the two budgets: a batch of `n` orders (or cancels) counts as one request
+against the per-IP weight budget but as `n` requests against the address-based one.
+
+Three adjacent rules from the exchange-endpoint docs matter to anyone pacing orders:
+
+- **Open-order limit** — 1000 open orders per user plus one more per 5M USDC of trading volume, capped at 5000
+  total. An order placed while the user already has at least 1000 open orders is rejected if it is reduce-only or a
+  trigger order.
+- **High-congestion throttling** — during high congestion an address is limited to 2x its previous-day maker-share
+  percentage of the block space; the maker share is scaled by the asset's fee-tier volume contribution (HIP-3 assets
+  under growth mode count less) and computed once per UTC day. During high traffic it therefore helps not to resend
+  cancels whose results the API already returned.
+- **Stale `expiresAfter`** — an action canceled because its `expiresAfter` timestamp went stale consumes 5x the
+  usual address-based rate limit.
 
 ## WebSocket
 
@@ -269,6 +308,12 @@ in their own text ("across all websocket connections"):
 | Unique users across user-specific subs | 14          | per IP                         |
 | Messages sent to Hyperliquid           | 2000/minute | per IP, across all connections |
 | Simultaneous inflight post requests    | 100         | per IP, across all connections |
+
+The unique-user value needs a caveat: the official docs still say **10**, while the server's own refusal message
+says 15 (`Cannot track more than 15 total users.`) — and neither number is what the server enforces. A live mainnet
+probe found the 15th distinct user refused, so the SDK guards at **14**, one below the message's claim
+(`src/transport/websocket/_quota.ts`). Erring low is the safe direction: refusing one subscription the server might
+have taken costs a slot, while admitting one it refuses costs a 10 s request timeout.
 
 Because that scope is the IP and not the socket, every `WebSocketTransport` on a network **shares one budget** by
 default, and the subscription and unique-user guards count what the server counts. Two transports no longer admit 2000
