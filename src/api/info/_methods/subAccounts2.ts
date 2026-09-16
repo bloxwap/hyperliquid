@@ -11,7 +11,6 @@ import type { UserAbstractionResponse } from "./userAbstraction.ts";
 
 /**
  * Request user sub-accounts (V2).
- * @see null
  */
 export const SubAccounts2Request = /* @__PURE__ */ (() => {
   return v.object({
@@ -25,7 +24,6 @@ export type SubAccounts2Request = v.InferOutput<typeof SubAccounts2Request>;
 
 /**
  * Array of user sub-account or null if the user does not have any sub-accounts.
- * @see null
  */
 export type SubAccounts2Response =
   | {
@@ -68,6 +66,8 @@ export type SubAccounts2Parameters = Omit<v.InferInput<typeof SubAccounts2Reques
 /**
  * Request user sub-accounts V2.
  *
+ * @deprecated use `subAccountsV2` — will be removed in v1.0.
+ *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
@@ -87,8 +87,6 @@ export type SubAccounts2Parameters = Omit<v.InferInput<typeof SubAccounts2Reques
  *   user: "0x...",
  * });
  * ```
- *
- * @see null
  */
 export function subAccounts2(
   config: InfoConfig,

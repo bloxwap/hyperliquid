@@ -160,9 +160,9 @@ export async function cleanupTempExchangeClient(
   tempClient: ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>,
 ): Promise<void> {
   const tempUser =
-    "multiSigUser" in tempClient.config_
-      ? tempClient.config_.multiSigUser
-      : await getWalletAddress(tempClient.config_.wallet);
+    "multiSigUser" in tempClient.config
+      ? tempClient.config.multiSigUser
+      : await getWalletAddress(tempClient.config.wallet);
 
   const webData2 = await infoClient.webData2({ user: tempUser });
 
@@ -339,7 +339,7 @@ export async function topUpPerp(
 ): Promise<void> {
   const mainExchClient = new ExchangeClient({ wallet: MAIN_WALLET!, transport });
   const tempUser =
-    "multiSigUser" in client.config_ ? client.config_.multiSigUser : await getWalletAddress(client.config_.wallet);
+    "multiSigUser" in client.config ? client.config.multiSigUser : await getWalletAddress(client.config.wallet);
   await mainExchClient.usdSend({ destination: tempUser, amount });
 }
 
@@ -356,7 +356,7 @@ export async function topUpSpot(
 
   const mainExchClient = new ExchangeClient({ wallet: MAIN_WALLET!, transport });
   const tempUser =
-    "multiSigUser" in client.config_ ? client.config_.multiSigUser : await getWalletAddress(client.config_.wallet);
+    "multiSigUser" in client.config ? client.config.multiSigUser : await getWalletAddress(client.config.wallet);
   await mainExchClient.spotSend({
     destination: tempUser,
     token: `${token}:${tokenAddresses[token]}`,
@@ -369,9 +369,9 @@ export async function createAgentExchangeClient(
   principalClient: ExchangeClient<ExchangeSingleWalletConfig | ExchangeMultiSigConfig>,
 ): Promise<{ agentExch: ExchangeClient<ExchangeSingleWalletConfig>; principal: `0x${string}` }> {
   const principal =
-    "multiSigUser" in principalClient.config_
-      ? principalClient.config_.multiSigUser
-      : await getWalletAddress(principalClient.config_.wallet);
+    "multiSigUser" in principalClient.config
+      ? principalClient.config.multiSigUser
+      : await getWalletAddress(principalClient.config.wallet);
 
   const agentAccount = privateKeyToAccount(generatePrivateKey());
   await principalClient.approveAgent({ agentAddress: agentAccount.address, agentName: null });

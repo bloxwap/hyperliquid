@@ -3,9 +3,21 @@
  * @module
  */
 
-import { ApiRequestError } from "../../../_errors.ts";
+import {
+  type ApiBulkErrorResponse,
+  ApiRequestError,
+  type ApiSingleErrorResponse,
+  type ApiTopLevelErrorResponse,
+} from "../../../_errors.ts";
 
 export { ApiRequestError };
+export type {
+  ApiBulkErrorResponse,
+  ApiErrorResponse,
+  ApiExplorerErrorResponse,
+  ApiSingleErrorResponse,
+  ApiTopLevelErrorResponse,
+} from "../../../_errors.ts";
 
 // ============================================================
 // Detection (duck-typed)
@@ -16,19 +28,13 @@ function hasErrorField(value: unknown): value is { error: string } {
   return typeof value === "object" && value !== null && "error" in value && typeof value.error === "string";
 }
 
-/** Top-level error shape. */
-type TopLevelError = { status: "err"; response: string };
-
 /** True if `r` matches `{ status: "err", response: string }`. */
-function isTopLevelError(r: unknown): r is TopLevelError {
+function isTopLevelError(r: unknown): r is ApiTopLevelErrorResponse {
   return typeof r === "object" && r !== null && "status" in r && r.status === "err";
 }
 
-/** Bulk error shape with array of statuses. */
-type BulkError = { response: { type: string; data: { statuses: unknown[] } } };
-
 /** True if `r` matches `{ response: { type, data: { statuses: [{ error }, ...] } } }` (any error in array). */
-function isBulkError(r: unknown): r is BulkError {
+function isBulkError(r: unknown): r is ApiBulkErrorResponse {
   if (typeof r !== "object" || r === null) return false;
   const response = (r as { response?: { type?: unknown; data?: { statuses?: unknown[] } } }).response;
   if (typeof response?.type !== "string") return false;
@@ -36,18 +42,17 @@ function isBulkError(r: unknown): r is BulkError {
   return Array.isArray(statuses) && statuses.some(hasErrorField);
 }
 
-/** Single error shape with one status. */
-type SingleError = { response: { data: { status: { error: string } } } };
-
 /** True if `r` matches `{ response: { data: { status: { error } } } }`. */
-function isSingleError(r: unknown): r is SingleError {
+function isSingleError(r: unknown): r is ApiSingleErrorResponse {
   if (typeof r !== "object" || r === null) return false;
   const status = (r as { response?: { data?: { status?: unknown } } }).response?.data?.status;
   return hasErrorField(status);
 }
 
 /** True if `r` matches any of the three Hyperliquid error response shapes. */
-export function isErrorResponse(r: unknown): r is TopLevelError | BulkError | SingleError {
+export function isErrorResponse(
+  r: unknown,
+): r is ApiTopLevelErrorResponse | ApiBulkErrorResponse | ApiSingleErrorResponse {
   return isTopLevelError(r) || isBulkError(r) || isSingleError(r);
 }
 

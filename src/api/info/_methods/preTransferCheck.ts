@@ -8,7 +8,6 @@ import { Address } from "../../_schemas.ts";
 
 /**
  * Request user existence check before transfer.
- * @see null
  */
 export const PreTransferCheckRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -24,7 +23,6 @@ export type PreTransferCheckRequest = v.InferOutput<typeof PreTransferCheckReque
 
 /**
  * Pre-transfer user existence check result.
- * @see null
  */
 export type PreTransferCheckResponse = {
   /**
@@ -73,8 +71,6 @@ export type PreTransferCheckParameters = Omit<v.InferInput<typeof PreTransferChe
  *   source: "0x...",
  * });
  * ```
- *
- * @see null
  */
 export function preTransferCheck(
   config: InfoConfig,

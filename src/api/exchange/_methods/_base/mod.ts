@@ -10,6 +10,14 @@ export type {
   ExtractRequestOptions,
 } from "./_config.ts";
 export { buildAction } from "./_action.ts";
-export { ApiRequestError, type ExcludeErrorResponse } from "./errors.ts";
+export {
+  type ApiBulkErrorResponse,
+  type ApiErrorResponse,
+  type ApiExplorerErrorResponse,
+  ApiRequestError,
+  type ApiSingleErrorResponse,
+  type ApiTopLevelErrorResponse,
+  type ExcludeErrorResponse,
+} from "./errors.ts";
 export { executeL1Action, executeUserSignedAction } from "./execute.ts";
 export type { PreparedExchangeRequest } from "./_shell.ts";

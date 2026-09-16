@@ -131,6 +131,26 @@ export function runOfflineMethodTests(options: {
           }
         }
       });
+
+      test("treats a non-native AbortSignal-like object as the signal, not as params", async () => {
+        // `instanceof AbortSignal` fails across realms (iframe, worker, vm) and for polyfills;
+        // overload disambiguation is structural, so a duck-typed signal must reach the transport.
+        const fakeSignal = {
+          aborted: false,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        } as unknown as AbortSignal;
+
+        for (const viaClient of [false, true]) {
+          const transport = new MockInfoTransport(() => null);
+          const client = new InfoClient({ transport });
+          const fn = (client as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)[name];
+
+          await (viaClient ? fn.call(client, fakeSignal) : method({ transport }, fakeSignal));
+
+          expect(transport.calls).toEqual([{ endpoint: "info", payload: { type: name }, signal: fakeSignal }]);
+        }
+      });
     }
   });
 }

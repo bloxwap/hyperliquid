@@ -6,7 +6,6 @@ import * as v from "valibot";
 
 /**
  * Request USDC transfer routing.
- * @see null
  */
 export const UsdcRoutingRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -18,7 +17,6 @@ export type UsdcRoutingRequest = v.InferOutput<typeof UsdcRoutingRequest>;
 
 /**
  * Routes currently used to move USDC in and out of the platform.
- * @see null
  */
 export type UsdcRoutingResponse = {
   /**
@@ -61,8 +59,6 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * const data = await usdcRouting({ transport });
  * ```
- *
- * @see null
  */
 export function usdcRouting(config: InfoConfig, signal?: AbortSignal): Promise<UsdcRoutingResponse> {
   const request = parse(UsdcRoutingRequest, {

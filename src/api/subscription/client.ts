@@ -3,8 +3,8 @@
  * @module
  */
 
-import type { ISubscription } from "../../transport/mod.ts";
-import type { SubscriptionConfig, SubscriptionOptions } from "./_methods/_base/mod.ts";
+import type { ClientSubscription, SubscriptionConfig, SubscriptionOptions } from "./_methods/_base/mod.ts";
+import { trackerFor } from "./_methods/_base/_tracking.ts";
 
 // ============================================================
 // Methods Imports
@@ -46,6 +46,7 @@ import { spotAssetCtxs, type SpotAssetCtxsEvent } from "./_methods/spotAssetCtxs
 import { spotState, type SpotStateEvent, type SpotStateParameters } from "./_methods/spotState.ts";
 import { trades, type TradesEvent, type TradesParameters } from "./_methods/trades.ts";
 import { twapStates, type TwapStatesEvent, type TwapStatesParameters } from "./_methods/twapStates.ts";
+import { unsubscribeAll } from "./_methods/unsubscribeAll.ts";
 import { userEvents, type UserEventsEvent, type UserEventsParameters } from "./_methods/userEvents.ts";
 import { userFills, type UserFillsEvent, type UserFillsParameters } from "./_methods/userFills.ts";
 import { userFundings, type UserFundingsEvent, type UserFundingsParameters } from "./_methods/userFundings.ts";
@@ -81,7 +82,13 @@ import { webData3, type WebData3Event, type WebData3Parameters } from "./_method
  * Corresponds to {@link https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions | WebSocket subscriptions}.
  */
 export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfig> {
-  config_: C;
+  readonly config: C;
+  /**
+   * `config` with the transport wrapped in its shared {@linkcode SubscriptionTracker}, so every
+   * subscription opened through this client is registered for {@linkcode SubscriptionClient.unsubscribeAll}
+   * and carries a guaranteed `failureSignal` (see {@linkcode ClientSubscription}).
+   */
+  private readonly _trackedConfig: SubscriptionConfig;
 
   /**
    * Creates an instance of the SubscriptionClient.
@@ -98,7 +105,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    * ```
    */
   constructor(config: C) {
-    this.config_ = config;
+    this.config = config;
+    this._trackedConfig = { ...config, transport: trackerFor(config.transport) };
   }
 
   /**
@@ -130,8 +138,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: ActiveAssetCtxParameters,
     listener: (data: ActiveAssetCtxEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return activeAssetCtx(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return activeAssetCtx(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -163,8 +171,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: ActiveAssetDataParameters,
     listener: (data: ActiveAssetDataEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return activeAssetData(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return activeAssetData(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -196,8 +204,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: ActiveSpotAssetCtxParameters,
     listener: (data: ActiveSpotAssetCtxEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return activeSpotAssetCtx(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return activeSpotAssetCtx(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -227,8 +235,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
   allDexsAssetCtxs(
     listener: (data: AllDexsAssetCtxsEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return allDexsAssetCtxs(this.config_, listener, options);
+  ): Promise<ClientSubscription> {
+    return allDexsAssetCtxs(this._trackedConfig, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -260,8 +268,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: AllDexsClearinghouseStateParameters,
     listener: (data: AllDexsClearinghouseStateEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return allDexsClearinghouseState(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return allDexsClearinghouseState(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -289,22 +297,22 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
-  allMids(listener: (data: AllMidsEvent) => void, options?: SubscriptionOptions): Promise<ISubscription>;
+  allMids(listener: (data: AllMidsEvent) => void, options?: SubscriptionOptions): Promise<ClientSubscription>;
   allMids(
     params: AllMidsParameters,
     listener: (data: AllMidsEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription>;
+  ): Promise<ClientSubscription>;
   allMids(
     paramsOrListener: AllMidsParameters | ((data: AllMidsEvent) => void),
     listenerOrOptions?: ((data: AllMidsEvent) => void) | SubscriptionOptions,
     maybeOptions?: SubscriptionOptions,
-  ): Promise<ISubscription> {
+  ): Promise<ClientSubscription> {
     const isListenerFirst = typeof paramsOrListener === "function";
     const params = isListenerFirst ? {} : paramsOrListener;
     const listener = isListenerFirst ? paramsOrListener : (listenerOrOptions as (data: AllMidsEvent) => void);
     const options = isListenerFirst ? (listenerOrOptions as SubscriptionOptions | undefined) : maybeOptions;
-    return allMids(this.config_, params, listener, options);
+    return allMids(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -332,22 +340,22 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
-  assetCtxs(listener: (data: AssetCtxsEvent) => void, options?: SubscriptionOptions): Promise<ISubscription>;
+  assetCtxs(listener: (data: AssetCtxsEvent) => void, options?: SubscriptionOptions): Promise<ClientSubscription>;
   assetCtxs(
     params: AssetCtxsParameters,
     listener: (data: AssetCtxsEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription>;
+  ): Promise<ClientSubscription>;
   assetCtxs(
     paramsOrListener: AssetCtxsParameters | ((data: AssetCtxsEvent) => void),
     listenerOrOptions?: ((data: AssetCtxsEvent) => void) | SubscriptionOptions,
     maybeOptions?: SubscriptionOptions,
-  ): Promise<ISubscription> {
+  ): Promise<ClientSubscription> {
     const isListenerFirst = typeof paramsOrListener === "function";
     const params = isListenerFirst ? {} : paramsOrListener;
     const listener = isListenerFirst ? paramsOrListener : (listenerOrOptions as (data: AssetCtxsEvent) => void);
     const options = isListenerFirst ? (listenerOrOptions as SubscriptionOptions | undefined) : maybeOptions;
-    return assetCtxs(this.config_, params, listener, options);
+    return assetCtxs(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -379,8 +387,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: BboParameters,
     listener: (data: BboEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return bbo(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return bbo(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -412,8 +420,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: CandleParameters,
     listener: (data: CandleEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return candle(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return candle(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -445,8 +453,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: ClearinghouseStateParameters,
     listener: (data: ClearinghouseStateEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return clearinghouseState(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return clearinghouseState(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -473,8 +481,11 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
-  fastAssetCtxs(listener: (data: FastAssetCtxsEvent) => void, options?: SubscriptionOptions): Promise<ISubscription> {
-    return fastAssetCtxs(this.config_, listener, options);
+  fastAssetCtxs(
+    listener: (data: FastAssetCtxsEvent) => void,
+    options?: SubscriptionOptions,
+  ): Promise<ClientSubscription> {
+    return fastAssetCtxs(this._trackedConfig, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -506,8 +517,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: L2BookParameters,
     listener: (data: L2BookEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return l2Book(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return l2Book(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -539,8 +550,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: NotificationParameters,
     listener: (data: NotificationEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return notification(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return notification(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -572,8 +583,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: OpenOrdersParameters,
     listener: (data: OpenOrdersEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return openOrders(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return openOrders(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -605,8 +616,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: OrderUpdatesParameters,
     listener: (data: OrderUpdatesEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return orderUpdates(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return orderUpdates(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -636,8 +647,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
   outcomeMetaUpdates(
     listener: (data: OutcomeMetaUpdatesEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return outcomeMetaUpdates(this.config_, listener, options);
+  ): Promise<ClientSubscription> {
+    return outcomeMetaUpdates(this._trackedConfig, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -664,8 +675,11 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
-  spotAssetCtxs(listener: (data: SpotAssetCtxsEvent) => void, options?: SubscriptionOptions): Promise<ISubscription> {
-    return spotAssetCtxs(this.config_, listener, options);
+  spotAssetCtxs(
+    listener: (data: SpotAssetCtxsEvent) => void,
+    options?: SubscriptionOptions,
+  ): Promise<ClientSubscription> {
+    return spotAssetCtxs(this._trackedConfig, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -697,8 +711,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: SpotStateParameters,
     listener: (data: SpotStateEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return spotState(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return spotState(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -730,8 +744,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: TradesParameters,
     listener: (data: TradesEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return trades(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return trades(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -763,8 +777,35 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: TwapStatesParameters,
     listener: (data: TwapStatesEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return twapStates(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return twapStates(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
+  }
+
+  /**
+   * Unsubscribes every subscription opened through a `SubscriptionClient` on this transport.
+   *
+   * Subscriptions are unsubscribed concurrently; the promise resolves when every unsubscribe has
+   * settled and rejects if any of them rejects. A subscribe call still waiting for its confirmation
+   * resolves with an already-unsubscribed handle once the confirmation lands — it never joins the
+   * registry, and this call does not wait for it. Subscriptions opened by calling the standalone
+   * subscription functions or `ISubscriptionTransport.subscribe` directly are not tracked and are
+   * unaffected. The teardown scope is the transport: subscriptions opened through any
+   * `SubscriptionClient` sharing it are unsubscribed too.
+   *
+   * @return A promise that resolves when every tracked subscription has been unsubscribed.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.WebSocketTransport();
+   * const client = new hl.SubscriptionClient({ transport });
+   *
+   * await client.unsubscribeAll();
+   * ```
+   */
+  unsubscribeAll(): Promise<void> {
+    return unsubscribeAll(this.config);
   }
 
   /**
@@ -796,8 +837,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: UserEventsParameters,
     listener: (data: UserEventsEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return userEvents(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return userEvents(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -829,8 +870,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: UserFillsParameters,
     listener: (data: UserFillsEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return userFills(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return userFills(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -862,8 +903,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: UserFundingsParameters,
     listener: (data: UserFundingsEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return userFundings(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return userFundings(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -895,8 +936,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: UserHistoricalOrdersParameters,
     listener: (data: UserHistoricalOrdersEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return userHistoricalOrders(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return userHistoricalOrders(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -928,8 +969,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: UserNonFundingLedgerUpdatesParameters,
     listener: (data: UserNonFundingLedgerUpdatesEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return userNonFundingLedgerUpdates(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return userNonFundingLedgerUpdates(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -961,8 +1002,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: UserTwapHistoryParameters,
     listener: (data: UserTwapHistoryEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return userTwapHistory(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return userTwapHistory(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -994,8 +1035,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: UserTwapSliceFillsParameters,
     listener: (data: UserTwapSliceFillsEvent) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return userTwapSliceFills(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return userTwapSliceFills(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 
   /**
@@ -1027,8 +1068,8 @@ export class SubscriptionClient<C extends SubscriptionConfig = SubscriptionConfi
     params: WebData3Parameters,
     listener: (data: WebData3Event) => void,
     options?: SubscriptionOptions,
-  ): Promise<ISubscription> {
-    return webData3(this.config_, params, listener, options);
+  ): Promise<ClientSubscription> {
+    return webData3(this._trackedConfig, params, listener, options) as Promise<ClientSubscription>;
   }
 }
 
@@ -1091,6 +1132,7 @@ export type {
   TwapStatesEvent as TwapStatesWsEvent,
   TwapStatesParameters as TwapStatesWsParameters,
 } from "./_methods/twapStates.ts";
+export type { ClientSubscription } from "./_methods/unsubscribeAll.ts";
 export type {
   UnknownUserEvent as UnknownUserWsEvent,
   UserEventsEvent as UserEventsWsEvent,

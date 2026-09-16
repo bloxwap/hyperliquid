@@ -9,7 +9,6 @@ import type { TwapState } from "./_base/mod.ts";
 
 /**
  * Request TWAP history of a user.
- * @see null
  */
 export const TwapHistoryRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -23,7 +22,6 @@ export type TwapHistoryRequest = v.InferOutput<typeof TwapHistoryRequest>;
 
 /**
  * Array of user's TWAP history.
- * @see null
  */
 export type TwapHistoryResponse = {
   /** Creation time of the history record (in seconds since epoch). */
@@ -86,8 +84,6 @@ export type TwapHistoryParameters = Omit<v.InferInput<typeof TwapHistoryRequest>
  *   user: "0x...",
  * });
  * ```
- *
- * @see null
  */
 export function twapHistory(
   config: InfoConfig,

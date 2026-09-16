@@ -6,7 +6,6 @@ import * as v from "valibot";
 
 /**
  * Request maximum market order notionals.
- * @see null
  */
 export const MaxMarketOrderNtlsRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -18,7 +17,6 @@ export type MaxMarketOrderNtlsRequest = v.InferOutput<typeof MaxMarketOrderNtlsR
 
 /**
  * Array of tuples of maximum leverage and its corresponding maximum market order notional.
- * @see null
  */
 export type MaxMarketOrderNtlsResponse = [
   /** Maximum leverage. */
@@ -56,8 +54,6 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * const data = await maxMarketOrderNtls({ transport });
  * ```
- *
- * @see null
  */
 export function maxMarketOrderNtls(config: InfoConfig, signal?: AbortSignal): Promise<MaxMarketOrderNtlsResponse> {
   const request = parse(MaxMarketOrderNtlsRequest, {

@@ -23,9 +23,9 @@ runTest({
   name: "userSetAbstraction",
   codeTestFn: async (_t, exchClient) => {
     const user =
-      "multiSigUser" in exchClient.config_
-        ? exchClient.config_.multiSigUser
-        : await getWalletAddress(exchClient.config_.wallet);
+      "multiSigUser" in exchClient.config
+        ? exchClient.config.multiSigUser
+        : await getWalletAddress(exchClient.config.wallet);
 
     const params: UserSetAbstractionParameters[] = [
       { user, abstraction: "disabled" },

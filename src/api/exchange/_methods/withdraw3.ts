@@ -104,6 +104,8 @@ export const Withdraw3Types = {
  *
  * Signing: User-Signed EIP-712.
  *
+ * @deprecated use {@linkcode withdraw} instead — will be removed in v1.0.
+ *
  * @param config General configuration for Exchange API requests.
  * @param params Parameters specific to the API request.
  * @param opts Request execution options.

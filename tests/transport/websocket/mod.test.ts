@@ -239,6 +239,52 @@ describe("WebSocketTransport", () => {
     });
   });
 
+  describe("connection state", () => {
+    test("reports connecting, then connected once the connection is open", async () => {
+      await using transport = createTransport(url);
+      const states: string[] = [];
+      transport.events.addEventListener("connectionstatechange", (event) => states.push(event.detail));
+
+      assertEquals(transport.connectionState, "connecting");
+      await transport.ready();
+
+      assertEquals(transport.connectionState, "connected");
+      assertEquals(states, ["connected"]);
+    });
+
+    test("reports reconnecting after a drop, then connected again", async () => {
+      await using transport = createTransport(url);
+      const states: string[] = [];
+      transport.events.addEventListener("connectionstatechange", (event) => states.push(event.detail));
+      await transport.ready();
+
+      const { promise: reconnected, resolve } = Promise.withResolvers<void>();
+      transport.events.addEventListener("connectionstatechange", (event) => {
+        if (event.detail === "connected") resolve();
+      });
+
+      transport.socket.send('{"method":"drop"}'); // the server closes the connection
+      await reconnected;
+
+      assertEquals(transport.connectionState, "connected");
+      assertEquals(states, ["connected", "reconnecting", "connected"]);
+    });
+
+    test("close() reports disconnected", async () => {
+      await using transport = createTransport(url);
+      await transport.ready();
+
+      const { promise: disconnected, resolve } = Promise.withResolvers<void>();
+      transport.events.addEventListener("connectionstatechange", (event) => {
+        if (event.detail === "disconnected") resolve();
+      });
+
+      transport.close();
+      await disconnected;
+      assertEquals(transport.connectionState, "disconnected");
+    });
+  });
+
   describe("close()", () => {
     test("is idempotent", async () => {
       await using transport = createTransport(url);

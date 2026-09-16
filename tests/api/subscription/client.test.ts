@@ -8,11 +8,12 @@
  * @module
  */
 
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, spyOn, test } from "bun:test";
 import {
   type ISubscription,
   type SubscriptionOptions,
   SubscriptionClient,
+  TransportError,
   ValidationError,
 } from "@bloxwap/hyperliquid";
 import { allMids, assetCtxs } from "@bloxwap/hyperliquid/api/subscription";
@@ -406,7 +407,8 @@ describe("SubscriptionClient (offline mock transport)", () => {
       test("subscribes once with the validated payload and forwards options", async () => {
         const transport = new MockSubscriptionTransport();
         const client = new SubscriptionClient({ transport });
-        const options: SubscriptionOptions = { signal: AbortSignal.timeout(5_000), onError: () => {} };
+        const onError = mock(() => {});
+        const options: SubscriptionOptions = { signal: AbortSignal.timeout(5_000), onError };
 
         const sub = await c.subscribe(client, () => {}, options);
 
@@ -414,7 +416,12 @@ describe("SubscriptionClient (offline mock transport)", () => {
         const call = transport.calls[0];
         expect(call.channel).toBe(c.channel);
         expect(call.payload).toEqual(c.payload);
-        expect(call.options).toBe(options);
+        // The client chains onError through its own subscription tracking, so the transport never
+        // sees the caller's options object itself; the signal passes through by identity.
+        expect(call.options?.signal).toBe(options.signal);
+        const failure = new TransportError("subscription failed");
+        call.options?.onError?.(failure);
+        expect(onError).toHaveBeenCalledWith(failure);
         expect(typeof sub.unsubscribe).toBe("function");
         await sub.unsubscribe();
       });
@@ -462,7 +469,8 @@ describe("listener-first overloads", () => {
     expect(transport.calls).toHaveLength(1);
     expect(transport.calls[0].channel).toBe("allMids");
     expect(transport.calls[0].payload).toEqual({ type: "allMids", dex: undefined });
-    expect(transport.calls[0].options).toBe(options);
+    // onError is chained through the client's subscription tracking; the signal passes through by identity.
+    expect(transport.calls[0].options?.signal).toBe(options.signal);
 
     transport.emit({ mids: { ETH: "3000" } }); // no dex: matches `undefined`
     transport.emit({ mids: { ETH: "3000" }, dex: "unit" });
@@ -489,7 +497,8 @@ describe("listener-first overloads", () => {
     expect(transport.calls).toHaveLength(1);
     expect(transport.calls[0].channel).toBe("assetCtxs");
     expect(transport.calls[0].payload).toEqual({ type: "assetCtxs", dex: "" });
-    expect(transport.calls[0].options).toBe(options);
+    // onError is chained through the client's subscription tracking; the signal passes through by identity.
+    expect(transport.calls[0].options?.signal).toBe(options.signal);
 
     transport.emit({ dex: "", ctxs: [] });
     transport.emit({ dex: "unit", ctxs: [] });
@@ -579,7 +588,8 @@ describe("fastAssetCtxs", () => {
     expect(transport.calls).toHaveLength(1);
     expect(transport.calls[0].channel).toBe("fastAssetCtxs");
     expect(transport.calls[0].payload).toEqual({ type: "fastAssetCtxs" });
-    expect(transport.calls[0].options).toBe(options);
+    // onError is chained through the client's subscription tracking; the signal passes through by identity.
+    expect(transport.calls[0].options?.signal).toBe(options.signal);
     expect(typeof sub.unsubscribe).toBe("function");
     await sub.unsubscribe();
   });

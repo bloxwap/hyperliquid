@@ -3,6 +3,8 @@
  * @module
  */
 
+import { HyperliquidError } from "../../_base.ts";
+import { SymbolConverter } from "../../utils/mod.ts";
 import type { ExchangeConfig, ExchangeSingleWalletConfig } from "./_methods/_base/mod.ts";
 
 // ============================================================
@@ -213,11 +215,23 @@ import {
   type SpotUserSuccessResponse,
 } from "./_methods/spotUser.ts";
 import {
+  stakingDeposit,
+  type StakingDepositOptions,
+  type StakingDepositParameters,
+  type StakingDepositSuccessResponse,
+} from "./_methods/stakingDeposit.ts";
+import {
   stakingLinkDisableTradingUser,
   type StakingLinkDisableTradingUserOptions,
   type StakingLinkDisableTradingUserParameters,
   type StakingLinkDisableTradingUserSuccessResponse,
 } from "./_methods/stakingLinkDisableTradingUser.ts";
+import {
+  stakingWithdraw,
+  type StakingWithdrawOptions,
+  type StakingWithdrawParameters,
+  type StakingWithdrawSuccessResponse,
+} from "./_methods/stakingWithdraw.ts";
 import {
   subAccountModify,
   type SubAccountModifyOptions,
@@ -310,11 +324,23 @@ import {
   type UserSetAbstractionSuccessResponse,
 } from "./_methods/userSetAbstraction.ts";
 import {
+  validatorAction,
+  type ValidatorActionOptions,
+  type ValidatorActionParameters,
+  type ValidatorActionSuccessResponse,
+} from "./_methods/validatorAction.ts";
+import {
   validatorL1Stream,
   type ValidatorL1StreamOptions,
   type ValidatorL1StreamParameters,
   type ValidatorL1StreamSuccessResponse,
 } from "./_methods/validatorL1Stream.ts";
+import {
+  validatorSignerAction,
+  type ValidatorSignerActionOptions,
+  type ValidatorSignerActionParameters,
+  type ValidatorSignerActionSuccessResponse,
+} from "./_methods/validatorSignerAction.ts";
 import {
   vaultDistribute,
   type VaultDistributeOptions,
@@ -334,11 +360,142 @@ import {
   type VaultTransferSuccessResponse,
 } from "./_methods/vaultTransfer.ts";
 import {
+  withdraw,
+  type WithdrawOptions,
+  type WithdrawParameters,
+  type WithdrawSuccessResponse,
+} from "./_methods/withdraw.ts";
+import {
   withdraw3,
   type Withdraw3Options,
   type Withdraw3Parameters,
   type Withdraw3SuccessResponse,
 } from "./_methods/withdraw3.ts";
+
+// ============================================================
+// Symbol-based Asset References
+// ============================================================
+
+/**
+ * Coin symbol alternative to a raw asset-ID field, resolved via the client's symbol converter
+ * before dispatch (see the `symbolConverter` config option).
+ */
+export interface CoinAssetRef {
+  /**
+   * Coin symbol resolved to the asset ID before dispatch: perp name (`"BTC"`), spot pair
+   * (`"HYPE/USDC"`), builder-dex asset (`"dex:ASSET"`, requires the converter's `dexs` option),
+   * or outcome-market slug. When both the raw asset ID and `coin` are set, `coin` wins.
+   */
+  coin?: string;
+}
+
+/**
+ * Adds an optional {@linkcode CoinAssetRef | coin} symbol alternative to the asset-ID field `K`
+ * of `T`, which becomes optional. Resolution is an `ExchangeClient` convenience — the raw
+ * functions in `@bloxwap/hyperliquid/api/exchange` take asset IDs only.
+ */
+export type CoinResolvable<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>> & CoinAssetRef;
+
+/** {@linkcode OrderParameters} where each order may use a `coin` symbol instead of the raw asset ID `a`. */
+export type CoinOrderParameters = Omit<OrderParameters, "orders"> & {
+  /** Array of order parameters. */
+  orders: CoinResolvable<OrderParameters["orders"][number], "a">[];
+};
+
+/** {@linkcode ModifyParameters} where the order may use a `coin` symbol instead of the raw asset ID `a`. */
+export type CoinModifyParameters = Omit<ModifyParameters, "order"> & {
+  /** Order parameters. */
+  order: CoinResolvable<ModifyParameters["order"], "a">;
+};
+
+/** {@linkcode BatchModifyParameters} where each order may use a `coin` symbol instead of the raw asset ID `a`. */
+export type CoinBatchModifyParameters = Omit<BatchModifyParameters, "modifies"> & {
+  /** Order modifications. */
+  modifies: (Omit<BatchModifyParameters["modifies"][number], "order"> & {
+    /** Order parameters. */
+    order: CoinResolvable<BatchModifyParameters["modifies"][number]["order"], "a">;
+  })[];
+};
+
+/** {@linkcode CancelParameters} where each cancel may use a `coin` symbol instead of the raw asset ID `a`. */
+export type CoinCancelParameters = Omit<CancelParameters, "cancels"> & {
+  /** Orders to cancel by asset and order ID. */
+  cancels: CoinResolvable<CancelParameters["cancels"][number], "a">[];
+};
+
+/** {@linkcode CancelByCloidParameters} where each cancel may use a `coin` symbol instead of the raw asset ID `asset`. */
+export type CoinCancelByCloidParameters = Omit<CancelByCloidParameters, "cancels"> & {
+  /** Orders to cancel by asset and client order ID. */
+  cancels: CoinResolvable<CancelByCloidParameters["cancels"][number], "asset">[];
+};
+
+/** {@linkcode TwapOrderParameters} where the TWAP may use a `coin` symbol instead of the raw asset ID `a`. */
+export type CoinTwapOrderParameters = Omit<TwapOrderParameters, "twap"> & {
+  /** Twap parameters. */
+  twap: CoinResolvable<TwapOrderParameters["twap"], "a">;
+};
+
+/** {@linkcode TwapCancelParameters} with a `coin` symbol alternative to the raw asset ID `a`. */
+export type CoinTwapCancelParameters = CoinResolvable<TwapCancelParameters, "a">;
+
+/** {@linkcode UpdateLeverageParameters} with a `coin` symbol alternative to the raw asset ID `asset`. */
+export type CoinUpdateLeverageParameters = CoinResolvable<UpdateLeverageParameters, "asset">;
+
+/** {@linkcode UpdateIsolatedMarginParameters} with a `coin` symbol alternative to the raw asset ID `asset`. */
+export type CoinUpdateIsolatedMarginParameters = CoinResolvable<UpdateIsolatedMarginParameters, "asset">;
+
+/** {@linkcode TopUpIsolatedOnlyMarginParameters} with a `coin` symbol alternative to the raw asset ID `asset`. */
+export type CoinTopUpIsolatedOnlyMarginParameters = CoinResolvable<TopUpIsolatedOnlyMarginParameters, "asset">;
+
+// ============================================================
+// Symbol Resolution
+// ============================================================
+
+/** Lazily created symbol converters per config (keyed by object identity). */
+const lazySymbolConverters = new WeakMap<ExchangeConfig, Promise<SymbolConverter>>();
+
+/**
+ * Returns the configured symbol converter, lazily creating and loading one over the config's
+ * transport when the config does not provide one.
+ */
+function getSymbolConverter(config: ExchangeConfig): Promise<SymbolConverter> {
+  if (config.symbolConverter) return Promise.resolve(config.symbolConverter);
+  let promise = lazySymbolConverters.get(config);
+  if (promise === undefined) {
+    promise = SymbolConverter.create({ transport: config.transport });
+    lazySymbolConverters.set(config, promise);
+  }
+  return promise;
+}
+
+/**
+ * Resolves `coin` symbols on `entries` to raw asset IDs written into `assetKey`. Entries without
+ * `coin` pass through unchanged (same object reference); entries with `coin` are copied with
+ * `coin` removed and the resolved asset ID placed first, preserving canonical wire key order.
+ *
+ * @throws {HyperliquidError} When a `coin` symbol is unknown to the converter.
+ */
+async function resolveCoinRefs<E extends { coin?: string }>(
+  config: ExchangeConfig,
+  entries: readonly E[],
+  assetKey: "a" | "asset",
+): Promise<E[]> {
+  if (entries.every((entry) => entry.coin === undefined)) return [...entries];
+  const converter = await getSymbolConverter(config);
+  return entries.map((entry) => {
+    const coin = entry.coin;
+    if (coin === undefined) return entry;
+    const assetId = converter.getAssetId(coin);
+    if (assetId === undefined) {
+      throw new HyperliquidError(
+        `Unknown coin: "${coin}". Expected a perp name ("BTC"), spot pair ("HYPE/USDC"), ` +
+          'builder-dex asset ("dex:ASSET"), or outcome-market slug — or pass the raw asset ID instead.',
+      );
+    }
+    const rest = Object.fromEntries(Object.entries(entry).filter(([key]) => key !== "coin" && key !== assetKey));
+    return { [assetKey]: assetId, ...rest } as E;
+  });
+}
 
 // ============================================================
 // Client
@@ -350,7 +507,7 @@ import {
  * Corresponds to the {@link https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint | Exchange endpoint}.
  */
 export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfig> {
-  config_: C;
+  readonly config: C;
 
   /**
    * Creates an instance of the ExchangeClient.
@@ -408,7 +565,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * ```
    */
   constructor(config: C) {
-    this.config_ = config;
+    this.config = config;
   }
 
   /**
@@ -442,7 +599,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: ActivateOutcomeDeployerParameters,
     opts?: ActivateOutcomeDeployerOptions,
   ): Promise<ActivateOutcomeDeployerSuccessResponse> {
-    return activateOutcomeDeployer(this.config_, params, opts);
+    return activateOutcomeDeployer(this.config, params, opts);
   }
 
   /**
@@ -450,7 +607,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * Signing: L1 Action.
    *
-   * @deprecated use {@linkcode agentSetAbstraction} instead.
+   * @deprecated use {@linkcode agentSetAbstraction} instead — will be removed in v1.0.
    *
    * @param opts Request execution options.
    * @return Successful response without specific data.
@@ -476,7 +633,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
   agentEnableDexAbstraction(
     opts?: AgentEnableDexAbstractionOptions,
   ): Promise<AgentEnableDexAbstractionSuccessResponse> {
-    return agentEnableDexAbstraction(this.config_, opts);
+    return agentEnableDexAbstraction(this.config, opts);
   }
 
   /**
@@ -518,7 +675,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: AgentSendAssetParameters,
     opts?: AgentSendAssetOptions,
   ): Promise<AgentSendAssetSuccessResponse> {
-    return agentSendAsset(this.config_, params, opts);
+    return agentSendAsset(this.config, params, opts);
   }
 
   /**
@@ -554,7 +711,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: AgentSetAbstractionParameters,
     opts?: AgentSetAbstractionOptions,
   ): Promise<AgentSetAbstractionSuccessResponse> {
-    return agentSetAbstraction(this.config_, params, opts);
+    return agentSetAbstraction(this.config, params, opts);
   }
 
   /**
@@ -600,7 +757,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#approve-an-api-wallet
    */
   approveAgent(params: ApproveAgentParameters, opts?: ApproveAgentOptions): Promise<ApproveAgentSuccessResponse> {
-    return approveAgent(this.config_, params, opts);
+    return approveAgent(this.config, params, opts);
   }
 
   /**
@@ -634,7 +791,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: ApproveBuilderFeeParameters,
     opts?: ApproveBuilderFeeOptions,
   ): Promise<ApproveBuilderFeeSuccessResponse> {
-    return approveBuilderFee(this.config_, params, opts);
+    return approveBuilderFee(this.config, params, opts);
   }
 
   /**
@@ -671,7 +828,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: AuthorizeAqav2RoleParameters,
     opts?: AuthorizeAqav2RoleOptions,
   ): Promise<AuthorizeAqav2RoleSuccessResponse> {
-    return authorizeAqav2Role(this.config_, params, opts);
+    return authorizeAqav2Role(this.config, params, opts);
   }
 
   /**
@@ -715,8 +872,24 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#modify-multiple-orders
    */
-  batchModify(params: BatchModifyParameters, opts?: BatchModifyOptions): Promise<BatchModifySuccessResponse> {
-    return batchModify(this.config_, params, opts);
+  batchModify(params: CoinBatchModifyParameters, opts?: BatchModifyOptions): Promise<BatchModifySuccessResponse> {
+    if (!Array.isArray(params.modifies) || params.modifies.every((m) => m?.order?.coin === undefined)) {
+      return batchModify(this.config, params as BatchModifyParameters, opts);
+    }
+    return resolveCoinRefs(
+      this.config,
+      params.modifies.map((m) => m.order),
+      "a",
+    ).then((orders) =>
+      batchModify(
+        this.config,
+        {
+          ...params,
+          modifies: params.modifies.map((m, i) => ({ ...m, order: orders[i] })),
+        } as BatchModifyParameters,
+        opts,
+      ),
+    );
   }
 
   /**
@@ -743,11 +916,9 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * await client.borrowLend({ operation: "supply", token: 0, amount: "20" });
    * ```
-   *
-   * @see null
    */
   borrowLend(params: BorrowLendParameters, opts?: BorrowLendOptions): Promise<BorrowLendSuccessResponse> {
-    return borrowLend(this.config_, params, opts);
+    return borrowLend(this.config, params, opts);
   }
 
   /**
@@ -780,8 +951,13 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#cancel-order-s
    */
-  cancel(params: CancelParameters, opts?: CancelOptions): Promise<CancelSuccessResponse> {
-    return cancel(this.config_, params, opts);
+  cancel(params: CoinCancelParameters, opts?: CancelOptions): Promise<CancelSuccessResponse> {
+    if (!Array.isArray(params.cancels) || params.cancels.every((c) => c?.coin === undefined)) {
+      return cancel(this.config, params as CancelParameters, opts);
+    }
+    return resolveCoinRefs(this.config, params.cancels, "a").then((cancels) =>
+      cancel(this.config, { ...params, cancels } as CancelParameters, opts),
+    );
   }
 
   /**
@@ -815,14 +991,24 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#cancel-order-s-by-cloid
    */
-  cancelByCloid(params: CancelByCloidParameters, opts?: CancelByCloidOptions): Promise<CancelByCloidSuccessResponse> {
-    return cancelByCloid(this.config_, params, opts);
+  cancelByCloid(
+    params: CoinCancelByCloidParameters,
+    opts?: CancelByCloidOptions,
+  ): Promise<CancelByCloidSuccessResponse> {
+    if (!Array.isArray(params.cancels) || params.cancels.every((c) => c?.coin === undefined)) {
+      return cancelByCloid(this.config, params as CancelByCloidParameters, opts);
+    }
+    return resolveCoinRefs(this.config, params.cancels, "asset").then((cancels) =>
+      cancelByCloid(this.config, { ...params, cancels } as CancelByCloidParameters, opts),
+    );
   }
 
   /**
    * Transfer native token from the user spot account into staking for delegating to validators.
    *
    * Signing: User-Signed EIP-712.
+   *
+   * @deprecated use {@linkcode stakingDeposit} instead — will be removed in v1.0.
    *
    * @param params Parameters specific to the API request.
    * @param opts Request execution options.
@@ -847,7 +1033,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#deposit-into-staking
    */
   cDeposit(params: CDepositParameters, opts?: CDepositOptions): Promise<CDepositSuccessResponse> {
-    return cDeposit(this.config_, params, opts);
+    return cDeposit(this.config, params, opts);
   }
 
   /**
@@ -877,7 +1063,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#claim-rewards
    */
   claimRewards(opts?: ClaimRewardsOptions): Promise<ClaimRewardsSuccessResponse> {
-    return claimRewards(this.config_, opts);
+    return claimRewards(this.config, opts);
   }
 
   /**
@@ -928,7 +1114,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: ConvertToMultiSigUserParameters,
     opts?: ConvertToMultiSigUserOptions,
   ): Promise<ConvertToMultiSigUserSuccessResponse> {
-    return convertToMultiSigUser(this.config_, params, opts);
+    return convertToMultiSigUser(this.config, params, opts);
   }
 
   /**
@@ -955,14 +1141,12 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * const data = await client.createSubAccount({ name: "..." });
    * ```
-   *
-   * @see null
    */
   createSubAccount(
     params: CreateSubAccountParameters,
     opts?: CreateSubAccountOptions,
   ): Promise<CreateSubAccountSuccessResponse> {
-    return createSubAccount(this.config_, params, opts);
+    return createSubAccount(this.config, params, opts);
   }
 
   /**
@@ -993,17 +1177,17 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *   initialUsd: 100 * 1e6,
    * });
    * ```
-   *
-   * @see null
    */
   createVault(params: CreateVaultParameters, opts?: CreateVaultOptions): Promise<CreateVaultSuccessResponse> {
-    return createVault(this.config_, params, opts);
+    return createVault(this.config, params, opts);
   }
 
   /**
    * Jail or unjail self as a validator signer.
    *
    * Signing: L1 Action.
+   *
+   * @deprecated use {@linkcode validatorSignerAction} instead — will be removed in v1.0.
    *
    * @param params Parameters specific to the API request.
    * @param opts Request execution options.
@@ -1036,17 +1220,17 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * await client.cSignerAction({ unjailSelf: null });
    * ```
-   *
-   * @see null
    */
   cSignerAction(params: CSignerActionParameters, opts?: CSignerActionOptions): Promise<CSignerActionSuccessResponse> {
-    return cSignerAction(this.config_, params, opts);
+    return cSignerAction(this.config, params, opts);
   }
 
   /**
    * Action related to validator management.
    *
    * Signing: L1 Action.
+   *
+   * @deprecated use {@linkcode validatorAction} instead — will be removed in v1.0.
    *
    * @param params Parameters specific to the API request.
    * @param opts Request execution options.
@@ -1077,20 +1261,20 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *   },
    * });
    * ```
-   *
-   * @see null
    */
   cValidatorAction(
     params: CValidatorActionParameters,
     opts?: CValidatorActionOptions,
   ): Promise<CValidatorActionSuccessResponse> {
-    return cValidatorAction(this.config_, params, opts);
+    return cValidatorAction(this.config, params, opts);
   }
 
   /**
    * Transfer native token from staking into the user's spot account.
    *
    * Signing: User-Signed EIP-712.
+   *
+   * @deprecated use {@linkcode stakingWithdraw} instead — will be removed in v1.0.
    *
    * @param params Parameters specific to the API request.
    * @param opts Request execution options.
@@ -1115,7 +1299,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#withdraw-from-staking
    */
   cWithdraw(params: CWithdrawParameters, opts?: CWithdrawOptions): Promise<CWithdrawSuccessResponse> {
-    return cWithdraw(this.config_, params, opts);
+    return cWithdraw(this.config, params, opts);
   }
 
   /**
@@ -1146,7 +1330,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/dual-block-architecture
    */
   evmUserModify(params: EvmUserModifyParameters, opts?: EvmUserModifyOptions): Promise<EvmUserModifySuccessResponse> {
-    return evmUserModify(this.config_, params, opts);
+    return evmUserModify(this.config, params, opts);
   }
 
   /**
@@ -1180,7 +1364,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: FinalizeEvmContractParameters,
     opts?: FinalizeEvmContractOptions,
   ): Promise<FinalizeEvmContractSuccessResponse> {
-    return finalizeEvmContract(this.config_, params, opts);
+    return finalizeEvmContract(this.config, params, opts);
   }
 
   /**
@@ -1218,7 +1402,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: GossipPriorityBidParameters,
     opts?: GossipPriorityBidOptions,
   ): Promise<GossipPriorityBidSuccessResponse> {
-    return gossipPriorityBid(this.config_, params, opts);
+    return gossipPriorityBid(this.config, params, opts);
   }
 
   /**
@@ -1256,7 +1440,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: Hip3LiquidatorTransferParameters,
     opts?: Hip3LiquidatorTransferOptions,
   ): Promise<Hip3LiquidatorTransferSuccessResponse> {
-    return hip3LiquidatorTransfer(this.config_, params, opts);
+    return hip3LiquidatorTransfer(this.config, params, opts);
   }
 
   /**
@@ -1290,7 +1474,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: LinkStakingUserParameters,
     opts?: LinkStakingUserOptions,
   ): Promise<LinkStakingUserSuccessResponse> {
-    return linkStakingUser(this.config_, params, opts);
+    return linkStakingUser(this.config, params, opts);
   }
 
   /**
@@ -1330,8 +1514,13 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#modify-an-order
    */
-  modify(params: ModifyParameters, opts?: ModifyOptions): Promise<ModifySuccessResponse> {
-    return modify(this.config_, params, opts);
+  modify(params: CoinModifyParameters, opts?: ModifyOptions): Promise<ModifySuccessResponse> {
+    if (params.order?.coin === undefined) {
+      return modify(this.config, params as ModifyParameters, opts);
+    }
+    return resolveCoinRefs(this.config, [params.order], "a").then(([resolvedOrder]) =>
+      modify(this.config, { ...params, order: resolvedOrder } as ModifyParameters, opts),
+    );
   }
 
   /**
@@ -1376,8 +1565,13 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#place-an-order
    */
-  order(params: OrderParameters, opts?: OrderOptions): Promise<OrderSuccessResponse> {
-    return order(this.config_, params, opts);
+  order(params: CoinOrderParameters, opts?: OrderOptions): Promise<OrderSuccessResponse> {
+    if (!Array.isArray(params.orders) || params.orders.every((o) => o?.coin === undefined)) {
+      return order(this.config, params as OrderParameters, opts);
+    }
+    return resolveCoinRefs(this.config, params.orders, "a").then((orders) =>
+      order(this.config, { ...params, orders } as OrderParameters, opts),
+    );
   }
 
   /**
@@ -1408,7 +1602,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#invalidate-pending-nonce-noop
    */
   noop(params: NoopParameters, opts?: NoopOptions): Promise<NoopSuccessResponse> {
-    return noop(this.config_, params, opts);
+    return noop(this.config, params, opts);
   }
 
   /**
@@ -1452,7 +1646,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-3-deployer-actions
    */
   perpDeploy(params: PerpDeployParameters, opts?: PerpDeployOptions): Promise<PerpDeploySuccessResponse> {
-    return perpDeploy(this.config_, params, opts);
+    return perpDeploy(this.config, params, opts);
   }
 
   /**
@@ -1526,7 +1720,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets#hyperliquid-nonces
    */
   prepareRequest<T>(run: (config: ExchangeConfig) => Promise<T>): Promise<PreparedExchangeRequest<T>> {
-    return prepareRequest(this.config_, run);
+    return prepareRequest(this.config, run);
   }
 
   /**
@@ -1553,14 +1747,12 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * await client.registerReferrer({ code: "..." });
    * ```
-   *
-   * @see null
    */
   registerReferrer(
     params: RegisterReferrerParameters,
     opts?: RegisterReferrerOptions,
   ): Promise<RegisterReferrerSuccessResponse> {
-    return registerReferrer(this.config_, params, opts);
+    return registerReferrer(this.config, params, opts);
   }
 
   /**
@@ -1594,7 +1786,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: ReserveRequestWeightParameters,
     opts?: ReserveRequestWeightOptions,
   ): Promise<ReserveRequestWeightSuccessResponse> {
-    return reserveRequestWeight(this.config_, params, opts);
+    return reserveRequestWeight(this.config, params, opts);
   }
 
   /**
@@ -1636,7 +1828,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     const isFirstArgParams = paramsOrOpts && "time" in paramsOrOpts;
     const params = isFirstArgParams ? paramsOrOpts : {};
     const opts = isFirstArgParams ? maybeOpts : (paramsOrOpts as ScheduleCancelOptions);
-    return scheduleCancel(this.config_, params, opts);
+    return scheduleCancel(this.config, params, opts);
   }
 
   /**
@@ -1675,7 +1867,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#send-asset
    */
   sendAsset(params: SendAssetParameters, opts?: SendAssetOptions): Promise<SendAssetSuccessResponse> {
-    return sendAsset(this.config_, params, opts);
+    return sendAsset(this.config, params, opts);
   }
 
   /**
@@ -1718,7 +1910,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: SendToEvmWithDataParameters,
     opts?: SendToEvmWithDataOptions,
   ): Promise<SendToEvmWithDataSuccessResponse> {
-    return sendToEvmWithData(this.config_, params, opts);
+    return sendToEvmWithData(this.config, params, opts);
   }
 
   /**
@@ -1745,14 +1937,12 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * await client.setDisplayName({ displayName: "..." });
    * ```
-   *
-   * @see null
    */
   setDisplayName(
     params: SetDisplayNameParameters,
     opts?: SetDisplayNameOptions,
   ): Promise<SetDisplayNameSuccessResponse> {
-    return setDisplayName(this.config_, params, opts);
+    return setDisplayName(this.config, params, opts);
   }
 
   /**
@@ -1779,11 +1969,9 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * await client.setReferrer({ code: "..." });
    * ```
-   *
-   * @see null
    */
   setReferrer(params: SetReferrerParameters, opts?: SetReferrerOptions): Promise<SetReferrerSuccessResponse> {
-    return setReferrer(this.config_, params, opts);
+    return setReferrer(this.config, params, opts);
   }
 
   /**
@@ -1824,7 +2012,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/deploying-hip-1-and-hip-2-assets
    */
   spotDeploy(params: SpotDeployParameters, opts?: SpotDeployOptions): Promise<SpotDeploySuccessResponse> {
-    return spotDeploy(this.config_, params, opts);
+    return spotDeploy(this.config, params, opts);
   }
 
   /**
@@ -1859,7 +2047,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#core-spot-transfer
    */
   spotSend(params: SpotSendParameters, opts?: SpotSendOptions): Promise<SpotSendSuccessResponse> {
-    return spotSend(this.config_, params, opts);
+    return spotSend(this.config, params, opts);
   }
 
   /**
@@ -1886,11 +2074,43 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * await client.spotUser({ toggleSpotDusting: { optOut: false } });
    * ```
-   *
-   * @see null
    */
   spotUser(params: SpotUserParameters, opts?: SpotUserOptions): Promise<SpotUserSuccessResponse> {
-    return spotUser(this.config_, params, opts);
+    return spotUser(this.config, params, opts);
+  }
+
+  /**
+   * Transfer native token from the user spot account into staking for delegating to validators.
+   *
+   * Signing: User-Signed EIP-712.
+   *
+   * @param params Parameters specific to the API request.
+   * @param opts Request execution options.
+   * @return Successful response without specific data.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   * @throws {ApiRequestError} When the API returns an unsuccessful response.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
+   * await client.stakingDeposit({ wei: 1 * 1e8 });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#deposit-into-staking
+   */
+  stakingDeposit(
+    params: StakingDepositParameters,
+    opts?: StakingDepositOptions,
+  ): Promise<StakingDepositSuccessResponse> {
+    return stakingDeposit(this.config, params, opts);
   }
 
   /**
@@ -1926,7 +2146,41 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: StakingLinkDisableTradingUserParameters,
     opts?: StakingLinkDisableTradingUserOptions,
   ): Promise<StakingLinkDisableTradingUserSuccessResponse> {
-    return stakingLinkDisableTradingUser(this.config_, params, opts);
+    return stakingLinkDisableTradingUser(this.config, params, opts);
+  }
+
+  /**
+   * Transfer native token from staking into the user's spot account.
+   *
+   * Signing: User-Signed EIP-712.
+   *
+   * @param params Parameters specific to the API request.
+   * @param opts Request execution options.
+   * @return Successful response without specific data.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   * @throws {ApiRequestError} When the API returns an unsuccessful response.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
+   * await client.stakingWithdraw({ wei: 1 * 1e8 });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#withdraw-from-staking
+   */
+  stakingWithdraw(
+    params: StakingWithdrawParameters,
+    opts?: StakingWithdrawOptions,
+  ): Promise<StakingWithdrawSuccessResponse> {
+    return stakingWithdraw(this.config, params, opts);
   }
 
   /**
@@ -1953,14 +2207,12 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * await client.subAccountModify({ subAccountUser: "0x...", name: "..." });
    * ```
-   *
-   * @see null
    */
   subAccountModify(
     params: SubAccountModifyParameters,
     opts?: SubAccountModifyOptions,
   ): Promise<SubAccountModifySuccessResponse> {
-    return subAccountModify(this.config_, params, opts);
+    return subAccountModify(this.config, params, opts);
   }
 
   /**
@@ -1992,14 +2244,12 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *   amount: "1",
    * });
    * ```
-   *
-   * @see null
    */
   subAccountSpotTransfer(
     params: SubAccountSpotTransferParameters,
     opts?: SubAccountSpotTransferOptions,
   ): Promise<SubAccountSpotTransferSuccessResponse> {
-    return subAccountSpotTransfer(this.config_, params, opts);
+    return subAccountSpotTransfer(this.config, params, opts);
   }
 
   /**
@@ -2030,14 +2280,12 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *   usd: 1 * 1e6,
    * });
    * ```
-   *
-   * @see null
    */
   subAccountTransfer(
     params: SubAccountTransferParameters,
     opts?: SubAccountTransferOptions,
   ): Promise<SubAccountTransferSuccessResponse> {
-    return subAccountTransfer(this.config_, params, opts);
+    return subAccountTransfer(this.config, params, opts);
   }
 
   /**
@@ -2075,7 +2323,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint
    */
   submitPrepared<T>(prepared: PreparedExchangeRequest<T>, opts?: SubmitPreparedOptions): Promise<T> {
-    return submitPrepared(this.config_, prepared, opts);
+    return submitPrepared(this.config, prepared, opts);
   }
 
   /**
@@ -2110,7 +2358,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#delegate-or-undelegate-stake-from-validator
    */
   tokenDelegate(params: TokenDelegateParameters, opts?: TokenDelegateOptions): Promise<TokenDelegateSuccessResponse> {
-    return tokenDelegate(this.config_, params, opts);
+    return tokenDelegate(this.config, params, opts);
   }
 
   /**
@@ -2141,10 +2389,15 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#update-isolated-margin
    */
   topUpIsolatedOnlyMargin(
-    params: TopUpIsolatedOnlyMarginParameters,
+    params: CoinTopUpIsolatedOnlyMarginParameters,
     opts?: TopUpIsolatedOnlyMarginOptions,
   ): Promise<TopUpIsolatedOnlyMarginSuccessResponse> {
-    return topUpIsolatedOnlyMargin(this.config_, params, opts);
+    if (params.coin === undefined) {
+      return topUpIsolatedOnlyMargin(this.config, params as TopUpIsolatedOnlyMarginParameters, opts);
+    }
+    return resolveCoinRefs(this.config, [params], "asset").then(([resolved]) =>
+      topUpIsolatedOnlyMargin(this.config, resolved as TopUpIsolatedOnlyMarginParameters, opts),
+    );
   }
 
   /**
@@ -2174,8 +2427,13 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#cancel-a-twap-order
    */
-  twapCancel(params: TwapCancelParameters, opts?: TwapCancelOptions): Promise<TwapCancelSuccessResponse> {
-    return twapCancel(this.config_, params, opts);
+  twapCancel(params: CoinTwapCancelParameters, opts?: TwapCancelOptions): Promise<TwapCancelSuccessResponse> {
+    if (params.coin === undefined) {
+      return twapCancel(this.config, params as TwapCancelParameters, opts);
+    }
+    return resolveCoinRefs(this.config, [params], "a").then(([resolved]) =>
+      twapCancel(this.config, resolved as TwapCancelParameters, opts),
+    );
   }
 
   /**
@@ -2214,8 +2472,13 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#place-a-twap-order
    */
-  twapOrder(params: TwapOrderParameters, opts?: TwapOrderOptions): Promise<TwapOrderSuccessResponse> {
-    return twapOrder(this.config_, params, opts);
+  twapOrder(params: CoinTwapOrderParameters, opts?: TwapOrderOptions): Promise<TwapOrderSuccessResponse> {
+    if (params.twap?.coin === undefined) {
+      return twapOrder(this.config, params as TwapOrderParameters, opts);
+    }
+    return resolveCoinRefs(this.config, [params.twap], "a").then(([twap]) =>
+      twapOrder(this.config, { ...params, twap } as TwapOrderParameters, opts),
+    );
   }
 
   /**
@@ -2246,10 +2509,15 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#update-isolated-margin
    */
   updateIsolatedMargin(
-    params: UpdateIsolatedMarginParameters,
+    params: CoinUpdateIsolatedMarginParameters,
     opts?: UpdateIsolatedMarginOptions,
   ): Promise<UpdateIsolatedMarginSuccessResponse> {
-    return updateIsolatedMargin(this.config_, params, opts);
+    if (params.coin === undefined) {
+      return updateIsolatedMargin(this.config, params as UpdateIsolatedMarginParameters, opts);
+    }
+    return resolveCoinRefs(this.config, [params], "asset").then(([resolved]) =>
+      updateIsolatedMargin(this.config, resolved as UpdateIsolatedMarginParameters, opts),
+    );
   }
 
   /**
@@ -2280,10 +2548,15 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#update-leverage
    */
   updateLeverage(
-    params: UpdateLeverageParameters,
+    params: CoinUpdateLeverageParameters,
     opts?: UpdateLeverageOptions,
   ): Promise<UpdateLeverageSuccessResponse> {
-    return updateLeverage(this.config_, params, opts);
+    if (params.coin === undefined) {
+      return updateLeverage(this.config, params as UpdateLeverageParameters, opts);
+    }
+    return resolveCoinRefs(this.config, [params], "asset").then(([resolved]) =>
+      updateLeverage(this.config, resolved as UpdateLeverageParameters, opts),
+    );
   }
 
   /**
@@ -2317,7 +2590,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: UsdClassTransferParameters,
     opts?: UsdClassTransferOptions,
   ): Promise<UsdClassTransferSuccessResponse> {
-    return usdClassTransfer(this.config_, params, opts);
+    return usdClassTransfer(this.config, params, opts);
   }
 
   /**
@@ -2348,7 +2621,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#core-usdc-transfer
    */
   usdSend(params: UsdSendParameters, opts?: UsdSendOptions): Promise<UsdSendSuccessResponse> {
-    return usdSend(this.config_, params, opts);
+    return usdSend(this.config, params, opts);
   }
 
   /**
@@ -2356,7 +2629,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * Signing: User-Signed EIP-712.
    *
-   * @deprecated use {@linkcode userSetAbstraction} instead.
+   * @deprecated use {@linkcode userSetAbstraction} instead — will be removed in v1.0.
    *
    * @param params Parameters specific to the API request.
    * @param opts Request execution options.
@@ -2384,7 +2657,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: UserDexAbstractionParameters,
     opts?: UserDexAbstractionOptions,
   ): Promise<UserDexAbstractionSuccessResponse> {
-    return userDexAbstraction(this.config_, params, opts);
+    return userDexAbstraction(this.config, params, opts);
   }
 
   /**
@@ -2418,7 +2691,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#negate-outcome
    */
   userOutcome(params: UserOutcomeParameters, opts?: UserOutcomeOptions): Promise<UserOutcomeSuccessResponse> {
-    return userOutcome(this.config_, params, opts);
+    return userOutcome(this.config, params, opts);
   }
 
   /**
@@ -2454,7 +2727,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: UserSetAbstractionParameters,
     opts?: UserSetAbstractionOptions,
   ): Promise<UserSetAbstractionSuccessResponse> {
-    return userSetAbstraction(this.config_, params, opts);
+    return userSetAbstraction(this.config, params, opts);
   }
 
   /**
@@ -2488,7 +2761,49 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: UserPortfolioMarginParameters,
     opts?: UserPortfolioMarginOptions,
   ): Promise<UserPortfolioMarginSuccessResponse> {
-    return userPortfolioMargin(this.config_, params, opts);
+    return userPortfolioMargin(this.config, params, opts);
+  }
+
+  /**
+   * Action related to validator management.
+   *
+   * Signing: L1 Action.
+   *
+   * @param params Parameters specific to the API request.
+   * @param opts Request execution options.
+   * @return Successful response without specific data.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   * @throws {ApiRequestError} When the API returns an unsuccessful response.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
+   * await client.validatorAction({
+   *   changeProfile: {
+   *     node_ip: { Ip: "1.2.3.4" },
+   *     name: "...",
+   *     description: "...",
+   *     unjailed: true,
+   *     disable_delegations: false,
+   *     commission_bps: null,
+   *     signer: null,
+   *   },
+   * });
+   * ```
+   */
+  validatorAction(
+    params: ValidatorActionParameters,
+    opts?: ValidatorActionOptions,
+  ): Promise<ValidatorActionSuccessResponse> {
+    return validatorAction(this.config, params, opts);
   }
 
   /**
@@ -2522,7 +2837,51 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     params: ValidatorL1StreamParameters,
     opts?: ValidatorL1StreamOptions,
   ): Promise<ValidatorL1StreamSuccessResponse> {
-    return validatorL1Stream(this.config_, params, opts);
+    return validatorL1Stream(this.config, params, opts);
+  }
+
+  /**
+   * Jail or unjail self as a validator signer.
+   *
+   * Signing: L1 Action.
+   *
+   * @param params Parameters specific to the API request.
+   * @param opts Request execution options.
+   * @return Successful response without specific data.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   * @throws {ApiRequestError} When the API returns an unsuccessful response.
+   *
+   * @example Jail self
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
+   * await client.validatorSignerAction({ jailSelf: null });
+   * ```
+   *
+   * @example Unjail self
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
+   * await client.validatorSignerAction({ unjailSelf: null });
+   * ```
+   */
+  validatorSignerAction(
+    params: ValidatorSignerActionParameters,
+    opts?: ValidatorSignerActionOptions,
+  ): Promise<ValidatorSignerActionSuccessResponse> {
+    return validatorSignerAction(this.config, params, opts);
   }
 
   /**
@@ -2549,14 +2908,12 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * await client.vaultDistribute({ vaultAddress: "0x...", usd: 10 * 1e6 });
    * ```
-   *
-   * @see null
    */
   vaultDistribute(
     params: VaultDistributeParameters,
     opts?: VaultDistributeOptions,
   ): Promise<VaultDistributeSuccessResponse> {
-    return vaultDistribute(this.config_, params, opts);
+    return vaultDistribute(this.config, params, opts);
   }
 
   /**
@@ -2587,11 +2944,9 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *   alwaysCloseOnWithdraw: false,
    * });
    * ```
-   *
-   * @see null
    */
   vaultModify(params: VaultModifyParameters, opts?: VaultModifyOptions): Promise<VaultModifySuccessResponse> {
-    return vaultModify(this.config_, params, opts);
+    return vaultModify(this.config, params, opts);
   }
 
   /**
@@ -2626,7 +2981,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#deposit-or-withdraw-from-a-vault
    */
   vaultTransfer(params: VaultTransferParameters, opts?: VaultTransferOptions): Promise<VaultTransferSuccessResponse> {
-    return vaultTransfer(this.config_, params, opts);
+    return vaultTransfer(this.config, params, opts);
   }
 
   /**
@@ -2651,13 +3006,46 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
+   * await client.withdraw({ destination: "0x...", amount: "1" });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#initiate-a-withdrawal-request
+   */
+  withdraw(params: WithdrawParameters, opts?: WithdrawOptions): Promise<WithdrawSuccessResponse> {
+    return withdraw(this.config, params, opts);
+  }
+
+  /**
+   * Initiate a withdrawal request.
+   *
+   * Signing: User-Signed EIP-712.
+   *
+   * @deprecated use {@linkcode withdraw} instead — will be removed in v1.0.
+   *
+   * @param params Parameters specific to the API request.
+   * @param opts Request execution options.
+   * @return Successful response without specific data.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   * @throws {ApiRequestError} When the API returns an unsuccessful response.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
    * await client.withdraw3({ destination: "0x...", amount: "1" });
    * ```
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#initiate-a-withdrawal-request
    */
   withdraw3(params: Withdraw3Parameters, opts?: Withdraw3Options): Promise<Withdraw3SuccessResponse> {
-    return withdraw3(this.config_, params, opts);
+    return withdraw3(this.config, params, opts);
   }
 }
 
@@ -2666,7 +3054,12 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
 // ============================================================
 
 export {
+  type ApiBulkErrorResponse,
+  type ApiErrorResponse,
+  type ApiExplorerErrorResponse,
   ApiRequestError,
+  type ApiSingleErrorResponse,
+  type ApiTopLevelErrorResponse,
   type ExchangeConfig,
   type ExchangeMultiSigConfig,
   type ExchangeSingleWalletConfig,
@@ -2799,10 +3192,20 @@ export type { SpotDeployOptions, SpotDeployParameters, SpotDeploySuccessResponse
 export type { SpotSendOptions, SpotSendParameters, SpotSendSuccessResponse } from "./_methods/spotSend.ts";
 export type { SpotUserOptions, SpotUserParameters, SpotUserSuccessResponse } from "./_methods/spotUser.ts";
 export type {
+  StakingDepositOptions,
+  StakingDepositParameters,
+  StakingDepositSuccessResponse,
+} from "./_methods/stakingDeposit.ts";
+export type {
   StakingLinkDisableTradingUserOptions,
   StakingLinkDisableTradingUserParameters,
   StakingLinkDisableTradingUserSuccessResponse,
 } from "./_methods/stakingLinkDisableTradingUser.ts";
+export type {
+  StakingWithdrawOptions,
+  StakingWithdrawParameters,
+  StakingWithdrawSuccessResponse,
+} from "./_methods/stakingWithdraw.ts";
 export type {
   SubAccountModifyOptions,
   SubAccountModifyParameters,
@@ -2867,10 +3270,20 @@ export type {
   UserSetAbstractionSuccessResponse,
 } from "./_methods/userSetAbstraction.ts";
 export type {
+  ValidatorActionOptions,
+  ValidatorActionParameters,
+  ValidatorActionSuccessResponse,
+} from "./_methods/validatorAction.ts";
+export type {
   ValidatorL1StreamOptions,
   ValidatorL1StreamParameters,
   ValidatorL1StreamSuccessResponse,
 } from "./_methods/validatorL1Stream.ts";
+export type {
+  ValidatorSignerActionOptions,
+  ValidatorSignerActionParameters,
+  ValidatorSignerActionSuccessResponse,
+} from "./_methods/validatorSignerAction.ts";
 export type {
   VaultDistributeOptions,
   VaultDistributeParameters,
@@ -2882,4 +3295,5 @@ export type {
   VaultTransferParameters,
   VaultTransferSuccessResponse,
 } from "./_methods/vaultTransfer.ts";
+export type { WithdrawOptions, WithdrawParameters, WithdrawSuccessResponse } from "./_methods/withdraw.ts";
 export type { Withdraw3Options, Withdraw3Parameters, Withdraw3SuccessResponse } from "./_methods/withdraw3.ts";

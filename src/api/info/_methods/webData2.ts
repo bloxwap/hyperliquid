@@ -15,7 +15,6 @@ import type { SpotClearinghouseStateResponse } from "./spotClearinghouseState.ts
 
 /**
  * Request comprehensive user and market data.
- * @see null
  */
 export const WebData2Request = /* @__PURE__ */ (() => {
   return v.object({
@@ -29,7 +28,6 @@ export type WebData2Request = v.InferOutput<typeof WebData2Request>;
 
 /**
  * Comprehensive user and market data.
- * @see null
  */
 export type WebData2Response = {
   /** Account summary for perpetual trading. */
@@ -98,7 +96,7 @@ export type WebData2Parameters = Omit<v.InferInput<typeof WebData2Request>, "typ
 /**
  * Request comprehensive user and market data.
  *
- * @deprecated use `webData3` and other component subscriptions instead.
+ * @deprecated use `webData3` and other component subscriptions instead — will be removed in v1.0.
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
@@ -119,8 +117,6 @@ export type WebData2Parameters = Omit<v.InferInput<typeof WebData2Request>, "typ
  *   user: "0x...",
  * });
  * ```
- *
- * @see null
  */
 export function webData2(
   config: InfoConfig,

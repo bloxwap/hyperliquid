@@ -18,7 +18,10 @@ export const TopUpIsolatedOnlyMarginRequest = /* @__PURE__ */ (() => {
       type: v.literal("topUpIsolatedOnlyMargin"),
       /** Asset ID. */
       asset: UnsignedInteger,
-      /** Target leverage (float string). */
+      /**
+       * Target leverage as a float (e.g. `0.5` or `"0.5"`). Numbers are normalized to their
+       * decimal string form on the wire; pass a string for exact wire fidelity.
+       */
       leverage: UnsignedDecimal,
     }),
     /** Nonce (timestamp in ms) used to prevent replay attacks. */

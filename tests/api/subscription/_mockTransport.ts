@@ -3,7 +3,8 @@
  *
  * Records every `subscribe(...)` call — channel, validated payload, wrapped listener and
  * options — and resolves with a stub {@linkcode ISubscription}, so tests can assert exactly
- * what the API layer sent and replay synthetic events through the captured listener.
+ * what the API layer sent and replay synthetic events through the captured listener. `unsubscribe()`
+ * calls on the issued handles are counted on {@linkcode MockSubscriptionTransport.unsubscribeCalls}.
  *
  * Event delivery mirrors the production WebSocket path: frames are filtered by the same
  * {@linkcode payloadEventType} / {@linkcode frameEventType} routing table, so a subscription
@@ -38,6 +39,10 @@ export interface MockSubscribeCall {
 /** An {@linkcode ISubscriptionTransport} that records subscriptions instead of opening a socket. */
 export class MockSubscriptionTransport implements ISubscriptionTransport {
   readonly calls: MockSubscribeCall[] = [];
+  /** Number of `unsubscribe()` calls across every handle this transport issued. */
+  unsubscribeCalls = 0;
+  /** Extra properties merged into every issued handle (e.g. a transport-provided `failureSignal`). */
+  handleExtras?: Partial<ISubscription>;
 
   subscribe<T>(
     channel: string,
@@ -52,7 +57,13 @@ export class MockSubscriptionTransport implements ISubscriptionTransport {
       options,
       eventType: payloadEventType(channel, payload),
     });
-    return Promise.resolve({ unsubscribe: () => Promise.resolve() });
+    return Promise.resolve({
+      ...this.handleExtras,
+      unsubscribe: () => {
+        this.unsubscribeCalls++;
+        return Promise.resolve();
+      },
+    });
   }
 
   /**

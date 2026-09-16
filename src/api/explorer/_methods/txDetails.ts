@@ -9,7 +9,6 @@ import type { ExplorerTransaction } from "./_base/mod.ts";
 
 /**
  * Request transaction details by transaction hash.
- * @see null
  */
 export const TxDetailsRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -23,7 +22,6 @@ export type TxDetailsRequest = v.InferOutput<typeof TxDetailsRequest>;
 
 /**
  * Response with transaction details.
- * @see null
  */
 export type TxDetailsResponse = {
   /** Response type. */
@@ -67,7 +65,6 @@ export type TxDetailsParameters = Omit<v.InferInput<typeof TxDetailsRequest>, "t
  * });
  * ```
  *
- * @see null
  */
 export async function txDetails(
   config: ExplorerConfig<IRequestTransport<"explorer">>,

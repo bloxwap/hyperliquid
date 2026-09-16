@@ -2,7 +2,8 @@
  * JSDoc Sync Checker
  *
  * Verifies that JSDoc comments in class methods (client.ts)
- * are synchronized with JSDoc comments in standalone functions (_methods/*.ts).
+ * are synchronized with JSDoc comments in standalone functions (_methods/*.ts),
+ * and fails on any `@see null` placeholder (a dead link in generated docs).
  *
  * Usage: bun run .dev/jsdoc_sync_check.ts
  *
@@ -166,6 +167,14 @@ function isIncompleteJSDoc(jsdoc: ParsedJSDoc): boolean {
   if ((jsdoc.tags.get("returns")?.length ?? 0) > 0) return false;
   if ((jsdoc.tags.get("throws")?.length ?? 0) > 0) return false;
   return true;
+}
+
+/**
+ * Check if JSDoc contains a `@see null` placeholder.
+ * Placeholders render as dead links in generated docs and must not be committed.
+ */
+function hasSeeNullPlaceholder(jsdoc: ParsedJSDoc): boolean {
+  return jsdoc.tags.get("see")?.some((value) => value.trim() === "null") ?? false;
 }
 
 // =============================================================================
@@ -477,6 +486,17 @@ function main(): void {
         continue;
       }
 
+      // `@see null` placeholders were scrubbed from the tree; keep them from coming back.
+      if (hasSeeNullPlaceholder(methodJSDoc)) {
+        allErrors.push({
+          methodName,
+          className: endpoint.className,
+          errorType: "@see null placeholder",
+          details: "Remove the `@see null` placeholder — it renders as a dead link in generated docs",
+          filePath: clientPath,
+        });
+      }
+
       // Parse function JSDoc from _methods/*.ts
       const funcJSDocMap = parseFunctionJSDoc(funcFilePath);
       const funcJSDoc = funcJSDocMap.get(methodName);
@@ -491,6 +511,16 @@ function main(): void {
           filePath: funcFilePath,
         });
         continue;
+      }
+
+      if (hasSeeNullPlaceholder(funcJSDoc)) {
+        allErrors.push({
+          methodName,
+          className: endpoint.className,
+          errorType: "@see null placeholder",
+          details: "Remove the `@see null` placeholder — it renders as a dead link in generated docs",
+          filePath: funcFilePath,
+        });
       }
 
       allErrors.push(...compareJSDoc(funcJSDoc, methodJSDoc, methodName, endpoint.className, funcFilePath, clientPath));

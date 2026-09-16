@@ -3,7 +3,7 @@
  * @module
  */
 
-import type { InfoConfig, PaginationOptions } from "./_methods/_base/mod.ts";
+import { isAbortSignal, type InfoConfig, type PaginationOptions } from "./_methods/_base/mod.ts";
 
 // ============================================================
 // Methods Imports
@@ -41,6 +41,7 @@ import {
   type CandleSnapshotResponse,
 } from "./_methods/candleSnapshot.ts";
 import { candleSnapshotAll, type CandleSnapshotAllParameters } from "./_methods/candleSnapshotAll.ts";
+import { candleSnapshotPages, type CandleSnapshotPagesParameters } from "./_methods/candleSnapshotPages.ts";
 import {
   clearinghouseState,
   type ClearinghouseStateParameters,
@@ -75,6 +76,7 @@ import {
   type FundingHistoryResponse,
 } from "./_methods/fundingHistory.ts";
 import { fundingHistoryAll, type FundingHistoryAllParameters } from "./_methods/fundingHistoryAll.ts";
+import { fundingHistoryPages, type FundingHistoryPagesParameters } from "./_methods/fundingHistoryPages.ts";
 import {
   gossipPriorityAuctionStatus,
   type GossipPriorityAuctionStatusResponse,
@@ -113,6 +115,7 @@ import { perpConciseAnnotations, type PerpConciseAnnotationsResponse } from "./_
 import { perpDeployAuctionStatus, type PerpDeployAuctionStatusResponse } from "./_methods/perpDeployAuctionStatus.ts";
 import { perpDexLimits, type PerpDexLimitsParameters, type PerpDexLimitsResponse } from "./_methods/perpDexLimits.ts";
 import { perpDexs, type PerpDexsResponse } from "./_methods/perpDexs.ts";
+import { perpDexes, type PerpDexesResponse } from "./_methods/perpDexes.ts";
 import { perpDexStatus, type PerpDexStatusParameters, type PerpDexStatusResponse } from "./_methods/perpDexStatus.ts";
 import {
   perpsAtOpenInterestCap,
@@ -151,6 +154,7 @@ import {
 } from "./_methods/spotPairDeployAuctionStatus.ts";
 import { subAccounts, type SubAccountsParameters, type SubAccountsResponse } from "./_methods/subAccounts.ts";
 import { subAccounts2, type SubAccounts2Parameters, type SubAccounts2Response } from "./_methods/subAccounts2.ts";
+import { subAccountsV2, type SubAccountsV2Parameters, type SubAccountsV2Response } from "./_methods/subAccountsV2.ts";
 import { tokenDetails, type TokenDetailsParameters, type TokenDetailsResponse } from "./_methods/tokenDetails.ts";
 import { twapHistory, type TwapHistoryParameters, type TwapHistoryResponse } from "./_methods/twapHistory.ts";
 import { usdcRouting, type UsdcRoutingResponse } from "./_methods/usdcRouting.ts";
@@ -177,6 +181,7 @@ import {
   type UserFillsByTimeResponse,
 } from "./_methods/userFillsByTime.ts";
 import { userFillsByTimeAll, type UserFillsByTimeAllParameters } from "./_methods/userFillsByTimeAll.ts";
+import { userFillsByTimePages, type UserFillsByTimePagesParameters } from "./_methods/userFillsByTimePages.ts";
 import { userFunding, type UserFundingParameters, type UserFundingResponse } from "./_methods/userFunding.ts";
 import {
   userNonFundingLedgerUpdates,
@@ -187,6 +192,10 @@ import {
   userNonFundingLedgerUpdatesAll,
   type UserNonFundingLedgerUpdatesAllParameters,
 } from "./_methods/userNonFundingLedgerUpdatesAll.ts";
+import {
+  userNonFundingLedgerUpdatesPages,
+  type UserNonFundingLedgerUpdatesPagesParameters,
+} from "./_methods/userNonFundingLedgerUpdatesPages.ts";
 import { userRateLimit, type UserRateLimitParameters, type UserRateLimitResponse } from "./_methods/userRateLimit.ts";
 import { userRole, type UserRoleParameters, type UserRoleResponse } from "./_methods/userRole.ts";
 import {
@@ -209,6 +218,10 @@ import {
   type UserTwapSliceFillsByTimeAllParameters,
 } from "./_methods/userTwapSliceFillsByTimeAll.ts";
 import {
+  userTwapSliceFillsByTimePages,
+  type UserTwapSliceFillsByTimePagesParameters,
+} from "./_methods/userTwapSliceFillsByTimePages.ts";
+import {
   userVaultEquities,
   type UserVaultEquitiesParameters,
   type UserVaultEquitiesResponse,
@@ -229,7 +242,7 @@ import { webData2, type WebData2Parameters, type WebData2Response } from "./_met
  * Corresponds to the {@link https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint | Info endpoint}.
  */
 export class InfoClient<C extends InfoConfig = InfoConfig> {
-  config_: C;
+  readonly config: C;
 
   /**
    * Creates an instance of the InfoClient.
@@ -246,7 +259,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * ```
    */
   constructor(config: C) {
-    this.config_ = config;
+    this.config = config;
   }
 
   /**
@@ -272,7 +285,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-users-active-asset-data
    */
   activeAssetData(params: ActiveAssetDataParameters, signal?: AbortSignal): Promise<ActiveAssetDataResponse> {
-    return activeAssetData(this.config_, params, signal);
+    return activeAssetData(this.config, params, signal);
   }
 
   /**
@@ -297,7 +310,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-all-borrow-lend-reserve-states
    */
   allBorrowLendReserveStates(signal?: AbortSignal): Promise<AllBorrowLendReserveStatesResponse> {
-    return allBorrowLendReserveStates(this.config_, signal);
+    return allBorrowLendReserveStates(this.config, signal);
   }
 
   /**
@@ -325,9 +338,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   allMids(params?: AllMidsParameters, signal?: AbortSignal): Promise<AllMidsResponse>;
   allMids(signal?: AbortSignal): Promise<AllMidsResponse>;
   allMids(paramsOrSignal?: AllMidsParameters | AbortSignal, maybeSignal?: AbortSignal): Promise<AllMidsResponse> {
-    const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
-    const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
-    return allMids(this.config_, params, signal);
+    const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
+    const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
+    return allMids(this.config, params, signal);
   }
 
   /**
@@ -352,7 +365,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetuals-metadata-universe-and-margin-tables
    */
   allPerpMetas(signal?: AbortSignal): Promise<AllPerpMetasResponse> {
-    return allPerpMetas(this.config_, signal);
+    return allPerpMetas(this.config, signal);
   }
 
   /**
@@ -378,7 +391,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-approved-builders-for-user
    */
   approvedBuilders(params: ApprovedBuildersParameters, signal?: AbortSignal): Promise<ApprovedBuildersResponse> {
-    return approvedBuilders(this.config_, params, signal);
+    return approvedBuilders(this.config, params, signal);
   }
 
   /**
@@ -407,7 +420,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     params: BorrowLendReserveStateParameters,
     signal?: AbortSignal,
   ): Promise<BorrowLendReserveStateResponse> {
-    return borrowLendReserveState(this.config_, params, signal);
+    return borrowLendReserveState(this.config, params, signal);
   }
 
   /**
@@ -436,7 +449,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     params: BorrowLendUserStateParameters,
     signal?: AbortSignal,
   ): Promise<BorrowLendUserStateResponse> {
-    return borrowLendUserState(this.config_, params, signal);
+    return borrowLendUserState(this.config, params, signal);
   }
 
   /**
@@ -469,7 +482,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#candle-snapshot
    */
   candleSnapshot(params: CandleSnapshotParameters, signal?: AbortSignal): Promise<CandleSnapshotResponse> {
-    return candleSnapshot(this.config_, params, signal);
+    return candleSnapshot(this.config, params, signal);
   }
 
   /**
@@ -514,7 +527,57 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     options?: PaginationOptions,
     signal?: AbortSignal,
   ): Promise<CandleSnapshotResponse> {
-    return candleSnapshotAll(this.config_, params, options, signal);
+    return candleSnapshotAll(this.config, params, options, signal);
+  }
+
+  /**
+   * Request candlestick snapshots over a time range as a lazy stream of pages.
+   *
+   * Streaming form of {@linkcode candleSnapshotAll}: same walk — re-requesting from the last
+   * returned candle's opening time (`startTime` is inclusive) after each full page, discarding the
+   * overlap matched by the candle's opening time `t` (exactly one candle exists per interval per
+   * opening time) — but each page is yielded as it arrives instead of buffering the whole range.
+   * Nothing is requested until iteration starts, and breaking out of the loop stops the walk
+   * without further requests. Ends at the first short page, when `options.maxPages` pages have been
+   * fetched, or when a page contributes nothing new, so a misbehaving server causes neither
+   * duplicates nor an infinite loop.
+   *
+   * Note: only the most recent 5000 candles are available from the server — that window is an
+   * availability limit, not a pagination cap, so older history cannot be reached by paginating.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Async generator yielding pages of candlestick data points.
+   *
+   * @throws {ValidationError} When the pagination options fail validation (thrown by the first
+   *   `next()` call, before any request is sent).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * for await (const page of client.candleSnapshotPages({
+   *   coin: "ETH",
+   *   interval: "1h",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * })) {
+   *   console.log(`received ${page.length} candles`);
+   * }
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#candle-snapshot
+   */
+  candleSnapshotPages(
+    params: CandleSnapshotPagesParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): AsyncGenerator<CandleSnapshotResponse, void, undefined> {
+    return candleSnapshotPages(this.config, params, options, signal);
   }
 
   /**
@@ -540,7 +603,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-users-perpetuals-account-summary
    */
   clearinghouseState(params: ClearinghouseStateParameters, signal?: AbortSignal): Promise<ClearinghouseStateResponse> {
-    return clearinghouseState(this.config_, params, signal);
+    return clearinghouseState(this.config, params, signal);
   }
 
   /**
@@ -566,7 +629,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-delegations
    */
   delegations(params: DelegationsParameters, signal?: AbortSignal): Promise<DelegationsResponse> {
-    return delegations(this.config_, params, signal);
+    return delegations(this.config, params, signal);
   }
 
   /**
@@ -592,7 +655,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-history
    */
   delegatorHistory(params: DelegatorHistoryParameters, signal?: AbortSignal): Promise<DelegatorHistoryResponse> {
-    return delegatorHistory(this.config_, params, signal);
+    return delegatorHistory(this.config, params, signal);
   }
 
   /**
@@ -618,7 +681,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-rewards
    */
   delegatorRewards(params: DelegatorRewardsParameters, signal?: AbortSignal): Promise<DelegatorRewardsResponse> {
-    return delegatorRewards(this.config_, params, signal);
+    return delegatorRewards(this.config, params, signal);
   }
 
   /**
@@ -644,7 +707,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-summary
    */
   delegatorSummary(params: DelegatorSummaryParameters, signal?: AbortSignal): Promise<DelegatorSummaryResponse> {
-    return delegatorSummary(this.config_, params, signal);
+    return delegatorSummary(this.config, params, signal);
   }
 
   /**
@@ -665,11 +728,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.exchangeStatus();
    * ```
-   *
-   * @see null
    */
   exchangeStatus(signal?: AbortSignal): Promise<ExchangeStatusResponse> {
-    return exchangeStatus(this.config_, signal);
+    return exchangeStatus(this.config, signal);
   }
 
   /**
@@ -691,11 +752,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.extraAgents({ user: "0x..." });
    * ```
-   *
-   * @see null
    */
   extraAgents(params: ExtraAgentsParameters, signal?: AbortSignal): Promise<ExtraAgentsResponse> {
-    return extraAgents(this.config_, params, signal);
+    return extraAgents(this.config, params, signal);
   }
 
   /**
@@ -721,7 +780,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-open-orders-with-additional-frontend-info
    */
   frontendOpenOrders(params: FrontendOpenOrdersParameters, signal?: AbortSignal): Promise<FrontendOpenOrdersResponse> {
-    return frontendOpenOrders(this.config_, params, signal);
+    return frontendOpenOrders(this.config, params, signal);
   }
 
   /**
@@ -753,7 +812,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-historical-funding-rates
    */
   fundingHistory(params: FundingHistoryParameters, signal?: AbortSignal): Promise<FundingHistoryResponse> {
-    return fundingHistory(this.config_, params, signal);
+    return fundingHistory(this.config, params, signal);
   }
 
   /**
@@ -794,7 +853,53 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     options?: PaginationOptions,
     signal?: AbortSignal,
   ): Promise<FundingHistoryResponse> {
-    return fundingHistoryAll(this.config_, params, options, signal);
+    return fundingHistoryAll(this.config, params, options, signal);
+  }
+
+  /**
+   * Request funding history as a lazy stream of pages, paginating through the server's 500-records-per-response cap.
+   *
+   * Streaming form of {@linkcode fundingHistoryAll}: same walk — re-requesting from the last
+   * returned timestamp (`startTime` is inclusive) after each full page, discarding the overlap
+   * matched by the record's `time` (there is exactly one funding record per coin per funding
+   * interval) — but each page is yielded as it arrives instead of buffering the whole range.
+   * Nothing is requested until iteration starts, and breaking out of the loop stops the walk
+   * without further requests. Ends at the first short page, when `options.maxPages` pages have been
+   * fetched, or when a page contributes nothing new, so a misbehaving server causes neither
+   * duplicates nor an infinite loop.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Async generator yielding pages of historical funding rate records for an asset.
+   *
+   * @throws {ValidationError} When the pagination options fail validation (thrown by the first
+   *   `next()` call, before any request is sent).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * for await (const page of client.fundingHistoryPages({
+   *   coin: "ETH",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * })) {
+   *   console.log(`received ${page.length} funding records`);
+   * }
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-historical-funding-rates
+   */
+  fundingHistoryPages(
+    params: FundingHistoryPagesParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): AsyncGenerator<FundingHistoryResponse, void, undefined> {
+    return fundingHistoryPages(this.config, params, options, signal);
   }
 
   /**
@@ -819,7 +924,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/priority-fees
    */
   gossipPriorityAuctionStatus(signal?: AbortSignal): Promise<GossipPriorityAuctionStatusResponse> {
-    return gossipPriorityAuctionStatus(this.config_, signal);
+    return gossipPriorityAuctionStatus(this.config, signal);
   }
 
   /**
@@ -840,11 +945,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.gossipRootIps();
    * ```
-   *
-   * @see null
    */
   gossipRootIps(signal?: AbortSignal): Promise<GossipRootIpsResponse> {
-    return gossipRootIps(this.config_, signal);
+    return gossipRootIps(this.config, signal);
   }
 
   /**
@@ -873,7 +976,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-historical-orders
    */
   historicalOrders(params: HistoricalOrdersParameters, signal?: AbortSignal): Promise<HistoricalOrdersResponse> {
-    return historicalOrders(this.config_, params, signal);
+    return historicalOrders(this.config, params, signal);
   }
 
   /**
@@ -895,11 +998,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.isVip({ user: "0x..." });
    * ```
-   *
-   * @see null
    */
   isVip(params: IsVipParameters, signal?: AbortSignal): Promise<IsVipResponse> {
-    return isVip(this.config_, params, signal);
+    return isVip(this.config, params, signal);
   }
 
   /**
@@ -927,7 +1028,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#l2-book-snapshot
    */
   l2Book(params: L2BookParameters, signal?: AbortSignal): Promise<L2BookResponse> {
-    return l2Book(this.config_, params, signal);
+    return l2Book(this.config, params, signal);
   }
 
   /**
@@ -949,11 +1050,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.leadingVaults({ user: "0x..." });
    * ```
-   *
-   * @see null
    */
   leadingVaults(params: LeadingVaultsParameters, signal?: AbortSignal): Promise<LeadingVaultsResponse> {
-    return leadingVaults(this.config_, params, signal);
+    return leadingVaults(this.config, params, signal);
   }
 
   /**
@@ -975,18 +1074,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.legalCheck({ user: "0x..." });
    * ```
-   *
-   * @see null
    */
   legalCheck(params: LegalCheckParameters, signal?: AbortSignal): Promise<LegalCheckResponse> {
-    return legalCheck(this.config_, params, signal);
+    return legalCheck(this.config, params, signal);
   }
 
   /**
    * Request liquidatable.
    *
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
-   * @return Unknown array.
+   * @return Array of liquidatable positions.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
    * @throws {TransportError} When the transport layer throws an error.
@@ -1000,11 +1097,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.liquidatable();
    * ```
-   *
-   * @see null
    */
   liquidatable(signal?: AbortSignal): Promise<LiquidatableResponse> {
-    return liquidatable(this.config_, signal);
+    return liquidatable(this.config, signal);
   }
 
   /**
@@ -1026,11 +1121,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.marginTable({ id: 1 });
    * ```
-   *
-   * @see null
    */
   marginTable(params: MarginTableParameters, signal?: AbortSignal): Promise<MarginTableResponse> {
-    return marginTable(this.config_, params, signal);
+    return marginTable(this.config, params, signal);
   }
 
   /**
@@ -1056,7 +1149,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#check-builder-fee-approval
    */
   maxBuilderFee(params: MaxBuilderFeeParameters, signal?: AbortSignal): Promise<MaxBuilderFeeResponse> {
-    return maxBuilderFee(this.config_, params, signal);
+    return maxBuilderFee(this.config, params, signal);
   }
 
   /**
@@ -1077,11 +1170,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.maxMarketOrderNtls();
    * ```
-   *
-   * @see null
    */
   maxMarketOrderNtls(signal?: AbortSignal): Promise<MaxMarketOrderNtlsResponse> {
-    return maxMarketOrderNtls(this.config_, signal);
+    return maxMarketOrderNtls(this.config, signal);
   }
 
   /**
@@ -1109,9 +1200,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   meta(params?: MetaParameters, signal?: AbortSignal): Promise<MetaResponse>;
   meta(signal?: AbortSignal): Promise<MetaResponse>;
   meta(paramsOrSignal?: MetaParameters | AbortSignal, maybeSignal?: AbortSignal): Promise<MetaResponse> {
-    const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
-    const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
-    return meta(this.config_, params, signal);
+    const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
+    const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
+    return meta(this.config, params, signal);
   }
 
   /**
@@ -1142,9 +1233,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     paramsOrSignal?: MetaAndAssetCtxsParameters | AbortSignal,
     maybeSignal?: AbortSignal,
   ): Promise<MetaAndAssetCtxsResponse> {
-    const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
-    const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
-    return metaAndAssetCtxs(this.config_, params, signal);
+    const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
+    const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
+    return metaAndAssetCtxs(this.config, params, signal);
   }
 
   /**
@@ -1170,7 +1261,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-open-orders
    */
   openOrders(params: OpenOrdersParameters, signal?: AbortSignal): Promise<OpenOrdersResponse> {
-    return openOrders(this.config_, params, signal);
+    return openOrders(this.config, params, signal);
   }
 
   /**
@@ -1196,7 +1287,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-order-status-by-oid-or-cloid
    */
   orderStatus(params: OrderStatusParameters, signal?: AbortSignal): Promise<OrderStatusResponse> {
-    return orderStatus(this.config_, params, signal);
+    return orderStatus(this.config, params, signal);
   }
 
   /**
@@ -1221,7 +1312,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-outcome-metadata
    */
   outcomeMeta(signal?: AbortSignal): Promise<OutcomeMetaResponse> {
-    return outcomeMeta(this.config_, signal);
+    return outcomeMeta(this.config, signal);
   }
 
   /**
@@ -1246,7 +1337,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions#read-api
    */
   outcomeTemplates(signal?: AbortSignal): Promise<OutcomeTemplatesResponse> {
-    return outcomeTemplates(this.config_, signal);
+    return outcomeTemplates(this.config, signal);
   }
 
   /**
@@ -1272,7 +1363,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perp-annotation
    */
   perpAnnotation(params: PerpAnnotationParameters, signal?: AbortSignal): Promise<PerpAnnotationResponse> {
-    return perpAnnotation(this.config_, params, signal);
+    return perpAnnotation(this.config, params, signal);
   }
 
   /**
@@ -1297,7 +1388,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perp-categories
    */
   perpCategories(signal?: AbortSignal): Promise<PerpCategoriesResponse> {
-    return perpCategories(this.config_, signal);
+    return perpCategories(this.config, signal);
   }
 
   /**
@@ -1322,7 +1413,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-concise-perp-annotations
    */
   perpConciseAnnotations(signal?: AbortSignal): Promise<PerpConciseAnnotationsResponse> {
-    return perpConciseAnnotations(this.config_, signal);
+    return perpConciseAnnotations(this.config, signal);
   }
 
   /**
@@ -1347,7 +1438,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-information-about-the-perp-deploy-auction
    */
   perpDeployAuctionStatus(signal?: AbortSignal): Promise<PerpDeployAuctionStatusResponse> {
-    return perpDeployAuctionStatus(this.config_, signal);
+    return perpDeployAuctionStatus(this.config, signal);
   }
 
   /**
@@ -1373,11 +1464,13 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-builder-deployed-perp-market-limits
    */
   perpDexLimits(params: PerpDexLimitsParameters, signal?: AbortSignal): Promise<PerpDexLimitsResponse> {
-    return perpDexLimits(this.config_, params, signal);
+    return perpDexLimits(this.config, params, signal);
   }
 
   /**
    * Request all perpetual dexs.
+   *
+   * @deprecated use `perpDexes` — will be removed in v1.0.
    *
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
    * @return Array of perpetual dexes (null is main dex).
@@ -1398,7 +1491,35 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetual-dexs
    */
   perpDexs(signal?: AbortSignal): Promise<PerpDexsResponse> {
-    return perpDexs(this.config_, signal);
+    return perpDexs(this.config, signal);
+  }
+
+  /**
+   * Request all perpetual dexes.
+   *
+   * Friendly alias of {@linkcode perpDexs} (the wire name): sends the same `perpDexs` request and
+   * returns its response unchanged.
+   *
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Array of perpetual dexes (null is main dex).
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * const data = await client.perpDexes();
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetual-dexs
+   */
+  perpDexes(signal?: AbortSignal): Promise<PerpDexesResponse> {
+    return perpDexes(this.config, signal);
   }
 
   /**
@@ -1424,7 +1545,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#get-perp-market-status
    */
   perpDexStatus(params: PerpDexStatusParameters, signal?: AbortSignal): Promise<PerpDexStatusResponse> {
-    return perpDexStatus(this.config_, params, signal);
+    return perpDexStatus(this.config, params, signal);
   }
 
   /**
@@ -1458,9 +1579,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     paramsOrSignal?: PerpsAtOpenInterestCapParameters | AbortSignal,
     maybeSignal?: AbortSignal,
   ): Promise<PerpsAtOpenInterestCapResponse> {
-    const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
-    const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
-    return perpsAtOpenInterestCap(this.config_, params, signal);
+    const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
+    const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
+    return perpsAtOpenInterestCap(this.config, params, signal);
   }
 
   /**
@@ -1486,7 +1607,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-portfolio
    */
   portfolio(params: PortfolioParameters, signal?: AbortSignal): Promise<PortfolioResponse> {
-    return portfolio(this.config_, params, signal);
+    return portfolio(this.config, params, signal);
   }
 
   /**
@@ -1511,7 +1632,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-predicted-funding-rates-for-different-venues
    */
   predictedFundings(signal?: AbortSignal): Promise<PredictedFundingsResponse> {
-    return predictedFundings(this.config_, signal);
+    return predictedFundings(this.config, signal);
   }
 
   /**
@@ -1533,11 +1654,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.preTransferCheck({ user: "0x...", source: "0x..." });
    * ```
-   *
-   * @see null
    */
   preTransferCheck(params: PreTransferCheckParameters, signal?: AbortSignal): Promise<PreTransferCheckResponse> {
-    return preTransferCheck(this.config_, params, signal);
+    return preTransferCheck(this.config, params, signal);
   }
 
   /**
@@ -1559,11 +1678,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.recentTrades({ coin: "ETH" });
    * ```
-   *
-   * @see null
    */
   recentTrades(params: RecentTradesParameters, signal?: AbortSignal): Promise<RecentTradesResponse> {
-    return recentTrades(this.config_, params, signal);
+    return recentTrades(this.config, params, signal);
   }
 
   /**
@@ -1589,7 +1706,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-referral-information
    */
   referral(params: ReferralParameters, signal?: AbortSignal): Promise<ReferralResponse> {
-    return referral(this.config_, params, signal);
+    return referral(this.config, params, signal);
   }
 
   /**
@@ -1615,7 +1732,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-a-settled-outcome
    */
   settledOutcome(params: SettledOutcomeParameters, signal?: AbortSignal): Promise<SettledOutcomeResponse> {
-    return settledOutcome(this.config_, params, signal);
+    return settledOutcome(this.config, params, signal);
   }
 
   /**
@@ -1644,7 +1761,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     params: SpotClearinghouseStateParameters,
     signal?: AbortSignal,
   ): Promise<SpotClearinghouseStateResponse> {
-    return spotClearinghouseState(this.config_, params, signal);
+    return spotClearinghouseState(this.config, params, signal);
   }
 
   /**
@@ -1670,7 +1787,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-the-spot-deploy-auction
    */
   spotDeployState(params: SpotDeployStateParameters, signal?: AbortSignal): Promise<SpotDeployStateResponse> {
-    return spotDeployState(this.config_, params, signal);
+    return spotDeployState(this.config, params, signal);
   }
 
   /**
@@ -1695,7 +1812,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-metadata
    */
   spotMeta(signal?: AbortSignal): Promise<SpotMetaResponse> {
-    return spotMeta(this.config_, signal);
+    return spotMeta(this.config, signal);
   }
 
   /**
@@ -1720,7 +1837,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-asset-contexts
    */
   spotMetaAndAssetCtxs(signal?: AbortSignal): Promise<SpotMetaAndAssetCtxsResponse> {
-    return spotMetaAndAssetCtxs(this.config_, signal);
+    return spotMetaAndAssetCtxs(this.config, signal);
   }
 
   /**
@@ -1745,7 +1862,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-the-spot-pair-deploy-auction
    */
   spotPairDeployAuctionStatus(signal?: AbortSignal): Promise<SpotPairDeployAuctionStatusResponse> {
-    return spotPairDeployAuctionStatus(this.config_, signal);
+    return spotPairDeployAuctionStatus(this.config, signal);
   }
 
   /**
@@ -1771,11 +1888,13 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-subaccounts
    */
   subAccounts(params: SubAccountsParameters, signal?: AbortSignal): Promise<SubAccountsResponse> {
-    return subAccounts(this.config_, params, signal);
+    return subAccounts(this.config, params, signal);
   }
 
   /**
    * Request user sub-accounts V2.
+   *
+   * @deprecated use `subAccountsV2` — will be removed in v1.0.
    *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
@@ -1793,11 +1912,36 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.subAccounts2({ user: "0x..." });
    * ```
-   *
-   * @see null
    */
   subAccounts2(params: SubAccounts2Parameters, signal?: AbortSignal): Promise<SubAccounts2Response> {
-    return subAccounts2(this.config_, params, signal);
+    return subAccounts2(this.config, params, signal);
+  }
+
+  /**
+   * Request user sub-accounts V2.
+   *
+   * Friendly alias of {@linkcode subAccounts2} (the wire name): sends the same `subAccounts2`
+   * request and returns its response unchanged.
+   *
+   * @param params Parameters specific to the API request.
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Array of user sub-account or null if the user does not have any sub-accounts.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * const data = await client.subAccountsV2({ user: "0x..." });
+   * ```
+   */
+  subAccountsV2(params: SubAccountsV2Parameters, signal?: AbortSignal): Promise<SubAccountsV2Response> {
+    return subAccountsV2(this.config, params, signal);
   }
 
   /**
@@ -1823,7 +1967,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-a-token
    */
   tokenDetails(params: TokenDetailsParameters, signal?: AbortSignal): Promise<TokenDetailsResponse> {
-    return tokenDetails(this.config_, params, signal);
+    return tokenDetails(this.config, params, signal);
   }
 
   /**
@@ -1845,11 +1989,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.twapHistory({ user: "0x..." });
    * ```
-   *
-   * @see null
    */
   twapHistory(params: TwapHistoryParameters, signal?: AbortSignal): Promise<TwapHistoryResponse> {
-    return twapHistory(this.config_, params, signal);
+    return twapHistory(this.config, params, signal);
   }
 
   /**
@@ -1870,11 +2012,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.usdcRouting();
    * ```
-   *
-   * @see null
    */
   usdcRouting(signal?: AbortSignal): Promise<UsdcRoutingResponse> {
-    return usdcRouting(this.config_, signal);
+    return usdcRouting(this.config, signal);
   }
 
   /**
@@ -1900,7 +2040,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-abstraction-state
    */
   userAbstraction(params: UserAbstractionParameters, signal?: AbortSignal): Promise<UserAbstractionResponse> {
-    return userAbstraction(this.config_, params, signal);
+    return userAbstraction(this.config, params, signal);
   }
 
   /**
@@ -1925,14 +2065,12 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *   startTime: Date.now() - 1000 * 60 * 60 * 24,
    * });
    * ```
-   *
-   * @see null
    */
   userBorrowLendInterest(
     params: UserBorrowLendInterestParameters,
     signal?: AbortSignal,
   ): Promise<UserBorrowLendInterestResponse> {
-    return userBorrowLendInterest(this.config_, params, signal);
+    return userBorrowLendInterest(this.config, params, signal);
   }
 
   /**
@@ -1958,7 +2096,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-hip-3-dex-abstraction-state
    */
   userDexAbstraction(params: UserDexAbstractionParameters, signal?: AbortSignal): Promise<UserDexAbstractionResponse> {
-    return userDexAbstraction(this.config_, params, signal);
+    return userDexAbstraction(this.config, params, signal);
   }
 
   /**
@@ -1984,7 +2122,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-fees
    */
   userFees(params: UserFeesParameters, signal?: AbortSignal): Promise<UserFeesResponse> {
-    return userFees(this.config_, params, signal);
+    return userFees(this.config, params, signal);
   }
 
   /**
@@ -2012,7 +2150,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-fills
    */
   userFills(params: UserFillsParameters, signal?: AbortSignal): Promise<UserFillsResponse> {
-    return userFills(this.config_, params, signal);
+    return userFills(this.config, params, signal);
   }
 
   /**
@@ -2044,7 +2182,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-fills-by-time
    */
   userFillsByTime(params: UserFillsByTimeParameters, signal?: AbortSignal): Promise<UserFillsByTimeResponse> {
-    return userFillsByTime(this.config_, params, signal);
+    return userFillsByTime(this.config, params, signal);
   }
 
   /**
@@ -2086,7 +2224,55 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     options?: PaginationOptions,
     signal?: AbortSignal,
   ): Promise<UserFillsByTimeResponse> {
-    return userFillsByTimeAll(this.config_, params, options, signal);
+    return userFillsByTimeAll(this.config, params, options, signal);
+  }
+
+  /**
+   * Request user fills by time as a lazy stream of pages, paginating through the server's 2000-fills-per-response cap.
+   *
+   * Streaming form of {@linkcode userFillsByTimeAll}: same walk — re-requesting from the last
+   * returned timestamp (`startTime` is inclusive) after each full page, discarding the overlap
+   * matched by fill `tid`, which is unique per fill — but each page is yielded as it arrives
+   * instead of buffering the whole range. Nothing is requested until iteration starts, and breaking
+   * out of the loop stops the walk without further requests. Ends at the first short page, when
+   * `options.maxPages` pages have been fetched, or when a page contributes nothing new, so a
+   * misbehaving server causes neither duplicates nor an infinite loop.
+   *
+   * Note: only the 10000 most recent fills are available from the server, regardless of pagination.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Async generator yielding pages of user trade fills by time.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending), or when
+   *   the pagination options fail validation (thrown by the first `next()` call, before any request
+   *   is sent).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * for await (const page of client.userFillsByTimePages({
+   *   user: "0x...",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * })) {
+   *   console.log(`received ${page.length} fills`);
+   * }
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-fills-by-time
+   */
+  userFillsByTimePages(
+    params: UserFillsByTimePagesParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): AsyncGenerator<UserFillsByTimeResponse, void, undefined> {
+    return userFillsByTimePages(this.config, params, options, signal);
   }
 
   /**
@@ -2112,7 +2298,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-a-users-funding-history-or-non-funding-ledger-updates
    */
   userFunding(params: UserFundingParameters, signal?: AbortSignal): Promise<UserFundingResponse> {
-    return userFunding(this.config_, params, signal);
+    return userFunding(this.config, params, signal);
   }
 
   /**
@@ -2144,7 +2330,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     params: UserNonFundingLedgerUpdatesParameters,
     signal?: AbortSignal,
   ): Promise<UserNonFundingLedgerUpdatesResponse> {
-    return userNonFundingLedgerUpdates(this.config_, params, signal);
+    return userNonFundingLedgerUpdates(this.config, params, signal);
   }
 
   /**
@@ -2185,7 +2371,53 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     options?: PaginationOptions,
     signal?: AbortSignal,
   ): Promise<UserNonFundingLedgerUpdatesResponse> {
-    return userNonFundingLedgerUpdatesAll(this.config_, params, options, signal);
+    return userNonFundingLedgerUpdatesAll(this.config, params, options, signal);
+  }
+
+  /**
+   * Request user non-funding ledger updates as a lazy stream of pages, paginating through the server's per-response cap.
+   *
+   * Streaming form of {@linkcode userNonFundingLedgerUpdatesAll}: same walk — re-requesting from
+   * the last returned timestamp (`startTime` is inclusive) after each full page, discarding the
+   * overlap matched by the update's L1 transaction `hash` and `time` (one L1 transaction produces
+   * at most one non-funding ledger update per user) — but each page is yielded as it arrives
+   * instead of buffering the whole range. Nothing is requested until iteration starts, and breaking
+   * out of the loop stops the walk without further requests. Ends at the first short page, when
+   * `options.maxPages` pages have been fetched, or when a page contributes nothing new, so a
+   * misbehaving server causes neither duplicates nor an infinite loop.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Async generator yielding pages of user's non-funding ledger update.
+   *
+   * @throws {ValidationError} When the pagination options fail validation (thrown by the first
+   *   `next()` call, before any request is sent).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * for await (const page of client.userNonFundingLedgerUpdatesPages({
+   *   user: "0x...",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * })) {
+   *   console.log(`received ${page.length} ledger updates`);
+   * }
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-a-users-funding-history-or-non-funding-ledger-updates
+   */
+  userNonFundingLedgerUpdatesPages(
+    params: UserNonFundingLedgerUpdatesPagesParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): AsyncGenerator<UserNonFundingLedgerUpdatesResponse, void, undefined> {
+    return userNonFundingLedgerUpdatesPages(this.config, params, options, signal);
   }
 
   /**
@@ -2211,7 +2443,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-user-rate-limits
    */
   userRateLimit(params: UserRateLimitParameters, signal?: AbortSignal): Promise<UserRateLimitResponse> {
-    return userRateLimit(this.config_, params, signal);
+    return userRateLimit(this.config, params, signal);
   }
 
   /**
@@ -2237,7 +2469,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-role
    */
   userRole(params: UserRoleParameters, signal?: AbortSignal): Promise<UserRoleResponse> {
-    return userRole(this.config_, params, signal);
+    return userRole(this.config, params, signal);
   }
 
   /**
@@ -2259,14 +2491,12 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.userToMultiSigSigners({ user: "0x..." });
    * ```
-   *
-   * @see null
    */
   userToMultiSigSigners(
     params: UserToMultiSigSignersParameters,
     signal?: AbortSignal,
   ): Promise<UserToMultiSigSignersResponse> {
-    return userToMultiSigSigners(this.config_, params, signal);
+    return userToMultiSigSigners(this.config, params, signal);
   }
 
   /**
@@ -2292,7 +2522,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-twap-slice-fills
    */
   userTwapSliceFills(params: UserTwapSliceFillsParameters, signal?: AbortSignal): Promise<UserTwapSliceFillsResponse> {
-    return userTwapSliceFills(this.config_, params, signal);
+    return userTwapSliceFills(this.config, params, signal);
   }
 
   /**
@@ -2327,7 +2557,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     params: UserTwapSliceFillsByTimeParameters,
     signal?: AbortSignal,
   ): Promise<UserTwapSliceFillsByTimeResponse> {
-    return userTwapSliceFillsByTime(this.config_, params, signal);
+    return userTwapSliceFillsByTime(this.config, params, signal);
   }
 
   /**
@@ -2367,7 +2597,52 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
     options?: PaginationOptions,
     signal?: AbortSignal,
   ): Promise<UserTwapSliceFillsByTimeResponse> {
-    return userTwapSliceFillsByTimeAll(this.config_, params, options, signal);
+    return userTwapSliceFillsByTimeAll(this.config, params, options, signal);
+  }
+
+  /**
+   * Request user TWAP slice fills by time as a lazy stream of pages, paginating through the server's per-response cap.
+   *
+   * Streaming form of {@linkcode userTwapSliceFillsByTimeAll}: same walk — re-requesting from the
+   * last returned timestamp (`startTime` is inclusive) after each full page, discarding the overlap
+   * matched by the nested fill's `tid`, which is unique per fill — but each page is yielded as it
+   * arrives instead of buffering the whole range. Nothing is requested until iteration starts, and
+   * breaking out of the loop stops the walk without further requests. Ends at the first short page,
+   * when `options.maxPages` pages have been fetched, or when a page contributes nothing new, so a
+   * misbehaving server causes neither duplicates nor an infinite loop.
+   *
+   * @param params Parameters specific to the API request.
+   * @param options Pagination options (see {@linkcode PaginationOptions}).
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Async generator yielding pages of user's TWAP slice fill by time.
+   *
+   * @throws {ValidationError} When the pagination options fail validation (thrown by the first
+   *   `next()` call, before any request is sent).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.InfoClient({ transport });
+   *
+   * for await (const page of client.userTwapSliceFillsByTimePages({
+   *   user: "0x...",
+   *   startTime: Date.now() - 1000 * 60 * 60 * 24 * 7,
+   * })) {
+   *   console.log(`received ${page.length} TWAP slice fills`);
+   * }
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-twap-slice-fills
+   */
+  userTwapSliceFillsByTimePages(
+    params: UserTwapSliceFillsByTimePagesParameters,
+    options?: PaginationOptions,
+    signal?: AbortSignal,
+  ): AsyncGenerator<UserTwapSliceFillsByTimeResponse, void, undefined> {
+    return userTwapSliceFillsByTimePages(this.config, params, options, signal);
   }
 
   /**
@@ -2393,7 +2668,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-vault-deposits
    */
   userVaultEquities(params: UserVaultEquitiesParameters, signal?: AbortSignal): Promise<UserVaultEquitiesResponse> {
-    return userVaultEquities(this.config_, params, signal);
+    return userVaultEquities(this.config, params, signal);
   }
 
   /**
@@ -2414,11 +2689,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.validatorL1Votes();
    * ```
-   *
-   * @see null
    */
   validatorL1Votes(signal?: AbortSignal): Promise<ValidatorL1VotesResponse> {
-    return validatorL1Votes(this.config_, signal);
+    return validatorL1Votes(this.config, signal);
   }
 
   /**
@@ -2439,11 +2712,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.validatorSummaries();
    * ```
-   *
-   * @see null
    */
   validatorSummaries(signal?: AbortSignal): Promise<ValidatorSummariesResponse> {
-    return validatorSummaries(this.config_, signal);
+    return validatorSummaries(this.config, signal);
   }
 
   /**
@@ -2469,7 +2740,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-details-for-a-vault
    */
   vaultDetails(params: VaultDetailsParameters, signal?: AbortSignal): Promise<VaultDetailsResponse> {
-    return vaultDetails(this.config_, params, signal);
+    return vaultDetails(this.config, params, signal);
   }
 
   /**
@@ -2490,17 +2761,15 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.vaultSummaries();
    * ```
-   *
-   * @see null
    */
   vaultSummaries(signal?: AbortSignal): Promise<VaultSummariesResponse> {
-    return vaultSummaries(this.config_, signal);
+    return vaultSummaries(this.config, signal);
   }
 
   /**
    * Request comprehensive user and market data.
    *
-   * @deprecated use `webData3` and other component subscriptions instead.
+   * @deprecated use `webData3` and other component subscriptions instead — will be removed in v1.0.
    *
    * @param params Parameters specific to the API request.
    * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
@@ -2518,11 +2787,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * const data = await client.webData2({ user: "0x..." });
    * ```
-   *
-   * @see null
    */
   webData2(params: WebData2Parameters, signal?: AbortSignal): Promise<WebData2Response> {
-    return webData2(this.config_, params, signal);
+    return webData2(this.config, params, signal);
   }
 }
 
@@ -2544,6 +2811,7 @@ export type {
 export type { BorrowLendUserStateParameters, BorrowLendUserStateResponse } from "./_methods/borrowLendUserState.ts";
 export type { CandleSnapshotParameters, CandleSnapshotResponse } from "./_methods/candleSnapshot.ts";
 export type { CandleSnapshotAllParameters } from "./_methods/candleSnapshotAll.ts";
+export type { CandleSnapshotPagesParameters } from "./_methods/candleSnapshotPages.ts";
 export type { ClearinghouseStateParameters, ClearinghouseStateResponse } from "./_methods/clearinghouseState.ts";
 export type { DelegationsParameters, DelegationsResponse } from "./_methods/delegations.ts";
 export type { DelegatorHistoryParameters, DelegatorHistoryResponse } from "./_methods/delegatorHistory.ts";
@@ -2554,6 +2822,7 @@ export type { ExtraAgentsParameters, ExtraAgentsResponse } from "./_methods/extr
 export type { FrontendOpenOrdersParameters, FrontendOpenOrdersResponse } from "./_methods/frontendOpenOrders.ts";
 export type { FundingHistoryParameters, FundingHistoryResponse } from "./_methods/fundingHistory.ts";
 export type { FundingHistoryAllParameters } from "./_methods/fundingHistoryAll.ts";
+export type { FundingHistoryPagesParameters } from "./_methods/fundingHistoryPages.ts";
 export type { GossipPriorityAuctionStatusResponse } from "./_methods/gossipPriorityAuctionStatus.ts";
 export type { GossipRootIpsResponse } from "./_methods/gossipRootIps.ts";
 export type { HistoricalOrdersParameters, HistoricalOrdersResponse } from "./_methods/historicalOrders.ts";
@@ -2577,6 +2846,7 @@ export type { PerpConciseAnnotationsResponse } from "./_methods/perpConciseAnnot
 export type { PerpDeployAuctionStatusResponse } from "./_methods/perpDeployAuctionStatus.ts";
 export type { PerpDexLimitsParameters, PerpDexLimitsResponse } from "./_methods/perpDexLimits.ts";
 export type { PerpDexsResponse } from "./_methods/perpDexs.ts";
+export type { PerpDexesResponse } from "./_methods/perpDexes.ts";
 export type { PerpDexStatusParameters, PerpDexStatusResponse } from "./_methods/perpDexStatus.ts";
 export type {
   PerpsAtOpenInterestCapParameters,
@@ -2598,6 +2868,7 @@ export type { SpotMetaAndAssetCtxsResponse } from "./_methods/spotMetaAndAssetCt
 export type { SpotPairDeployAuctionStatusResponse } from "./_methods/spotPairDeployAuctionStatus.ts";
 export type { SubAccountsParameters, SubAccountsResponse } from "./_methods/subAccounts.ts";
 export type { SubAccounts2Parameters, SubAccounts2Response } from "./_methods/subAccounts2.ts";
+export type { SubAccountsV2Parameters, SubAccountsV2Response } from "./_methods/subAccountsV2.ts";
 export type { TokenDetailsParameters, TokenDetailsResponse } from "./_methods/tokenDetails.ts";
 export type { TwapHistoryParameters, TwapHistoryResponse } from "./_methods/twapHistory.ts";
 export type { UsdcRoutingResponse } from "./_methods/usdcRouting.ts";
@@ -2614,12 +2885,14 @@ export type { UserFeesParameters, UserFeesResponse } from "./_methods/userFees.t
 export type { UserFillsParameters, UserFillsResponse } from "./_methods/userFills.ts";
 export type { UserFillsByTimeParameters, UserFillsByTimeResponse } from "./_methods/userFillsByTime.ts";
 export type { UserFillsByTimeAllParameters } from "./_methods/userFillsByTimeAll.ts";
+export type { UserFillsByTimePagesParameters } from "./_methods/userFillsByTimePages.ts";
 export type { UserFundingParameters, UserFundingResponse } from "./_methods/userFunding.ts";
 export type {
   UserNonFundingLedgerUpdatesParameters,
   UserNonFundingLedgerUpdatesResponse,
 } from "./_methods/userNonFundingLedgerUpdates.ts";
 export type { UserNonFundingLedgerUpdatesAllParameters } from "./_methods/userNonFundingLedgerUpdatesAll.ts";
+export type { UserNonFundingLedgerUpdatesPagesParameters } from "./_methods/userNonFundingLedgerUpdatesPages.ts";
 export type { UserRateLimitParameters, UserRateLimitResponse } from "./_methods/userRateLimit.ts";
 export type { UserRoleParameters, UserRoleResponse } from "./_methods/userRole.ts";
 export type {
@@ -2632,6 +2905,7 @@ export type {
   UserTwapSliceFillsByTimeResponse,
 } from "./_methods/userTwapSliceFillsByTime.ts";
 export type { UserTwapSliceFillsByTimeAllParameters } from "./_methods/userTwapSliceFillsByTimeAll.ts";
+export type { UserTwapSliceFillsByTimePagesParameters } from "./_methods/userTwapSliceFillsByTimePages.ts";
 export type { UserVaultEquitiesParameters, UserVaultEquitiesResponse } from "./_methods/userVaultEquities.ts";
 export type { ValidatorL1VotesResponse } from "./_methods/validatorL1Votes.ts";
 export type { ValidatorSummariesResponse } from "./_methods/validatorSummaries.ts";

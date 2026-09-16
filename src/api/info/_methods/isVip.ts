@@ -8,7 +8,6 @@ import { Address } from "../../_schemas.ts";
 
 /**
  * Request to check if a user is a VIP.
- * @see null
  */
 export const IsVipRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -22,7 +21,6 @@ export type IsVipRequest = v.InferOutput<typeof IsVipRequest>;
 
 /**
  * Boolean indicating user's VIP status.
- * @see null
  */
 export type IsVipResponse = boolean | null;
 
@@ -58,8 +56,6 @@ export type IsVipParameters = Omit<v.InferInput<typeof IsVipRequest>, "type">;
  *   user: "0x...",
  * });
  * ```
- *
- * @see null
  */
 export function isVip(config: InfoConfig, params: IsVipParameters, signal?: AbortSignal): Promise<IsVipResponse> {
   const request = parse(IsVipRequest, {

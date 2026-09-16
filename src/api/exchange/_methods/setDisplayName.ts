@@ -8,7 +8,6 @@ import { Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Set the display name in the leaderboard.
- * @see null
  */
 export const SetDisplayNameRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -41,7 +40,6 @@ export type SetDisplayNameRequest = v.InferOutput<typeof SetDisplayNameRequest>;
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type SetDisplayNameResponse =
   | {
@@ -113,8 +111,6 @@ export type SetDisplayNameSuccessResponse = ExcludeErrorResponse<SetDisplayNameR
  *   displayName: "...",
  * });
  * ```
- *
- * @see null
  */
 export function setDisplayName(
   config: ExchangeConfig,

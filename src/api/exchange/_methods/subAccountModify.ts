@@ -8,7 +8,6 @@ import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Modify a sub-account.
- * @see null
  */
 export const SubAccountModifyRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -40,7 +39,6 @@ export type SubAccountModifyRequest = v.InferOutput<typeof SubAccountModifyReque
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type SubAccountModifyResponse =
   | {
@@ -113,8 +111,6 @@ export type SubAccountModifySuccessResponse = ExcludeErrorResponse<SubAccountMod
  *   name: "...",
  * });
  * ```
- *
- * @see null
  */
 export function subAccountModify(
   config: ExchangeConfig,

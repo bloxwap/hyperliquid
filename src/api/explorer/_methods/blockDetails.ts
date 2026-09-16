@@ -9,7 +9,6 @@ import type { ExplorerTransaction } from "./_base/mod.ts";
 
 /**
  * Request block details by block height.
- * @see null
  */
 export const BlockDetailsRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -23,7 +22,6 @@ export type BlockDetailsRequest = v.InferOutput<typeof BlockDetailsRequest>;
 
 /**
  * Response containing block information.
- * @see null
  */
 export type BlockDetailsResponse = {
   /** Type of response. */
@@ -86,7 +84,6 @@ export type BlockDetailsParameters = Omit<v.InferInput<typeof BlockDetailsReques
  * });
  * ```
  *
- * @see null
  */
 export async function blockDetails(
   config: ExplorerConfig<IRequestTransport<"explorer">>,

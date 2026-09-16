@@ -4,7 +4,7 @@
  */
 
 import type { IRequestTransport, ISubscription, ISubscriptionTransport, TransportError } from "../../transport/mod.ts";
-import type { ExplorerConfig } from "./_methods/_base/mod.ts";
+import type { ExplorerConfig, ExplorerDualConfig } from "./_methods/_base/mod.ts";
 
 // ============================================================
 // Methods Imports
@@ -21,20 +21,40 @@ import { userDetails, type UserDetailsParameters, type UserDetailsResponse } fro
 // ============================================================
 
 /**
+ * An {@linkcode ExplorerClient} that can execute requests.
+ *
+ * Named so that calling a request method without a request-capable transport reports
+ * "not assignable to method's 'this' of type 'RequestCapableExplorerClient'".
+ */
+type RequestCapableExplorerClient = ExplorerClient<IRequestTransport<"explorer">>;
+
+/**
+ * An {@linkcode ExplorerClient} that can subscribe to events.
+ *
+ * Named so that calling a subscription method without a subscription-capable transport reports
+ * "not assignable to method's 'this' of type 'SubscriptionCapableExplorerClient'".
+ */
+type SubscriptionCapableExplorerClient = ExplorerClient<ISubscriptionTransport>;
+
+/**
  * Access to the Hyperliquid blockchain explorer.
  *
  * Requests use an `HttpTransport` and subscriptions use a `WebSocketTransport`, both on the RPC endpoint.
+ *
+ * Pass a single transport via `{ transport }`, or separate transports via
+ * `{ requestTransport, subscriptionTransport }` (see {@link ExplorerDualConfig}) to query and
+ * subscribe from one client.
  */
 export class ExplorerClient<
   T extends IRequestTransport<"explorer"> | ISubscriptionTransport = IRequestTransport<"explorer"> &
     ISubscriptionTransport,
 > {
-  config_: ExplorerConfig<T>;
+  readonly config: ExplorerConfig<T> | ExplorerDualConfig;
 
   /**
    * Creates an instance of the ExplorerClient.
    *
-   * @param config Configuration for Explorer API requests. See {@link ExplorerConfig}.
+   * @param config Configuration for Explorer API requests. See {@link ExplorerConfig} or {@link ExplorerDualConfig}.
    *
    * @example
    * ```ts
@@ -45,9 +65,22 @@ export class ExplorerClient<
    *
    * const explorerClient = new hl.ExplorerClient({ transport });
    * ```
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   *
+   * // Separate transports, so one client can both query and subscribe
+   * const explorerClient = new hl.ExplorerClient({
+   *   requestTransport: new hl.HttpTransport(),
+   *   subscriptionTransport: new hl.WebSocketTransport({ url: "wss://rpc.hyperliquid.xyz/ws" }),
+   * });
+   * ```
    */
-  constructor(config: ExplorerConfig<T>) {
-    this.config_ = config;
+  constructor(config: ExplorerConfig<T>);
+  constructor(config: ExplorerDualConfig);
+  constructor(config: ExplorerConfig<T> | ExplorerDualConfig) {
+    this.config = config;
   }
 
   /**
@@ -70,15 +103,15 @@ export class ExplorerClient<
    *
    * const data = await client.blockDetails({ height: 123 });
    * ```
-   *
-   * @see null
    */
   blockDetails(
-    this: ExplorerClient<IRequestTransport<"explorer">>,
+    this: RequestCapableExplorerClient,
     params: BlockDetailsParameters,
     signal?: AbortSignal,
   ): Promise<BlockDetailsResponse> {
-    return blockDetails(this.config_, params, signal);
+    const config = this.config;
+    const transport = "transport" in config ? config.transport : config.requestTransport;
+    return blockDetails({ transport }, params, signal);
   }
 
   /**
@@ -106,11 +139,13 @@ export class ExplorerClient<
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
   explorerBlock(
-    this: ExplorerClient<ISubscriptionTransport>,
+    this: SubscriptionCapableExplorerClient,
     listener: (data: ExplorerBlockEvent) => void,
     onError?: (error: TransportError) => void,
   ): Promise<ISubscription> {
-    return explorerBlock(this.config_, listener, onError);
+    const config = this.config;
+    const transport = "transport" in config ? config.transport : config.subscriptionTransport;
+    return explorerBlock({ transport }, listener, onError);
   }
 
   /**
@@ -138,11 +173,13 @@ export class ExplorerClient<
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
    */
   explorerTxs(
-    this: ExplorerClient<ISubscriptionTransport>,
+    this: SubscriptionCapableExplorerClient,
     listener: (data: ExplorerTxsEvent) => void,
     onError?: (error: TransportError) => void,
   ): Promise<ISubscription> {
-    return explorerTxs(this.config_, listener, onError);
+    const config = this.config;
+    const transport = "transport" in config ? config.transport : config.subscriptionTransport;
+    return explorerTxs({ transport }, listener, onError);
   }
 
   /**
@@ -165,15 +202,15 @@ export class ExplorerClient<
    *
    * const data = await client.txDetails({ hash: "0x..." });
    * ```
-   *
-   * @see null
    */
   txDetails(
-    this: ExplorerClient<IRequestTransport<"explorer">>,
+    this: RequestCapableExplorerClient,
     params: TxDetailsParameters,
     signal?: AbortSignal,
   ): Promise<TxDetailsResponse> {
-    return txDetails(this.config_, params, signal);
+    const config = this.config;
+    const transport = "transport" in config ? config.transport : config.requestTransport;
+    return txDetails({ transport }, params, signal);
   }
 
   /**
@@ -196,15 +233,15 @@ export class ExplorerClient<
    *
    * const data = await client.userDetails({ user: "0x..." });
    * ```
-   *
-   * @see null
    */
   userDetails(
-    this: ExplorerClient<IRequestTransport<"explorer">>,
+    this: RequestCapableExplorerClient,
     params: UserDetailsParameters,
     signal?: AbortSignal,
   ): Promise<UserDetailsResponse> {
-    return userDetails(this.config_, params, signal);
+    const config = this.config;
+    const transport = "transport" in config ? config.transport : config.requestTransport;
+    return userDetails({ transport }, params, signal);
   }
 }
 
@@ -212,7 +249,7 @@ export class ExplorerClient<
 // Type Re-exports
 // ============================================================
 
-export type { ExplorerConfig } from "./_methods/_base/mod.ts";
+export type { ExplorerConfig, ExplorerDualConfig } from "./_methods/_base/mod.ts";
 
 export type { BlockDetailsParameters, BlockDetailsResponse } from "./_methods/blockDetails.ts";
 export type { ExplorerBlockEvent } from "./_methods/explorerBlock.ts";

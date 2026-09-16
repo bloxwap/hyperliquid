@@ -35,7 +35,7 @@ export type AllMidsResponse = {
 // ============================================================
 
 import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, isAbortSignal } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode allMids} function. */
 export type AllMidsParameters = Omit<v.InferInput<typeof AllMidsRequest>, "type">;
@@ -70,8 +70,8 @@ export function allMids(
   paramsOrSignal?: AllMidsParameters | AbortSignal,
   maybeSignal?: AbortSignal,
 ): Promise<AllMidsResponse> {
-  const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
-  const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
+  const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
+  const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
 
   const request = parse(AllMidsRequest, {
     type: "allMids",

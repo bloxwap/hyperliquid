@@ -102,6 +102,8 @@ import type { InfoConfig } from "./_base/mod.ts";
 /**
  * Request all perpetual dexs.
  *
+ * @deprecated use `perpDexes` — will be removed in v1.0.
+ *
  * @param config General configuration for Info API requests.
  * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
  * @return Array of perpetual dexes (null is main dex).

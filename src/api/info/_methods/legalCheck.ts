@@ -8,7 +8,6 @@ import { Address } from "../../_schemas.ts";
 
 /**
  * Request legal verification status of a user.
- * @see null
  */
 export const LegalCheckRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -22,7 +21,6 @@ export type LegalCheckRequest = v.InferOutput<typeof LegalCheckRequest>;
 
 /**
  * Legal verification status for a user.
- * @see null
  */
 export type LegalCheckResponse = {
   /** Whether the user has accepted the terms of service. */
@@ -71,8 +69,6 @@ export type LegalCheckParameters = Omit<v.InferInput<typeof LegalCheckRequest>, 
  *   user: "0x...",
  * });
  * ```
- *
- * @see null
  */
 export function legalCheck(
   config: InfoConfig,

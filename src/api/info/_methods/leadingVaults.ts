@@ -8,7 +8,6 @@ import { Address } from "../../_schemas.ts";
 
 /**
  * Request leading vaults for a user.
- * @see null
  */
 export const LeadingVaultsRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -22,7 +21,6 @@ export type LeadingVaultsRequest = v.InferOutput<typeof LeadingVaultsRequest>;
 
 /**
  * Array of leading vaults for a user.
- * @see null
  */
 export type LeadingVaultsResponse = {
   /**
@@ -66,8 +64,6 @@ export type LeadingVaultsParameters = Omit<v.InferInput<typeof LeadingVaultsRequ
  *   user: "0x...",
  * });
  * ```
- *
- * @see null
  */
 export function leadingVaults(
   config: InfoConfig,
