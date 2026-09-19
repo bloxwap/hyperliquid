@@ -8,7 +8,6 @@ import { Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Create a referral code.
- * @see null
  */
 export const RegisterReferrerRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -38,7 +37,6 @@ export type RegisterReferrerRequest = v.InferOutput<typeof RegisterReferrerReque
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type RegisterReferrerResponse =
   | {
@@ -110,8 +108,6 @@ export type RegisterReferrerSuccessResponse = ExcludeErrorResponse<RegisterRefer
  *   code: "...",
  * });
  * ```
- *
- * @see null
  */
 export function registerReferrer(
   config: ExchangeConfig,

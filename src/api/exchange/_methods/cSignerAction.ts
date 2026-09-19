@@ -8,7 +8,6 @@ import { Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Jail or unjail self as a validator signer.
- * @see null
  */
 export const CSignerActionRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -46,7 +45,6 @@ export type CSignerActionRequest = v.InferOutput<typeof CSignerActionRequest>;
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type CSignerActionResponse =
   | {
@@ -101,6 +99,8 @@ export type CSignerActionSuccessResponse = ExcludeErrorResponse<CSignerActionRes
  *
  * Signing: L1 Action.
  *
+ * @deprecated use {@linkcode validatorSignerAction} instead — will be removed in v1.0.
+ *
  * @param config General configuration for Exchange API requests.
  * @param params Parameters specific to the API request.
  * @param opts Request execution options.
@@ -137,8 +137,6 @@ export type CSignerActionSuccessResponse = ExcludeErrorResponse<CSignerActionRes
  *   unjailSelf: null,
  * });
  * ```
- *
- * @see null
  */
 export function cSignerAction(
   config: ExchangeConfig,

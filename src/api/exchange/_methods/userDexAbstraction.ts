@@ -108,7 +108,7 @@ export const UserDexAbstractionTypes = {
  *
  * Signing: User-Signed EIP-712.
  *
- * @deprecated use {@linkcode userSetAbstraction} instead.
+ * @deprecated use {@linkcode userSetAbstraction} instead — will be removed in v1.0.
  *
  * @param config General configuration for Exchange API requests.
  * @param params Parameters specific to the API request.

@@ -8,7 +8,6 @@ import { Address } from "../../_schemas.ts";
 
 /**
  * Request multi-sig signers for a user.
- * @see null
  */
 export const UserToMultiSigSignersRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -22,7 +21,6 @@ export type UserToMultiSigSignersRequest = v.InferOutput<typeof UserToMultiSigSi
 
 /**
  * Multi-sig signers for a user or null if the user does not have any multi-sig signers.
- * @see null
  */
 export type UserToMultiSigSignersResponse = {
   /**
@@ -66,8 +64,6 @@ export type UserToMultiSigSignersParameters = Omit<v.InferInput<typeof UserToMul
  *   user: "0x...",
  * });
  * ```
- *
- * @see null
  */
 export function userToMultiSigSigners(
   config: InfoConfig,

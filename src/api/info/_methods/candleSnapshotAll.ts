@@ -2,8 +2,9 @@
 // Execution Logic
 // ============================================================
 
-import { fetchAllPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
-import { candleSnapshot, type CandleSnapshotParameters, type CandleSnapshotResponse } from "./candleSnapshot.ts";
+import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import type { CandleSnapshotParameters, CandleSnapshotResponse } from "./candleSnapshot.ts";
+import { candleSnapshotPages } from "./candleSnapshotPages.ts";
 
 /** Request parameters for the {@linkcode candleSnapshotAll} function. */
 export type CandleSnapshotAllParameters = CandleSnapshotParameters;
@@ -54,12 +55,5 @@ export function candleSnapshotAll(
   options?: PaginationOptions,
   signal?: AbortSignal,
 ): Promise<CandleSnapshotResponse> {
-  return fetchAllPages(
-    (startTime) => candleSnapshot(config, { ...params, startTime }, signal),
-    Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
-    5000, // only the most recent 5000 candles are available, so a full window arrives as one page
-    (candle) => candle.t,
-    (candle) => String(candle.t), // one candle per interval per opening time: t is the identity
-    options,
-  );
+  return collectPages(candleSnapshotPages(config, params, options, signal));
 }

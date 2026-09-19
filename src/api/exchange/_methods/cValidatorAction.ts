@@ -8,7 +8,6 @@ import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Action related to validator management.
- * @see null
  */
 export const CValidatorActionRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -95,7 +94,6 @@ export type CValidatorActionRequest = v.InferOutput<typeof CValidatorActionReque
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type CValidatorActionResponse =
   | {
@@ -150,6 +148,8 @@ export type CValidatorActionSuccessResponse = ExcludeErrorResponse<CValidatorAct
  *
  * Signing: L1 Action.
  *
+ * @deprecated use {@linkcode validatorAction} instead — will be removed in v1.0.
+ *
  * @param config General configuration for Exchange API requests.
  * @param params Parameters specific to the API request.
  * @param opts Request execution options.
@@ -180,8 +180,6 @@ export type CValidatorActionSuccessResponse = ExcludeErrorResponse<CValidatorAct
  *   },
  * });
  * ```
- *
- * @see null
  */
 export function cValidatorAction(
   config: ExchangeConfig,

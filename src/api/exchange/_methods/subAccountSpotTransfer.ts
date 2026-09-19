@@ -8,7 +8,6 @@ import { Address, Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.t
 
 /**
  * Transfer between sub-accounts (spot).
- * @see null
  */
 export const SubAccountSpotTransferRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -44,7 +43,6 @@ export type SubAccountSpotTransferRequest = v.InferOutput<typeof SubAccountSpotT
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type SubAccountSpotTransferResponse =
   | {
@@ -119,8 +117,6 @@ export type SubAccountSpotTransferSuccessResponse = ExcludeErrorResponse<SubAcco
  *   amount: "1",
  * });
  * ```
- *
- * @see null
  */
 export function subAccountSpotTransfer(
   config: ExchangeConfig,

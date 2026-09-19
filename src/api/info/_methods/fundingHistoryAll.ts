@@ -2,8 +2,9 @@
 // Execution Logic
 // ============================================================
 
-import { fetchAllPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
-import { fundingHistory, type FundingHistoryParameters, type FundingHistoryResponse } from "./fundingHistory.ts";
+import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import type { FundingHistoryParameters, FundingHistoryResponse } from "./fundingHistory.ts";
+import { fundingHistoryPages } from "./fundingHistoryPages.ts";
 
 /** Request parameters for the {@linkcode fundingHistoryAll} function. */
 export type FundingHistoryAllParameters = FundingHistoryParameters;
@@ -50,12 +51,5 @@ export function fundingHistoryAll(
   options?: PaginationOptions,
   signal?: AbortSignal,
 ): Promise<FundingHistoryResponse> {
-  return fetchAllPages(
-    (startTime) => fundingHistory(config, { ...params, startTime }, signal),
-    Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
-    500, // the server returns at most 500 funding records per response
-    (record) => record.time,
-    (record) => String(record.time), // one funding record per coin per interval: time is the identity
-    options,
-  );
+  return collectPages(fundingHistoryPages(config, params, options, signal));
 }

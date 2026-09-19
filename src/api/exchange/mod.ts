@@ -42,7 +42,12 @@
  */
 
 export {
+  type ApiBulkErrorResponse,
+  type ApiErrorResponse,
+  type ApiExplorerErrorResponse,
   ApiRequestError,
+  type ApiSingleErrorResponse,
+  type ApiTopLevelErrorResponse,
   type ExchangeConfig,
   type ExchangeMultiSigConfig,
   type ExchangeSingleWalletConfig,
@@ -89,7 +94,9 @@ export * from "./_methods/setReferrer.ts";
 export * from "./_methods/spotDeploy.ts";
 export * from "./_methods/spotSend.ts";
 export * from "./_methods/spotUser.ts";
+export * from "./_methods/stakingDeposit.ts";
 export * from "./_methods/stakingLinkDisableTradingUser.ts";
+export * from "./_methods/stakingWithdraw.ts";
 export * from "./_methods/subAccountModify.ts";
 export * from "./_methods/subAccountSpotTransfer.ts";
 export * from "./_methods/subAccountTransfer.ts";
@@ -106,8 +113,11 @@ export * from "./_methods/userDexAbstraction.ts";
 export * from "./_methods/userOutcome.ts";
 export * from "./_methods/userPortfolioMargin.ts";
 export * from "./_methods/userSetAbstraction.ts";
+export * from "./_methods/validatorAction.ts";
 export * from "./_methods/validatorL1Stream.ts";
+export * from "./_methods/validatorSignerAction.ts";
 export * from "./_methods/vaultDistribute.ts";
 export * from "./_methods/vaultModify.ts";
 export * from "./_methods/vaultTransfer.ts";
+export * from "./_methods/withdraw.ts";
 export * from "./_methods/withdraw3.ts";

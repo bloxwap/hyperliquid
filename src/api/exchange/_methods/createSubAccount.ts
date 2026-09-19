@@ -8,7 +8,6 @@ import { Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Create a sub-account.
- * @see null
  */
 export const CreateSubAccountRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -38,7 +37,6 @@ export type CreateSubAccountRequest = v.InferOutput<typeof CreateSubAccountReque
 
 /**
  * Response for creating a sub-account.
- * @see null
  */
 export type CreateSubAccountResponse =
   | {
@@ -115,8 +113,6 @@ export type CreateSubAccountSuccessResponse = ExcludeErrorResponse<CreateSubAcco
  *   name: "...",
  * });
  * ```
- *
- * @see null
  */
 export function createSubAccount(
   config: ExchangeConfig,

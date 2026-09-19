@@ -5,6 +5,7 @@
 
 import type { AbstractWallet } from "../../../../signing/mod.ts";
 import type { IRequestTransport } from "../../../../transport/mod.ts";
+import type { SymbolConverter } from "../../../../utils/mod.ts";
 
 // ============================================================
 // Type Utilities
@@ -47,6 +48,17 @@ interface BaseConfig<T extends IRequestTransport = IRequestTransport> {
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets#hyperliquid-nonces
    */
   nonceManager?: (address: string) => MaybePromise<number>;
+
+  /**
+   * Symbol converter used by `ExchangeClient` methods to resolve `coin` symbols (e.g. `"BTC"`,
+   * `"HYPE/USDC"`) into raw asset IDs before dispatch.
+   *
+   * When omitted, the client lazily creates and loads one over the same transport on the first
+   * symbol-based call. Pass a preloaded instance to control builder-dex support (`dexs` option)
+   * or to avoid the metadata fetch on the first call. Ignored by the raw functions in
+   * `@bloxwap/hyperliquid/api/exchange`, which take asset IDs only.
+   */
+  symbolConverter?: SymbolConverter;
 }
 
 /** Configuration for single-wallet Exchange API requests. */

@@ -37,7 +37,7 @@ export type MetaAndAssetCtxsResponse = [
 // ============================================================
 
 import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, isAbortSignal } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode metaAndAssetCtxs} function. */
 export type MetaAndAssetCtxsParameters = Omit<v.InferInput<typeof MetaAndAssetCtxsRequest>, "type">;
@@ -76,8 +76,8 @@ export function metaAndAssetCtxs(
   paramsOrSignal?: MetaAndAssetCtxsParameters | AbortSignal,
   maybeSignal?: AbortSignal,
 ): Promise<MetaAndAssetCtxsResponse> {
-  const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
-  const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
+  const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
+  const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
 
   const request = parse(MetaAndAssetCtxsRequest, {
     type: "metaAndAssetCtxs",

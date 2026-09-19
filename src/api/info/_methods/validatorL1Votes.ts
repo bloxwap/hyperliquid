@@ -6,7 +6,6 @@ import * as v from "valibot";
 
 /**
  * Request validator L1 votes.
- * @see null
  */
 export const ValidatorL1VotesRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -18,7 +17,6 @@ export type ValidatorL1VotesRequest = v.InferOutput<typeof ValidatorL1VotesReque
 
 /**
  * Array of L1 governance votes cast by validators.
- * @see null
  */
 export type ValidatorL1VotesResponse = {
   /** Timestamp when the vote expires (in ms since epoch). */
@@ -29,7 +27,7 @@ export type ValidatorL1VotesResponse = {
         /**
          * Governance vote variant.
          *
-         * FIXME: meaning unconfirmed.
+         * @unconfirmed The meaning of this variant has not been verified against the docs.
          */
         D: string;
       }
@@ -37,7 +35,7 @@ export type ValidatorL1VotesResponse = {
         /**
          * Governance vote variant.
          *
-         * FIXME: meaning unconfirmed.
+         * @unconfirmed The meaning of this variant has not been verified against the docs.
          */
         C: string[];
       }
@@ -215,8 +213,6 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * const data = await validatorL1Votes({ transport });
  * ```
- *
- * @see null
  */
 export function validatorL1Votes(config: InfoConfig, signal?: AbortSignal): Promise<ValidatorL1VotesResponse> {
   const request = parse(ValidatorL1VotesRequest, {

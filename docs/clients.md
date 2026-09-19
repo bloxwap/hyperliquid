@@ -49,6 +49,29 @@ and cannot reach older history. `historicalOrders` (at most 2000 most recent ord
 paginated. `userFillsByTimeAll` rejects `reversed: true`: the walk moves forward from `startTime` and needs ascending
 pages.
 
+#### Streaming pages instead of buffering
+
+The `*All` helpers buffer the whole range into one array. When the range is large — or you want to process, persist,
+or render results incrementally — use the matching `*Pages` variant instead. It runs the same walk as a lazy async
+generator: nothing is requested until iteration starts, each page is yielded as it arrives (boundary overlap already
+removed), and `break` stops the walk without issuing further requests:
+
+```ts
+// Pages arrive one at a time; memory stays bounded by one page, not the whole range
+for await (const page of client.userFillsByTimePages({
+  user: "0x...",
+  startTime: Date.now() - 1000 * 60 * 60 * 24 * 30,
+})) {
+  await storeFills(page); // process and discard — no giant buffer
+  if (enough) break; // stops the walk: no further requests are made
+}
+```
+
+Every `*All` helper has a `*Pages` twin with the same parameters and options (`userFillsByTimePages`,
+`userTwapSliceFillsByTimePages`, `fundingHistoryPages`, `userNonFundingLedgerUpdatesPages`, `candleSnapshotPages`).
+The buffered helpers are thin collectors over the generators, so both forms share the same boundary handling,
+`maxPages` bound, and availability-window caveats.
+
 ### Caching slow-changing metadata
 
 Info responses are never cached by default. If your app polls metadata endpoints (`meta`, `spotMeta`, …) in a loop,
@@ -276,6 +299,59 @@ const client = new ExchangeClient({
 > wallet, back the manager with shared state (e.g. Redis). See
 > [Operational nonce rules](signing.md#operational-nonce-rules).
 
+### Symbol-based orders
+
+Every `ExchangeClient` method that takes a raw asset ID also accepts a `coin` symbol instead — perp name (`"BTC"`),
+spot pair (`"HYPE/USDC"`), builder-dex asset (`"dex:ASSET"`), or outcome-market slug. The client resolves symbols to
+asset IDs through a [`SymbolConverter`](utilities.md#asset-id--symbolconverter) before signing and dispatch:
+
+```ts
+// `coin` instead of the raw `a` index
+await client.order({
+  orders: [{ coin: "BTC", b: true, p: "30000", s: "0.1", r: false, t: { limit: { tif: "Gtc" } } }],
+  grouping: "na",
+});
+
+await client.cancel({ cancels: [{ coin: "BTC", o: 12345 }] });
+await client.updateLeverage({ coin: "BTC", isCross: true, leverage: 5 });
+```
+
+This works on `order`, `modify`, `batchModify`, `cancel`, `cancelByCloid`, `twapOrder`, `twapCancel`,
+`updateLeverage`, `updateIsolatedMargin`, and `topUpIsolatedOnlyMargin`. Entries without a `coin` are dispatched
+unchanged — no metadata is fetched unless a call actually uses a symbol.
+
+The symbol metadata comes from the client's `symbolConverter` config. When omitted, the client lazily creates and
+loads a `SymbolConverter` over the same transport on the first symbol-based call; pass a preloaded instance to enable
+builder dexs or to take the metadata fetch off the hot path:
+
+```ts
+import { SymbolConverter } from "@bloxwap/hyperliquid/utils";
+
+const converter = await SymbolConverter.create({ transport, dexs: ["test"] });
+const client = new ExchangeClient({ transport, wallet, symbolConverter: converter });
+```
+
+An unknown symbol rejects with `HyperliquidError` before anything is signed or sent. When both the raw asset ID and
+`coin` are set, `coin` wins. The raw functions in `@bloxwap/hyperliquid/api/exchange` take asset IDs only — symbol
+resolution is a client-level convenience.
+
+### Friendly names for versioned wire actions
+
+A few methods historically exposed raw upstream wire names. Friendly aliases are now the canonical form; the old
+names still work but are deprecated and will be removed in v1.0:
+
+| Deprecated         | Use instead             |
+| ------------------ | ----------------------- |
+| `withdraw3`        | `withdraw`              |
+| `cDeposit`         | `stakingDeposit`        |
+| `cWithdraw`        | `stakingWithdraw`       |
+| `cSignerAction`    | `validatorSignerAction` |
+| `cValidatorAction` | `validatorAction`       |
+
+The aliases exist both on `ExchangeClient` and as raw functions in `@bloxwap/hyperliquid/api/exchange`, and produce
+the exact same wire actions as the deprecated names. `agentEnableDexAbstraction` and `userDexAbstraction` are likewise
+deprecated in favor of `agentSetAbstraction` and `userSetAbstraction`.
+
 ### Pre-signed payloads (sign now, submit later)
 
 `prepareRequest` builds a fully signed request **without sending it**; `submitPrepared` posts it later. A latency-critical
@@ -390,10 +466,10 @@ const transport = new WebSocketTransport();
 await transport.ready(); // finish connecting now, not on the first order
 
 const converter = await SymbolConverter.create({ transport }); // pre-fetch meta (asset IDs, szDecimals)
-const client = new ExchangeClient({ transport, wallet });
+const client = new ExchangeClient({ transport, wallet, symbolConverter: converter }); // enables `coin` symbols
 
 // Later, on the hot path — one frame out on an open connection:
-await client.order({ orders: [/* ... */], grouping: "na" });
+await client.order({ orders: [{ coin: "BTC", /* ... */ }], grouping: "na" });
 ```
 
 > [!WARNING]
@@ -459,17 +535,19 @@ const subscription = await client.allMids(
 
 The same failure is also exposed on the subscription handle as `failureSignal` — an `AbortSignal` that aborts with the
 failure `TransportError` as its reason, and never on a voluntary `unsubscribe()`. It makes a dead feed observable even
-when no `onError` was passed. The signal is always present on a `WebSocketTransport` subscription (it is optional only
-for third-party transports):
+when no `onError` was passed. Every handle returned by a `SubscriptionClient` method carries one (the
+`ClientSubscription` type): if the transport does not provide a signal — the field is optional on the transport-level
+`ISubscription` interface so third-party transports stay valid — the client synthesizes one from the `onError`
+contract:
 
 ```ts
 const subscription = await client.allMids((data) => {
   console.log(data.mids);
 });
 
-subscription.failureSignal?.addEventListener("abort", () => {
+subscription.failureSignal.addEventListener("abort", () => {
   // The subscription is gone — inspect the reason and re-subscribe if needed
-  console.error(subscription.failureSignal?.reason);
+  console.error(subscription.failureSignal.reason);
 });
 ```
 
@@ -502,6 +580,23 @@ const sub2 = await client.allMids((data) => console.log("B:", data.mids));
 await sub1.unsubscribe(); // removes listener A, subscription stays active
 await sub2.unsubscribe(); // removes listener B, channel closed
 ```
+
+To tear down everything at once, `unsubscribeAll()` unsubscribes every subscription opened through a
+`SubscriptionClient` on the same transport, concurrently, and clears the registry:
+
+```ts
+import { unsubscribeAll } from "@bloxwap/hyperliquid/api/subscription";
+
+await client.unsubscribeAll();
+// or, with the standalone function on the same transport:
+await unsubscribeAll({ transport });
+```
+
+Subscriptions already unsubscribed or failed are not revisited. A subscribe call still waiting for its confirmation
+resolves with an already-unsubscribed handle once the confirmation lands — it never joins the registry, and
+`unsubscribeAll()` does not wait for it. The scope is the transport: two clients sharing one transport share the
+registry, while subscriptions opened through `transport.subscribe()` directly are not tracked. The connection itself
+stays open — call `transport.close()` when done with it.
 
 ### Stability contract for server-extensible events
 
@@ -566,6 +661,27 @@ const sub = await client.explorerBlock((data) => {
   console.log(data);
 });
 ```
+
+To query and subscribe from one client, pass separate transports instead — each method uses the transport built for
+it:
+
+```ts
+import { ExplorerClient, HttpTransport, WebSocketTransport } from "@bloxwap/hyperliquid";
+
+const client = new ExplorerClient({
+  requestTransport: new HttpTransport(),
+  subscriptionTransport: new WebSocketTransport({ url: "wss://rpc.hyperliquid.xyz/ws" }),
+});
+
+const block = await client.blockDetails({ height: 123 });
+const sub = await client.explorerBlock((data) => {
+  console.log(data);
+});
+```
+
+Request methods (`blockDetails`, `txDetails`, `userDetails`) require a request-capable transport and subscription
+methods (`explorerBlock`, `explorerTxs`) a subscription-capable one — with either config shape, calling a method whose
+transport was not provided is a compile-time error.
 
 ## Common options
 

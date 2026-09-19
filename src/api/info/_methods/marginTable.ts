@@ -8,7 +8,6 @@ import { UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Request margin table data.
- * @see null
  */
 export const MarginTableRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -25,7 +24,6 @@ export type MarginTableRequest = v.InferOutput<typeof MarginTableRequest>;
 
 /**
  * Margin requirements table with multiple tiers.
- * @see null
  */
 export type MarginTableResponse = {
   /** Description of the margin table. */
@@ -74,8 +72,6 @@ export type MarginTableParameters = Omit<v.InferInput<typeof MarginTableRequest>
  *   id: 1,
  * });
  * ```
- *
- * @see null
  */
 export function marginTable(
   config: InfoConfig,

@@ -295,6 +295,25 @@ const transport = new WebSocketTransport({ resubscribe: false });
 If a subscription then fails to re-establish, every subscriber's `onError` callback is invoked and each subscription
 handle's `failureSignal` aborts. Handle it as shown under [subscription errors](clients.md#errors).
 
+### Connection state
+
+The transport reduces the connection lifecycle to four states — `connecting`, `connected`, `reconnecting` (down,
+retrying), and `disconnected` (permanently terminated by `close()`, or by the reconnection policy giving up). Read the
+current one from `transport.connectionState`, and observe transitions on `transport.events`:
+
+```ts
+import { WebSocketTransport } from "@bloxwap/hyperliquid";
+
+const transport = new WebSocketTransport();
+transport.events.addEventListener("connectionstatechange", (event) => {
+  console.log(event.detail); // "connecting" | "connected" | "reconnecting" | "disconnected"
+});
+```
+
+The event fires once per actual transition. While `reconnecting`, outgoing frames are buffered and subscriptions resume
+on their own (see [reconnection](#reconnection) and [resubscription](#resubscription)), so most consumers only need this
+to surface connection status or to run their own teardown on `disconnected`.
+
 ### WebSocket limits
 
 Hyperliquid scopes every documented WebSocket limit to your **IP address**, not to the connection — two of them say so

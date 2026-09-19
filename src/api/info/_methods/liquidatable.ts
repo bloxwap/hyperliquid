@@ -6,7 +6,6 @@ import * as v from "valibot";
 
 /**
  * Request liquidatable.
- * @see null
  */
 export const LiquidatableRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -18,7 +17,6 @@ export type LiquidatableRequest = v.InferOutput<typeof LiquidatableRequest>;
 
 /**
  * Array of liquidatable positions.
- * @see null
  */
 export type LiquidatableResponse = {
   /**
@@ -29,7 +27,7 @@ export type LiquidatableResponse = {
   /**
    * Position index.
    *
-   * FIXME: a `cross` variant may exist (unconfirmed).
+   * @unconfirmed Only the `isolated` variant has been observed; a `cross` variant may also exist.
    */
   positionIndex: {
     /** Isolated position details. */
@@ -41,7 +39,7 @@ export type LiquidatableResponse = {
   /**
    * Available margin.
    *
-   * FIXME: meaning of the two values unconfirmed.
+   * @unconfirmed The meaning of the two tuple values has not been verified against the docs.
    */
   marginAvailable: [number, number];
 }[];
@@ -58,7 +56,7 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @param config General configuration for Info API requests.
  * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
- * @return Unknown array.
+ * @return Array of liquidatable positions.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
  * @throws {TransportError} When the transport layer throws an error.
@@ -72,8 +70,6 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * const data = await liquidatable({ transport });
  * ```
- *
- * @see null
  */
 export function liquidatable(config: InfoConfig, signal?: AbortSignal): Promise<LiquidatableResponse> {
   const request = parse(LiquidatableRequest, {

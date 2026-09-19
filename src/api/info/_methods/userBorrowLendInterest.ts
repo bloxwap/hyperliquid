@@ -8,7 +8,6 @@ import { Address, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Request user borrow/lend interest.
- * @see null
  */
 export const UserBorrowLendInterestRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -26,7 +25,6 @@ export type UserBorrowLendInterestRequest = v.InferOutput<typeof UserBorrowLendI
 
 /**
  * User's borrow/lend interest.
- * @see null
  */
 export type UserBorrowLendInterestResponse = {
   /** Timestamp of the update (in ms since epoch). */
@@ -78,8 +76,6 @@ export type UserBorrowLendInterestParameters = Omit<v.InferInput<typeof UserBorr
  *   startTime: Date.now() - 1000 * 60 * 60 * 24,
  * });
  * ```
- *
- * @see null
  */
 export function userBorrowLendInterest(
   config: InfoConfig,

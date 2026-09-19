@@ -9,7 +9,6 @@ import type { ExplorerTransaction } from "./_base/mod.ts";
 
 /**
  * Request array of user transaction details.
- * @see null
  */
 export const UserDetailsRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -33,7 +32,6 @@ type UserDetailsTransaction = Omit<ExplorerTransaction, "action"> & {
 
 /**
  * Response array of user transaction details.
- * @see null
  */
 export type UserDetailsResponse = {
   /** Type of response. */
@@ -77,7 +75,6 @@ export type UserDetailsParameters = Omit<v.InferInput<typeof UserDetailsRequest>
  * });
  * ```
  *
- * @see null
  */
 export async function userDetails(
   config: ExplorerConfig<IRequestTransport<"explorer">>,

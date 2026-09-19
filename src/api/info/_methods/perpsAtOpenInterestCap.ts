@@ -29,7 +29,7 @@ export type PerpsAtOpenInterestCapResponse = string[];
 // ============================================================
 
 import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, isAbortSignal } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode perpsAtOpenInterestCap} function. */
 export type PerpsAtOpenInterestCapParameters = Omit<v.InferInput<typeof PerpsAtOpenInterestCapRequest>, "type">;
@@ -71,8 +71,8 @@ export function perpsAtOpenInterestCap(
   paramsOrSignal?: PerpsAtOpenInterestCapParameters | AbortSignal,
   maybeSignal?: AbortSignal,
 ): Promise<PerpsAtOpenInterestCapResponse> {
-  const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
-  const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
+  const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
+  const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
 
   const request = parse(PerpsAtOpenInterestCapRequest, {
     type: "perpsAtOpenInterestCap",

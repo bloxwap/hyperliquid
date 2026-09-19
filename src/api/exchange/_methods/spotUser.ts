@@ -8,7 +8,6 @@ import { Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Opt out of spot dusting.
- * @see null
  */
 export const SpotUserRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -41,7 +40,6 @@ export type SpotUserRequest = v.InferOutput<typeof SpotUserRequest>;
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type SpotUserResponse =
   | {
@@ -113,8 +111,6 @@ export type SpotUserSuccessResponse = ExcludeErrorResponse<SpotUserResponse>;
  *   toggleSpotDusting: { optOut: false },
  * });
  * ```
- *
- * @see null
  */
 export function spotUser(
   config: ExchangeConfig,

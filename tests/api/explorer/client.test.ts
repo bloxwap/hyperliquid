@@ -18,7 +18,48 @@ describe("ExplorerClient (offline)", () => {
     const transport = new MockExplorerTransport();
     const client = new ExplorerClient({ transport });
 
-    assertStrictEquals(client.config_.transport, transport);
+    const config = client.config;
+    if (!("transport" in config)) throw new Error("Expected a single-transport config");
+    assertStrictEquals(config.transport, transport);
+  });
+
+  test("dual config stores both transports", () => {
+    const requestTransport = new MockExplorerTransport();
+    const subscriptionTransport = new MockExplorerSubscriptionTransport();
+    const client = new ExplorerClient({ requestTransport, subscriptionTransport });
+
+    const config = client.config;
+    if ("transport" in config) throw new Error("Expected a dual-transport config");
+    assertStrictEquals(config.requestTransport, requestTransport);
+    assertStrictEquals(config.subscriptionTransport, subscriptionTransport);
+  });
+
+  test("dual config routes requests to the request transport", async () => {
+    const response = { type: "blockDetails", blockDetails: { height: 123 } };
+    const requestTransport = new MockExplorerTransport(() => response);
+    const subscriptionTransport = new MockExplorerSubscriptionTransport();
+    const client = new ExplorerClient({ requestTransport, subscriptionTransport });
+
+    const result = await client.blockDetails({ height: 123 });
+
+    assertStrictEquals(result, response);
+    assertEquals(requestTransport.calls.length, 1);
+    assertEquals(subscriptionTransport.calls.length, 0);
+  });
+
+  test("dual config routes subscriptions to the subscription transport", async () => {
+    const requestTransport = new MockExplorerTransport();
+    const subscriptionTransport = new MockExplorerSubscriptionTransport();
+    const client = new ExplorerClient({ requestTransport, subscriptionTransport });
+    const received: ExplorerBlockEvent[] = [];
+
+    await client.explorerBlock((data) => received.push(data));
+
+    assertEquals(subscriptionTransport.calls[0].channel, "explorerBlock_");
+    assertEquals(requestTransport.calls.length, 0);
+
+    subscriptionTransport.dispatch("explorerBlock_", []);
+    assertEquals(received, [[]]);
   });
 
   test("blockDetails delegates to the explorer endpoint", async () => {

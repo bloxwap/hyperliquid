@@ -8,7 +8,6 @@ import { Address } from "../../_schemas.ts";
 
 /**
  * Request user extra agents.
- * @see null
  */
 export const ExtraAgentsRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -22,7 +21,6 @@ export type ExtraAgentsRequest = v.InferOutput<typeof ExtraAgentsRequest>;
 
 /**
  * Array of extra agent details for a user.
- * @see null
  */
 export type ExtraAgentsResponse = {
   /**
@@ -68,8 +66,6 @@ export type ExtraAgentsParameters = Omit<v.InferInput<typeof ExtraAgentsRequest>
  *   user: "0x...",
  * });
  * ```
- *
- * @see null
  */
 export function extraAgents(
   config: InfoConfig,

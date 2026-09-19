@@ -8,7 +8,6 @@ import { Address, Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.t
 
 /**
  * Borrow or lend assets.
- * @see null
  */
 export const BorrowLendRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -44,7 +43,6 @@ export type BorrowLendRequest = v.InferOutput<typeof BorrowLendRequest>;
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type BorrowLendResponse =
   | {
@@ -118,8 +116,6 @@ export type BorrowLendSuccessResponse = ExcludeErrorResponse<BorrowLendResponse>
  *   amount: "20",
  * });
  * ```
- *
- * @see null
  */
 export function borrowLend(
   config: ExchangeConfig,

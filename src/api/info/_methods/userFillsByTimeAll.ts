@@ -2,10 +2,9 @@
 // Execution Logic
 // ============================================================
 
-import * as v from "valibot";
-import { parse } from "../../../_base.ts";
-import { fetchAllPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
-import { userFillsByTime, type UserFillsByTimeParameters, type UserFillsByTimeResponse } from "./userFillsByTime.ts";
+import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import type { UserFillsByTimeParameters, UserFillsByTimeResponse } from "./userFillsByTime.ts";
+import { userFillsByTimePages } from "./userFillsByTimePages.ts";
 
 /** Request parameters for the {@linkcode userFillsByTimeAll} function. */
 export type UserFillsByTimeAllParameters = Omit<UserFillsByTimeParameters, "reversed"> & {
@@ -59,22 +58,5 @@ export function userFillsByTimeAll(
   options?: PaginationOptions,
   signal?: AbortSignal,
 ): Promise<UserFillsByTimeResponse> {
-  // `reversed` is excluded at the type level; this rejects it for untyped callers, before any request.
-  parse(
-    v.optional(
-      v.literal(
-        false,
-        "`reversed: true` is not supported: pagination walks forward from `startTime` and needs ascending pages.",
-      ),
-    ),
-    params.reversed,
-  );
-  return fetchAllPages(
-    (startTime) => userFillsByTime(config, { ...params, startTime }, signal),
-    Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
-    2000, // the server returns at most 2000 fills per response
-    (fill) => fill.time,
-    (fill) => String(fill.tid), // `tid` is the documented unique identifier of a (partial) fill
-    options,
-  );
+  return collectPages(userFillsByTimePages(config, params, options, signal));
 }

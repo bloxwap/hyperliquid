@@ -8,7 +8,6 @@ import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Distribute funds from a vault between followers.
- * @see null
  */
 export const VaultDistributeRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -43,7 +42,6 @@ export type VaultDistributeRequest = v.InferOutput<typeof VaultDistributeRequest
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type VaultDistributeResponse =
   | {
@@ -116,8 +114,6 @@ export type VaultDistributeSuccessResponse = ExcludeErrorResponse<VaultDistribut
  *   usd: 10 * 1e6,
  * });
  * ```
- *
- * @see null
  */
 export function vaultDistribute(
   config: ExchangeConfig,

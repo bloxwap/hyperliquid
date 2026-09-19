@@ -6,7 +6,6 @@ import * as v from "valibot";
 
 /**
  * Request validator summaries.
- * @see null
  */
 export const ValidatorSummariesRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -34,7 +33,6 @@ type ValidatorStats = {
 
 /**
  * Array of validator performance statistics.
- * @see null
  */
 export type ValidatorSummariesResponse = {
   /**
@@ -100,8 +98,6 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * const data = await validatorSummaries({ transport });
  * ```
- *
- * @see null
  */
 export function validatorSummaries(config: InfoConfig, signal?: AbortSignal): Promise<ValidatorSummariesResponse> {
   const request = parse(ValidatorSummariesRequest, {

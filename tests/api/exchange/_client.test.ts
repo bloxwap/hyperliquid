@@ -448,10 +448,20 @@ const METHOD_CASES: Record<string, MethodCase> = {
     action: { type: "spotUser", toggleSpotDusting: { optOut: true } },
     invalid: (c) => c.spotUser({} as never),
   },
+  stakingDeposit: {
+    run: (c) => c.stakingDeposit({ wei: 1 }),
+    action: { type: "cDeposit", ...US, wei: 1, nonce: FIXED_NONCE },
+    invalid: (c) => c.stakingDeposit({} as never),
+  },
   stakingLinkDisableTradingUser: {
     run: (c) => c.stakingLinkDisableTradingUser({ tradingUser: ADDR1 }),
     action: { type: "stakingLinkDisableTradingUser", ...US, tradingUser: ADDR1, nonce: FIXED_NONCE },
     invalid: (c) => c.stakingLinkDisableTradingUser({} as never),
+  },
+  stakingWithdraw: {
+    run: (c) => c.stakingWithdraw({ wei: 1 }),
+    action: { type: "cWithdraw", ...US, wei: 1, nonce: FIXED_NONCE },
+    invalid: (c) => c.stakingWithdraw({} as never),
   },
   subAccountModify: {
     run: (c) => c.subAccountModify({ subAccountUser: SUB_ACCOUNT, name: "sub" }),
@@ -535,10 +545,42 @@ const METHOD_CASES: Record<string, MethodCase> = {
     },
     invalid: (c) => c.userSetAbstraction({} as never),
   },
+  validatorAction: {
+    run: (c) =>
+      c.validatorAction({
+        changeProfile: {
+          node_ip: { Ip: "1.2.3.4" },
+          name: "...",
+          description: "...",
+          unjailed: false,
+          disable_delegations: false,
+          commission_bps: null,
+          signer: null,
+        },
+      }),
+    action: {
+      type: "CValidatorAction",
+      changeProfile: {
+        node_ip: { Ip: "1.2.3.4" },
+        name: "...",
+        description: "...",
+        unjailed: false,
+        disable_delegations: false,
+        commission_bps: null,
+        signer: null,
+      },
+    },
+    invalid: (c) => c.validatorAction({} as never),
+  },
   validatorL1Stream: {
     run: (c) => c.validatorL1Stream({ riskFreeRate: "0.05" }),
     action: { type: "validatorL1Stream", riskFreeRate: "0.05" },
     invalid: (c) => c.validatorL1Stream({} as never),
+  },
+  validatorSignerAction: {
+    run: (c) => c.validatorSignerAction({ jailSelf: null }),
+    action: { type: "CSignerAction", jailSelf: null },
+    invalid: (c) => c.validatorSignerAction({} as never),
   },
   vaultDistribute: {
     run: (c) => c.vaultDistribute({ vaultAddress: VAULT, usd: 1_000_000 }),
@@ -554,6 +596,11 @@ const METHOD_CASES: Record<string, MethodCase> = {
     run: (c) => c.vaultTransfer({ vaultAddress: VAULT, isDeposit: true, usd: 5_000_000 }),
     action: { type: "vaultTransfer", vaultAddress: VAULT, isDeposit: true, usd: 5_000_000 },
     invalid: (c) => c.vaultTransfer({} as never),
+  },
+  withdraw: {
+    run: (c) => c.withdraw({ amount: "2", destination: ADDR1 }),
+    action: { type: "withdraw3", ...US, amount: "2", destination: ADDR1, time: FIXED_NONCE },
+    invalid: (c) => c.withdraw({} as never),
   },
   withdraw3: {
     run: (c) => c.withdraw3({ amount: "2", destination: ADDR1 }),

@@ -2,12 +2,12 @@
 // Execution Logic
 // ============================================================
 
-import { fetchAllPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
-import {
-  userTwapSliceFillsByTime,
-  type UserTwapSliceFillsByTimeParameters,
-  type UserTwapSliceFillsByTimeResponse,
+import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import type {
+  UserTwapSliceFillsByTimeParameters,
+  UserTwapSliceFillsByTimeResponse,
 } from "./userTwapSliceFillsByTime.ts";
+import { userTwapSliceFillsByTimePages } from "./userTwapSliceFillsByTimePages.ts";
 
 /** Request parameters for the {@linkcode userTwapSliceFillsByTimeAll} function. */
 export type UserTwapSliceFillsByTimeAllParameters = UserTwapSliceFillsByTimeParameters;
@@ -53,12 +53,5 @@ export function userTwapSliceFillsByTimeAll(
   options?: PaginationOptions,
   signal?: AbortSignal,
 ): Promise<UserTwapSliceFillsByTimeResponse> {
-  return fetchAllPages(
-    (startTime) => userTwapSliceFillsByTime(config, { ...params, startTime }, signal),
-    Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
-    500, // time-ranged responses are documented to return at most 500 elements
-    (sliceFill) => sliceFill.fill.time,
-    (sliceFill) => String(sliceFill.fill.tid), // `tid` is the documented unique identifier of a fill
-    options,
-  );
+  return collectPages(userTwapSliceFillsByTimePages(config, params, options, signal));
 }

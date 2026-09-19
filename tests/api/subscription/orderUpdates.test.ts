@@ -18,7 +18,7 @@ runTestWithExchange({
   name: "orderUpdates",
   fn: async (_t, client) => {
     const user = await getWalletAddress(
-      "multiSigUser" in client.exch.config_ ? client.exch.config_.signers[0] : client.exch.config_.wallet,
+      "multiSigUser" in client.exch.config ? client.exch.config.signers[0] : client.exch.config.wallet,
     );
     const params: OrderUpdatesParameters[] = [{ user }];
 

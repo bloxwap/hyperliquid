@@ -75,7 +75,8 @@ export interface ISubscription {
    * Never aborts on a voluntary {@linkcode ISubscription.unsubscribe | unsubscribe()}.
    *
    * Optional so that {@linkcode ISubscriptionTransport} implementations outside this package
-   * stay valid; the built-in WebSocket transport always provides it.
+   * stay valid; the built-in WebSocket transport always provides it, and so does every handle
+   * returned by a `SubscriptionClient` method (see `ClientSubscription`).
    */
   readonly failureSignal?: AbortSignal;
 }

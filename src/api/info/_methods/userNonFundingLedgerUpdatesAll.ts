@@ -2,12 +2,12 @@
 // Execution Logic
 // ============================================================
 
-import { fetchAllPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
-import {
-  userNonFundingLedgerUpdates,
-  type UserNonFundingLedgerUpdatesParameters,
-  type UserNonFundingLedgerUpdatesResponse,
+import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import type {
+  UserNonFundingLedgerUpdatesParameters,
+  UserNonFundingLedgerUpdatesResponse,
 } from "./userNonFundingLedgerUpdates.ts";
+import { userNonFundingLedgerUpdatesPages } from "./userNonFundingLedgerUpdatesPages.ts";
 
 /** Request parameters for the {@linkcode userNonFundingLedgerUpdatesAll} function. */
 export type UserNonFundingLedgerUpdatesAllParameters = Omit<UserNonFundingLedgerUpdatesParameters, "startTime"> & {
@@ -57,12 +57,5 @@ export function userNonFundingLedgerUpdatesAll(
   options?: PaginationOptions,
   signal?: AbortSignal,
 ): Promise<UserNonFundingLedgerUpdatesResponse> {
-  return fetchAllPages(
-    (startTime) => userNonFundingLedgerUpdates(config, { ...params, startTime }, signal),
-    Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
-    500, // time-ranged responses are documented to return at most 500 elements
-    (update) => update.time,
-    (update) => `${update.hash}:${update.time}`, // one non-funding ledger update per user per L1 tx
-    options,
-  );
+  return collectPages(userNonFundingLedgerUpdatesPages(config, params, options, signal));
 }

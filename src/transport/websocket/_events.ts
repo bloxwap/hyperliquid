@@ -48,8 +48,6 @@ export interface PostResponse {
 
 /**
  * Block summary pushed by the explorer RPC.
- *
- * @see null
  */
 interface BlockDetails {
   blockTime: number;
@@ -61,8 +59,6 @@ interface BlockDetails {
 
 /**
  * Transaction details pushed by the explorer RPC.
- *
- * @see null
  */
 interface TxDetails {
   action: {

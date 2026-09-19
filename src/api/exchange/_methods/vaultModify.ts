@@ -8,7 +8,6 @@ import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Modify a vault's configuration.
- * @see null
  */
 export const VaultModifyRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -42,7 +41,6 @@ export type VaultModifyRequest = v.InferOutput<typeof VaultModifyRequest>;
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type VaultModifyResponse =
   | {
@@ -116,8 +114,6 @@ export type VaultModifySuccessResponse = ExcludeErrorResponse<VaultModifyRespons
  *   alwaysCloseOnWithdraw: false,
  * });
  * ```
- *
- * @see null
  */
 export function vaultModify(
   config: ExchangeConfig,

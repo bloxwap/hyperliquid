@@ -23,6 +23,7 @@
 
 import { ReconnectingWebSocket, type ReconnectingWebSocketOptions } from "./_reconnectingSocket.ts";
 import type { IRequestTransport, ISubscription, ISubscriptionTransport } from "../_base.ts";
+import { WebSocketConnectionEvents, type WebSocketConnectionState } from "./_connectionState.ts";
 import { WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
 import { HyperliquidEventTarget } from "./_events.ts";
 import { WebSocketKeepAlive, type WebSocketKeepAliveOptions } from "./_keepAlive.ts";
@@ -35,6 +36,11 @@ import {
 import { WebSocketSubscriptionManager } from "./_subscriptionManager.ts";
 
 export { WebSocketQuota, type WebSocketQuotaOptions, type WebSocketRateLimitOptions, WebSocketRequestError };
+export {
+  WebSocketConnectionEvents,
+  type WebSocketConnectionEventMap,
+  type WebSocketConnectionState,
+} from "./_connectionState.ts";
 
 /** Configuration options for the WebSocket transport layer. */
 export interface WebSocketTransportOptions {
@@ -145,8 +151,30 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
     this._dispatcher.timeout = value;
   }
 
+  /** Current connection lifecycle state; transitions are dispatched on {@linkcode WebSocketTransport.events}. */
+  get connectionState(): WebSocketConnectionState {
+    return this.events.state;
+  }
+
   /** The per-IP budget this transport draws from; shared with every transport that was not given its own. */
   readonly quota: WebSocketQuota;
+
+  /**
+   * Connection lifecycle events: dispatches `connectionstatechange`
+   * (`CustomEvent<{@linkcode WebSocketConnectionState}>`) on every transition — `connecting`,
+   * `connected`, `reconnecting`, `disconnected`.
+   *
+   * @example
+   * ```ts
+   * import { WebSocketTransport } from "@bloxwap/hyperliquid";
+   *
+   * const transport = new WebSocketTransport();
+   * transport.events.addEventListener("connectionstatechange", (event) => {
+   *   console.log(event.detail);
+   * });
+   * ```
+   */
+  readonly events: WebSocketConnectionEvents;
 
   private readonly _hlEvents: HyperliquidEventTarget;
   private readonly _dispatcher: WebSocketDispatcher;
@@ -161,6 +189,7 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
       options?.url ?? (this.isTestnet ? TESTNET_API_WS_URL : MAINNET_API_WS_URL),
       options?.reconnect,
     );
+    this.events = new WebSocketConnectionEvents(this.socket);
 
     this._hlEvents = new HyperliquidEventTarget(this.socket);
     this._dispatcher = new WebSocketDispatcher(

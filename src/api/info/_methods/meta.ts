@@ -66,7 +66,7 @@ export type MetaResponse = {
 // ============================================================
 
 import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, isAbortSignal } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode meta} function. */
 export type MetaParameters = Omit<v.InferInput<typeof MetaRequest>, "type">;
@@ -101,8 +101,8 @@ export function meta(
   paramsOrSignal?: MetaParameters | AbortSignal,
   maybeSignal?: AbortSignal,
 ): Promise<MetaResponse> {
-  const params = paramsOrSignal instanceof AbortSignal ? {} : paramsOrSignal;
-  const signal = paramsOrSignal instanceof AbortSignal ? paramsOrSignal : maybeSignal;
+  const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
+  const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
 
   const request = parse(MetaRequest, {
     type: "meta",

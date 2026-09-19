@@ -85,7 +85,7 @@ export type AgentEnableDexAbstractionSuccessResponse = ExcludeErrorResponse<Agen
  *
  * Signing: L1 Action.
  *
- * @deprecated use {@linkcode agentSetAbstraction} instead.
+ * @deprecated use {@linkcode agentSetAbstraction} instead — will be removed in v1.0.
  *
  * @param config General configuration for Exchange API requests.
  * @param opts Request execution options.

@@ -8,7 +8,6 @@ import type { VaultRelationship } from "./_base/mod.ts";
 
 /**
  * Request a list of vaults less than 2 hours old.
- * @see null
  */
 export const VaultSummariesRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -20,7 +19,6 @@ export type VaultSummariesRequest = v.InferOutput<typeof VaultSummariesRequest>;
 
 /**
  * Array of vaults less than 2 hours old.
- * @see null
  */
 export type VaultSummariesResponse = {
   /** Vault name. */
@@ -74,8 +72,6 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * const data = await vaultSummaries({ transport });
  * ```
- *
- * @see null
  */
 export function vaultSummaries(config: InfoConfig, signal?: AbortSignal): Promise<VaultSummariesResponse> {
   const request = parse(VaultSummariesRequest, {

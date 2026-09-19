@@ -8,7 +8,6 @@ import { Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Create a vault.
- * @see null
  */
 export const CreateVaultRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -44,7 +43,6 @@ export type CreateVaultRequest = v.InferOutput<typeof CreateVaultRequest>;
 
 /**
  * Response for creating a vault.
- * @see null
  */
 export type CreateVaultResponse =
   | {
@@ -124,8 +122,6 @@ export type CreateVaultSuccessResponse = ExcludeErrorResponse<CreateVaultRespons
  *   initialUsd: 100 * 1e6,
  * });
  * ```
- *
- * @see null
  */
 export function createVault(
   config: ExchangeConfig,

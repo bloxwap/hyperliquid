@@ -4,3 +4,4 @@
  */
 
 export type { SubscriptionConfig, SubscriptionOptions } from "./_config.ts";
+export type { ClientSubscription } from "./_tracking.ts";

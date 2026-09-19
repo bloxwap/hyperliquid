@@ -8,7 +8,6 @@ import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
 
 /**
  * Transfer between sub-accounts (perpetual).
- * @see null
  */
 export const SubAccountTransferRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -42,7 +41,6 @@ export type SubAccountTransferRequest = v.InferOutput<typeof SubAccountTransferR
 
 /**
  * Successful response without specific data or error response.
- * @see null
  */
 export type SubAccountTransferResponse =
   | {
@@ -116,8 +114,6 @@ export type SubAccountTransferSuccessResponse = ExcludeErrorResponse<SubAccountT
  *   usd: 1 * 1e6,
  * });
  * ```
- *
- * @see null
  */
 export function subAccountTransfer(
   config: ExchangeConfig,

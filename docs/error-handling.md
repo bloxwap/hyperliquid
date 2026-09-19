@@ -79,7 +79,15 @@ try {
 ## `ApiRequestError`
 
 Thrown when Hyperliquid's API processed the request and returned an error response. The raw payload is attached as
-`response`, and `message` is its error text.
+`response`, typed as the `ApiErrorResponse` union of the known error shapes:
+
+- `{ status: "err", response: string }` — the request was rejected outright;
+- `{ response: { type, data: { statuses: [...] } } }` — a bulk action (`order`, `cancel`, …) where individual
+  entries carry `{ error: string }`;
+- `{ response: { data: { status: { error: string } } } }` — a single-status action (`twapOrder`, `twapCancel`);
+- `{ type: "error", message?: string }` — the explorer endpoint's error envelope.
+
+`message` is the error text extracted from whichever shape matched.
 
 ```ts
 import { ApiRequestError } from "@bloxwap/hyperliquid";
@@ -88,8 +96,10 @@ try {
   await client.order({ orders: [/* ... */], grouping: "na" });
 } catch (error) {
   if (error instanceof ApiRequestError) {
-    console.error(error.message);  // server-owned text
-    console.error(error.response); // full raw API response
+    console.error(error.message); // server-owned text
+    if ("status" in error.response && error.response.status === "err") {
+      console.error(error.response.response); // narrowed: top-level error message
+    }
   }
 }
 ```

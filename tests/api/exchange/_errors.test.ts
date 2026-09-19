@@ -41,7 +41,7 @@ describe("exchange error responses", () => {
   });
 
   test("top-level error response throws ApiRequestError with the server message", async () => {
-    const response = { status: "err", response: "Must deposit before performing actions." };
+    const response = { status: "err", response: "Must deposit before performing actions." } as const;
 
     const error = await assertRejects(
       () => order({ transport: transportWith(response), wallet }, { orders: [LIMIT_ORDER] }),
@@ -58,5 +58,19 @@ describe("exchange error responses", () => {
     };
 
     assertEquals(await order({ transport: transportWith(response), wallet }, { orders: [LIMIT_ORDER] }), response);
+  });
+
+  test("the typed response narrows to the top-level error shape", async () => {
+    const response = { status: "err", response: "Must deposit before performing actions." } as const;
+
+    const error = await assertRejects(
+      () => order({ transport: transportWith(response), wallet }, { orders: [LIMIT_ORDER] }),
+      ApiRequestError,
+    );
+    if ("status" in error.response && error.response.status === "err") {
+      assertEquals(error.response.response, "Must deposit before performing actions.");
+    } else {
+      throw new Error("expected the top-level error shape");
+    }
   });
 });

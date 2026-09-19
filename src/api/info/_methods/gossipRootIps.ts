@@ -6,7 +6,6 @@ import * as v from "valibot";
 
 /**
  * Request gossip root IPs.
- * @see null
  */
 export const GossipRootIpsRequest = /* @__PURE__ */ (() => {
   return v.object({
@@ -18,7 +17,6 @@ export type GossipRootIpsRequest = v.InferOutput<typeof GossipRootIpsRequest>;
 
 /**
  * Array of gossip root IPs.
- * @see null
  */
 export type GossipRootIpsResponse = `${number}.${number}.${number}.${number}`[];
 
@@ -48,8 +46,6 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * const data = await gossipRootIps({ transport });
  * ```
- *
- * @see null
  */
 export function gossipRootIps(config: InfoConfig, signal?: AbortSignal): Promise<GossipRootIpsResponse> {
   const request = parse(GossipRootIpsRequest, {
