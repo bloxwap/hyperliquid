@@ -11,6 +11,9 @@ coverage/
 .claude/
 .dev/worktrees/
 
+# Local agent prompts under .dev/ can reference private repos; keep them out of this public one.
+.dev/*.md
+
 # macOS Finder metadata.
 .DS_Store
 
