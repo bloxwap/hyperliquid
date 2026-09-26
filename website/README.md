@@ -10,7 +10,7 @@ The design follows the Bloxwap monorepo's documentation site at commit `15201923
 
 - `app/brand-tokens.css` is a verbatim snapshot of `packages/ui/src/styles/tokens.generated.css`.
 - Fumadocs colors, typography, navigation, and forced dark mode follow `workers/docs/src/app/global.css` and its layouts.
-- The wordmark and favicon in `public/logos/` are copied from `workers/docs/public/logos/`, preserving their metadata.
+- The app icon and favicon in `public/logos/` preserve the original Bloxwap artwork and metadata.
 - Nunito body text, Space Grotesk Bold headings, and Maple Mono code use local assets in `public/fonts/`.
   Nunito comes from the monorepo's `@fontsource-variable/nunito@5.3.0`; Space Grotesk and Maple Mono come from `workers/www`.
   All three SIL OFL license notices are included alongside the fonts.
@@ -52,7 +52,24 @@ NEXT_PUBLIC_BASE_PATH=/hyperliquid bun run docs:preview
 
 Open `http://localhost:4173/hyperliquid/`. The preview serves only the static files in `website/out`.
 The build verifies every documentation page, internal link, asset, and anchor, plus the static JSON search index and
-`.nojekyll`. Build without `NEXT_PUBLIC_BASE_PATH` to serve at a domain root instead.
+`.nojekyll`. It also checks each page's social metadata and its distinct 1200 × 630 PNG card.
+Build without `NEXT_PUBLIC_BASE_PATH` to serve at a domain root instead.
+
+## Social cards
+
+Every build creates an Open Graph card for the homepage and each documentation page. Page titles and descriptions come
+from the same Markdown frontmatter used by the site; new pages receive cards automatically. Open Graph and Twitter
+metadata share the same image, title, description, and accessible image text. Canonical URLs and social image URLs
+always point to the published GitHub Pages site, including when previewing locally.
+
+- `lib/og-image.tsx` defines the Bloxwap layout, colors, official green app icon, and typography.
+- `lib/social.ts` defines the published URL and metadata. Update it if the repository or public hostname changes.
+- `app/og/[...slug]/route.tsx` generates `/og/index.png`, `/og/docs.png`, and `/og/docs/<slug>.png` during the static build.
+
+Cards use the existing Space Grotesk Bold heading font and a static Nunito Bold face copied from the Bloxwap monorepo's
+`packages/og/assets/`. Its license is included as `public/fonts/Nunito-OG-OFL.txt`. The renderer reads bundled fonts and
+artwork locally; it needs no font CDN, API credentials, or image server after deployment. Generated PNGs live in `out/`
+and are included in the GitHub Pages artifact.
 
 ## Deploy
 
