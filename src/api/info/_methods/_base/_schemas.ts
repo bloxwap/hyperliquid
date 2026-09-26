@@ -264,8 +264,8 @@ export type TwapState = {
     above: boolean;
   } | null;
   /**
-   * Stop price, present on the wire (observed as `null`; not settable via the current TWAP order
-   * action).
+   * Price at which the order is terminated; `null` when unset. Settable via `details.s`
+   * on the TWAP order action.
    * @pattern ^[0-9]+(\.[0-9]+)?$
    */
   stopPx?: string | null;

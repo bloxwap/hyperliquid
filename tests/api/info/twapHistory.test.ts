@@ -13,20 +13,23 @@ const paramsSchema = valibotToJsonSchema(v.omit(TwapHistoryRequest, ["type"]));
 
 runTest({
   name: "twapHistory",
+  isTestnet: false,
   codeTestFn: async (_t, client) => {
-    const params: TwapHistoryParameters[] = [{ user: "0xe019d6167E7e324aEd003d94098496b6d986aB05" }];
+    const params: TwapHistoryParameters[] = [
+      { user: "0x03ce7863a2b62f4e227fd98605b79beb32618c76" }, // trigger.above: true
+      { user: "0x0132157369b0d073dd99011da1777920a025fd77" }, // trigger.above: false
+      { user: "0x051748895c6ed4fab50828bebe8e62e665134d23" }, // stopped and non-null stopPx
+      { user: "0x06d5af06a3a7d29909e1cdc7a9deded2fb14ab57" }, // error and historical entries without twapId
+    ];
 
     const data = await Promise.all(params.map((p) => client.twapHistory(p)));
 
     schemaCoverage(paramsSchema, params);
-    // Live wire always carries trigger/stopPx as null for this account (no trigger/stop set),
-    // so the missing/non-null branches are uncoverable live — the offline block below
-    // covers them.
+    // Current responses include trigger/stopPx even when unset. The offline block below
+    // covers older responses that omit them; the live accounts cover non-null values and every status.
     schemaCoverage(responseSchema, data, [
       "#/items/properties/state/properties/trigger/missing",
-      "#/items/properties/state/properties/trigger/defined",
       "#/items/properties/state/properties/stopPx/missing",
-      "#/items/properties/state/properties/stopPx/defined",
     ]);
   },
 });

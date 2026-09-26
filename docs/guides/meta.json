@@ -1,0 +1,5 @@
+{
+  "title": "Guides",
+  "defaultOpen": true,
+  "pages": ["index", "market-orders", "agent-wallets-and-vaults", "browser-wallets", "tree-shaking"]
+}

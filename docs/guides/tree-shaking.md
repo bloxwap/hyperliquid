@@ -1,3 +1,8 @@
+---
+title: Tree-shaking
+description: Use narrow entry points and direct method imports to reduce SDK bundle size and startup work.
+---
+
 # Tree-shaking
 
 The SDK is organized into modular entry points so bundlers can eliminate unused code.

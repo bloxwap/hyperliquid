@@ -1,0 +1,3 @@
+[install]
+# Match the SDK's minimum dependency release age.
+minimumReleaseAge = 259200

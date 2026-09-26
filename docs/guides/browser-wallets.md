@@ -1,3 +1,8 @@
+---
+title: Browser wallets
+description: Connect browser wallets to ExchangeClient and understand signature prompts.
+---
+
 # Browser wallets
 
 The SDK works with browser extension wallets like MetaMask.

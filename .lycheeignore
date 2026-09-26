@@ -1,1 +1,3 @@
 ^https://www\.npmjs\.com/package/@bloxwap/hyperliquid$
+# GitHub Pages URLs become live after the first deployment. Source links and exported site links are checked locally.
+^https://bloxwap\.github\.io/hyperliquid(?:/|$)
