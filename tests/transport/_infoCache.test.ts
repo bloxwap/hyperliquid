@@ -246,3 +246,177 @@ describe("InfoCacheTransport", () => {
     assertEquals(new InfoCacheTransport(mock).isTestnet, mock.isTestnet);
   });
 });
+
+/** A transport whose responses stay pending until the test settles them, and which honors aborts. */
+class DeferredTransport implements IRequestTransport<Endpoint> {
+  readonly isTestnet = true;
+  readonly calls: {
+    payload: unknown;
+    signal?: AbortSignal;
+    resolve: (value: unknown) => void;
+    reject: (error: unknown) => void;
+  }[] = [];
+
+  request<T>(_endpoint: Endpoint, payload: unknown, signal?: AbortSignal): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.calls.push({ payload, signal, resolve: resolve as (value: unknown) => void, reject });
+      signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+  }
+}
+
+describe("InfoCacheTransport coalescing", () => {
+  test("concurrent identical requests share one network call and one response", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock, { coalesce: ["l2Book"] });
+
+    const a = transport.request("info", { type: "l2Book", coin: "BTC" });
+    const b = transport.request("info", { coin: "BTC", type: "l2Book" }); // key order is irrelevant
+    assertEquals(mock.calls.length, 1);
+
+    const response = { levels: [] };
+    mock.calls[0].resolve(response);
+    const [ra, rb] = await Promise.all([a, b]);
+    assertEquals(ra === response && rb === response, true);
+  });
+
+  test("keeps nothing once the request settles", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock, { coalesce: ["l2Book"] });
+
+    const first = transport.request("info", { type: "l2Book", coin: "BTC" });
+    mock.calls[0].resolve({ n: 1 });
+    await first;
+
+    const second = transport.request("info", { type: "l2Book", coin: "BTC" });
+    assertEquals(mock.calls.length, 2);
+    mock.calls[1].resolve({ n: 2 });
+    assertEquals(await second, { n: 2 });
+  });
+
+  test("does not coalesce different params, unlisted types, or non-info endpoints", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock, { coalesce: ["l2Book"] });
+
+    transport.request("info", { type: "l2Book", coin: "BTC" });
+    transport.request("info", { type: "l2Book", coin: "ETH" });
+    transport.request("info", { type: "allMids" });
+    transport.request("info", { type: "allMids" });
+    transport.request("exchange", { type: "l2Book", coin: "BTC" });
+    assertEquals(mock.calls.length, 5);
+  });
+
+  test("coalesce: true covers every info request type", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock, { coalesce: true });
+
+    transport.request("info", { type: "allMids" });
+    transport.request("info", { type: "allMids" });
+    transport.request("info", { type: "clearinghouseState", user: "0x1" });
+    transport.request("info", { type: "clearinghouseState", user: "0x1" });
+    assertEquals(mock.calls.length, 2);
+  });
+
+  test("is disabled by default", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock);
+
+    transport.request("info", { type: "l2Book", coin: "BTC" });
+    transport.request("info", { type: "l2Book", coin: "BTC" });
+    assertEquals(mock.calls.length, 2);
+  });
+
+  test("a rejection reaches every waiter, and the next call retries", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock, { coalesce: ["l2Book"] });
+
+    const a = transport.request("info", { type: "l2Book", coin: "BTC" });
+    const b = transport.request("info", { type: "l2Book", coin: "BTC" }, new AbortController().signal);
+    mock.calls[0].reject(new Error("boom"));
+    await assertRejects(() => a, Error, "boom");
+    await assertRejects(() => b, Error, "boom");
+
+    transport.request("info", { type: "l2Book", coin: "BTC" });
+    assertEquals(mock.calls.length, 2);
+  });
+
+  test("one waiter aborting detaches only that waiter", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock, { coalesce: ["l2Book"] });
+    const aborter = new AbortController();
+
+    const a = transport.request("info", { type: "l2Book", coin: "BTC" }, aborter.signal);
+    const b = transport.request("info", { type: "l2Book", coin: "BTC" }, new AbortController().signal);
+    aborter.abort(new Error("caller a gave up"));
+
+    await assertRejects(() => a, Error, "caller a gave up");
+    assertEquals(mock.calls[0].signal?.aborted, false);
+    mock.calls[0].resolve({ ok: true });
+    assertEquals(await b, { ok: true });
+  });
+
+  test("the shared request is aborted once every waiter has aborted, and later calls start fresh", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock, { coalesce: ["l2Book"] });
+    const first = new AbortController();
+    const second = new AbortController();
+
+    const a = transport.request("info", { type: "l2Book", coin: "BTC" }, first.signal);
+    const b = transport.request("info", { type: "l2Book", coin: "BTC" }, second.signal);
+    first.abort(new Error("a"));
+    assertEquals(mock.calls[0].signal?.aborted, false);
+    second.abort(new Error("b"));
+    assertEquals(mock.calls[0].signal?.aborted, true);
+    await assertRejects(() => a, Error, "a");
+    await assertRejects(() => b, Error, "b");
+
+    transport.request("info", { type: "l2Book", coin: "BTC" });
+    assertEquals(mock.calls.length, 2);
+  });
+
+  test("a waiter without a signal keeps the shared request alive", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock, { coalesce: ["l2Book"] });
+    const aborter = new AbortController();
+
+    const a = transport.request("info", { type: "l2Book", coin: "BTC" }, aborter.signal);
+    const pinned = transport.request("info", { type: "l2Book", coin: "BTC" });
+    aborter.abort(new Error("a"));
+
+    await assertRejects(() => a, Error, "a");
+    assertEquals(mock.calls[0].signal?.aborted, false);
+    mock.calls[0].resolve({ ok: true });
+    assertEquals(await pinned, { ok: true });
+  });
+
+  test("an already-aborted signal rejects without starting or joining a request", async () => {
+    const mock = new DeferredTransport();
+    const transport = new InfoCacheTransport(mock, { coalesce: ["l2Book"] });
+    const reason = new Error("already aborted");
+
+    await assertRejects(
+      () => transport.request("info", { type: "l2Book", coin: "BTC" }, AbortSignal.abort(reason)),
+      Error,
+      "already aborted",
+    );
+    assertEquals(mock.calls.length, 0);
+  });
+
+  test("TTL-cacheable types keep their TTL caching", async () => {
+    const mock = new MockTransport(echoHandler);
+    const transport = new InfoCacheTransport(mock, { coalesce: true });
+
+    await transport.request("info", { type: "meta" });
+    await transport.request("info", { type: "meta" });
+    assertEquals(mock.calls.length, 1);
+  });
+
+  test("rejects an invalid coalesce option", () => {
+    const mock = new MockTransport(echoHandler);
+    assertThrows(
+      () => new InfoCacheTransport(mock, { coalesce: "l2Book" as unknown as string[] }),
+      TypeError,
+      "coalesce must be",
+    );
+  });
+});

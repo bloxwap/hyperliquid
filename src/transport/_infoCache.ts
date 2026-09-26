@@ -5,8 +5,10 @@
  * repeated requests to a conservative allowlist of slow-changing info endpoints (`meta`, `spotMeta`,
  * `allPerpMetas`, `perpDexs`, `marginTable`, `tokenDetails`, `outcomeMeta`, `outcomeTemplates`)
  * from an in-memory cache instead of the network. Everything else — user state, order books,
- * `exchange` and `explorer` requests — passes straight through. The wrapper is strictly opt-in:
- * without it, behavior is byte-for-byte the default.
+ * `exchange` and `explorer` requests — passes straight through, unless in-flight coalescing is
+ * enabled for it ({@linkcode InfoCacheOptions.coalesce}): then concurrent identical info requests
+ * share one network round trip, and nothing is kept once it settles. The wrapper is strictly
+ * opt-in: without it, behavior is byte-for-byte the default.
  *
  * ```text
  * InfoCacheTransport.request():
@@ -16,6 +18,9 @@
  *     └─ miss/expired ─► inner transport ─► cache promise (TTL from dispatch)
  *                        ├─ resolves ─► served until expiry
  *                        └─ rejects ─► evicted (next call retries)
+ *   coalesced type ─► key = type + sorted params
+ *     ├─ identical request in flight ─► join it (own signal only detaches this caller)
+ *     └─ none ─► inner transport ─► shared until it settles, then forgotten
  * ```
  *
  * @module
@@ -91,12 +96,49 @@ export interface InfoCacheOptions {
    * Default: `1000`
    */
   maxSize?: number;
+  /**
+   * Info request types whose concurrent identical requests share one in-flight network request,
+   * or `true` for every info request type. Nothing is cached: the shared request is forgotten as
+   * soon as it settles, so the next call always refetches. Types on the TTL allowlist
+   * ({@linkcode InfoCacheableRequestType}) keep their TTL caching, which already shares in-flight
+   * requests.
+   *
+   * Useful when several parts of a process poll the same data (`l2Book`, `allMids`,
+   * `clearinghouseState`, …) independently: each duplicate that joins a request already in
+   * flight saves a full round trip and the request's weight against the rate limit.
+   *
+   * Every caller receives the same response object, so treat it as read-only. Unlike the TTL
+   * cache, a caller's abort signal only detaches that caller (its promise rejects with the
+   * signal's reason); the shared request itself is aborted only when every caller waiting on it
+   * has aborted, and never while a caller without a signal is waiting.
+   *
+   * Default: `false` (no coalescing beyond the TTL allowlist)
+   *
+   * @example
+   * ```ts
+   * const transport = new InfoCacheTransport(new HttpTransport(), {
+   *   coalesce: ["l2Book", "allMids", "clearinghouseState"],
+   * });
+   * ```
+   */
+  coalesce?: boolean | readonly string[];
 }
 
 /** One cached response: the in-flight or settled promise plus its expiry. */
 interface CacheEntry {
   promise: Promise<unknown>;
   expiresAt: number;
+}
+
+/** One coalesced request still in flight, shared by every identical concurrent call. */
+interface InFlightEntry {
+  promise: Promise<unknown>;
+  /** Aborts the shared request; used only once every waiter has aborted. */
+  controller: AbortController;
+  /** Waiters that can still abort (they passed a signal and have not aborted yet). */
+  abortable: number;
+  /** Set once a waiter without a signal joins: the request must then run to completion. */
+  pinned: boolean;
 }
 
 /**
@@ -145,6 +187,10 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
   private readonly _maxSize: number;
   /** Cached responses keyed by type + sorted params, in insertion order (oldest first). */
   private readonly _entries = new Map<string, CacheEntry>();
+  /** Info types to coalesce: `true` for all, a set for a list, `undefined` when disabled. */
+  private readonly _coalesce: true | ReadonlySet<string> | undefined;
+  /** Coalesced requests still in flight, keyed like {@linkcode _entries}. */
+  private readonly _inFlight = new Map<string, InFlightEntry>();
 
   /**
    * Creates a caching wrapper around `inner`.
@@ -153,7 +199,7 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
    * @param options Cache configuration. See {@link InfoCacheOptions}.
    */
   constructor(inner: IRequestTransport<E>, options?: InfoCacheOptions) {
-    const { ttl = 60_000, ttlByType = {}, maxSize = 1000 } = options ?? {};
+    const { ttl = 60_000, ttlByType = {}, maxSize = 1000, coalesce = false } = options ?? {};
     if (
       typeof ttl !== "number" ||
       Number.isNaN(ttl) ||
@@ -165,10 +211,15 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
     if (!Number.isSafeInteger(maxSize) || maxSize < 1) {
       throw new RangeError(`InfoCacheTransport: maxSize must be a positive integer (got ${maxSize})`);
     }
+    if (typeof coalesce !== "boolean" && !(Array.isArray(coalesce) && coalesce.every((t) => typeof t === "string"))) {
+      throw new TypeError("InfoCacheTransport: coalesce must be a boolean or an array of info request types");
+    }
     this.inner = inner;
     this._ttl = ttl;
     this._ttlByType = ttlByType;
     this._maxSize = maxSize;
+    this._coalesce =
+      coalesce === true ? true : coalesce === false || coalesce.length === 0 ? undefined : new Set(coalesce);
   }
 
   /** Indicates this transport uses testnet endpoint(s) — mirrors the wrapped transport. */
@@ -186,7 +237,12 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
    */
   request<T>(endpoint: E, payload: unknown, signal?: AbortSignal): Promise<T> {
     const type = endpoint === "info" ? cacheableType(payload) : undefined;
-    if (type === undefined) return this.inner.request<T>(endpoint, payload, signal);
+    if (type === undefined) {
+      if (endpoint === "info" && this._coalesce !== undefined && this._shouldCoalesce(payload)) {
+        return this._coalesced<T>(endpoint, payload as Record<string, unknown>, signal);
+      }
+      return this.inner.request<T>(endpoint, payload, signal);
+    }
 
     const key = stableKey(payload as Record<string, unknown>);
     const now = Date.now();
@@ -207,9 +263,75 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
     return promise;
   }
 
-  /** Drops every cached entry; the next call to any allowlisted endpoint refetches. */
+  /**
+   * Drops every cached entry; the next call to any allowlisted endpoint refetches. Coalesced
+   * requests already in flight still settle for the callers waiting on them, but later calls no
+   * longer join them.
+   */
   clear(): void {
     this._entries.clear();
+    this._inFlight.clear();
+  }
+
+  /** Whether `payload` names an info request type enabled by {@linkcode InfoCacheOptions.coalesce}. */
+  private _shouldCoalesce(payload: unknown): boolean {
+    if (typeof payload !== "object" || payload === null) return false;
+    const type = (payload as Record<string, unknown>).type;
+    return typeof type === "string" && (this._coalesce === true || (this._coalesce as ReadonlySet<string>).has(type));
+  }
+
+  /** Sends `payload` once for every identical concurrent call; see {@linkcode InfoCacheOptions.coalesce}. */
+  private _coalesced<T>(endpoint: E, payload: Record<string, unknown>, signal: AbortSignal | undefined): Promise<T> {
+    // An already-aborted caller neither starts nor joins a request.
+    if (signal?.aborted) return Promise.reject(signal.reason);
+
+    const key = stableKey(payload);
+    let entry = this._inFlight.get(key);
+    if (entry === undefined) {
+      const controller = new AbortController();
+      const created: InFlightEntry = {
+        promise: this.inner.request<T>(endpoint, payload, controller.signal),
+        controller,
+        abortable: 0,
+        pinned: false,
+      };
+      const forget = (): void => {
+        if (this._inFlight.get(key) === created) this._inFlight.delete(key);
+      };
+      created.promise.then(forget, forget);
+      this._inFlight.set(key, created);
+      entry = created;
+    }
+
+    if (signal === undefined) {
+      entry.pinned = true;
+      return entry.promise as Promise<T>;
+    }
+
+    const joined = entry;
+    joined.abortable++;
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = (): void => {
+        reject(signal.reason);
+        joined.abortable--;
+        if (!joined.pinned && joined.abortable === 0) {
+          // Nobody is left waiting: abort the shared request, and stop later calls joining it.
+          if (this._inFlight.get(key) === joined) this._inFlight.delete(key);
+          joined.controller.abort(signal.reason);
+        }
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      (joined.promise as Promise<T>).then(
+        (value) => {
+          signal.removeEventListener("abort", onAbort);
+          resolve(value);
+        },
+        (error: unknown) => {
+          signal.removeEventListener("abort", onAbort);
+          reject(error);
+        },
+      );
+    });
   }
 
   /** Makes room for one more entry: expired entries first, then the oldest. */
@@ -255,13 +377,15 @@ function stableKey(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableKey).join(",")}]`;
   if (typeof value === "object" && value !== null) {
     const record = value as Record<string, unknown>;
-    const parts: string[] = [];
-    for (const key of Object.keys(record).sort()) {
-      const field = record[key];
+    // Built in one pass rather than via a parts array and `join`: this runs on every cached and
+    // coalesced request, including cache hits.
+    let key = "{";
+    for (const name of Object.keys(record).sort()) {
+      const field = record[name];
       if (field === undefined) continue; // mirrors JSON.stringify dropping undefined object values
-      parts.push(`${JSON.stringify(key)}:${stableKey(field)}`);
+      key += `${key.length === 1 ? "" : ","}${JSON.stringify(name)}:${stableKey(field)}`;
     }
-    return `{${parts.join(",")}}`;
+    return `${key}}`;
   }
   return JSON.stringify(value) ?? "null";
 }

@@ -110,6 +110,29 @@ Two interactions to be aware of:
 - `InfoCacheTransport` implements only the request interface. When wrapping a `WebSocketTransport`, pass the raw
   WebSocket transport to `SubscriptionClient` and the wrapped one to `InfoClient`.
 
+### Sharing identical in-flight requests
+
+When several parts of a process request the same live data at the same time (a UI and a strategy both polling
+`l2Book`, say), the `coalesce` option lets identical concurrent requests share one network round trip, without caching
+anything:
+
+```ts
+import { HttpTransport, InfoCacheTransport, InfoClient } from "@bloxwap/hyperliquid";
+
+const transport = new InfoCacheTransport(new HttpTransport(), {
+  coalesce: ["l2Book", "allMids", "clearinghouseState"], // or `true` for every info request type
+});
+const client = new InfoClient({ transport });
+
+// One request goes out; both callers get its response.
+const [a, b] = await Promise.all([client.l2Book({ coin: "BTC" }), client.l2Book({ coin: "BTC" })]);
+```
+
+Each joined duplicate saves a full round trip and the request's weight against the rate limit. The shared request is
+forgotten as soon as it settles, so the next call always refetches. Every caller receives the same response object, so
+treat it as read-only. An abort signal detaches only its own caller; the shared request is aborted only once every
+caller waiting on it has aborted.
+
 ## Exchange endpoint
 
 `ExchangeClient` requires a wallet for [signing](signing.md#wallet-compatibility) and works with any transport. See all
