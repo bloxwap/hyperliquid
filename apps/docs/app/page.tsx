@@ -1,6 +1,7 @@
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
+import { CopyButton } from "@/components/copy-button";
 import { InstallCommand } from "@/components/install-command";
 import { baseOptions } from "@/lib/layout.shared";
 
@@ -24,6 +25,18 @@ const features = [
     href: "/docs/clients/#websocket-subscriptions",
   },
 ];
+
+/** The hero snippet as plain text, for the copy button; the markup below renders the same code. */
+const MARKET_DATA_SNIPPET = `import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
+
+// Connect to Hyperliquid
+const client = new InfoClient({
+  transport: new HttpTransport(),
+});
+
+// Read every market's mid price
+const mids = await client.allMids();
+`;
 
 export default function Home() {
   return (
@@ -62,7 +75,10 @@ export default function Home() {
                 <i />
               </div>
               <span>market-data.ts</span>
-              <span className="code-language">TS</span>
+              <div className="code-actions">
+                <span className="code-language">TS</span>
+                <CopyButton text={MARKET_DATA_SNIPPET} label="Copy code" className="code-copy" />
+              </div>
             </div>
             <pre>
               <code>
@@ -75,7 +91,8 @@ export default function Home() {
                 <br />
                 <span className="syntax-purple">const</span> client = <span className="syntax-purple">new</span>{" "}
                 <span className="syntax-blue">InfoClient</span>({"{"}
-                <br /> transport: <span className="syntax-purple">new</span>{" "}
+                <br />
+                {"  "}transport: <span className="syntax-purple">new</span>{" "}
                 <span className="syntax-blue">HttpTransport</span>(),
                 <br />
                 {"}"});
