@@ -22,17 +22,18 @@ jobs:
     with:
       # Explicit lockfiles instead of the default recursive `-r ./`: bun audit skips every @jsr/*
       # package ("do not come from the default registry"), and .dev/ts7 resolves crypto-critical
-      # deps (@noble/hashes, valibot) through JSR, so both lockfiles are scanned here.
+      # deps (@noble/hashes, valibot) through JSR. Include the isolated documentation site too.
       #
       # Known residual gap (verified 2026-07-26 against OSV-Scanner v2.4.0): OSV has no JSR
       # ecosystem, and @jsr/scope__name aliases do not match npm advisories — e.g.
       # @jsr/valibot__valibot@1.4.1 is not flagged although npm valibot@1.4.1 maps to
-      # GHSA-5qjj-4xww-7phc. npm-named packages in both lockfiles (the vast majority, including
+      # GHSA-5qjj-4xww-7phc. npm-named packages in these lockfiles (the vast majority, including
       # all npm transitives) are covered; JSR-aliased entries are extracted and queried but only
       # match if OSV ever learns the alias.
       scan-args: |-
         --lockfile=bun.lock
         --lockfile=.dev/ts7/bun.lock
+        --lockfile=website/bun.lock
       # SARIF upload needs security-events: write; kept off so the job runs with contents: read.
       # Results are still uploaded as a build artifact and the job fails on any vulnerability.
       upload-sarif: false
