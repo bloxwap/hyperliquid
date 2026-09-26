@@ -20,6 +20,8 @@ The design follows the Bloxwap monorepo's documentation site at commit `15201923
 Update these snapshots from the monorepo when its design changes. Keep the artwork and font notices intact.
 Building this site does not require a checkout of the monorepo or a request to a font CDN.
 
+The [historical design review](design-review/README.md) preserves the original findings and screenshots from 2026-09-26.
+
 ## Develop
 
 From the repository root:

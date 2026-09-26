@@ -1,9 +1,12 @@
-# Design review: docs website (`website/`)
+# Design review: documentation website
+
+This historical review captures the site on 2026-09-26 in its former `website/` layout. The application now lives in
+`apps/docs/`. The findings and file references below describe that reviewed snapshot; screenshots are stored alongside
+this report.
 
 Scope: the Next.js + Fumadocs documentation site. That covers the custom landing page (`app/page.tsx`), the docs
 shell (`app/docs/`), search (`components/search.tsx`), and the custom styling in `app/global.css` and
-`app/brand-tokens.css`. The SDK itself has no UI. Reviewed on 2026-09-26 against the 30-check catalog. Screenshots are
-in `design-review/`.
+`app/brand-tokens.css`. The SDK itself has no UI. Reviewed against the 30-check catalog.
 
 - **Static pass:** done.
 - **Visual pass:** desktop at 1440 px. Mobile at 390 px, rendered in iframes because Chrome would not shrink the window
