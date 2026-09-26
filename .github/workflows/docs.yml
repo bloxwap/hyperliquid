@@ -66,6 +66,10 @@ jobs:
         working-directory: website
         run: bun run check
 
+      - name: Test documentation website helpers
+        working-directory: website
+        run: bun run test
+
       - name: Build static documentation website
         working-directory: website
         run: bun run build

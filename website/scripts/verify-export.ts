@@ -277,6 +277,79 @@ if (!searchArtifact) {
   }
 }
 
+// Agent and crawler files: GitHub Pages serves them as-is, so verify their exported content.
+const publishedPages = [...contentPages.values()].map((route) => `${publishedOrigin}${publishedBasePath}${route}`);
+async function exportedText(path: string): Promise<string | undefined> {
+  if (!files.has(path)) {
+    errors.add(`Missing exported ${path}.`);
+    return undefined;
+  }
+  return Bun.file(resolve(outDir, path)).text();
+}
+
+const sitemap = await exportedText("sitemap.xml");
+if (sitemap !== undefined) {
+  if (!sitemap.startsWith("<?xml") || !sitemap.includes('xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"')) {
+    errors.add("sitemap.xml: expected an XML urlset in the sitemaps.org 0.9 namespace.");
+  }
+  const entries = [...sitemap.matchAll(/<url>\s*<loc>([^<]+)<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/g)];
+  const locs = new Set(entries.map((entry) => entry[1]));
+  for (const url of publishedPages) if (!locs.has(url)) errors.add(`sitemap.xml: missing ${url}.`);
+  if (locs.size !== publishedPages.length) {
+    errors.add(`sitemap.xml: expected ${publishedPages.length} URLs with lastmod, found ${locs.size}.`);
+  }
+  for (const [, loc, lastmod] of entries) {
+    if (Number.isNaN(Date.parse(lastmod ?? ""))) errors.add(`sitemap.xml: invalid lastmod for ${loc}.`);
+  }
+}
+
+const llms = await exportedText("llms.txt");
+if (llms !== undefined) {
+  if (!llms.startsWith("# ") || !/\n> \S/.test(llms)) errors.add("llms.txt: must open with an H1 and a blockquote.");
+  if (!llms.includes("\n## When to use this\n")) errors.add("llms.txt: missing the 'When to use this' section.");
+  for (const url of publishedPages.filter((url) => url.includes("/docs/"))) {
+    if (!llms.includes(`](${url})`)) errors.add(`llms.txt: missing a link to ${url}.`);
+  }
+}
+
+const llmsFull = await exportedText("llms-full.txt");
+if (llmsFull !== undefined) {
+  for (const url of publishedPages.filter((url) => url.includes("/docs/"))) {
+    if (!llmsFull.includes(`<!-- Source: ${url} -->`)) errors.add(`llms-full.txt: missing the page ${url}.`);
+  }
+  if (/-->\n\n---\n/.test(llmsFull)) errors.add("llms-full.txt: front matter was not removed.");
+  if (/\]\((?![a-z]+:|#)[^)]*\.md\b/i.test(llmsFull)) errors.add("llms-full.txt: has relative Markdown links.");
+}
+
+const home = await exportedText("index.html");
+if (home !== undefined) {
+  const types = new Set<string>();
+  for (const [, json] of home.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
+    try {
+      const data = JSON.parse(json ?? "") as { "@graph"?: { "@type"?: string; contactPoint?: unknown }[] };
+      for (const node of data["@graph"] ?? []) {
+        if (node["@type"]) types.add(node["@type"]);
+        if (node["@type"] === "Organization" && !node.contactPoint) {
+          errors.add("index.html: Organization JSON-LD needs a contactPoint.");
+        }
+      }
+    } catch {
+      errors.add("index.html: JSON-LD is not valid JSON.");
+    }
+  }
+  for (const type of ["Organization", "SoftwareApplication", "WebSite"]) {
+    if (!types.has(type)) errors.add(`index.html: missing ${type} JSON-LD.`);
+  }
+  if (!/<html[^>]* lang="en"/.test(home)) errors.add('index.html: missing <html lang="en">.');
+}
+
+const notFound = await exportedText("404.html");
+if (notFound !== undefined) {
+  for (const link of ["/sitemap.xml", "/llms.txt"]) {
+    if (!notFound.includes(`href="${basePath}${link}"`)) errors.add(`404.html: missing a link to ${link}.`);
+  }
+}
+
 if (errors.size > 0) {
   console.error(`Static export verification failed (${errors.size} issue${errors.size === 1 ? "" : "s"}):`);
   for (const error of [...errors].sort().slice(0, 60)) console.error(`- ${error}`);
@@ -286,6 +359,6 @@ if (errors.size > 0) {
 
 console.log(
   `Verified ${docsFiles.length} docs pages, ${htmlFiles.length} HTML files, ${checkedLinks} internal links/assets, ` +
-    `${checkedAnchors} anchors, ${checkedCards} unique social cards, static search, and .nojekyll ` +
+    `${checkedAnchors} anchors, ${checkedCards} unique social cards, static search, agent files, and .nojekyll ` +
     `(base path: ${basePath || "/"}).`,
 );

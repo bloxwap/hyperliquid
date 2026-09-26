@@ -169,6 +169,11 @@ textarea:focus-visible {
   line-height: 1.7;
   color: var(--color-text-muted);
 }
+.hero-description a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .hero-actions {
   display: flex;
   align-items: center;
@@ -388,6 +393,11 @@ textarea:focus-visible {
 }
 .landing-footer a:hover {
   color: var(--color-accent);
+}
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: --spacing(4);
 }
 
 /* Entrance: three attention layers, 200 ms apart — headline, then supporting copy and actions,

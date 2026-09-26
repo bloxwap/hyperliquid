@@ -2,6 +2,7 @@ import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { InstallCommand } from "@/components/install-command";
+import { homeStructuredData, jsonLdScript, organization } from "@/lib/agent";
 import { baseOptions } from "@/lib/layout.shared";
 
 const features = [
@@ -28,6 +29,11 @@ const features = [
 export default function Home() {
   return (
     <HomeLayout {...baseOptions()}>
+      <script
+        type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: static JSON-LD, escaped by jsonLdScript.
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(homeStructuredData()) }}
+      />
       <main className="landing">
         <div className="hero">
           <div className="hero-copy">
@@ -106,9 +112,15 @@ export default function Home() {
         </div>
         <footer className="landing-footer">
           <span>Built by Bloxwap. Open source, MIT licensed.</span>
-          <a href="https://github.com/bloxwap/hyperliquid">
-            View on GitHub <ArrowUpRight size={14} aria-hidden />
-          </a>
+          <nav className="footer-links" aria-label="Company and agent resources">
+            <a href={organization.about}>About</a>
+            <a href={organization.contact}>Contact</a>
+            <a href={organization.privacy}>Privacy</a>
+            <a href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/llms.txt`}>llms.txt</a>
+            <a href="https://github.com/bloxwap/hyperliquid">
+              View on GitHub <ArrowUpRight size={14} aria-hidden />
+            </a>
+          </nav>
         </footer>
       </main>
     </HomeLayout>
