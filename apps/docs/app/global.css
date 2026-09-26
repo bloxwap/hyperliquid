@@ -126,11 +126,14 @@ textarea:focus-visible {
 }
 
 /* Landing */
+/* Same column as the header: Fumadocs centers the nav in --fd-layout-width and insets its
+   content 16px, so matching both lines the hero up with the logo and the code window with the
+   header's right-hand controls at every width. */
 .landing {
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--fd-layout-width, 1400px);
   margin: auto;
-  padding: --spacing(24) --spacing(8) --spacing(6);
+  padding: --spacing(24) --spacing(4) --spacing(6);
 }
 .hero {
   display: grid;
@@ -270,10 +273,9 @@ textarea:focus-visible {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
 }
-/* The landing page's one emphasis surface. */
+/* Cards are fill-only: a raised surface and a radius, never a stroke. */
 .code-window {
   overflow: hidden;
-  border: 1px solid var(--color-line);
   border-radius: var(--radius-xl);
   background: var(--color-surface-raised);
   color: var(--color-text);
@@ -297,6 +299,24 @@ textarea:focus-visible {
   height: 6px;
   border-radius: 50%;
   background: var(--muted);
+}
+.code-actions {
+  display: flex;
+  align-items: center;
+  gap: --spacing(3);
+}
+.code-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: --spacing(1);
+  margin: calc(--spacing(1) * -1);
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--color-text-muted);
+  transition: color var(--duration-interactive) var(--ease-out);
+}
+.code-copy:hover {
+  color: var(--color-text);
 }
 .code-language {
   font-size: var(--text-2xs);
@@ -332,15 +352,22 @@ textarea:focus-visible {
   color: var(--color-text-muted);
 }
 
-/* Feature links: grouped by whitespace, not boxed. */
+/* Feature links: fill-only cards, matching the code window. */
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: --spacing(12);
+  gap: --spacing(4);
   margin-top: --spacing(20);
 }
 .feature-card {
   display: block;
+  padding: --spacing(6);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-raised);
+  transition: background-color var(--duration-interactive) var(--ease-out);
+}
+.feature-card:hover {
+  background: color-mix(in oklab, var(--color-surface-raised) 88%, var(--color-text));
 }
 .feature-number {
   font-family: var(--font-mono);
@@ -460,8 +487,17 @@ textarea:focus-visible {
 }
 .prose details {
   padding: --spacing(3) --spacing(4);
-  border: 1px solid var(--color-line);
   border-radius: var(--radius);
+  background: var(--color-surface-raised);
+}
+/* Fumadocs code blocks: its card fill is the page black, so swap the stroke for a raised fill. */
+.prose figure.shiki:not(.bg-fd-secondary) {
+  border: 0;
+  box-shadow: none;
+  background: var(--color-surface-raised);
+}
+.prose figure.shiki > .border-b {
+  border-bottom: 0;
 }
 .prose summary {
   cursor: pointer;
@@ -490,6 +526,40 @@ textarea:focus-visible {
 .docs-app-link:hover {
   background: var(--color-surface-raised);
   color: var(--color-accent);
+}
+
+/* Search box (Fumadocs' full search trigger, in the header and the docs sidebar): a fill-only
+   pill like the hero buttons, with borderless key chips one step lighter than the box. */
+[data-search-full] {
+  gap: --spacing(2);
+  min-height: --spacing(9);
+  padding: 0 --spacing(1.5) 0 --spacing(3);
+  border: 0;
+  border-radius: 9999px;
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  transition:
+    background-color var(--duration-interactive) var(--ease-out),
+    color var(--duration-interactive) var(--ease-out);
+}
+[data-search-full]:hover {
+  background: color-mix(in oklab, var(--color-surface-raised) 88%, var(--color-text));
+  color: var(--color-text);
+}
+[data-search-full] kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: --spacing(6);
+  height: --spacing(6);
+  padding: 0 --spacing(1.5);
+  border: 0;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-surface-raised) 80%, var(--color-text));
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
 }
 
 /* Search dialog: focus shows as an accent line under the field, matching the dialog's own edges,
@@ -567,12 +637,12 @@ textarea:focus-visible {
   }
   .feature-grid {
     margin-top: --spacing(12);
-    gap: --spacing(8);
+    gap: --spacing(4);
   }
 }
 @media (max-width: 540px) {
   .landing {
-    padding: --spacing(9) --spacing(5) --spacing(6);
+    padding: --spacing(9) --spacing(4) --spacing(6);
   }
   .hero h1 {
     font-size: clamp(40px, 12vw, 56px);
@@ -597,7 +667,7 @@ textarea:focus-visible {
   }
   .feature-grid {
     grid-template-columns: 1fr;
-    gap: --spacing(6);
+    gap: --spacing(3);
     margin-top: --spacing(10);
   }
   .feature-card p {
@@ -616,7 +686,9 @@ textarea:focus-visible {
   }
   .button-primary,
   .button-secondary,
+  .feature-card,
   .feature-card h2,
+  [data-search-full],
   .feature-card h2 > svg,
   .search-header {
     transition: none;
