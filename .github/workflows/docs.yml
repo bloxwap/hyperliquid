@@ -6,27 +6,27 @@ on:
       - main
     paths:
       - "README.md"
-      - "docs/**"
-      - "website/**"
-      - ".dev/docs_check.ts"
+      - "apps/docs/**"
+      - "packages/hyperliquid/README.md"
       - ".github/CODEOWNERS"
       - ".github/workflows/docs.yml"
       - ".lycheeignore"
       - ".markdownlint-cli2.jsonc"
       - "package.json"
       - "bun.lock"
+      - "bunfig.toml"
   pull_request:
     paths:
       - "README.md"
-      - "docs/**"
-      - "website/**"
-      - ".dev/docs_check.ts"
+      - "apps/docs/**"
+      - "packages/hyperliquid/README.md"
       - ".github/CODEOWNERS"
       - ".github/workflows/docs.yml"
       - ".lycheeignore"
       - ".markdownlint-cli2.jsonc"
       - "package.json"
       - "bun.lock"
+      - "bunfig.toml"
   workflow_dispatch:
 
 permissions:
@@ -58,16 +58,12 @@ jobs:
       - name: Check documentation structure and formatting
         run: bun run check:docs
 
-      - name: Install website dependencies
-        working-directory: website
-        run: bun install --frozen-lockfile
-
       - name: Check documentation website types
-        working-directory: website
+        working-directory: apps/docs
         run: bun run check
 
       - name: Build static documentation website
-        working-directory: website
+        working-directory: apps/docs
         run: bun run build
 
       - name: Check documentation links
@@ -79,7 +75,8 @@ jobs:
             --max-retries 3
             --timeout 20
             README.md
-            'docs/**/*.md'
+            packages/hyperliquid/README.md
+            'apps/docs/content/docs/**/*.md'
           fail: true
           failIfEmpty: true
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -88,7 +85,7 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
-          path: website/out
+          path: apps/docs/out
 
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

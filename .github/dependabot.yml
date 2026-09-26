@@ -9,12 +9,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-  # Reads package.json + bun.lock. The `@jsr/*` dependencies resolve through the registry pinned in .npmrc.
+  # One workspace lockfile covers packages/hyperliquid and apps/docs.
   - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"
   - package-ecosystem: "bun"
-    directory: "/website"
+    # TS7 is deliberately isolated from the SDK's TypeScript 5 toolchain.
+    directory: "/packages/hyperliquid/.dev/ts7"
     schedule:
       interval: "weekly"

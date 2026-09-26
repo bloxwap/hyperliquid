@@ -1,12 +1,10 @@
 [install]
-# Supply-chain protection: refuse dependency versions published within the last 3 days (259200
-# seconds). Just-published malicious releases — compromised maintainer accounts, hijacked
-# packages — are typically pulled from the registry within that window.
+# Preserve each workspace's declared dependencies, including the docs app's local Tailwind sources.
+linker = "isolated"
+# Match the SDK's supply-chain protection for every workspace installation.
 minimumReleaseAge = 259200
 
 [test]
-# Run the whole suite without a global `CloseEvent`, so the WebSocket transport's local
-# fallback class (its older-runtime path) is what every close event exercises.
-preload = ["./tests/_noCloseEvent.ts"]
-# Test and development tooling files should not count toward the library's coverage numbers.
-coveragePathIgnorePatterns = ["tests/**", ".dev/**"]
+# Keep direct `bun test` at the workspace root consistent with the SDK's test setup.
+preload = ["./packages/hyperliquid/tests/_noCloseEvent.ts"]
+coveragePathIgnorePatterns = ["packages/hyperliquid/tests/**", "packages/hyperliquid/.dev/**", "apps/**"]

@@ -24,8 +24,9 @@ jobs:
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
     with:
       # Explicit lockfiles instead of the default recursive `-r ./`: bun audit skips every @jsr/*
-      # package ("do not come from the default registry"), and .dev/ts7 resolves crypto-critical
-      # deps (@noble/hashes, valibot) through JSR. Include the isolated documentation site too.
+      # package ("do not come from the default registry"), and the SDK's .dev/ts7 resolves
+      # crypto-critical deps (@noble/hashes, valibot) through JSR. The root workspace lockfile
+      # covers both the SDK and documentation app; TS7 retains its isolated lockfile.
       #
       # Known residual gap (verified 2026-07-26 against OSV-Scanner v2.4.0): OSV has no JSR
       # ecosystem, and @jsr/scope__name aliases do not match npm advisories — e.g.
@@ -35,8 +36,7 @@ jobs:
       # match if OSV ever learns the alias.
       scan-args: |-
         --lockfile=bun.lock
-        --lockfile=.dev/ts7/bun.lock
-        --lockfile=website/bun.lock
+        --lockfile=packages/hyperliquid/.dev/ts7/bun.lock
       # Keep SARIF upload disabled; results are available as a build artifact and
       # the job fails on any vulnerability. The callee still requires the permissions above.
       upload-sarif: false

@@ -1,4 +1,4 @@
-# Dependencies (root install, plus the pinned TypeScript 7 gate under .dev/ts7).
+# Dependencies (workspace install, plus the SDK's isolated TypeScript 7 gate).
 node_modules/
 
 # Output of `bun run build`.
@@ -13,16 +13,17 @@ coverage/
 
 # Local agent prompts under .dev/ can reference private repos; keep them out of this public one.
 .dev/*.md
+packages/hyperliquid/.dev/*.md
 
 # macOS Finder metadata.
 .DS_Store
 
 # Generated documentation website files.
-website/.next/
-website/.source/
-website/out/
-website/next-env.d.ts
-website/tsconfig.tsbuildinfo
+apps/docs/.next/
+apps/docs/.source/
+apps/docs/out/
+apps/docs/next-env.d.ts
+apps/docs/tsconfig.tsbuildinfo
 
 # Local secrets. Tests load `PRIVATE_KEY` from the environment, and Bun auto-loads `.env` —
 # a funded key must never be committable.
