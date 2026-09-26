@@ -12,7 +12,7 @@
   <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue&style=flat-square"></a>
   <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@bloxwap/hyperliquid.svg?style=flat-square"></a>
   <a href="https://codecov.io/gh/bloxwap/hyperliquid"><img alt="Codecov coverage" src="https://img.shields.io/codecov/c/github/bloxwap/hyperliquid?branch=main&style=flat-square"></a>
-  <a href="https://bundlephobia.com/package/@bloxwap/hyperliquid"><img alt="Bundle size" src="https://img.shields.io/bundlephobia/minzip/@bloxwap/hyperliquid?style=flat-square"></a>
+  <a href="https://bundlejs.com/?q=@bloxwap/hyperliquid&amp;config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22viem%22%2C%22tiny-secp256k1%22%2C%22hash-wasm%22%5D%7D%7D"><img alt="Bundle size" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdeno.bundlejs.com%2F%3Fq%3D%40bloxwap%2Fhyperliquid%26config%3D%257B%2522esbuild%2522%253A%257B%2522external%2522%253A%255B%2522viem%2522%252C%2522tiny-secp256k1%2522%252C%2522hash-wasm%2522%255D%257D%257D&amp;query=%24.size.compressedSize&amp;label=minzipped+size&amp;style=flat-square&amp;color=blue"></a>
 </p>
 
 ## Features
