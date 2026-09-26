@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getMDXComponents } from "@/components/mdx";
 import { source } from "@/lib/source";
+import { homeDescription, socialMetadata } from "@/lib/social";
 
 type PageProps = { params: Promise<{ slug?: string[] }> };
 
@@ -48,5 +49,8 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const page = source.getPage((await params).slug);
   if (!page) notFound();
-  return { title: page.data.title, description: page.data.description };
+  return {
+    ...socialMetadata(page.url, `${page.data.title} · Hyperliquid SDK`, page.data.description ?? homeDescription),
+    title: page.data.title,
+  };
 }
