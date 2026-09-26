@@ -6,6 +6,7 @@ const columns = [
   {
     title: "Product",
     links: [
+      { label: "Home", href: "https://bloxwap.com" },
       { label: "Web", href: "https://bloxwap.app" },
       { label: "Pro", href: "https://bloxwap.pro" },
       { label: "App", href: "https://bloxwap.com/#app" },
