@@ -22,7 +22,8 @@ runTest({
     const szDecimals = symbolConverter.getSzDecimals("SOL")!;
     const midPx = allMids["SOL"];
 
-    const sz = formatSize(60 / parseFloat(midPx), szDecimals);
+    // Leave room for size rounding above the $100 minimum TWAP notional.
+    const sz = formatSize(110 / parseFloat(midPx), szDecimals);
     const pxUp = formatPrice(parseFloat(midPx) * 1.5, szDecimals);
     const pxDown = formatPrice(parseFloat(midPx) * 0.5, szDecimals);
 

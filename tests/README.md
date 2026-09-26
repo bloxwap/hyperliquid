@@ -28,6 +28,11 @@ bun run perf:gate
 
 `test` and `test:offline` in `package.json` are the same invocations as the first two commands above.
 
+Live Info and Subscription tests default to testnet. Their `runTest` helpers accept `isTestnet: false` for
+read-only mainnet fixtures; the TWAP history tests use this to cover trigger and stop prices and their statuses.
+Exchange tests and subscriptions that create orders use testnet. TWAP integration tests target a $110 notional
+to leave room for size rounding above the $100 minimum.
+
 ## Conventions
 
 Shared harnesses live at the top level of `tests/` and are prefixed with `_`:

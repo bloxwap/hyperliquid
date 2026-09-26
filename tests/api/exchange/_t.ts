@@ -305,8 +305,8 @@ export async function createTWAP(
   const szDecimals = symbolConverter.getSzDecimals(symbol)!;
   const midPx = allMids[symbol];
 
-  // Calculate order parameters
-  const sz = formatSize(55 / Number(midPx), szDecimals);
+  // Leave room for size rounding above the $100 minimum TWAP notional.
+  const sz = formatSize(110 / Number(midPx), szDecimals);
 
   // Place TWAP order
   const result = await client.twapOrder({

@@ -1,3 +1,8 @@
+---
+title: Known documentation drift
+description: Verified differences between the official Hyperliquid documentation, live servers, and SDK types.
+---
+
 # Known documentation drift
 
 A living list of places where the
@@ -77,10 +82,11 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   [#48](https://github.com/bloxwap/hyperliquid/issues/48).
 - **Docs claim:** `twapStates` frames carry the documented `TwapState` fields only.
 - **Server reality:** frames now also include `trigger` and `stopPx`.
-- **SDK behavior:** runtime unaffected — subscription payloads are delivered to listeners as received, so the new
-  fields are present on the objects your listener gets. The `TwapState` **type**
-  (`src/api/info/_methods/_base/_schemas.ts`) does not declare them yet, so they are invisible to TypeScript until
-  #48 lands.
+- **SDK behavior:** supported — `TwapState` declares both fields as optional and nullable, preserving compatibility
+  with older responses. Set a trigger through `twapOrder.details.t` (`{ p, a }`) and a stop price through
+  `twapOrder.details.s`; either setting can be `null`. Responses use `trigger: { px, above }` and `stopPx`.
+  Live mainnet history tests cover non-null values and the `waitingForTrigger` / `stopped` statuses; offline
+  fixtures also cover older responses that omit the fields. The original type gap tracked in #48 is fixed.
 
 ### 8. Outcome markets have no documented price/size precision
 
@@ -116,21 +122,41 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   `registerTemplate` variant (and the `settleQuestion2` variant added alongside it), so live votes validate. The
   docs still don't show the variant, so this entry stays open until they do.
 
-### 11. Aug-2026 outcome-template surface is undocumented
+### 11. Aug-2026 outcome-template API snapshot
 
 - **Observed:** 2026-08-23.
-- **Docs claim:** the info-endpoint and exchange-endpoint pages have no entries for `outcomeTemplates`,
+- **Docs at that date:** the info-endpoint and exchange-endpoint pages had no entries for `outcomeTemplates`,
   `usdcRouting`, `activateOutcomeDeployer`, the `spotDeploy` outcome sub-actions
   (`registerStandaloneOutcomeFromTemplate`, `registerQuestionFromTemplate`, `settleOutcome`, `settleQuestion2`),
   `twapOrder`'s `details` (trigger/stop), `reserveRequestWeight`'s `destination`, or `marginTable`'s `dex`
   parameter.
-- **Server reality:** all of the above are live — they shipped in the Aug-2026 "HIP-4 outcome templates" API drop.
-- **SDK behavior:** supported — schemas were implemented against the reference TypeScript SDK
+- **Server at that date:** these additions shipped in the Aug-2026 "HIP-4 outcome templates" API drop.
+- **SDK behavior:** the August schemas were implemented against the reference TypeScript SDK
   ([nktkas/hyperliquid](https://github.com/nktkas/hyperliquid) v0.33.3), which tracks the deployed API, then
   widened where live testnet responses went further: `outcomeTemplates` serves keyword formats `uDecimal`, `uInt`,
   and `shortString` and a `role` union of `standaloneOutcome` / `questionOutcome` / `"question"` that the upstream
-  schema doesn't cover (observed 2026-08-24). If the official docs publish different shapes when they catch up,
-  reconcile the schemas then.
+  schema doesn't cover (observed 2026-08-24). The deployment action formats have since changed on testnet;
+  see [the September verification](#12-hip-4-deployment-now-requires-venues) for the remaining compatibility gap.
+
+### 12. HIP-4 deployment now requires venues
+
+- **Verified:** 2026-09-26 against `https://api.hyperliquid-testnet.xyz`.
+- **Docs:** [HIP-4 deployer actions](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions)
+  describe activation with `activate: { venueName }` or `deactivate: null`, and deployment through
+  `outcomeDeploy` with `venue` and `operation`.
+- **Server reality:** both activation variants and all six documented deployment operations parse successfully
+  and reach signature recovery. The legacy `isDeactivate` forms and `spotDeploy.outcome` registration return
+  HTTP 422. Omitting `venue` or a standalone template's `deployerFeeScale` also returns HTTP 422.
+- **Verification scope:** every exchange probe uses `r = s = 0`, an invalid ECDSA signature. Recognized formats
+  return `Unable to recover signer.` No action executes. These results verify request parsing, not staking,
+  permissions, settlement rules, or successful deployment. Repeat with
+  `bun run .dev/verify_hip4_actions.ts`.
+- **SDK gap:** `activateOutcomeDeployer` still requires `isDeactivate`, and deployment operations still use
+  `spotDeploy.outcome`. The SDK needs the new activation union and an `outcomeDeploy` method, including template
+  fee scales, `registerAndAssociateNamedOutcomeFromTemplate`, and `setSubDeployers`.
+- **Read API gap:** testnet `outcomeMeta` also returns top-level `deployers` and `feeScale`, and optional per-outcome
+  `venue` and `deployerFeeScale`, which the current response type does not declare. The queried templates still
+  omit the documented `semanticRestriction` field; its live shape remains unverified.
 
 ## Resolved
 

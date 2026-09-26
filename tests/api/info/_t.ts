@@ -14,15 +14,15 @@ import { createTestContext, type TestContext } from "../../_testContext.ts";
 
 const WAIT = 5000;
 
-/** Generous per-test budget: every case pays the rate-limit delay plus one or more testnet round trips. */
+/** Generous per-test budget: every case pays the rate-limit delay plus one or more API round trips. */
 const TIMEOUT = 120_000;
 
 // ============================================================
 // Preparation
 // ============================================================
 
-const transport = new HttpTransport({ isTestnet: true, timeout: 30_000 });
-const client = new InfoClient({ transport });
+const testnetClient = new InfoClient({ transport: new HttpTransport({ isTestnet: true, timeout: 30_000 }) });
+const mainnetClient = new InfoClient({ transport: new HttpTransport({ timeout: 30_000 }) });
 
 // ============================================================
 // Test
@@ -34,21 +34,23 @@ const client = new InfoClient({ transport });
  * @param options Test options including name and test function
  * @param options.name Name of the test
  * @param options.ignore Whether to skip the test
+ * @param options.isTestnet Uses the testnet API when true; defaults to `true`
  * @param options.codeTestFn Async function containing the test code, receives a test context and shared InfoClient
  */
 export function runTest(options: {
   name: string;
   ignore?: boolean;
-  codeTestFn: (t: TestContext, client_: typeof client) => Promise<void>;
+  isTestnet?: boolean;
+  codeTestFn: (t: TestContext, client_: typeof testnetClient) => Promise<void>;
 }): void {
-  const { name, ignore, codeTestFn } = options;
+  const { name, ignore, isTestnet = true, codeTestFn } = options;
 
   test.skipIf(OFFLINE || ignore === true)(
     name,
     async () => {
       await new Promise((r) => setTimeout(r, WAIT)); // delay to avoid rate limits
 
-      await codeTestFn(createTestContext([name]), client);
+      await codeTestFn(createTestContext([name]), isTestnet ? testnetClient : mainnetClient);
     },
     TIMEOUT,
   );

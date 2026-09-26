@@ -16,10 +16,13 @@ const paramsSchema = valibotToJsonSchema(v.omit(UserTwapHistoryRequest, ["type"]
 runTest({
   name: "userTwapHistory",
   mode: "api",
+  isTestnet: false,
   fn: async (_t, client) => {
     const params: UserTwapHistoryParameters[] = [
-      { user: "0x563C175E6f11582f65D6d9E360A618699DEe14a9" },
-      { user: "0xe019d6167E7e324aEd003d94098496b6d986aB05" },
+      { user: "0x03ce7863a2b62f4e227fd98605b79beb32618c76" }, // trigger.above: true
+      { user: "0x0132157369b0d073dd99011da1777920a025fd77" }, // trigger.above: false
+      { user: "0x051748895c6ed4fab50828bebe8e62e665134d23" }, // stopped and non-null stopPx
+      { user: "0x06d5af06a3a7d29909e1cdc7a9deded2fb14ab57" }, // additional triggered TWAPs
     ];
 
     const data = await collectEventsOverTime<UserTwapHistoryEvent>(async (cb) => {
@@ -27,13 +30,15 @@ runTest({
     }, 10_000);
 
     schemaCoverage(paramsSchema, params);
-    // trigger/stopPx always arrive as null on the wire (not settable via the current TWAP order
-    // action), so their missing/non-null branches are uncoverable live.
+    // Snapshots contain fewer entries than REST history and can omit errors and older entries
+    // without trigger/stopPx or twapId. The offline twapHistory fixtures cover those branches
+    // of the shared response type; these live accounts exercise trigger and stop prices/statuses.
     schemaCoverage(responseSchema, data, [
       "#/properties/isSnapshot/missing",
       "#/properties/history/items/properties/state/properties/trigger/missing",
       "#/properties/history/items/properties/state/properties/stopPx/missing",
-      "#/properties/history/items/properties/state/properties/stopPx/defined",
+      "#/properties/history/items/properties/status/anyOf/1",
+      "#/properties/history/items/properties/twapId/missing",
     ]);
   },
 });
