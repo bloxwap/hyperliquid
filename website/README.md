@@ -29,7 +29,7 @@ cd ..
 bun run docs:dev
 ```
 
-Open `http://localhost:3000`. No environment variables or API credentials are needed.
+Open `http://localhost:3900`. No environment variables or API credentials are needed.
 Use Node.js 22.12+ and the same Bun version as the repository's CI.
 
 ## Edit content
