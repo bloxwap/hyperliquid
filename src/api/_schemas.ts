@@ -12,10 +12,46 @@ import { HyperliquidError } from "../_base.ts";
 // Number
 // ============================================================
 
+/**
+ * `v.union([v.string(), v.number()])` with its accepting path short-circuited.
+ *
+ * Valibot's union tries its options in order, and a failed option allocates an issue before the next
+ * one is tried — so every number passing through `union([string, number])` paid for a discarded
+ * "expected string" issue (~45 ns of the ~85 ns an `UnsignedInteger` parse cost). Here a string or a
+ * non-NaN number is accepted with one `typeof`, producing exactly the dataset the union's matching
+ * option would (`{ value, typed: true }`); anything else runs the real union, so issues and messages
+ * are unchanged. The schema object is otherwise the union itself — same `type`, `options` and
+ * `expects` — which keeps JSON Schema generation and introspection identical.
+ */
+function stringOrNumber(): StringOrNumberSchema {
+  const base = stringOrNumberUnion();
+  type Run = (typeof base)["~run"];
+  const run: Run = base["~run"].bind(base);
+  const fastRun: Run = (dataset: Parameters<Run>[0], config: Parameters<Run>[1]): ReturnType<Run> => {
+    const value = dataset.value;
+    if (typeof value === "string" || (typeof value === "number" && !Number.isNaN(value))) {
+      return { typed: true, value } as ReturnType<Run>;
+    }
+    return run(dataset, config);
+  };
+  // Copy descriptors rather than spreading, so the lazy `~standard` getter stays a getter.
+  const descriptors: PropertyDescriptorMap = Object.getOwnPropertyDescriptors(base);
+  descriptors["~run"] = { ...descriptors["~run"], value: fastRun };
+  return Object.defineProperties({}, descriptors) as typeof base;
+}
+
+/** The union {@linkcode stringOrNumber} wraps. */
+type StringOrNumberSchema = v.UnionSchema<[v.StringSchema<undefined>, v.NumberSchema<undefined>], undefined>;
+
+/** Builds the union {@linkcode stringOrNumber} wraps. */
+function stringOrNumberUnion(): StringOrNumberSchema {
+  return v.union([v.string(), v.number()]);
+}
+
 /** Unsigned decimal number as a string (e.g., "123.45"). */
 export const UnsignedDecimal = /* @__PURE__ */ (() => {
   return v.pipe(
-    v.union([v.string(), v.number()]),
+    stringOrNumber(),
     v.toString(),
     v.string(), // HACK: for correct JSONSchema generation
     v.transform((value) => normalizeDecimalString(value)),
@@ -27,7 +63,7 @@ export type UnsignedDecimal = v.InferOutput<typeof UnsignedDecimal>;
 /** Decimal number as a string, can be negative (e.g., "-123.45"). */
 export const Decimal = /* @__PURE__ */ (() => {
   return v.pipe(
-    v.union([v.string(), v.number()]),
+    stringOrNumber(),
     v.toString(),
     v.string(), // HACK: for correct JSONSchema generation
     v.transform((value) => normalizeDecimalString(value)),
@@ -39,7 +75,7 @@ export type Decimal = v.InferOutput<typeof Decimal>;
 /** Safe integer number (>= Number.MIN_SAFE_INTEGER & <= Number.MAX_SAFE_INTEGER). */
 export const Integer = /* @__PURE__ */ (() => {
   return v.pipe(
-    v.union([v.string(), v.number()]),
+    stringOrNumber(),
     v.toNumber(),
     v.number(), // HACK: for correct JSONSchema generation
     v.safeInteger(),
@@ -50,7 +86,7 @@ export type Integer = v.InferOutput<typeof Integer>;
 /** Unsigned safe integer number (>= 0 & <= Number.MAX_SAFE_INTEGER). */
 export const UnsignedInteger = /* @__PURE__ */ (() => {
   return v.pipe(
-    v.union([v.string(), v.number()]),
+    stringOrNumber(),
     v.toNumber(),
     v.number(), // HACK: for correct JSONSchema generation
     v.safeInteger(),

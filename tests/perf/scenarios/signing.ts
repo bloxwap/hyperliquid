@@ -106,6 +106,7 @@ for (const count of [1, 100] as const) {
     unit: "order",
     unitsPerIteration: count,
     iterations: count === 1 ? 2000 : 100,
+    keccak: "noble",
     setup: () => ({ action: orderAction(count) }),
     run: ({ action }: { action: Record<string, unknown> }) => {
       createL1ActionHash({ action, nonce: NONCE });
@@ -351,6 +352,7 @@ scenario({
   description: "createL1AgentDigest(): hand-rolled EIP-712 digest of the fixed L1 Agent message",
   unit: "digest",
   iterations: 5000,
+  keccak: "noble",
   run: () => {
     createL1AgentDigest(AGENT_ACTION_HASH, true);
   },
@@ -406,6 +408,7 @@ scenario({
   description: "createMultiSigDigest(): hand-rolled EIP-712 digest of the fixed SendMultiSig outer message",
   unit: "digest",
   iterations: 5000,
+  keccak: "noble",
   run: () => {
     createMultiSigDigest(MULTI_SIG_ACTION_HASH, NONCE, "0x66eee", true);
   },
@@ -555,6 +558,7 @@ if (hashWasmAvailable) {
       unit: "order",
       unitsPerIteration: count,
       iterations: count === 1 ? 2000 : 100,
+      keccak: "wasm",
       setup: async () => {
         await preloadWasmKeccak();
         return { action: orderAction(count) };
@@ -572,6 +576,7 @@ if (hashWasmAvailable) {
       "createL1AgentDigest() with the WASM keccak provider (hash-wasm); opt-in counterpart of eip712_agent_digest",
     unit: "digest",
     iterations: 5000,
+    keccak: "wasm",
     setup: () => preloadWasmKeccak(),
     run: () => {
       createL1AgentDigest(AGENT_ACTION_HASH, true);
@@ -585,6 +590,7 @@ if (hashWasmAvailable) {
       "createMultiSigDigest() with the WASM keccak provider (hash-wasm); opt-in counterpart of eip712_multisig_digest",
     unit: "digest",
     iterations: 5000,
+    keccak: "wasm",
     setup: () => preloadWasmKeccak(),
     run: () => {
       createMultiSigDigest(MULTI_SIG_ACTION_HASH, NONCE, "0x66eee", true);

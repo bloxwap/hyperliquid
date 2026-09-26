@@ -23,6 +23,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { _setKeccakLoaderForTests, preloadWasmKeccak } from "../../src/signing/_keccak.ts";
 
 /** Extra scenario-specific numbers recorded alongside timing (e.g. `maxInFlight`). */
 export type ExtraMetrics = Record<string, number>;
@@ -58,6 +59,20 @@ export interface Scenario {
   unitsPerIteration?: number;
   /** Unit label for the report, e.g. `"order"`, `"frame"`, `"parse"`. Default `"op"`. */
   unit?: string;
+  /**
+   * The keccak provider the scenario measures, pinned (and fully loaded) before `setup` runs.
+   *
+   * The provider is process-wide and switches to the WASM one whenever a load settles, and
+   * `ExchangeClient` starts that load on construction. Unpinned, a scenario would measure noble
+   * or WASM depending on which scenarios ran before it and on when the event loop serviced the
+   * import. The default is `"wasm"` because that is what a caller gets: `ExchangeClient` loads
+   * it on construction (and a checkout without `hash-wasm` falls back to noble either way).
+   * `"noble"` is for the pure-JS counterparts of the `_wasm` scenarios, which exist to keep the
+   * fallback path measured.
+   *
+   * Default `"wasm"`.
+   */
+  keccak?: "noble" | "wasm";
 }
 
 /** Timing and derived statistics for one scenario. */
@@ -117,6 +132,8 @@ export function scenarioFingerprint(def: Scenario): string {
       warmupSamples: def.warmupSamples ?? 3,
       unitsPerIteration: def.unitsPerIteration ?? 1,
       unit: def.unit ?? "op",
+      // Only when set, so scenarios on the default provider keep their recorded fingerprints.
+      ...(def.keccak === undefined ? {} : { keccak: def.keccak }),
     }),
   );
   hash.update(def.run.toString());
@@ -204,6 +221,10 @@ export async function runScenario(def: Scenario): Promise<ScenarioResult> {
   const warmupSamples = def.warmupSamples ?? 3;
   const unitsPerIteration = def.unitsPerIteration ?? 1;
   const unit = def.unit ?? "op";
+
+  // Pin the keccak provider first: `setup` may construct clients that would otherwise kick a load.
+  _setKeccakLoaderForTests(def.keccak === "noble" ? () => Promise.resolve(undefined) : undefined);
+  await preloadWasmKeccak();
 
   const ctx = (await def.setup?.()) as never;
 

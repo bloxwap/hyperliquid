@@ -15,6 +15,7 @@
 import {
   type ISubscription,
   SubscriptionClient,
+  WebSocketQuota,
   type WebSocketRequestError,
   WebSocketTransport,
 } from "@bloxwap/hyperliquid";
@@ -134,8 +135,11 @@ scenario({
   },
   run: async () => {
     // A fresh transport per sample: subscription state accumulates, and the per-subscribe
-    // cost this scenario measures is a function of how many already exist.
-    const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+    // cost this scenario measures is a function of how many already exist. Its own
+    // accounting-only quota: the process-wide default paces subscribes against a 2000-message
+    // bucket this scenario alone drains (~5600 subscribes per run), after which it measured the
+    // 30 ms refill interval instead of the bookkeeping.
+    const transport = new WebSocketTransport({ url: "wss://perf.local/ws", quota: new WebSocketQuota() });
     await transport.ready();
     const client = new SubscriptionClient({ transport });
 
@@ -165,10 +169,15 @@ scenario({
   },
   run: async () => {
     // A fresh transport per sample: the burst's cost is a function of how many requests are in
-    // flight, and a reused transport would only accumulate settled subscriptions. The default
-    // 10 s request timeout is disabled: outbound pacing spreads the burst over ~15 s, and this
-    // scenario measures echo dispatch, not timeout behavior.
-    const transport = new WebSocketTransport({ url: "wss://perf.local/ws", timeout: null });
+    // flight, and a reused transport would only accumulate settled subscriptions. Its own
+    // accounting-only quota keeps outbound pacing out of the measurement: the shared default
+    // is drained by earlier scenarios and would trickle the burst out at one frame per 30 ms.
+    // The request timeout stays disabled so a slow machine cannot turn this into a timeout test.
+    const transport = new WebSocketTransport({
+      url: "wss://perf.local/ws",
+      timeout: null,
+      quota: new WebSocketQuota(),
+    });
     await transport.ready();
     const socket = lastMockWebSocket();
 
@@ -189,11 +198,11 @@ scenario({
     const client = new SubscriptionClient({ transport });
     const subs = Array.from({ length: BURST_SUBSCRIPTIONS }, (_, i) => client.l2Book({ coin: `BURST${i}` }, () => {}));
 
-    // Outbound pacing trickles the burst out over real time, so `frames` is still filling when
-    // Array.from returns; wait for the last subscribe to hit the wire before echoing, or the
-    // tail of the burst would never be answered.
+    // Subscribes reach the wire asynchronously, so `frames` may still be filling when
+    // Array.from returns; wait for the last one before echoing, or the tail of the burst would
+    // never be answered.
     while (frames.length < BURST_SUBSCRIPTIONS) {
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     // The server echoes each subscription verbatim, one frame per task; the microtask flushes

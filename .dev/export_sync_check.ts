@@ -137,6 +137,18 @@ async function parseClientExports(clientPath: string): Promise<Set<string>> {
     methods.add(methodName);
   }
 
+  // A method whose file declares no public types (e.g. `warmup`) has nothing to re-export, so it
+  // counts as covered when client.ts imports the function itself — which it must, to delegate to it.
+  const importPattern = /import\s+\{([^}]+)\}\s+from\s+["']\.\/_methods\/(\w+)\.ts["']/g;
+  const methodsDir = path.join(path.dirname(fullPath), "_methods");
+  for (const [, specifiers, methodName] of content.matchAll(importPattern)) {
+    if (methodName.startsWith("_") || methods.has(methodName)) continue;
+    const importsFunction = specifiers.split(",").some((spec) => spec.trim() === methodName);
+    if (!importsFunction) continue;
+    const methodSource = await Bun.file(path.join(methodsDir, `${methodName}.ts`)).text();
+    if (!/^export\s+(type|interface)\s/m.test(methodSource)) methods.add(methodName);
+  }
+
   return methods;
 }
 

@@ -119,5 +119,6 @@ export * from "./_methods/validatorSignerAction.ts";
 export * from "./_methods/vaultDistribute.ts";
 export * from "./_methods/vaultModify.ts";
 export * from "./_methods/vaultTransfer.ts";
+export * from "./_methods/warmup.ts";
 export * from "./_methods/withdraw.ts";
 export * from "./_methods/withdraw3.ts";

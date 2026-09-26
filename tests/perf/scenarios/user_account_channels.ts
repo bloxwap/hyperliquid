@@ -16,7 +16,7 @@
  * @module
  */
 
-import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
+import { SubscriptionClient, WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
 import { scenario } from "../_harness.ts";
 import { installMockWebSocket, lastMockWebSocket, type MockWebSocket, restoreWebSocket } from "../_helpers.ts";
 
@@ -237,8 +237,10 @@ scenario({
   },
   run: async () => {
     // A fresh transport per sample: subscription state accumulates, and the per-subscribe
-    // cost this scenario measures is a function of how many already exist.
-    const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+    // cost this scenario measures is a function of how many already exist. Its own
+    // accounting-only quota: the process-wide default is drained by earlier scenarios, after
+    // which each subscribe waited out the 30 ms pacing interval instead of measuring bookkeeping.
+    const transport = new WebSocketTransport({ url: "wss://perf.local/ws", quota: new WebSocketQuota() });
     await transport.ready();
     const client = new SubscriptionClient({ transport });
 

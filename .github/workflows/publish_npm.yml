@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Emits dist/ with its own package.json whose exports point at the compiled .js/.d.ts files.
+      # Emits dist/ (bundled .js, .d.ts, and a package.json whose exports point at them), verified by loading it in Node.
       - name: Build package
         run: bun run .dev/build/build.ts
 

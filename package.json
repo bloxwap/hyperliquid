@@ -31,7 +31,7 @@
     "node": ">=22.12.0"
   },
   "//exports": "Points at TypeScript sources: Bun consumes them directly, and self-referential imports (`@bloxwap/hyperliquid/...`) in tests, docs and JSDoc examples resolve without a build. The publishable package is emitted by `bun run build`, which writes dist/ with its own package.json whose exports point at .js/.d.ts.",
-  "//exports:narrow": "The `.` barrel re-exports all four clients plus the transports, so importing it evaluates the exchange and signing graph even for a read-only process: 69.5 ms on Node, 22.0 ms on Bun, against 41.0 / 8.3 ms for an info-only consumer entering through `./api/info/client` + `./transport`. The `./transport*` and `./api/*/client` keys below exist for that consumer — `.` stays the compatible default and nothing under src/ changed to add them.",
+  "//exports:narrow": "The `.` barrel re-exports all four clients plus the transports, so importing it evaluates the exchange and signing graph even for a read-only process: 25.2 ms on Node, 16.5 ms on Bun (published bundle), against 17.7 / 5.5 ms for an info-only consumer entering through `./api/info/client` + `./transport`, and 6.5 / 4.6 ms through `./api/info/client` + `./transport/http`. The `./transport*` and `./api/*/client` keys below exist for that consumer — `.` stays the compatible default and nothing under src/ changed to add them.",
   "exports": {
     ".": "./src/mod.ts",
     "./signing": "./src/signing/mod.ts",
@@ -95,6 +95,7 @@
     "@valibot/to-json-schema": "1.7.1",
     "ajv": "8.20.0",
     "decimal.js": "10.6.0",
+    "esbuild": "0.28.2",
     "markdownlint-cli2": "0.23.1",
     "ts-json-schema-generator": "2.9.0",
     "typescript": "5.9.3",

@@ -3,8 +3,16 @@
  *
  * The repository root `package.json` deliberately points its `exports` at TypeScript sources so Bun, the tests and the
  * JSDoc examples can consume the SDK without a build step. npm consumers need real JavaScript and declaration files,
- * so this script compiles `src/` with `tsc` and writes a second, publish-only manifest whose `exports` point at the
- * emitted `.js`/`.d.ts` files.
+ * so this script emits declarations with `tsc`, bundles the JavaScript with esbuild, and writes a second,
+ * publish-only manifest whose `exports` point at the emitted `.js`/`.d.ts` files.
+ *
+ * The JavaScript is bundled rather than emitted file-for-file because module count, not code size, dominated
+ * start-up: `tsc`'s one-file-per-module output made Node load ~95 modules for an info-only consumer (21.5 ms) and
+ * ~255 for the root barrel (59.4 ms). Each entry point is bundled with code splitting, so modules shared between
+ * entry points land in shared chunks and stay single instances — process-wide state such as the keccak provider,
+ * the nonce manager, the shared WebSocket quota and the error classes behind `instanceof` checks is never
+ * duplicated across subpath imports. Dependencies stay external: inlining them would duplicate a consumer's own
+ * copy of `valibot` and bypass the semver ranges in the manifest.
  *
  * @example
  * ```sh
@@ -17,6 +25,7 @@
 import { copyFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { build as esbuild } from "esbuild";
 
 // --- Layout ------------------------------------------------------------------
 
@@ -91,17 +100,87 @@ async function readRootManifest(): Promise<RootManifest> {
 }
 
 /**
- * Compiles `src/` into `dist/` as ESM plus declaration files.
+ * Emits declaration files for `src/` into `dist/` (JavaScript is emitted by {@linkcode bundleSources}).
  *
  * @throws If `tsc` reports any diagnostic; its output is streamed to this process' stdio.
  */
-async function compileSources(): Promise<void> {
+async function emitDeclarations(): Promise<void> {
   const tsc = Bun.spawn(["bunx", "tsc", "--project", BUILD_TSCONFIG], {
     cwd: ROOT_DIR,
     stdio: ["inherit", "inherit", "inherit"],
   });
   const code = await tsc.exited;
   if (code !== 0) throw new Error(`tsc exited with code ${code}`);
+}
+
+/**
+ * Bundles every export entry point into `dist/` as ESM, with shared modules split into `dist/_chunks/`.
+ *
+ * Entry files keep their source-relative paths (`src/api/info/client.ts` → `dist/api/info/client.js`), so they sit
+ * next to the declaration files `tsc` emits for them. Bare specifiers — the dependencies, and the optional ones
+ * loaded through dynamic `import()` — stay external. `platform: "neutral"` because the SDK runs in browsers as well
+ * as Node and Bun, and reaches Node built-ins only through runtime feature checks.
+ *
+ * esbuild rather than `Bun.build`: Bun 1.4's code splitting emitted an entry that re-exported a binding from a
+ * chunk it never imported (`export { AbstractWalletError }` in `dist/mod.js`), which Node rejects at link time.
+ *
+ * @param root - The parsed root manifest, whose `exports` targets are the entry points.
+ * @returns The number of JavaScript files written.
+ * @throws If the bundler reports any error.
+ */
+async function bundleSources(root: RootManifest): Promise<number> {
+  const result = await esbuild({
+    entryPoints: Object.values(root.exports).map((target) => join(ROOT_DIR, target)),
+    outbase: join(ROOT_DIR, "src"),
+    outdir: DIST_DIR,
+    tsconfig: BUILD_TSCONFIG,
+    bundle: true,
+    splitting: true,
+    format: "esm",
+    platform: "neutral",
+    target: "es2024",
+    packages: "external",
+    entryNames: "[dir]/[name]",
+    chunkNames: "_chunks/[name]-[hash]",
+    metafile: true,
+    logLevel: "warning",
+  });
+  return Object.keys(result.metafile.outputs).length;
+}
+
+/**
+ * Loads every emitted entry point in Node and checks that it exports exactly what its TypeScript source exports.
+ *
+ * A bundler that emits unlinkable ESM fails silently until a consumer imports the package — the `Bun.build` output
+ * this script once produced passed every in-repo check and only broke under Node's linker. Running the check as part
+ * of the build makes a broken bundle a failed build instead of a broken release.
+ *
+ * @param root - The parsed root manifest.
+ * @throws If Node cannot load an entry, or an entry's export names differ from its source's.
+ */
+async function verifyBundle(root: RootManifest): Promise<void> {
+  const expected: Record<string, string[]> = {};
+  for (const target of Object.values(root.exports)) {
+    const source = (await import(join(ROOT_DIR, target))) as Record<string, unknown>;
+    expected[toEmittedConditions(target).default] = Object.keys(source).sort();
+  }
+
+  const script = `
+    const entries = ${JSON.stringify(Object.keys(expected))};
+    const out = {};
+    for (const entry of entries) out[entry] = Object.keys(await import(new URL(entry, ${JSON.stringify(`file://${DIST_DIR}/`)}))).sort();
+    console.log(JSON.stringify(out));
+  `;
+  const node = Bun.spawn(["node", "--input-type=module", "-e", script], { cwd: ROOT_DIR, stderr: "inherit" });
+  const [stdout, code] = await Promise.all([new Response(node.stdout).text(), node.exited]);
+  if (code !== 0) throw new Error(`Node failed to load the bundled entry points (exit code ${code}).`);
+
+  const actual = JSON.parse(stdout) as Record<string, string[]>;
+  for (const [entry, names] of Object.entries(expected)) {
+    if (JSON.stringify(actual[entry]) !== JSON.stringify(names)) {
+      throw new Error(`Bundled ${entry} exports [${actual[entry]}], but its source exports [${names}].`);
+    }
+  }
 }
 
 /**
@@ -171,7 +250,8 @@ async function copyDocs(): Promise<void> {
 // --- Entry point -------------------------------------------------------------
 
 /**
- * Runs the full build: clean, compile, fix declaration specifiers, emit the manifest, copy docs.
+ * Runs the full build: clean, emit declarations, bundle, verify the bundle in Node, fix declaration specifiers, emit
+ * the manifest, copy docs.
  *
  * @throws If any step fails; the process exit code is left to the caller.
  */
@@ -179,12 +259,16 @@ export async function build(): Promise<void> {
   const root = await readRootManifest();
 
   await rm(DIST_DIR, { recursive: true, force: true });
-  await compileSources();
+  await emitDeclarations();
+  const bundled = await bundleSources(root);
+  await verifyBundle(root);
   const rewritten = await rewriteDeclarationExtensions(DIST_DIR);
   await writeDistManifest(root);
   await copyDocs();
 
-  console.log(`Built ${root.name}@${root.version} into dist/ (${rewritten} declaration files rewritten).`);
+  console.log(
+    `Built ${root.name}@${root.version} into dist/ (${bundled} JavaScript files, ${rewritten} declaration files rewritten).`,
+  );
 }
 
 if (import.meta.main) {

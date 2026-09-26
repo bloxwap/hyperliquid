@@ -247,18 +247,32 @@ function decodeBase64(data: string): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * Native synchronous raw-inflate, when the runtime has one.
+ * Native synchronous raw-inflate straight to text, when the runtime has one.
  *
- * `node:zlib` is reachable through `process.getBuiltinModule` on Node >= 22.3 and Bun. Using it
- * collapses the whole per-frame stream pipeline — a `DecompressionStream`, a writer, a reader and
- * four-plus promises — into one native call, which also removes the cross-task window that made a
- * frame's payload observable to a later frame. Browser / RN builds have no `process`, so they keep
- * the `DecompressionStream` path below. Resolved once at module load: the answer cannot change.
+ * Bun's own `Bun.inflateSync` (raw DEFLATE by default) is preferred there: it measured ~40% faster
+ * than `node:zlib` on a delta frame (1.9 vs 3.5 µs, most of it fixed per-call cost) and ~20% on a
+ * snapshot, with byte-identical output. It returns a plain `Uint8Array`, decoded with the shared
+ * `TextDecoder`. Elsewhere, `node:zlib` is reachable through `process.getBuiltinModule` on
+ * Node >= 22.3; its `inflateRawSync` returns a `Buffer`, whose `toString("utf8")` decodes the
+ * ASCII-heavy JSON measurably faster than a `TextDecoder`. Either collapses the whole per-frame
+ * stream pipeline — a `DecompressionStream`, a writer, a reader and four-plus promises — into one
+ * native call, which also removes the cross-task window that made a frame's payload observable to a
+ * later frame. Browser / RN builds have neither, so they keep the `DecompressionStream` path below.
+ * Resolved once at module load: the answer cannot change.
  */
-const INFLATE_RAW_SYNC: ((data: Uint8Array) => Uint8Array) | undefined = /* @__PURE__ */ (() => {
+const INFLATE_RAW_SYNC: ((data: Uint8Array) => string) | undefined = /* @__PURE__ */ (() => {
+  const bun = (globalThis as { Bun?: { inflateSync?: (data: Uint8Array) => Uint8Array } }).Bun;
+  const bunInflate = bun?.inflateSync;
+  if (typeof bunInflate === "function") return (data: Uint8Array): string => TEXT_DECODER.decode(bunInflate(data));
+
   const proc = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process;
   const zlib = proc?.getBuiltinModule?.("node:zlib") as { inflateRawSync?: (d: Uint8Array) => Uint8Array } | undefined;
-  return typeof zlib?.inflateRawSync === "function" ? zlib.inflateRawSync.bind(zlib) : undefined;
+  const zlibInflate = zlib?.inflateRawSync;
+  if (typeof zlibInflate !== "function") return undefined;
+  // The cast is structural: the declared return type stays `Uint8Array` so the browser/RN
+  // type-check stays clean, but node:zlib hands back a `Buffer`.
+  return (data: Uint8Array): string =>
+    (zlibInflate.call(zlib, data) as Uint8Array & { toString(encoding: "utf8"): string }).toString("utf8");
 })();
 
 /**
@@ -281,21 +295,16 @@ export function _setForceStreamDecompressForTests(force: boolean): void {
  * here, and the decoded length stands in for that path's full-string alphabet scan.
  */
 function decompressSync(data: string): FastAssetCtxsEvent {
-  const inflate = INFLATE_RAW_SYNC as (data: Uint8Array) => Uint8Array;
+  const inflateToText = INFLATE_RAW_SYNC as (data: Uint8Array) => string;
   const Buf = (globalThis as { Buffer?: { from(data: string, enc: string): Uint8Array } }).Buffer;
   if (Buf === undefined) {
     // No `Buffer` to decode through: fall back to the table decoder, but keep the sync inflater.
-    return JSON.parse(TEXT_DECODER.decode(inflate(decodeBase64(data))));
+    return JSON.parse(inflateToText(decodeBase64(data)));
   }
   if (data.length === 0 || data.length % 4 !== 0) throw new Error("Invalid base64");
   const pooled = Buf.from(data, "base64");
   if (pooled.byteLength !== expectedBase64Bytes(data)) throw new Error("Invalid base64");
-  // `inflate` returns a `Buffer` here (node:zlib), and `Buffer.toString("utf8")` decodes the
-  // ASCII-heavy JSON payload measurably faster than the shared TextDecoder — no decoder machinery.
-  // The cast is structural (same style as the node:zlib import above): the declared return type
-  // stays `Uint8Array` so browser/RN type-check stays clean.
-  const inflated = inflate(pooled) as Uint8Array & { toString(encoding: "utf8"): string };
-  return JSON.parse(inflated.toString("utf8"));
+  return JSON.parse(inflateToText(pooled));
 }
 
 /** Decode a base64 + raw DEFLATE (RFC 1951) payload into a {@linkcode FastAssetCtxsEvent}. */
