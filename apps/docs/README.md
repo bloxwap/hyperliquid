@@ -67,14 +67,17 @@ from the same Markdown frontmatter used by the site; new pages receive cards aut
 metadata share the same image, title, description, and accessible image text. Canonical URLs and social image URLs
 always point to the published GitHub Pages site, including when previewing locally.
 
-- `lib/og-image.tsx` defines the Bloxwap layout, colors, official green app icon, and typography.
+- `lib/og-image.tsx` defines the Bloxwap layout, accent colors, and typography.
+- `lib/brand.ts` vendors the official brand geometry from the Bloxwap monorepo's `packages/tokens/src/brand.ts`.
+  Cards draw the wordmark from these SVG paths. Re-copy the geometry from the monorepo when the marks change.
 - `lib/social.ts` defines the published URL and metadata. Update it if the repository or public hostname changes.
 - `app/og/[...slug]/route.tsx` generates `/og/index.png`, `/og/docs.png`, and `/og/docs/<slug>.png` during the static build.
 
-Cards use the existing Space Grotesk Bold heading font and a static Nunito Bold face copied from the Bloxwap monorepo's
-`packages/og/assets/`. Its license is included as `public/fonts/Nunito-OG-OFL.txt`. The renderer reads bundled fonts and
-artwork locally; it needs no font CDN, API credentials, or image server after deployment. Generated PNGs live in `out/`
-and are included in the GitHub Pages artifact.
+Cards use Nunito Black for headlines, Nunito Bold for descriptions, and Space Grotesk Bold for product and category labels.
+The static Nunito faces come from the Bloxwap monorepo's `packages/og/assets/`; their license is included as
+`public/fonts/Nunito-OG-OFL.txt`. The existing Space Grotesk face retains its `public/fonts/SpaceGrotesk-OFL.txt` notice.
+The renderer uses bundled fonts and brand geometry locally; it needs no font CDN, API credentials, or image server after
+deployment. Generated PNGs live in `out/` and are included in the GitHub Pages artifact.
 
 ## Deploy
 
