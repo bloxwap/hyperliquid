@@ -1,3 +1,8 @@
+---
+title: Connect to Hyperliquid
+description: Configure HTTP and WebSocket transports, rate limits, retries, and connection lifecycle.
+---
+
 # Connect to Hyperliquid
 
 Every [client](clients.md) reaches Hyperliquid through a transport. Two are built in — [`HttpTransport`](#http) and

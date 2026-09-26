@@ -28,7 +28,14 @@
       "!.claude",
       "!.dev/worktrees",
       "!.dev/ts7/node_modules",
-      "!.dev/ts7/tsconfig.json"
+      "!.dev/ts7/tsconfig.json",
+      "!website/.next",
+      "!website/.source",
+      "!website/out",
+      "!website/next-env.d.ts",
+      // Copied brand assets retain their original formatting and provenance metadata.
+      "!website/public/logos",
+      "!website/app/brand-tokens.css"
     ]
   },
   "formatter": {
@@ -56,6 +63,9 @@
     "parser": {
       "allowComments": true
     }
+  },
+  "css": {
+    "parser": { "tailwindDirectives": true }
   },
   "assist": {
     "enabled": false
@@ -115,7 +125,7 @@
     {
       // Tests and dev tooling print to stdout by design, and annotating every inline callback in a
       // benchmark or fixture adds noise without protecting a published API surface.
-      "includes": [".dev/**/*.ts", "tests/**/*.ts"],
+      "includes": [".dev/**/*.ts", "tests/**/*.ts", "website/**"],
       "linter": {
         "rules": {
           "suspicious": {

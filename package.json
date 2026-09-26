@@ -19,7 +19,7 @@
     "dex",
     "hyperliquid"
   ],
-  "homepage": "https://github.com/bloxwap/hyperliquid",
+  "homepage": "https://bloxwap.github.io/hyperliquid/",
   "bugs": {
     "url": "https://github.com/bloxwap/hyperliquid/issues"
   },
@@ -74,7 +74,11 @@
     "perf": "bun run tests/perf/run.ts",
     "//perf:gate": "Zero-regression gate: fails if any scenario got materially slower than the baseline.",
     "perf:gate": "bun run .dev/perf/gate.ts",
-    "build": "bun run .dev/build/build.ts"
+    "build": "bun run .dev/build/build.ts",
+    "docs:dev": "cd website && bun run dev",
+    "docs:build": "cd website && bun run build",
+    "docs:preview": "cd website && bun run preview",
+    "docs:check": "bun run check:docs && cd website && bun run check"
   },
   "dependencies": {
     "@noble/hashes": "2.2.0",

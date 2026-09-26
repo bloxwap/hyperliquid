@@ -1,3 +1,8 @@
+---
+title: Utilities
+description: Format valid prices and sizes and resolve Hyperliquid asset IDs with SymbolConverter.
+---
+
 # Utilities
 
 Helpers from `@bloxwap/hyperliquid/utils` that keep order payloads compatible with Hyperliquid's tick, lot, and asset

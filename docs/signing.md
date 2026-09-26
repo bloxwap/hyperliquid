@@ -1,3 +1,8 @@
+---
+title: Signing
+description: Sign Hyperliquid actions, manage nonces, support wallets, and configure optional signing accelerators.
+---
+
 # Signing
 
 Low-level signing helpers from `@bloxwap/hyperliquid/signing` for building signed
