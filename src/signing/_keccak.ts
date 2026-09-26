@@ -124,9 +124,25 @@ export function keccak256(data: Uint8Array): Uint8Array {
 }
 
 /**
- * Starts the background WASM load if it has not started yet and resolves when it has settled
- * (successfully or not). Internal: used by the perf scenarios to measure the WASM provider with
- * the warm-up cost excluded. Not re-exported from `mod.ts`.
+ * Starts the background load of the optional WASM keccak (`hash-wasm`) if it has not started yet,
+ * and resolves once it has settled.
+ *
+ * Without this, the load starts on the first hash, so the first actions a process signs hash on the
+ * slower pure-JS keccak. And the load can only finish once the event loop services the dynamic import,
+ * which a busy process may not do for a while. `ExchangeClient` starts the load on construction;
+ * call this (or {@linkcode warmupSigning}, which awaits it) to also wait until it is ready.
+ *
+ * Never rejects: when `hash-wasm` is missing or fails its self-check, it resolves and hashing stays
+ * on `@noble/hashes`.
+ *
+ * @return A promise that resolves when the load has settled, successfully or not.
+ *
+ * @example
+ * ```ts
+ * import { preloadWasmKeccak } from "@bloxwap/hyperliquid/signing";
+ *
+ * await preloadWasmKeccak();
+ * ```
  */
 export function preloadWasmKeccak(): Promise<void> {
   kickWasmLoad();

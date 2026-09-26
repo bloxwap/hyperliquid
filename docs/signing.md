@@ -631,8 +631,10 @@ from ~11 µs down to ~5 µs.
 
 The acceleration needs no code changes:
 
-- **Automatic dispatch.** The first hash loads the WASM module in the background; until it is ready — and permanently
-  when `hash-wasm` is not installed — hashing transparently stays on `@noble/hashes`. Both compute keccak-256, so the
+- **Automatic dispatch.** `ExchangeClient` starts loading the WASM module in the background when it is constructed (any
+  other signing entry point starts it on its first hash); until it is ready — and permanently when `hash-wasm` is not
+  installed — hashing transparently stays on `@noble/hashes`. `await preloadWasmKeccak()` (from
+  `@bloxwap/hyperliquid/signing`) waits until the load has settled. Both compute keccak-256, so the
   output is byte-identical either way; the SDK's differential tests pin that identity across input sizes, block
   boundaries, and real action preimages.
 - **Optional dependency.** `hash-wasm` is declared as an optional dependency and loaded through a guarded dynamic
@@ -650,6 +652,13 @@ Stack the accelerators when signature latency is on the critical path:
 2. **`hash-wasm`** — ambient keccak speedup on every L1 hash and Agent digest (install the optional dep; no code change).
 3. **`skipValidation: true`** — skip the valibot parse + key canonicalization on trusted, already-canonical wire input
    (~3× less non-ECDSA CPU). See [ExchangeClient](clients.md#skipping-validation-unsafe) for the contract.
+4. **`await exchange.warmup()`** at start-up — the first order a cold process signs is several times slower than the
+   steady state (measured ~5.5 ms vs ~0.1 ms with a viem local account): the WASM keccak is still loading, the curve's
+   precomputed tables are not built, and nothing is compiled yet. `warmup()` settles all three (first order ~1.3 ms)
+   without sending anything or consuming a nonce. It signs throwaway data only with keys held in the process (viem
+   `privateKeyToAccount` / `mnemonicToAccount` / `hdKeyToAccount`, `createFastLocalWallet`, or a `WalletClient`
+   wrapping one) — never with a JSON-RPC wallet or a custom HSM / MPC / remote signer. `warmupSigning(wallet)` from
+   `@bloxwap/hyperliquid/signing` does the signing part without a client.
 
 ```ts
 import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
@@ -658,6 +667,7 @@ import { createFastLocalWallet } from "@bloxwap/hyperliquid/signing";
 // npm i tiny-secp256k1 hash-wasm   # optional deps; install explicitly if your package manager skips them
 const wallet = await createFastLocalWallet("0x...");
 const exchange = new ExchangeClient({ transport: new HttpTransport(), wallet });
+await exchange.warmup(); // before the first latency-sensitive order
 
 // Action must already be in canonical wire form (schema key order, normalized decimals, lowercase hex, defaults filled).
 await exchange.order(
@@ -669,7 +679,7 @@ await exchange.order(
 );
 ```
 
-Without step 3 the first two still apply and are safe for any input. Step 3 is an escape hatch: invalid input is no
+Without step 3 the other steps still apply and are safe for any input. Step 3 is an escape hatch: invalid input is no
 longer a client-side `ValidationError` — the server rejects it instead.
 
 ## Helpers

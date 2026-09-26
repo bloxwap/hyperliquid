@@ -4,6 +4,7 @@
  */
 
 import { HyperliquidError } from "../../_base.ts";
+import { preloadWasmKeccak } from "../../signing/mod.ts";
 import { SymbolConverter } from "../../utils/mod.ts";
 import type { ExchangeConfig, ExchangeSingleWalletConfig } from "./_methods/_base/mod.ts";
 
@@ -371,6 +372,7 @@ import {
   type Withdraw3Parameters,
   type Withdraw3SuccessResponse,
 } from "./_methods/withdraw3.ts";
+import { warmup } from "./_methods/warmup.ts";
 
 // ============================================================
 // Symbol-based Asset References
@@ -566,6 +568,43 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    */
   constructor(config: C) {
     this.config = config;
+    // Start loading the optional WASM keccak now rather than on the first hash, so it is usually
+    // ready before the first action is signed. Never rejects; see `preloadWasmKeccak`.
+    void preloadWasmKeccak();
+  }
+
+  /**
+   * Warm the signing path so the first action signs at steady-state speed.
+   *
+   * A cold process signs its first order several times slower than later ones (measured ~5 ms vs
+   * ~0.1 ms): the optional WASM keccak is still loading, the curve's precomputed tables are not
+   * built yet, and none of the validation or signing code is compiled. Call this during start-up,
+   * before the first latency-sensitive action.
+   *
+   * Signs throwaway data only with wallets whose key is held in this process (viem
+   * `privateKeyToAccount` / `mnemonicToAccount` / `hdKeyToAccount`, `createFastLocalWallet`, or a
+   * viem `WalletClient` wrapping one). JSON-RPC wallets and custom signers (HSM, MPC, remote
+   * services) are never asked to sign; they get the hash-path warm-up only. Nothing is sent and no
+   * nonce is consumed.
+   *
+   * @return A promise that resolves when the warm-up has finished.
+   *
+   * @throws {AbstractWalletError} When an in-process wallet fails to sign.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
+   * await client.warmup();
+   * ```
+   */
+  warmup(): Promise<void> {
+    return warmup(this.config);
   }
 
   /**
