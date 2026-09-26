@@ -6,8 +6,9 @@
     "dev": "next dev --port 3900",
     "preview": "bun run scripts/preview.ts",
     "build": "next build && bun run scripts/verify-export.ts",
-    "check": "fumadocs-mdx && next typegen && tsc --noEmit",
-    "postinstall": "fumadocs-mdx"
+    "check": "bun run check:content && fumadocs-mdx && next typegen && tsc --noEmit",
+    "postinstall": "fumadocs-mdx",
+    "check:content": "bun run scripts/check-content.ts && markdownlint-cli2 --config ../../.markdownlint-cli2.jsonc ../../README.md ../../packages/hyperliquid/README.md README.md \"content/**/*.md\""
   },
   "dependencies": {
     "fumadocs-core": "16.15.14",
@@ -22,11 +23,12 @@
     "@types/bun": "1.3.14",
     "@tailwindcss/postcss": "4.3.3",
     "@types/mdx": "2.0.14",
-    "@types/node": "26.6.3",
+    "@types/node": "26.1.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "postcss": "8.5.28",
     "tailwindcss": "4.3.3",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "markdownlint-cli2": "0.23.3"
   }
 }

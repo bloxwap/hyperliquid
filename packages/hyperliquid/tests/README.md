@@ -14,6 +14,9 @@ Test suite for the SDK, run with `bun test`.
 
 ## Running
 
+Run these commands from `packages/hyperliquid/`. The workspace root also provides `bun run test`,
+`bun run test:offline`, `bun run perf`, and `bun run perf:gate` shortcuts.
+
 ```sh
 # Whole suite (tests that need live Hyperliquid endpoints require network access)
 bun test tests/

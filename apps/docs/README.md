@@ -1,8 +1,10 @@
 # Documentation website
 
-[Fumadocs](https://www.fumadocs.dev) renders the canonical Markdown in [`../docs`](../docs/README.md).
+[Fumadocs](https://www.fumadocs.dev) renders the canonical Markdown in [`content/docs`](content/docs/README.md).
 Next.js exports the entire site, including the search index, as static files for GitHub Pages.
-The website has its own dependencies and lockfile; they are not part of the published SDK.
+The app is a private Bun workspace alongside [`packages/hyperliquid`](../../packages/hyperliquid/README.md).
+Install dependencies from the repository root using the shared `bun.lock`. App dependencies and content are excluded
+from the SDK package published from `packages/hyperliquid/dist`.
 
 ## Design system
 
@@ -23,9 +25,7 @@ Building this site does not require a checkout of the monorepo or a request to a
 From the repository root:
 
 ```sh
-cd website
 bun install --frozen-lockfile
-cd ..
 bun run docs:dev
 ```
 
@@ -34,14 +34,15 @@ Use Node.js 22.12+ and the same Bun version as the repository's CI.
 
 ## Edit content
 
-- Edit Markdown in `docs/`, retaining one visible H1 and `title`/`description` frontmatter.
-- Add each new page to its folder's `meta.json` and the GitHub index `docs/SUMMARY.md`.
+- Edit Markdown in `apps/docs/content/docs/`, retaining one visible H1 and `title`/`description` frontmatter.
+- Add each new page to its folder's `meta.json` and the GitHub index `apps/docs/content/docs/SUMMARY.md`.
 - Keep GitHub-compatible relative `.md` links. The website resolves them to routes during rendering.
 - `README.md` becomes the folder's index route. `SUMMARY.md` is not published as a page.
 - Native HTML details, summaries, and explicit anchors are supported. Existing code examples remain Markdown.
 
-Run `bun run docs:check` from the repository root to check content and website types.
-The repository's `bun run check` also formats and lints website source.
+Run `bun run docs:check` from the repository root to check content and app types.
+For content checks alone, run `bun run check:docs` from the root or `bun run check:content` from `apps/docs`.
+The repository's `bun run check` also formats and lints app source.
 
 ## Build and preview GitHub Pages
 
@@ -50,13 +51,13 @@ NEXT_PUBLIC_BASE_PATH=/hyperliquid bun run docs:build
 NEXT_PUBLIC_BASE_PATH=/hyperliquid bun run docs:preview
 ```
 
-Open `http://localhost:4173/hyperliquid/`. The preview serves only the static files in `website/out`.
+Open `http://localhost:4173/hyperliquid/`. The preview serves only the static files in `apps/docs/out`.
 The build verifies every documentation page, internal link, asset, and anchor, plus the static JSON search index and
 `.nojekyll`. Build without `NEXT_PUBLIC_BASE_PATH` to serve at a domain root instead.
 
 ## Deploy
 
-The [Documentation workflow](../.github/workflows/docs.yml) builds pull requests and publishes relevant changes on `main`.
+The [Documentation workflow](../../.github/workflows/docs.yml) builds pull requests and publishes relevant changes on `main`.
 In repository **Settings → Pages**, set **Source** to **GitHub Actions** before the first deployment. The workflow can also
 be run manually from the Actions tab. Deployment uses GitHub's Pages artifact and deployment actions; no server, GitBook
 connection, hosting token, or generated branch is required.

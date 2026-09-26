@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./.github/hyperliquid-light.svg">
-    <img alt="Hyperliquid" src="./.github/hyperliquid-dark.svg" height="50">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/bloxwap/hyperliquid/main/.github/hyperliquid-light.svg">
+    <img alt="Hyperliquid" src="https://raw.githubusercontent.com/bloxwap/hyperliquid/main/.github/hyperliquid-dark.svg" height="50">
   </picture>
   <br>
   <strong>Blazing fast typescript
@@ -30,31 +30,7 @@ Browse the [SDK documentation](https://bloxwap.github.io/hyperliquid/docs/) for 
 utilities, and guides.
 
 The documentation uses [Fumadocs](https://www.fumadocs.dev/) and is hosted on GitHub Pages. Its Markdown source lives in
-[`apps/docs/content/docs/`](apps/docs/content/docs/README.md).
-
-## Workspace
-
-This repository is a Bun workspace with one install and one root `bun.lock`:
-
-| Workspace | Purpose |
-| --- | --- |
-| [`packages/hyperliquid`](packages/hyperliquid/README.md) | Published `@bloxwap/hyperliquid` SDK, source, tests, and package tooling |
-| [`apps/docs`](apps/docs/README.md) | Fumadocs application, Markdown content, and GitHub Pages export |
-
-The root package is private and coordinates development. The SDK builds to `packages/hyperliquid/dist`; the docs app
-exports static files to `apps/docs/out`. Only the SDK's generated package is published to npm.
-
-Run these commands from the repository root:
-
-```sh
-bun install --frozen-lockfile
-bun run check
-bun run test:offline
-bun run build
-```
-
-To develop the documentation, run `bun run docs:dev` and open `http://localhost:3900`. See the
-[documentation app guide](apps/docs/README.md) for content checks, production builds, and GitHub Pages deployment.
+`apps/docs/content/docs/` in the [repository](https://github.com/bloxwap/hyperliquid).
 
 ## Installation
 

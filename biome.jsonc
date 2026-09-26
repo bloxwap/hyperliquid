@@ -23,19 +23,19 @@
     "includes": [
       "**",
       "!**/node_modules",
-      "!dist",
-      "!coverage",
+      "!**/dist",
+      "!**/coverage",
       "!.claude",
       "!.dev/worktrees",
-      "!.dev/ts7/node_modules",
-      "!.dev/ts7/tsconfig.json",
-      "!website/.next",
-      "!website/.source",
-      "!website/out",
-      "!website/next-env.d.ts",
+      "!packages/hyperliquid/.dev/worktrees",
+      "!packages/hyperliquid/.dev/ts7/tsconfig.json",
+      "!apps/docs/.next",
+      "!apps/docs/.source",
+      "!apps/docs/out",
+      "!apps/docs/next-env.d.ts",
       // Copied brand assets retain their original formatting and provenance metadata.
-      "!website/public/logos",
-      "!website/app/brand-tokens.css"
+      "!apps/docs/public/logos",
+      "!apps/docs/app/brand-tokens.css"
     ]
   },
   "formatter": {
@@ -125,7 +125,7 @@
     {
       // Tests and dev tooling print to stdout by design, and annotating every inline callback in a
       // benchmark or fixture adds noise without protecting a published API surface.
-      "includes": [".dev/**/*.ts", "tests/**/*.ts", "website/**"],
+      "includes": ["packages/hyperliquid/.dev/**/*.ts", "packages/hyperliquid/tests/**/*.ts", "apps/docs/**"],
       "linter": {
         "rules": {
           "suspicious": {

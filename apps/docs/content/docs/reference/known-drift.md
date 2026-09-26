@@ -22,7 +22,7 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   ([l2Book](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#l2-book-snapshot)).
 - **Server reality:** `mantissa: 1` returns HTTP 500.
 - **SDK behavior:** correct — `mantissa` is validated as `2 | 5` (or omitted), so the broken value is rejected
-  client-side with a `ValidationError` before any request is sent (`src/api/info/_methods/l2Book.ts`).
+  client-side with a `ValidationError` before any request is sent (`packages/hyperliquid/src/api/info/_methods/l2Book.ts`).
 
 ### 2. `webData2` vs `webData3` subscriptions
 
@@ -38,14 +38,15 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
 - **Docs claim:** no `reversed` parameter is documented.
 - **Server reality:** `reversed: true` works and returns fills newest-first.
 - **SDK behavior:** supported — `reversed` is an optional boolean parameter of `InfoClient.userFillsByTime`
-  (`src/api/info/_methods/userFillsByTime.ts`).
+  (`packages/hyperliquid/src/api/info/_methods/userFillsByTime.ts`).
 
 ### 4. `userNonFundingLedgerUpdates` — `startTime` is optional, not required
 
 - **Observed:** 2026-07-26
 - **Docs claim:** `startTime` is a required parameter.
 - **Server reality:** the request succeeds without `startTime`.
-- **SDK behavior:** matches the server — `startTime` is optional (`src/api/info/_methods/userNonFundingLedgerUpdates.ts`).
+- **SDK behavior:** matches the server — `startTime` is optional
+  (`packages/hyperliquid/src/api/info/_methods/userNonFundingLedgerUpdates.ts`).
 
 ### 5. `activeAssetCtx` with a spot coin pushes on `activeSpotAssetCtx`
 
@@ -56,7 +57,7 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
 - **SDK behavior:** handled — use `SubscriptionClient.activeSpotAssetCtx({ coin })` for spot. It sends the identical
   payload and listens on the channel the server actually uses, and the subscription manager keeps the two channels'
   listeners separate even though they share one server-side subscription
-  (`src/transport/websocket/_subscriptionManager.ts`).
+  (`packages/hyperliquid/src/transport/websocket/_subscriptionManager.ts`).
 
 ### 6. Unique users — docs say 10, the server's error says 15, the server enforces 14
 
@@ -70,8 +71,8 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
 - **Scope:** **per IP, not per connection.** With one connection holding 14 users, a second connection from the same
   host was refused a 15th distinct user, while still being allowed to subscribe a user the first connection already
   held. Sharding user channels across sockets therefore buys no additional user slots.
-- **SDK behavior:** enforces the measured 14 (`MAX_UNIQUE_USERS = 14`, `src/transport/websocket/_quota.ts`), counted
-  against a per-IP [`WebSocketQuota`](../transports.md#websocket-limits) shared by every transport on the network.
+- **SDK behavior:** enforces the measured 14 (`MAX_UNIQUE_USERS = 14`,
+  `packages/hyperliquid/src/transport/websocket/_quota.ts`), counted against a per-IP [`WebSocketQuota`](../transports.md#websocket-limits) shared by every transport on the network.
   The earlier value of 15 was taken from the server's error text and was one too high — the 15th subscription passed
   the client guard, and because the server's refusal carries no echoed request, it could not be matched to the
   pending subscribe and surfaced only as a request timeout ~10 s later.
@@ -96,8 +97,8 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
 - **Server reality (empirical):** orders behave like spot — spot-like tick size for prices, integer sizes. This is
   evidence-based, not protocol-guaranteed; size increments could change per market without notice.
 - **SDK behavior:** the `OutcomeMetaResponse` type mirrors the docs (no precision fields,
-  `src/api/info/_methods/outcomeMeta.ts`), and [`SymbolConverter`](../utilities.md#asset-id--symbolconverter)
-  resolves outcome asset IDs (`100000000 + outcomeId * 10 + sideIndex`) from `outcomeMeta` alone. Format prices and
+  `packages/hyperliquid/src/api/info/_methods/outcomeMeta.ts`), and
+  [`SymbolConverter`](../utilities.md#asset-id--symbolconverter) resolves outcome asset IDs (`100000000 + outcomeId * 10 + sideIndex`) from `outcomeMeta` alone. Format prices and
   sizes for outcome markets with the spot-like model above, at your own risk.
 
 ### 9. `outcomeMeta` outcomes gained a `deployer` field
@@ -106,7 +107,7 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
 - **Docs claim:** each entry of `outcomes` carries no `deployer`.
 - **Server reality:** every outcome in the response now includes `deployer`; the schema-coverage check reports
   `additionalProperty: "deployer"` across the whole `outcomes` array (observed at indices 0 through 157+).
-- **SDK behavior:** fixed — `OutcomeMetaResponse` in `src/api/info/_methods/outcomeMeta.ts` declares
+- **SDK behavior:** fixed — `OutcomeMetaResponse` in `packages/hyperliquid/src/api/info/_methods/outcomeMeta.ts` declares
   `deployer` as an optional field, so it is typed and the schema-coverage test accepts it. The docs still don't
   mention the field, so this entry stays open until they do.
 
@@ -118,7 +119,7 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   `registerTokensAndStandaloneOutcome`, so it matches no variant of the documented union — the check reports both
   `missingProperty: "registerTokensAndStandaloneOutcome"` and `additionalProperty: "registerTemplate"` for the same
   sample.
-- **SDK behavior:** fixed — the union in `src/api/info/_methods/validatorL1Votes.ts` includes the
+- **SDK behavior:** fixed — the union in `packages/hyperliquid/src/api/info/_methods/validatorL1Votes.ts` includes the
   `registerTemplate` variant (and the `settleQuestion2` variant added alongside it), so live votes validate. The
   docs still don't show the variant, so this entry stays open until they do.
 
@@ -150,7 +151,7 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
 - **Verification scope:** every exchange probe uses `r = s = 0`, an invalid ECDSA signature. Recognized formats
   return `Unable to recover signer.` No action executes. These results verify request parsing, not staking,
   permissions, settlement rules, or successful deployment. Repeat with
-  `bun run .dev/verify_hip4_actions.ts`.
+  `bun run packages/hyperliquid/.dev/verify_hip4_actions.ts`.
 - **SDK gap:** `activateOutcomeDeployer` still requires `isDeactivate`, and deployment operations still use
   `spotDeploy.outcome`. The SDK needs the new activation union and an `outcomeDeploy` method, including template
   fee scales, `registerAndAssociateNamedOutcomeFromTemplate`, and `setSubDeployers`.

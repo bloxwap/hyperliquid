@@ -1,9 +1,9 @@
 /** Verify the files and links that GitHub Pages will serve after a static export. */
 import { resolve, relative, sep } from "node:path";
 
-const websiteDir = resolve(import.meta.dir, "..");
-const outDir = resolve(process.argv[2] ?? resolve(websiteDir, "out"));
-const contentDir = resolve(websiteDir, "../docs");
+const appDir = resolve(import.meta.dir, "..");
+const outDir = resolve(process.argv[2] ?? resolve(appDir, "out"));
+const contentDir = resolve(appDir, "content/docs");
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/+$/, "");
 const localOrigin = "https://static-export.invalid";
 const publishedOrigin = "https://bloxwap.github.io";

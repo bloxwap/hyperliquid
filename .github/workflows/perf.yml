@@ -11,11 +11,11 @@ jobs:
   # Enforces the zero-performance-regression policy: a change may keep performance the same or
   # improve it, never regress it.
   #
-  # WHY THIS MEASURES TWICE INSTEAD OF USING tests/perf/results/baseline.json:
+  # WHY THIS MEASURES TWICE INSTEAD OF USING THE SDK'S tests/perf/results/baseline.json:
   # the scenarios measure between 9 ns and 600 µs per unit. A GitHub-hosted runner is several times
   # slower than a developer machine, so comparing a committed baseline (recorded on whatever machine
   # last touched it) against a runner would flag nearly every scenario as a regression on every PR.
-  # `.dev/perf/compare.ts` refuses such a comparison outright. So this job measures the base
+  # The SDK's `.dev/perf/compare.ts` refuses such a comparison outright. So this job measures the base
   # commit and the head commit back to back on the SAME runner and compares those two reports.
   # The committed baseline stays useful for local runs (`bun run perf:gate`) on one machine.
   #
@@ -68,9 +68,22 @@ jobs:
           }
           echo "Base: $BASE_REF -> $BASE_SHA"
           git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
+          # Locate each revision independently: older commits keep the SDK at the repository
+          # root, while workspace commits keep the same suite under packages/hyperliquid.
+          HEAD_SDK_DIR="$GITHUB_WORKSPACE"
+          if [ -f "$HEAD_SDK_DIR/packages/hyperliquid/tests/perf/run.ts" ]; then
+            HEAD_SDK_DIR="$HEAD_SDK_DIR/packages/hyperliquid"
+          fi
+          BASE_SDK_DIR="$RUNNER_TEMP/base"
+          if [ -f "$BASE_SDK_DIR/packages/hyperliquid/tests/perf/run.ts" ]; then
+            BASE_SDK_DIR="$BASE_SDK_DIR/packages/hyperliquid"
+          fi
+          echo "HEAD_SDK_DIR=$HEAD_SDK_DIR" >> "$GITHUB_ENV"
+          echo "BASE_SDK_DIR=$BASE_SDK_DIR" >> "$GITHUB_ENV"
           # A base commit from before the perf suite existed has nothing to compare against;
           # the round steps then skip the base side and the Compare step passes the job.
-          if [ -f "$RUNNER_TEMP/base/tests/perf/run.ts" ]; then
+          if [ -f "$BASE_SDK_DIR/tests/perf/run.ts" ]; then
+            # Install from the base repository root so its own lockfile/workspaces apply.
             cd "$RUNNER_TEMP/base"
             bun install --frozen-lockfile
           else
@@ -82,28 +95,30 @@ jobs:
       - name: Round 1 (head, then base)
         run: |
           set -euo pipefail
+          cd "$HEAD_SDK_DIR"
           bun run tests/perf/run.ts --label "head-1" --out "$RUNNER_TEMP/head-1.json"
-          if [ -f "$RUNNER_TEMP/base/tests/perf/run.ts" ]; then
-            cd "$RUNNER_TEMP/base"
+          if [ -f "$BASE_SDK_DIR/tests/perf/run.ts" ]; then
+            cd "$BASE_SDK_DIR"
             bun run tests/perf/run.ts --label "base-1" --out "$RUNNER_TEMP/base-1.json"
           fi
 
       - name: Round 2 (base, then head)
         run: |
           set -euo pipefail
-          if [ -f "$RUNNER_TEMP/base/tests/perf/run.ts" ]; then
-            cd "$RUNNER_TEMP/base"
+          if [ -f "$BASE_SDK_DIR/tests/perf/run.ts" ]; then
+            cd "$BASE_SDK_DIR"
             bun run tests/perf/run.ts --label "base-2" --out "$RUNNER_TEMP/base-2.json"
-            cd "$GITHUB_WORKSPACE"
           fi
+          cd "$HEAD_SDK_DIR"
           bun run tests/perf/run.ts --label "head-2" --out "$RUNNER_TEMP/head-2.json"
 
       - name: Round 3 (head, then base)
         run: |
           set -euo pipefail
+          cd "$HEAD_SDK_DIR"
           bun run tests/perf/run.ts --label "head-3" --out "$RUNNER_TEMP/head-3.json"
-          if [ -f "$RUNNER_TEMP/base/tests/perf/run.ts" ]; then
-            cd "$RUNNER_TEMP/base"
+          if [ -f "$BASE_SDK_DIR/tests/perf/run.ts" ]; then
+            cd "$BASE_SDK_DIR"
             bun run tests/perf/run.ts --label "base-3" --out "$RUNNER_TEMP/base-3.json"
           fi
 
@@ -125,6 +140,7 @@ jobs:
           # check is the intended one-time migration and is approved explicitly. The grace
           # flag covers pre-fingerprint bases ONLY; never widen it (not for suite edits,
           # not for direction, not for flapping).
+          cd "$HEAD_SDK_DIR"
           bun run .dev/perf/compare.ts \
             "$RUNNER_TEMP/base-1.json" "$RUNNER_TEMP/base-2.json" "$RUNNER_TEMP/base-3.json" \
             --vs \

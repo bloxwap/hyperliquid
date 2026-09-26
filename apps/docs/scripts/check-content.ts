@@ -8,8 +8,9 @@ import { readdir, stat } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT_DIR: string = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const DOCS_DIR: string = join(ROOT_DIR, "docs");
+const APP_DIR: string = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT_DIR: string = resolve(APP_DIR, "../..");
+const DOCS_DIR: string = join(APP_DIR, "content/docs");
 const errors: string[] = [];
 const files: string[] = [];
 
@@ -98,7 +99,7 @@ async function checkMarkdown(path: string): Promise<void> {
   if (path.startsWith(`${DOCS_DIR}/`) && !path.endsWith("/SUMMARY.md")) checkFrontmatter(source, label);
 
   if (source.includes("{%")) errors.push(`${label} contains unsupported GitBook directives`);
-  if (source.includes("bloxwap.gitbook.io")) errors.push(`${label} still links to the retired GitBook site`);
+  if (/https?:\/\/bloxwap\.gitbook\.io\b/.test(source)) errors.push(`${label} still links to the retired GitBook site`);
 
   // Source links remain relative Markdown links for GitHub; the website resolves them to page URLs at build time.
   const prose: string = source.replace(/^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, "");
@@ -115,7 +116,14 @@ async function checkMarkdown(path: string): Promise<void> {
 }
 
 await checkNavigation(DOCS_DIR);
-for (const path of [...files.sort(), join(ROOT_DIR, "README.md")]) await checkMarkdown(path);
+for (const path of [
+  ...files.sort(),
+  join(APP_DIR, "content/SUMMARY.md"),
+  join(APP_DIR, "README.md"),
+  join(ROOT_DIR, "README.md"),
+  join(ROOT_DIR, "packages/hyperliquid/README.md"),
+])
+  await checkMarkdown(path);
 
 if (errors.length > 0) {
   throw new Error(`Documentation check failed:\n${errors.map((message) => `- ${message}`).join("\n")}`);

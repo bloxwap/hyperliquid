@@ -6,12 +6,12 @@
   // binary with no JS API. This config runs TypeScript 7 over `src/` as a SECOND gate, so the
   // published surface is known to compile under the compiler downstream consumers will move to.
   //
-  // WHY THIS LIVES IN `.dev/ts7/` RATHER THAN THE REPO ROOT:
+  // WHY THIS LIVES IN THE SDK'S `.dev/ts7/` OUTSIDE THE WORKSPACE GLOBS:
   // the two compiler versions cannot share one `node_modules/typescript`. Pinning 7.0.2 here,
-  // beside its own `package.json`, keeps it away from the root install's 5.x.
+  // beside its own `package.json` and lockfile, keeps it away from the SDK's 5.x.
   //
   // Everything is driven by Bun: `bun install` materializes `node_modules` from `package.json`,
-  // and `bunx tsc` runs the pinned compiler. See the `check:ts7` script in the root package.json.
+  // and the local `node_modules/.bin/tsc` runs the pinned compiler. See the SDK's `check:ts7` script.
   //
   // `@std/*` packages live only on JSR, which mirrors them to npm under `@jsr/*`; the source
   // specifiers therefore need an explicit mapping to those declaration files.

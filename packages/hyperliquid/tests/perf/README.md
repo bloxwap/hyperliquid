@@ -6,6 +6,9 @@ time, no clock skew, no server variance. Two runs of the same code differ only b
 
 ## Running
 
+Run these examples from `packages/hyperliquid/`; output paths are relative to that SDK directory.
+The workspace root forwards `bun run perf` and `bun run perf:gate` to this package.
+
 ```sh
 # The whole suite, human-readable table only
 bun run perf

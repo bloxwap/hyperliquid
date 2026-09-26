@@ -26,15 +26,15 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Emits dist/ (bundled .js, .d.ts, and a package.json whose exports point at them), verified by loading it in Node.
+      # Emits packages/hyperliquid/dist/ (.js, .d.ts, and its publishable manifest), verified by loading it in Node.
       - name: Build package
-        run: bun run .dev/build/build.ts
+        run: bun run build
 
       - name: Determine npm tag
         id: tag
         run: |
-          # The emitted manifest inherits its version from the root package.json, so read it there.
-          VERSION=$(jq -r .version package.json)
+          # The private workspace root has no release version; the SDK owns the published version.
+          VERSION=$(jq -r .version packages/hyperliquid/package.json)
           # Extract tag (alpha, beta, rc) from version string if present
           TAG=$(echo "$VERSION" | sed -n 's/.*-\(alpha\|beta\|rc\).*/\1/p')
           # If no known tag found but version contains hyphen, use "prerelease"
@@ -45,6 +45,6 @@ jobs:
           echo "value=${TAG:-latest}" >> "$GITHUB_OUTPUT"
 
       - name: Publish package
-        working-directory: ./dist
+        working-directory: ./packages/hyperliquid/dist
         # Scoped packages default to private access (paid); this SDK publishes public.
         run: npm publish --access public --tag ${{ steps.tag.outputs.value }}

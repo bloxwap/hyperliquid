@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Dependency manifest for the TypeScript 7 type-check gate. Installed with `bun install`; nothing in this directory is published. The repo root package.json remains the source of truth for the library itself.",
+  "description": "Isolated TypeScript 7 type-check gate. This directory has its own installation and lockfile; the SDK manifest in packages/hyperliquid/package.json is the source of truth for the published library.",
   "devDependencies": {
     "typescript": "7.0.2"
   },

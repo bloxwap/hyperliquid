@@ -9,7 +9,7 @@ const config = {
   trailingSlash: true,
   basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
   images: { unoptimized: true },
-  turbopack: { root: path.resolve(import.meta.dirname, "..") },
+  turbopack: { root: path.resolve(import.meta.dirname, "../..") },
 };
 
 export default withMDX(config);

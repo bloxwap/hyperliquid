@@ -241,7 +241,7 @@ await explorer.explorerBlock((data) => {
 ### Reconnection
 
 `WebSocketTransport` reconnects on its own when the connection drops, through the in-house
-`ReconnectingWebSocket` (`src/transport/websocket/_reconnectingSocket.ts`) — a minimal WebSocket wrapper with
+`ReconnectingWebSocket` (`packages/hyperliquid/src/transport/websocket/_reconnectingSocket.ts`) — a minimal WebSocket wrapper with
 reconnection logic.
 
 Reconnection defaults, tuned for a latency-critical trading connection:
@@ -336,7 +336,7 @@ in their own text ("across all websocket connections"):
 The unique-user value needs a caveat: the official docs still say **10**, while the server's own refusal message
 says 15 (`Cannot track more than 15 total users.`) — and neither number is what the server enforces. A live mainnet
 probe found the 15th distinct user refused, so the SDK guards at **14**, one below the message's claim
-(`src/transport/websocket/_quota.ts`). Erring low is the safe direction: refusing one subscription the server might
+(`packages/hyperliquid/src/transport/websocket/_quota.ts`). Erring low is the safe direction: refusing one subscription the server might
 have taken costs a slot, while admitting one it refuses costs a 10 s request timeout.
 
 Because that scope is the IP and not the socket, every `WebSocketTransport` on a network **shares one budget** by

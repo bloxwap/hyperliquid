@@ -1,7 +1,7 @@
 /**
  * Emits the publishable npm package into `dist/`.
  *
- * The repository root `package.json` deliberately points its `exports` at TypeScript sources so Bun, the tests and the
+ * The SDK's `package.json` deliberately points its `exports` at TypeScript sources so Bun, the tests and the
  * JSDoc examples can consume the SDK without a build step. npm consumers need real JavaScript and declaration files,
  * so this script emits declarations with `tsc`, bundles the JavaScript with esbuild, and writes a second,
  * publish-only manifest whose `exports` point at the emitted `.js`/`.d.ts` files.
@@ -29,7 +29,7 @@ import { build as esbuild } from "esbuild";
 
 // --- Layout ------------------------------------------------------------------
 
-/** Repository root, derived from this file's location so the script is runnable from any working directory. */
+/** SDK package root, derived from this file's location so the script is runnable from any working directory. */
 const ROOT_DIR: string = resolve(fileURLToPath(import.meta.url), "../../..");
 
 /** Output directory of the publishable package. Recreated from scratch on every run. */
@@ -216,7 +216,7 @@ async function rewriteDeclarationExtensions(dir: string): Promise<number> {
 /**
  * Translates a root export target (`./src/signing/mod.ts`) into an emitted-file conditions object.
  *
- * @param target - Root export target, relative to the repository root.
+ * @param target - Root export target, relative to the SDK package root.
  * @returns `types`/`default` conditions relative to `dist/`.
  */
 function toEmittedConditions(target: string): { types: string; default: string } {

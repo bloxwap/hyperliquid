@@ -30,7 +30,10 @@ export default async function Page({ params }: PageProps) {
           })}
         />
       </DocsBody>
-      <a className="edit-link" href={`https://github.com/bloxwap/hyperliquid/edit/main/docs/${originalPath}`}>
+      <a
+        className="edit-link"
+        href={`https://github.com/bloxwap/hyperliquid/edit/main/apps/docs/content/docs/${originalPath}`}
+      >
         Edit this page on GitHub <span aria-hidden="true">↗</span>
       </a>
     </DocsPage>
