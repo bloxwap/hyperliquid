@@ -1,3 +1,8 @@
+---
+title: Agent wallets and vaults
+description: Authorize agent wallets and trade on behalf of Hyperliquid vaults and subaccounts.
+---
+
 # Agent wallets and vaults
 
 Hyperliquid supports delegated trading through

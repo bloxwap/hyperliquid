@@ -30,19 +30,21 @@ const TIMEOUT = 120_000;
 // =============================================================
 
 /**
- * Runs a subscription test against a live testnet WebSocket endpoint.
+ * Runs a subscription test against a live WebSocket endpoint.
  *
  * @param options Test options.
  * @param options.name Name of the subscription under test.
- * @param options.mode Which testnet host to connect to: the API or the RPC gateway.
+ * @param options.mode Which host to connect to: the API or the RPC gateway.
+ * @param options.isTestnet Uses the testnet API when true; defaults to `true`.
  * @param options.fn Test body; receives a test context and a connected `SubscriptionClient`.
  */
 export function runTest(options: {
   name: string;
   mode: "api" | "rpc";
+  isTestnet?: boolean;
   fn: (t: TestContext, client: SubscriptionClient) => Promise<void>;
 }): void {
-  const { name, mode, fn } = options;
+  const { name, mode, isTestnet = true, fn } = options;
 
   test.skipIf(OFFLINE)(
     name,
@@ -51,7 +53,8 @@ export function runTest(options: {
 
       // --- Preparation ------------------------------------------------
 
-      const transport = new WebSocketTransport({ url: `wss://${mode}.hyperliquid-testnet.xyz/ws`, isTestnet: true });
+      const domain = isTestnet ? "hyperliquid-testnet.xyz" : "hyperliquid.xyz";
+      const transport = new WebSocketTransport({ url: `wss://${mode}.${domain}/ws`, isTestnet });
       await transport.ready();
       const subsClient = new SubscriptionClient({ transport });
 

@@ -15,25 +15,29 @@ jobs:
   osv-scan:
     name: OSV-Scanner (dependency vulnerabilities)
     permissions:
+      # Required by the reusable workflow even when SARIF upload is disabled.
+      actions: read
       contents: read
+      security-events: write
     # SHA is the v2.3.8 tag target, verified via `gh api repos/google/osv-scanner-action/git/ref/tags/v2.3.8`.
     # The reusable workflow pins its own sub-actions and the osv-scanner container image by SHA internally.
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
     with:
       # Explicit lockfiles instead of the default recursive `-r ./`: bun audit skips every @jsr/*
       # package ("do not come from the default registry"), and .dev/ts7 resolves crypto-critical
-      # deps (@noble/hashes, valibot) through JSR, so both lockfiles are scanned here.
+      # deps (@noble/hashes, valibot) through JSR. Include the isolated documentation site too.
       #
       # Known residual gap (verified 2026-07-26 against OSV-Scanner v2.4.0): OSV has no JSR
       # ecosystem, and @jsr/scope__name aliases do not match npm advisories — e.g.
       # @jsr/valibot__valibot@1.4.1 is not flagged although npm valibot@1.4.1 maps to
-      # GHSA-5qjj-4xww-7phc. npm-named packages in both lockfiles (the vast majority, including
+      # GHSA-5qjj-4xww-7phc. npm-named packages in these lockfiles (the vast majority, including
       # all npm transitives) are covered; JSR-aliased entries are extracted and queried but only
       # match if OSV ever learns the alias.
       scan-args: |-
         --lockfile=bun.lock
         --lockfile=.dev/ts7/bun.lock
-      # SARIF upload needs security-events: write; kept off so the job runs with contents: read.
-      # Results are still uploaded as a build artifact and the job fails on any vulnerability.
+        --lockfile=website/bun.lock
+      # Keep SARIF upload disabled; results are available as a build artifact and
+      # the job fails on any vulnerability. The callee still requires the permissions above.
       upload-sarif: false
       fail-on-vuln: true

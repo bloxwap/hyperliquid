@@ -1,8 +1,13 @@
+---
+title: Introduction
+description: Install the Hyperliquid TypeScript SDK and start reading market data, trading, and subscribing to updates.
+---
+
 # @bloxwap/hyperliquid documentation
 
 `@bloxwap/hyperliquid` is a community-supported Hyperliquid API SDK for TypeScript and JavaScript runtimes.
 
-Use the [table of contents](SUMMARY.md) to browse every guide, or start with:
+Start with the core concepts, then explore the [guides](guides/README.md) and [reference](reference/README.md):
 
 - [Connect to Hyperliquid](transports.md)
 - [Clients](clients.md)

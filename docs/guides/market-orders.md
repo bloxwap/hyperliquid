@@ -1,3 +1,8 @@
+---
+title: Market orders
+description: Place immediate-or-cancel orders with explicit slippage and valid price and size precision.
+---
+
 # Market orders
 
 Hyperliquid doesn't have a dedicated market order type. Simulate market orders using a limit order with `tif: "Ioc"`

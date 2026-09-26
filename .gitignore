@@ -17,6 +17,12 @@ coverage/
 # macOS Finder metadata.
 .DS_Store
 
+# Generated documentation website files.
+website/.next/
+website/.source/
+website/out/
+website/tsconfig.tsbuildinfo
+
 # Local secrets. Tests load `PRIVATE_KEY` from the environment, and Bun auto-loads `.env` —
 # a funded key must never be committable.
 .env

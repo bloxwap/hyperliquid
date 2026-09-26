@@ -1,3 +1,8 @@
+---
+title: Error handling
+description: Handle validation, signing, API, and transport errors with typed SDK error classes.
+---
+
 # Error handling
 
 Typed exceptions thrown by `@bloxwap/hyperliquid` so you can route error handling by **class**.

@@ -1,3 +1,8 @@
+---
+title: Clients
+description: Use the Info, Exchange, Subscription, and Explorer clients to work with the Hyperliquid API.
+---
+
 # Clients
 
 A client uses a [transport](transports.md) to call a specific part of the Hyperliquid API:

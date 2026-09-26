@@ -1,0 +1,440 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+@import "./brand-tokens.css";
+
+@source "../node_modules/fumadocs-ui/dist/**/*.js";
+
+@theme inline {
+  --font-sans: var(--font-docs-sans), ui-rounded, system-ui, sans-serif;
+  --font-mono: var(--font-docs-mono), ui-monospace, monospace;
+}
+
+#nd-sidebar {
+  border-color: var(--border);
+}
+
+/* Fumadocs mappings from monorepo/workers/docs/src/app/global.css. */
+:root,
+.dark,
+.dark #nd-sidebar {
+  --color-fd-background: var(--bloxwap-black);
+  --color-fd-foreground: var(--foreground);
+  --color-fd-card: var(--bloxwap-black);
+  --color-fd-card-foreground: var(--foreground);
+  --color-fd-popover: var(--popover);
+  --color-fd-popover-foreground: var(--popover-foreground);
+  --color-fd-muted: var(--muted);
+  --color-fd-muted-foreground: var(--muted-foreground);
+  --color-fd-secondary: var(--card);
+  --color-fd-secondary-foreground: var(--foreground);
+  --color-fd-border: var(--border);
+  --color-fd-primary: var(--bloxwap-green);
+  --color-fd-primary-foreground: var(--bloxwap-black);
+  --color-fd-accent: var(--card);
+  --color-fd-accent-foreground: var(--foreground);
+  --color-fd-ring: var(--bloxwap-green);
+}
+html {
+  scrollbar-gutter: stable;
+}
+body {
+  font-family: var(--font-sans);
+}
+html > body[data-scroll-locked] {
+  /* biome-ignore lint/complexity/noImportantStyles: Override the dialog's inline scrollbar compensation, as in the monorepo docs. */
+  margin-right: 0 !important;
+  /* biome-ignore lint/complexity/noImportantStyles: The stable scrollbar gutter already reserves this space. */
+  --removed-body-scroll-bar-size: 0px !important;
+}
+::selection {
+  background: color-mix(in srgb, var(--bloxwap-green) 25%, transparent);
+  color: var(--foreground);
+}
+:focus-visible {
+  outline: 2px solid var(--bloxwap-green);
+  outline-offset: 3px;
+}
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.brand-lockup img {
+  width: 112px;
+  height: auto;
+  flex-shrink: 0;
+}
+.brand-product {
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 400;
+}
+.landing {
+  width: 100%;
+  max-width: 1180px;
+  margin: auto;
+  padding: 90px 32px 24px;
+}
+.hero {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  align-items: center;
+  gap: 55px;
+}
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--color-fd-muted-foreground);
+}
+.eyebrow > span,
+.code-status > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-fd-primary);
+}
+.hero h1 {
+  margin: 27px 0 22px;
+  font-family: var(--font-docs-display), var(--font-sans);
+  font-size: clamp(50px, 5.5vw, 72px);
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+}
+.hero-description {
+  max-width: 430px;
+  font-size: 18px;
+  line-height: 1.7;
+  color: var(--color-fd-muted-foreground);
+}
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 28px 0 31px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.button-primary {
+  display: inline-flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: 9999px;
+  padding: 0 24px;
+  background: var(--color-fd-primary);
+  color: var(--color-fd-primary-foreground);
+}
+.button-primary:hover {
+  background: color-mix(in oklab, var(--bloxwap-green) 90%, transparent);
+}
+.button-secondary {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 20px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--card);
+}
+.button-primary:active,
+.button-secondary:active {
+  transform: scale(0.98);
+}
+.button-secondary:hover,
+.landing-footer a:hover {
+  color: var(--color-fd-primary);
+}
+.install-command {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 14px;
+  border: 1px solid var(--color-fd-border);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.install-command > span {
+  color: var(--color-fd-muted-foreground);
+}
+.runtime-note {
+  margin-top: 11px;
+  font-size: 12px;
+  color: var(--color-fd-muted-foreground);
+}
+.code-window {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  color: var(--foreground);
+  transform: translateY(12px);
+}
+.code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.window-dots {
+  display: flex;
+  gap: 5px;
+}
+.window-dots > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.code-language {
+  font-size: 10px;
+  color: var(--bloxwap-blue);
+}
+.code-window pre {
+  overflow-x: auto;
+  padding: 26px 24px 28px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  line-height: 1.85;
+  tab-size: 2;
+}
+.syntax-purple {
+  color: var(--bloxwap-pink);
+}
+.syntax-green {
+  color: var(--bloxwap-green);
+}
+.syntax-blue {
+  color: var(--bloxwap-blue);
+}
+.syntax-muted {
+  color: var(--muted-foreground);
+}
+.code-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.code-status > span {
+  background: var(--bloxwap-green);
+}
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 85px;
+}
+.feature-card {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--color-fd-card);
+}
+.feature-card:hover {
+  border-color: color-mix(in srgb, var(--bloxwap-green) 40%, var(--border));
+}
+.feature-number {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-fd-muted-foreground);
+}
+.feature-card h2 {
+  display: flex;
+  justify-content: space-between;
+  margin: 13px 0 10px;
+  font-size: 20px;
+  font-family: var(--font-docs-display), var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.feature-card h2 > span {
+  color: var(--color-fd-muted-foreground);
+  font-size: 17px;
+  transition: transform 150ms;
+}
+.feature-card:hover h2 > span {
+  transform: translate(2px, -2px);
+  color: var(--color-fd-primary);
+}
+.feature-card p {
+  max-width: 290px;
+  color: var(--color-fd-muted-foreground);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.landing-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 42px;
+  padding-top: 22px;
+  border-top: 1px solid var(--color-fd-border);
+  font-size: 12px;
+  color: var(--color-fd-muted-foreground);
+}
+.edit-link {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  width: fit-content;
+  margin-top: 24px;
+  color: var(--color-fd-muted-foreground);
+  font-size: 13px;
+}
+.edit-link:hover {
+  color: var(--color-fd-primary);
+}
+#nd-page {
+  max-width: 52rem;
+}
+#nd-page[data-full="true"] {
+  max-width: 73rem;
+}
+#nd-page h1 {
+  font-family: var(--font-docs-display), var(--font-sans);
+  font-size: clamp(1.875rem, 3vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.prose {
+  line-height: 1.75;
+}
+.prose h2 {
+  font-family: var(--font-docs-display), var(--font-sans);
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.prose h3 {
+  font-weight: 700;
+}
+.prose a:not([data-card]):not(.not-prose a) {
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 0.2em;
+}
+.prose a:not([data-card]):hover {
+  color: var(--bloxwap-green);
+}
+.prose details {
+  padding: 12px 16px;
+  border: 1px solid var(--color-fd-border);
+  border-radius: var(--radius);
+}
+.prose summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.prose figure {
+  box-shadow: none;
+}
+#nd-sidebar a[data-active="true"] {
+  background: color-mix(in srgb, var(--bloxwap-green) 8%, transparent);
+  color: var(--bloxwap-green);
+}
+.docs-sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+.docs-app-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.docs-app-link:hover {
+  background: var(--card);
+  color: var(--bloxwap-green);
+}
+@media (max-width: 850px) {
+  .landing {
+    padding-top: 50px;
+  }
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 35px;
+  }
+  .hero-description {
+    max-width: 500px;
+  }
+  .code-window {
+    max-width: 580px;
+    transform: none;
+  }
+  .feature-grid {
+    margin-top: 50px;
+    gap: 20px;
+  }
+}
+@media (max-width: 540px) {
+  .landing {
+    padding: 36px 20px 24px;
+  }
+  .hero h1 {
+    font-size: clamp(40px, 12vw, 56px);
+  }
+  .hero-description {
+    font-size: 16px;
+  }
+  .hero-actions {
+    gap: 10px;
+    font-size: 14px;
+  }
+  .button-primary {
+    gap: 12px;
+    padding: 0 20px;
+  }
+  .button-secondary {
+    padding: 0 16px;
+  }
+  .code-window pre {
+    padding: 22px 16px;
+    font-size: 11px;
+  }
+  .feature-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 32px;
+  }
+  .feature-card p {
+    max-width: none;
+  }
+  .landing-footer {
+    flex-direction: column;
+    margin-top: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .feature-card h2 > span {
+    transition: none;
+  }
+}
