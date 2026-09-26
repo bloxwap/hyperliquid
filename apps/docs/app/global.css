@@ -133,9 +133,11 @@ textarea:focus-visible {
    content 16px, so matching both lines the hero up with the logo and the code window with the
    header's right-hand controls at every width. */
 .landing {
+  /* Grows to fill a tall window, so the slack sits above the footer rather than above the hero. */
+  flex: 1;
   width: 100%;
   max-width: var(--fd-layout-width, 1400px);
-  margin: auto;
+  margin: 0 auto;
   padding: --spacing(24) --spacing(4) --spacing(6);
 }
 .hero {

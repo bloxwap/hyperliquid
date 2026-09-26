@@ -41,7 +41,7 @@ const mids = await client.allMids();
 
 export default function Home() {
   return (
-    // min-h-dvh lets the landing's auto margins take up the slack, pinning the footer to the bottom.
+    // min-h-dvh lets .landing grow into the slack, keeping the footer at the bottom of a tall window.
     <HomeLayout {...baseOptions()} className="min-h-dvh">
       <main className="landing">
         <div className="hero">
