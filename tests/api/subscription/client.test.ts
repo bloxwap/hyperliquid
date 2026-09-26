@@ -821,4 +821,30 @@ describe("fastAssetCtxs", () => {
       errorSpy.mockRestore();
     }
   });
+
+  // The native path prefers `Bun.inflateSync` over `node:zlib`'s `inflateRawSync` on Bun. That swap is
+  // only sound if both are raw DEFLATE (RFC 1951) with identical output and both reject what the
+  // other rejects, so the existing error handling still applies — pinned here directly.
+  test.if(typeof (globalThis as { Bun?: unknown }).Bun !== "undefined")(
+    "Bun.inflateSync matches node:zlib inflateRawSync on raw DEFLATE input",
+    async () => {
+      const zlib = await import("node:zlib");
+      const bunInflate = (globalThis as unknown as { Bun: { inflateSync(d: Uint8Array): Uint8Array } }).Bun.inflateSync;
+      const text = JSON.stringify({ coins: Array.from({ length: 300 }, (_, i) => ({ c: `COIN${i}`, px: `${i}.5` })) });
+      for (const level of [1, 6, 9]) {
+        for (const input of [text, "", "{}", "é∑ unicode ✓"]) {
+          const compressed = zlib.deflateRawSync(Buffer.from(input), { level });
+          expect(new Uint8Array(bunInflate(compressed))).toEqual(new Uint8Array(zlib.inflateRawSync(compressed)));
+        }
+      }
+      // zlib-wrapped, truncated and garbage input throw synchronously from both.
+      const wrapped = zlib.deflateSync(Buffer.from(text));
+      const truncated = zlib.deflateRawSync(Buffer.from(text)).subarray(0, 20);
+      const garbage = new Uint8Array([0xff, 0xff, 0xff, 0xff, 0x00, 0x13]);
+      for (const bad of [wrapped, truncated, garbage]) {
+        expect(() => zlib.inflateRawSync(bad)).toThrow();
+        expect(() => bunInflate(bad)).toThrow();
+      }
+    },
+  );
 });
