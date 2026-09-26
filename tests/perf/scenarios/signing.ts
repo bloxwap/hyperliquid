@@ -106,6 +106,7 @@ for (const count of [1, 100] as const) {
     unit: "order",
     unitsPerIteration: count,
     iterations: count === 1 ? 2000 : 100,
+    keccak: "noble",
     setup: () => ({ action: orderAction(count) }),
     run: ({ action }: { action: Record<string, unknown> }) => {
       createL1ActionHash({ action, nonce: NONCE });
@@ -351,6 +352,7 @@ scenario({
   description: "createL1AgentDigest(): hand-rolled EIP-712 digest of the fixed L1 Agent message",
   unit: "digest",
   iterations: 5000,
+  keccak: "noble",
   run: () => {
     createL1AgentDigest(AGENT_ACTION_HASH, true);
   },
@@ -406,6 +408,7 @@ scenario({
   description: "createMultiSigDigest(): hand-rolled EIP-712 digest of the fixed SendMultiSig outer message",
   unit: "digest",
   iterations: 5000,
+  keccak: "noble",
   run: () => {
     createMultiSigDigest(MULTI_SIG_ACTION_HASH, NONCE, "0x66eee", true);
   },

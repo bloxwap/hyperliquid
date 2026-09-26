@@ -65,10 +65,12 @@ export interface Scenario {
    * The provider is process-wide and switches to the WASM one whenever a load settles, and
    * `ExchangeClient` starts that load on construction. Unpinned, a scenario would measure noble
    * or WASM depending on which scenarios ran before it and on when the event loop serviced the
-   * import. `"wasm"` is honored only when `hash-wasm` is installed; scenarios that need it
-   * register only in that case.
+   * import. The default is `"wasm"` because that is what a caller gets: `ExchangeClient` loads
+   * it on construction (and a checkout without `hash-wasm` falls back to noble either way).
+   * `"noble"` is for the pure-JS counterparts of the `_wasm` scenarios, which exist to keep the
+   * fallback path measured.
    *
-   * Default `"noble"`.
+   * Default `"wasm"`.
    */
   keccak?: "noble" | "wasm";
 }
@@ -221,7 +223,7 @@ export async function runScenario(def: Scenario): Promise<ScenarioResult> {
   const unit = def.unit ?? "op";
 
   // Pin the keccak provider first: `setup` may construct clients that would otherwise kick a load.
-  _setKeccakLoaderForTests(def.keccak === "wasm" ? undefined : () => Promise.resolve(undefined));
+  _setKeccakLoaderForTests(def.keccak === "noble" ? () => Promise.resolve(undefined) : undefined);
   await preloadWasmKeccak();
 
   const ctx = (await def.setup?.()) as never;
