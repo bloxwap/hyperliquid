@@ -1,5 +1,6 @@
 import { DocsBody, DocsPage } from "fumadocs-ui/layouts/docs/page";
 import { createRelativeLink } from "fumadocs-ui/mdx";
+import { ArrowUpRight } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getMDXComponents } from "@/components/mdx";
@@ -34,7 +35,7 @@ export default async function Page({ params }: PageProps) {
         className="edit-link"
         href={`https://github.com/bloxwap/hyperliquid/edit/main/apps/docs/content/docs/${originalPath}`}
       >
-        Edit this page on GitHub <span aria-hidden="true">↗</span>
+        Edit this page on GitHub <ArrowUpRight size={14} aria-hidden />
       </a>
     </DocsPage>
   );

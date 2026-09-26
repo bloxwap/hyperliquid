@@ -7,17 +7,18 @@ export function baseOptions(): BaseLayoutProps {
       title: (
         <span className="brand-lockup">
           <Image
-            src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/logos/bloxwap-wordmark-white.svg`}
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/logos/bloxwap-icon-green.svg`}
             alt="Bloxwap"
-            width={112}
-            height={31}
+            width={28}
+            height={28}
             priority
           />
-          <span className="brand-product">SDK</span>
+          <span className="brand-product">Hyperliquid SDK</span>
         </span>
       ),
     },
     githubUrl: "https://github.com/bloxwap/hyperliquid",
+    // Dark-only by brand decision; see components/provider.tsx.
     themeSwitch: { enabled: false },
   };
 }

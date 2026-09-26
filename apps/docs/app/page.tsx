@@ -1,5 +1,7 @@
 import { HomeLayout } from "fumadocs-ui/layouts/home";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
+import { InstallCommand } from "@/components/install-command";
 import { baseOptions } from "@/lib/layout.shared";
 
 const features = [
@@ -43,16 +45,13 @@ export default function Home() {
             </p>
             <div className="hero-actions">
               <Link className="button-primary" href="/docs/">
-                Get started <span aria-hidden="true">↗</span>
+                Get started <ArrowRight size={16} aria-hidden />
               </Link>
               <Link className="button-secondary" href="/docs/guides/">
-                Explore the guides <span aria-hidden="true">→</span>
+                Explore the guides <ArrowRight size={16} aria-hidden />
               </Link>
             </div>
-            <div className="install-command">
-              <span aria-hidden="true">$</span>
-              <code>bun add @bloxwap/hyperliquid</code>
-            </div>
+            <InstallCommand />
             <p className="runtime-note">Bun · Node.js · Browsers · React Native</p>
           </div>
           <div className="code-window">
@@ -99,7 +98,7 @@ export default function Home() {
               <span className="feature-number">{feature.number}</span>
               <h2>
                 {feature.title}
-                <span aria-hidden="true">↗</span>
+                <ArrowRight size={18} aria-hidden />
               </h2>
               <p>{feature.description}</p>
             </Link>
@@ -107,7 +106,9 @@ export default function Home() {
         </div>
         <footer className="landing-footer">
           <span>Built by Bloxwap. Open source, MIT licensed.</span>
-          <a href="https://github.com/bloxwap/hyperliquid">View on GitHub ↗</a>
+          <a href="https://github.com/bloxwap/hyperliquid">
+            View on GitHub <ArrowUpRight size={14} aria-hidden />
+          </a>
         </footer>
       </main>
     </HomeLayout>
