@@ -33,6 +33,8 @@ bun run docs:dev
 
 Open `http://localhost:3900`. No environment variables or API credentials are needed.
 Use Node.js 22.12+ and the same Bun version as the repository's CI.
+The dev, build, and check commands generate Fumadocs source files before running; dependency installation needs no
+code generation.
 
 ## Edit content
 
