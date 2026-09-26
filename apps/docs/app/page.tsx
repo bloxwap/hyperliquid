@@ -1,8 +1,9 @@
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
 import { InstallCommand } from "@/components/install-command";
+import { SiteFooter } from "@/components/site-footer";
 import { baseOptions } from "@/lib/layout.shared";
 
 const features = [
@@ -40,7 +41,8 @@ const mids = await client.allMids();
 
 export default function Home() {
   return (
-    <HomeLayout {...baseOptions()}>
+    // min-h-dvh lets the landing's auto margins take up the slack, pinning the footer to the bottom.
+    <HomeLayout {...baseOptions()} className="min-h-dvh">
       <main className="landing">
         <div className="hero">
           <div className="hero-copy">
@@ -121,13 +123,8 @@ export default function Home() {
             </Link>
           ))}
         </div>
-        <footer className="landing-footer">
-          <span>Built by Bloxwap. Open source, MIT licensed.</span>
-          <a href="https://github.com/bloxwap/hyperliquid">
-            View on GitHub <ArrowUpRight size={14} aria-hidden />
-          </a>
-        </footer>
       </main>
+      <SiteFooter />
     </HomeLayout>
   );
 }
