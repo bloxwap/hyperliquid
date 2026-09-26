@@ -17,7 +17,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     return createSocialImage({
       title: "Build on Hyperliquid.",
       description: homeDescription,
-      section: "DEVELOPER DOCUMENTATION",
+      category: "TYPESCRIPT · JAVASCRIPT",
       home: true,
     });
   }
@@ -28,7 +28,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   return createSocialImage({
     title: page.data.title,
     description: page.data.description ?? homeDescription,
-    section: page.url.startsWith("/docs/guides")
+    category: page.url.startsWith("/docs/guides")
       ? "GUIDES"
       : page.url.startsWith("/docs/reference")
         ? "REFERENCE"
