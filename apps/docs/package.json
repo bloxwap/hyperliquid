@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "fumadocs-mdx && next dev --port 3900",
+    "dev": "fumadocs-mdx && next dev --port 3901",
     "preview": "bun run scripts/preview.ts",
     "build": "fumadocs-mdx && next build && bun run scripts/verify-export.ts",
     "check": "bun run check:content && fumadocs-mdx && next typegen && tsc --noEmit",

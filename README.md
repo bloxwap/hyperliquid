@@ -53,7 +53,7 @@ bun run test:offline
 bun run build
 ```
 
-To develop the documentation, run `bun run docs:dev` and open `http://localhost:3900`. See the
+To develop the documentation, run `bun run docs:dev` and open `http://localhost:3901`. See the
 [documentation app guide](apps/docs/README.md) for content checks, production builds, and GitHub Pages deployment.
 
 ## Installation
