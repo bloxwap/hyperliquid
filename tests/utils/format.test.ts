@@ -8,7 +8,16 @@ import { describe, test } from "bun:test";
 import { assertEquals, assertThrows } from "@jsr/std__assert";
 import { Decimal } from "decimal.js";
 import { FormatError, floatToWire, formatPrice, formatSize } from "@bloxwap/hyperliquid/utils";
-import { type DecimalParts, toDecimalPlacesHalfEven, toSignificantDigitsHalfEven } from "../../src/utils/_decimal.ts";
+import {
+  type DecimalParts,
+  isInteger,
+  toDecimal,
+  toDecimalPlaces,
+  toDecimalPlacesHalfEven,
+  toFixed,
+  toSignificantDigits,
+  toSignificantDigitsHalfEven,
+} from "../../src/utils/_decimal.ts";
 
 // ============================================================
 // Test Data
@@ -686,6 +695,117 @@ describe("floatToWire exact path on subnormal doubles", () => {
       assertEquals(floatToWire(1e-310), "0");
     } finally {
       Number.prototype.toFixed = original;
+    }
+  });
+});
+
+// ============================================================
+// Plain-decimal fast path
+// ============================================================
+
+/**
+ * `formatPrice` / `formatSize` answer plain decimal strings ("97123.456", "0.0012") by slicing the
+ * string instead of parsing it. These references are the exact-path pipelines, composed from the
+ * `_decimal.ts` primitives exactly as the formatters compose them for every other input; the fast
+ * path must match them byte for byte — output and error message — on every input.
+ */
+function referenceFormatPrice(price: string | number, szDecimals: number, type: "perp" | "spot"): string {
+  const maxDecimals = Math.max((type === "perp" ? 6 : 8) - szDecimals, 0);
+  let result = toDecimalPlaces(toDecimal(price, "price"), maxDecimals);
+  if (!isInteger(result)) result = toSignificantDigits(result, 5);
+  if (result.digits === "") throw new FormatError("Price is too small and was truncated to 0");
+  return toFixed(result);
+}
+
+function referenceFormatSize(size: string | number, szDecimals: number): string {
+  const result = toDecimalPlaces(toDecimal(size, "size"), szDecimals);
+  if (result.digits === "") throw new FormatError("Size is too small and was truncated to 0");
+  return toFixed(result);
+}
+
+/** Output, or the error message, so a thrown result compares like a returned one. */
+function outcome(fn: () => string): string {
+  try {
+    return `ok:${fn()}`;
+  } catch (error) {
+    return `${(error as Error).constructor.name}:${(error as Error).message}`;
+  }
+}
+
+/** Deterministic PRNG (mulberry32), so a failure reproduces from the printed input. */
+function rng(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Random decimal-ish strings, weighted toward the plain shape and toward zero runs at the edges. */
+function randomInput(next: () => number): string {
+  const digit = (): string => (next() < 0.35 ? "0" : String(Math.floor(next() * 10)));
+  const digits = (max: number): string => Array.from({ length: Math.floor(next() * (max + 1)) }, digit).join("");
+  const roll = next();
+  if (roll < 0.04)
+    return ["", ".", "0.", ".5", "-1.5", "+2", "1e3", "1_000.5", "007", "00.1", "abc", "1.2.3"][
+      Math.floor(next() * 12)
+    ];
+  const intPart = next() < 0.3 ? "0" : String(1 + Math.floor(next() * 9)) + digits(9);
+  const frac = next() < 0.25 ? "" : `.${digits(12) || "0"}`;
+  return intPart + frac;
+}
+
+describe("plain-decimal fast path", () => {
+  test("matches the exact path on fuzzed inputs (strings and numbers, every szDecimals)", () => {
+    const next = rng(0x5eed);
+    for (let i = 0; i < 200_000; i++) {
+      const input = randomInput(next);
+      const szDecimals = next() < 0.02 ? [-1, 1.5, 11][Math.floor(next() * 3)] : Math.floor(next() * 11);
+      const inputs: (string | number)[] = [input];
+      const asNumber = Number(input);
+      if (input !== "" && Number.isFinite(asNumber)) inputs.push(asNumber);
+      for (const value of inputs) {
+        for (const type of ["perp", "spot"] as const) {
+          const actual = outcome(() => formatPrice(value, szDecimals, type));
+          const expected = outcome(() => referenceFormatPrice(value, szDecimals, type));
+          if (actual !== expected) {
+            throw new Error(
+              `formatPrice(${JSON.stringify(value)}, ${szDecimals}, "${type}"): ${actual} !== ${expected}`,
+            );
+          }
+        }
+        const actual = outcome(() => formatSize(value, szDecimals));
+        const expected = outcome(() => referenceFormatSize(value, szDecimals));
+        if (actual !== expected) {
+          throw new Error(`formatSize(${JSON.stringify(value)}, ${szDecimals}): ${actual} !== ${expected}`);
+        }
+      }
+    }
+  });
+
+  test("covers the significant-figure boundaries", () => {
+    const cases: [string, number, "perp" | "spot"][] = [
+      ["12345.6789", 0, "perp"],
+      ["123456.7", 0, "perp"],
+      ["1234567.891", 1, "perp"],
+      ["1234.05", 0, "perp"],
+      ["1.00001", 0, "perp"],
+      ["0.000123456", 0, "spot"],
+      ["0.00000001", 0, "spot"],
+      ["0.000000001", 0, "spot"],
+      ["0.1000", 2, "perp"],
+      ["99999.99999", 0, "perp"],
+      ["0", 0, "perp"],
+      ["0.0", 3, "spot"],
+    ];
+    for (const [price, sz, type] of cases) {
+      assertEquals(
+        outcome(() => formatPrice(price, sz, type)),
+        outcome(() => referenceFormatPrice(price, sz, type)),
+        `${price} ${sz} ${type}`,
+      );
     }
   });
 });

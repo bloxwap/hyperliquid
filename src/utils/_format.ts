@@ -70,6 +70,44 @@ function exactDecimalParts(x: number): DecimalParts {
 }
 
 /**
+ * Index of the decimal point in a plain non-negative decimal string — `"97123"`, `"0.05"`,
+ * `"7.250"` — or `str.length` when it has none; `-1` for any other shape (sign, exponent,
+ * separators, a leading zero on a multi-digit integer part, a bare or trailing point).
+ *
+ * That shape is what nearly every caller passes (and what `String(number)` yields for ordinary
+ * prices and sizes), and for it truncation is plain string slicing: the digits after the point
+ * ARE the decimal places, so {@linkcode formatPrice} and {@linkcode formatSize} can skip the
+ * parse into {@linkcode DecimalParts} and the re-render. Everything else takes the exact path.
+ */
+function plainDecimalPoint(str: string): number {
+  const len = str.length;
+  if (len === 0) return -1;
+  let dot = len;
+  for (let i = 0; i < len; i++) {
+    const c = str.charCodeAt(i);
+    if (c === 46 /* "." */) {
+      if (dot !== len || i === 0 || i === len - 1) return -1;
+      dot = i;
+    } else if (c < 48 || c > 57) {
+      return -1;
+    }
+  }
+  // A leading "0" is only plain as the whole integer part ("0" or "0.x"), never as padding ("007").
+  if (str.charCodeAt(0) === 48 && dot > 1) return -1;
+  return dot;
+}
+
+/**
+ * End index of `str` truncated to `decimals` fraction digits, with trailing fraction zeros dropped;
+ * at most `dot + 1` when no significant fraction digit survives (the value is an integer).
+ */
+function truncatedEnd(str: string, dot: number, decimals: number): number {
+  let end = Math.min(str.length, dot + 1 + decimals);
+  while (end > dot + 1 && str.charCodeAt(end - 1) === 48 /* "0" */) end--;
+  return end;
+}
+
+/**
  * Format price according to Hyperliquid {@link https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/tick-and-lot-size | rules}:
  * - Maximum 5 significant figures
  * - Maximum 6 (for perp) or 8 (for spot) - `szDecimals` decimal places
@@ -97,9 +135,38 @@ function exactDecimalParts(x: number): DecimalParts {
  * ```
  */
 export function formatPrice(price: string | number, szDecimals: number, type: "perp" | "spot" = "perp"): string {
-  const d = toDecimal(price, "price");
-
   const maxDecimals = Math.max((type === "perp" ? 6 : 8) - szDecimals, 0);
+
+  // Fast path for plain decimals: the same truncations, done on the string. Byte-identical to the
+  // exact path below, pinned differentially in tests/utils/format.test.ts.
+  const str = typeof price === "number" ? String(price) : price;
+  const dot = Number.isInteger(szDecimals) ? plainDecimalPoint(str) : -1;
+  if (dot >= 0) {
+    const end = truncatedEnd(str, dot, maxDecimals);
+    const zeroInteger = dot === 1 && str.charCodeAt(0) === 48;
+    if (end <= dot + 1) {
+      // An integer after truncation (or before it: `end === dot` when there is no point),
+      // exempt from the significant-figure cap.
+      if (zeroInteger) throw new FormatError("Price is too small and was truncated to 0");
+      return str.slice(0, dot);
+    }
+    if (dot >= 5 && !zeroInteger) {
+      // The integer part alone carries 5+ significant figures: keep 5, zero the rest, drop the fraction.
+      return dot === 5 ? str.slice(0, 5) : str.slice(0, 5) + "0".repeat(dot - 5);
+    }
+    // Keep 5 significant figures, counted from the first non-zero digit ("0.000123456" keeps "12345").
+    let first = 0;
+    if (zeroInteger) {
+      first = dot + 1;
+      while (str.charCodeAt(first) === 48) first++;
+    }
+    let cut = Math.min(end, first + 5 + (first <= dot ? 1 : 0)); // +1 steps over the point
+    while (str.charCodeAt(cut - 1) === 48) cut--;
+    if (str.charCodeAt(cut - 1) === 46 /* "." */) cut--;
+    return str.slice(0, cut);
+  }
+
+  const d = toDecimal(price, "price");
   let result = toDecimalPlaces(d, maxDecimals);
 
   // Integers are exempt from the 5-sig-fig cap.
@@ -137,6 +204,17 @@ export function formatPrice(price: string | number, szDecimals: number, type: "p
  * ```
  */
 export function formatSize(size: string | number, szDecimals: number): string {
+  // Fast path for plain decimals: truncation is string slicing. Byte-identical to the exact path
+  // below, pinned differentially in tests/utils/format.test.ts.
+  const str = typeof size === "number" ? String(size) : size;
+  const dot = Number.isInteger(szDecimals) && szDecimals >= 0 ? plainDecimalPoint(str) : -1;
+  if (dot >= 0) {
+    const end = truncatedEnd(str, dot, szDecimals);
+    if (end > dot + 1) return str.slice(0, end);
+    if (dot === 1 && str.charCodeAt(0) === 48) throw new FormatError("Size is too small and was truncated to 0");
+    return str.slice(0, dot);
+  }
+
   const d = toDecimal(size, "size");
 
   const result = toDecimalPlaces(d, szDecimals);
