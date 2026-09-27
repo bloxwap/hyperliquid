@@ -1,0 +1,50 @@
+# Hyperliquid SDK · Bloxwap
+
+> @bloxwap/hyperliquid is an open-source (MIT) TypeScript and JavaScript SDK for the Hyperliquid exchange API. It provides typed clients for market data (Info), trading (Exchange), real-time streams (Subscription/WebSocket), and explorer data, over HTTP or WebSocket transports, on Bun, Node.js, browsers, and React Native. Maintained by Bloxwap, Inc. and published on npm.
+
+## When to use this SDK
+
+Reach for this SDK when the task is to:
+
+- Read Hyperliquid market data (mids, order books, candles, funding) or account state from TypeScript/JavaScript.
+- Place, modify, or cancel Hyperliquid orders, manage vaults, or sign exchange actions with a wallet.
+- Subscribe to real-time market or account updates with automatic reconnection.
+- Build a trading bot, dashboard, or agent that calls the Hyperliquid API programmatically.
+
+Do not use it for non-Hyperliquid exchanges, or for custody of user funds; signing keys stay with the caller.
+
+## How an agent should use this site
+
+- Every documentation page has a Markdown mirror: append `.md` to the page path without its trailing slash (for example `/hyperliquid/docs/clients/` becomes `/hyperliquid/docs/clients.md`).
+- `llms-full.txt` contains the entire documentation as one Markdown file.
+- The npm package README doubles as the quick-start: https://www.npmjs.com/package/@bloxwap/hyperliquid
+
+## Documentation (Markdown)
+
+- [Documentation overview](https://bloxwap.github.io/hyperliquid/docs.md): SDK capabilities and install
+- [Connect to Hyperliquid (transports)](https://bloxwap.github.io/hyperliquid/docs/transports.md): HTTP and WebSocket transports, endpoints, timeouts
+- [Clients](https://bloxwap.github.io/hyperliquid/docs/clients.md): Info, Exchange, Subscription, and Explorer clients
+- [Error handling](https://bloxwap.github.io/hyperliquid/docs/error-handling.md): typed errors and retries
+- [Signing](https://bloxwap.github.io/hyperliquid/docs/signing.md): wallets, EIP-712 action signing
+- [Utilities](https://bloxwap.github.io/hyperliquid/docs/utilities.md): helpers for prices, sizes, and symbols
+- [Guides](https://bloxwap.github.io/hyperliquid/docs/guides.md): task-focused walkthroughs
+- [Agent wallets and vaults](https://bloxwap.github.io/hyperliquid/docs/guides/agent-wallets-and-vaults.md): delegated signing for agents
+- [Browser wallets](https://bloxwap.github.io/hyperliquid/docs/guides/browser-wallets.md): connect MetaMask-style wallets
+- [Market orders](https://bloxwap.github.io/hyperliquid/docs/guides/market-orders.md): place market orders correctly
+- [Tree-shaking](https://bloxwap.github.io/hyperliquid/docs/guides/tree-shaking.md): minimal bundles
+- [Reference](https://bloxwap.github.io/hyperliquid/docs/reference.md): API reference notes
+- [Known documentation drift](https://bloxwap.github.io/hyperliquid/docs/reference/known-drift.md): where the API differs from its docs
+
+## Machine-readable files
+
+- [llms-full.txt](https://bloxwap.github.io/hyperliquid/llms-full.txt): all documentation in one Markdown file
+- [Sitemap](https://bloxwap.github.io/hyperliquid/sitemap.xml): every published page
+- [Search index](https://bloxwap.github.io/hyperliquid/search-index.json): full-text search data as JSON
+
+## Project
+
+- [GitHub repository](https://github.com/bloxwap/hyperliquid): source, issues, and releases
+- [npm package](https://www.npmjs.com/package/@bloxwap/hyperliquid): @bloxwap/hyperliquid
+- [About](https://bloxwap.github.io/hyperliquid/about/): who maintains this SDK
+- [Contact](https://bloxwap.github.io/hyperliquid/contact/): support email and issue tracker
+- [Privacy](https://bloxwap.github.io/hyperliquid/privacy/): this site collects no data

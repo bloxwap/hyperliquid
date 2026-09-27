@@ -58,6 +58,22 @@ NEXT_PUBLIC_BASE_PATH=/hyperliquid bun run docs:preview
 Open `http://localhost:4173/hyperliquid/`. The preview serves only the static files in `apps/docs/out`.
 The build verifies every documentation page, internal link, asset, and anchor, plus the static JSON search index and
 `.nojekyll`. It also checks each page's social metadata and its distinct 1200 × 630 PNG card.
+
+## Agent-readable files
+
+The build also exports files that let AI agents use the site without rendering JavaScript:
+
+- `public/llms.txt` is the curated entry point: what the SDK does, when to use it, and links to every page.
+- `scripts/export-markdown.ts` runs after `next build` and writes a Markdown mirror for each documentation page
+  (`/docs/clients/` → `/docs/clients.md`, served as `text/markdown`) plus a concatenated `llms-full.txt`.
+- `app/sitemap.ts` emits `sitemap.xml`, and `public/robots.txt` explicitly allows AI crawlers.
+- `/about/`, `/contact/`, and `/privacy/` are trust pages, and the homepage carries JSON-LD
+  (Organization with a contact point, WebSite, SoftwareApplication).
+- `app/not-found.tsx` gives the exported `404.html` an explanatory body with links to the docs, sitemap, and
+  `llms.txt`.
+
+`scripts/verify-export.ts` checks all of these after every build. GitHub Pages cannot do server-driven content
+negotiation, so `Accept: text/markdown` requests still receive HTML; the `.md` mirrors are the Markdown path.
 Build without `NEXT_PUBLIC_BASE_PATH` to serve at a domain root instead.
 
 ## Social cards

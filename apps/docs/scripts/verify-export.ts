@@ -277,6 +277,141 @@ if (!searchArtifact) {
   }
 }
 
+// Agent-readiness artifacts: sitemap, robots.txt, llms.txt, Markdown mirrors, trust pages,
+// homepage JSON-LD, and a helpful 404 body.
+let checkedAgentFiles = 0;
+const readOut = async (file: string): Promise<string> => await Bun.file(resolve(outDir, file)).text();
+const visibleText = (html: string): string =>
+  html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&\w+;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+if (!files.has("sitemap.xml")) {
+  errors.add("Missing sitemap.xml.");
+} else {
+  const sitemap = await readOut("sitemap.xml");
+  const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+  if (locations.length === 0) errors.add("sitemap.xml lists no URLs.");
+  if (!sitemap.includes("<lastmod>")) errors.add("sitemap.xml has no lastmod dates.");
+  for (const route of [...contentPages.values(), "/about/", "/contact/", "/privacy/"]) {
+    const expected = `${publishedOrigin}${publishedBasePath}${route}`;
+    if (!locations.includes(expected)) errors.add(`sitemap.xml: missing ${expected}.`);
+  }
+  checkedAgentFiles++;
+}
+
+if (!files.has("robots.txt")) {
+  errors.add("Missing robots.txt.");
+} else {
+  const robots = await readOut("robots.txt");
+  if (!/User-agent:\s*\*[\s\S]*?Allow:\s*\//i.test(robots)) errors.add("robots.txt does not allow all crawlers.");
+  for (const agent of ["ChatGPT-User", "ClaudeBot", "Google-Extended", "DeepSeekBot"]) {
+    if (!robots.includes(agent)) errors.add(`robots.txt: no explicit rule for ${agent}.`);
+  }
+  if (!robots.includes(`Sitemap: ${publishedOrigin}${publishedBasePath}/sitemap.xml`)) {
+    errors.add("robots.txt: missing published Sitemap directive.");
+  }
+  checkedAgentFiles++;
+}
+
+if (!files.has("llms.txt")) {
+  errors.add("Missing llms.txt.");
+} else {
+  const llms = await readOut("llms.txt");
+  if (llms.length < 500) errors.add(`llms.txt is too short (${llms.length} characters).`);
+  if (!llms.startsWith("# ")) errors.add("llms.txt must start with an H1 project name.");
+  if (!/when to use/i.test(llms)) errors.add("llms.txt: missing when-to-use guidance for agents.");
+  if (!llms.includes(`${publishedBasePath}/llms-full.txt`)) errors.add("llms.txt: no link to llms-full.txt.");
+  checkedAgentFiles++;
+}
+
+if (!files.has("llms-full.txt")) {
+  errors.add("Missing llms-full.txt.");
+} else {
+  const full = await readOut("llms-full.txt");
+  if (full.length < 10_000) errors.add(`llms-full.txt looks incomplete (${full.length} characters).`);
+  checkedAgentFiles++;
+}
+
+for (const file of docsFiles) {
+  const slug = file
+    .replace(/(^|\/)README\.md$/i, "$1")
+    .replace(/\.md$/i, "")
+    .replace(/\/$/, "");
+  const mirror = slug ? `docs/${slug}.md` : "docs.md";
+  if (!files.has(mirror)) {
+    errors.add(`${file}: missing Markdown mirror ${mirror}.`);
+    continue;
+  }
+  if ((await readOut(mirror)).trim().length < 200) errors.add(`${mirror}: Markdown mirror is suspiciously short.`);
+  checkedAgentFiles++;
+}
+
+for (const trustPage of ["about", "contact", "privacy"]) {
+  const file = `${trustPage}/index.html`;
+  const page = pages.get(file);
+  if (!page) {
+    errors.add(`Missing trust page /${trustPage}/.`);
+    continue;
+  }
+  const html = await readOut(file);
+  if (!/<h1[\s>]/.test(html)) errors.add(`${file}: trust page has no H1.`);
+  const length = visibleText(html).length;
+  if (length < 500) errors.add(`${file}: trust page needs at least 500 characters of content, has ${length}.`);
+  const canonical = page.canonicals[0];
+  if (canonical !== `${publishedOrigin}${publishedBasePath}/${trustPage}/`) {
+    errors.add(`${file}: canonical must be the published /${trustPage}/ URL, got ${JSON.stringify(canonical)}.`);
+  }
+  checkedAgentFiles++;
+}
+
+const homepage = pages.get("index.html");
+if (homepage) {
+  const html = await readOut("index.html");
+  const ldJson = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)?.[1];
+  if (!ldJson) {
+    errors.add("index.html: missing JSON-LD structured data.");
+  } else {
+    try {
+      const data = JSON.parse(ldJson) as { "@graph"?: Record<string, unknown>[] };
+      const graph = data["@graph"] ?? [];
+      const software = graph.find((node) => node["@type"] === "SoftwareApplication");
+      if (!software?.name || !software.description || !software.url) {
+        errors.add("index.html: SoftwareApplication JSON-LD needs name, description, and url.");
+      }
+      const organization = graph.find((node) => node["@type"] === "Organization") as
+        | { contactPoint?: { email?: string; contactType?: string } }
+        | undefined;
+      if (!organization) {
+        errors.add("index.html: missing Organization JSON-LD.");
+      } else if (!organization.contactPoint?.email || !organization.contactPoint.contactType) {
+        errors.add("index.html: Organization JSON-LD needs a contactPoint with email and contactType.");
+      }
+      checkedAgentFiles++;
+    } catch {
+      errors.add("index.html: JSON-LD is not valid JSON.");
+    }
+  }
+}
+
+const notFound = pages.get("404.html");
+if (!notFound) {
+  errors.add("Missing exported 404.html.");
+} else {
+  const html = await readOut("404.html");
+  if (visibleText(html).length < 20) errors.add("404.html: error body must explain the problem in 20+ characters.");
+  const hrefs = notFound.references.filter((reference) => reference.attribute === "href").map((r) => r.value);
+  if (!hrefs.some((href) => href.endsWith("/docs/") || href.endsWith("/docs"))) {
+    errors.add("404.html: must link to the documentation.");
+  }
+  if (!hrefs.some((href) => href.endsWith("/llms.txt"))) errors.add("404.html: must link to llms.txt.");
+  checkedAgentFiles++;
+}
+
 if (errors.size > 0) {
   console.error(`Static export verification failed (${errors.size} issue${errors.size === 1 ? "" : "s"}):`);
   for (const error of [...errors].sort().slice(0, 60)) console.error(`- ${error}`);
@@ -286,6 +421,6 @@ if (errors.size > 0) {
 
 console.log(
   `Verified ${docsFiles.length} docs pages, ${htmlFiles.length} HTML files, ${checkedLinks} internal links/assets, ` +
-    `${checkedAnchors} anchors, ${checkedCards} unique social cards, static search, and .nojekyll ` +
-    `(base path: ${basePath || "/"}).`,
+    `${checkedAnchors} anchors, ${checkedCards} unique social cards, static search, ${checkedAgentFiles} ` +
+    `agent-readiness artifacts, and .nojekyll (base path: ${basePath || "/"}).`,
 );

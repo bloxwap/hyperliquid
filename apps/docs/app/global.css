@@ -540,6 +540,14 @@ textarea:focus-visible {
 .prose {
   line-height: 1.75;
 }
+/* Trust pages (about, contact, privacy, 404): a readable article column inside the landing width. */
+.trust-page h1 {
+  font-family: var(--font-docs-display), var(--font-sans);
+  font-size: clamp(1.875rem, 3vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
 .prose h2 {
   font-family: var(--font-docs-display), var(--font-sans);
   font-size: var(--text-2xl);
