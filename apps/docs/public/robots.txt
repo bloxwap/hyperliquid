@@ -1,0 +1,35 @@
+# Hyperliquid SDK documentation — https://bloxwap.github.io/hyperliquid/
+# All agents and crawlers are welcome, including AI assistants and their fetchers.
+
+User-agent: *
+Allow: /
+
+# AI agent user-agents, allowed explicitly so default-deny WAF rules have a match.
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: DeepSeekBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+Sitemap: https://bloxwap.github.io/hyperliquid/sitemap.xml

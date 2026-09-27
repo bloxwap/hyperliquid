@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "fumadocs-mdx && next dev --port 3901",
     "preview": "bun run scripts/preview.ts",
-    "build": "fumadocs-mdx && next build && bun run scripts/verify-export.ts",
+    "build": "fumadocs-mdx && next build && bun run scripts/export-markdown.ts && bun run scripts/verify-export.ts",
     "check": "bun run check:content && fumadocs-mdx && next typegen && tsc --noEmit",
     "check:content": "bun run scripts/check-content.ts && markdownlint-cli2 --config ../../.markdownlint-cli2.jsonc ../../README.md ../../packages/hyperliquid/README.md README.md \"content/**/*.md\""
   },
