@@ -581,6 +581,24 @@ textarea:focus-visible {
   background: color-mix(in srgb, var(--color-accent) 8%, transparent);
   color: var(--color-accent);
 }
+/* Fumadocs' sidebar icon-link bar ships as a stroked box; with GitHub its only link, drop the box
+   and leave the icon. */
+#nd-sidebar div:has(> a[href="https://github.com/bloxwap/hyperliquid"]) {
+  border: 0;
+  background: none;
+}
+/* Previous/next page links: fill-only cards like the landing's feature cards. */
+.page-nav > a {
+  padding: --spacing(5) --spacing(6);
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-raised);
+  transition: background-color var(--duration-interactive) var(--ease-out);
+}
+.page-nav > a:hover {
+  background: color-mix(in oklab, var(--color-surface-raised) 88%, var(--color-text));
+  color: var(--color-accent);
+}
 .docs-sidebar-footer {
   padding-top: --spacing(2);
 }
