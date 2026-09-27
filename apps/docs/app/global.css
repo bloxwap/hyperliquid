@@ -26,6 +26,8 @@
   --color-surface-raised: var(--card);
   --color-text: var(--foreground);
   --color-text-muted: var(--muted-foreground);
+  /* Quietest gray that still clears WCAG AA 4.5:1 on the surface (bloxwap.com's footer base). */
+  --color-text-quiet: #878d96;
   --color-line: var(--border);
   /* A fill one step above whatever overlay it sits in (dialogs use --popover, the same gray as
      --color-surface-raised, so raised fills vanish inside them). */
@@ -97,7 +99,8 @@ textarea:focus-visible {
 .button-secondary,
 .feature-card h2,
 .feature-card h2 > svg,
-.landing-footer a,
+.footer-col a,
+.footer-base a,
 .edit-link,
 .docs-app-link,
 .prose a {
@@ -130,9 +133,11 @@ textarea:focus-visible {
    content 16px, so matching both lines the hero up with the logo and the code window with the
    header's right-hand controls at every width. */
 .landing {
+  /* Grows to fill a tall window, so the slack sits above the footer rather than above the hero. */
+  flex: 1;
   width: 100%;
   max-width: var(--fd-layout-width, 1400px);
-  margin: auto;
+  margin: 0 auto;
   padding: --spacing(24) --spacing(4) --spacing(6);
 }
 .hero {
@@ -400,21 +405,87 @@ textarea:focus-visible {
   font-size: var(--text-sm);
   line-height: 1.7;
 }
-.landing-footer {
+/* Site footer, ported from bloxwap.com and aligned to the header column like .landing. */
+/* Full-bleed so its fill hides the page scrolling beneath it; the padding keeps the content in the
+   header's column. */
+.site-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  width: 100%;
+  padding: --spacing(8) max(--spacing(4), calc((100% - var(--fd-layout-width, 1400px)) / 2 + --spacing(4)));
+  background: var(--color-surface);
+}
+/* Logo block and the three link columns share the width evenly. */
+.footer-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: --spacing(10) --spacing(8);
+}
+.footer-brand {
   display: flex;
-  justify-content: space-between;
-  gap: --spacing(4);
-  margin-top: --spacing(16);
-  font-size: var(--text-xs);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: --spacing(3);
+}
+/* The lockup's tile-to-wordmark gap is a quarter of the tile, as on bloxwap.com. */
+.footer-lockup {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.footer-lockup img {
+  width: 36px;
+  height: 36px;
+}
+.footer-wordmark {
+  display: block;
+  height: 22.27px;
+  width: auto;
+  overflow: visible;
+}
+.wordmark-letters {
+  fill: var(--color-text);
+}
+.wordmark-x {
+  stroke: var(--color-accent);
+}
+.footer-brand p {
+  margin: 0;
+  font-size: 13px;
   color: var(--color-text-muted);
 }
-.landing-footer a {
+.footer-col h2 {
+  margin: 0 0 --spacing(3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.footer-col a {
+  display: block;
+  padding: --spacing(1) 0;
+  font-size: 13px;
+  color: color-mix(in oklab, var(--color-text) 80%, transparent);
+}
+.footer-col a:hover,
+.footer-base a:hover {
+  color: var(--color-accent);
+}
+.footer-base {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: --spacing(2);
+  margin-top: --spacing(9);
+  font-size: 11px;
+  color: var(--color-text-quiet);
+}
+.footer-legal {
   display: inline-flex;
   align-items: center;
-  gap: --spacing(1);
-}
-.landing-footer a:hover {
-  color: var(--color-accent);
+  gap: --spacing(2);
 }
 
 /* Entrance: three attention layers, 200 ms apart — headline, then supporting copy and actions,
@@ -508,6 +579,24 @@ textarea:focus-visible {
 }
 #nd-sidebar a[data-active="true"] {
   background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  color: var(--color-accent);
+}
+/* Fumadocs' sidebar icon-link bar ships as a stroked box; with GitHub its only link, drop the box
+   and leave the icon. */
+#nd-sidebar div:has(> a[href="https://github.com/bloxwap/hyperliquid"]) {
+  border: 0;
+  background: none;
+}
+/* Previous/next page links: fill-only cards like the landing's feature cards. */
+.page-nav > a {
+  padding: --spacing(5) --spacing(6);
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-raised);
+  transition: background-color var(--duration-interactive) var(--ease-out);
+}
+.page-nav > a:hover {
+  background: color-mix(in oklab, var(--color-surface-raised) 88%, var(--color-text));
   color: var(--color-accent);
 }
 .docs-sidebar-footer {
@@ -624,6 +713,22 @@ textarea:focus-visible {
   .landing {
     padding-top: --spacing(12);
   }
+  /* Stacked, the footer is too tall to keep on screen; it follows the content instead. */
+  .site-footer {
+    position: static;
+  }
+  /* The logo takes its own row; the three columns stay even below it. */
+  .footer-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: --spacing(6);
+  }
+  .footer-brand {
+    grid-column: 1 / -1;
+  }
+  /* Grow link tap areas toward 44px for touch. */
+  .footer-col a {
+    padding: --spacing(3) 0;
+  }
   .hero {
     grid-template-columns: 1fr;
     gap: --spacing(8);
@@ -673,9 +778,8 @@ textarea:focus-visible {
   .feature-card p {
     max-width: none;
   }
-  .landing-footer {
-    flex-direction: column;
-    margin-top: --spacing(10);
+  .footer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (prefers-reduced-motion: reduce) {

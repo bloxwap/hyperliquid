@@ -24,7 +24,7 @@ export default async function Page({ params }: PageProps) {
   const originalPath = page.path.replace(/(^|\/)index\.md$/, "$1README.md");
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    <DocsPage toc={page.data.toc} full={page.data.full} footer={{ className: "page-nav" }}>
       <DocsBody>
         <MDX
           components={getMDXComponents({
