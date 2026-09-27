@@ -19,6 +19,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { privateKeyToAccount } from "viem/accounts";
 
 import {
+  AbstractWalletError,
   type AbstractViemLocalAccount,
   createFastLocalWallet,
   signL1Action,
@@ -26,7 +27,7 @@ import {
   signUserSignedAction,
 } from "@bloxwap/hyperliquid/signing";
 import { ApproveAgentTypes } from "@bloxwap/hyperliquid/api/exchange";
-import { _setEccLoaderForTests, loadTinySecp256k1 } from "../../src/signing/_fastWallet.ts";
+import { _setEccLoaderForTests, loadTinySecp256k1, resolvePrivateKeyToAccount } from "../../src/signing/_fastWallet.ts";
 
 // --- Fixtures (same shapes as tests/signing/fastDigest.test.ts) --------------
 
@@ -405,6 +406,23 @@ describe("loadTinySecp256k1() failure arms", () => {
 });
 
 // --- JSON-RPC wallets stay untouched --------------------------------------------
+
+describe("resolvePrivateKeyToAccount() failure arm", () => {
+  test("an unloadable viem/accounts is reported with the remedy and the original cause", async () => {
+    const cause = new Error("A dynamic import callback was invoked without --experimental-vm-modules");
+    const error = await resolvePrivateKeyToAccount(undefined, "signTypedData", () => Promise.reject(cause)).catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(AbstractWalletError);
+    expect((error as Error).message).toContain("signTypedData needs `viem/accounts`");
+    expect((error as Error).message).toContain("options.privateKeyToAccount");
+    expect((error as Error).cause).toBe(cause);
+  });
+
+  test("the default import resolves to viem's privateKeyToAccount", async () => {
+    await expect(resolvePrivateKeyToAccount(undefined, "signTypedData")).resolves.toBe(privateKeyToAccount);
+  });
+});
 
 describe("createFastLocalWallet() alongside JSON-RPC wallets", () => {
   test("a JSON-RPC wallet never takes the raw-digest path, even backed by a WASM-capable signer", async () => {

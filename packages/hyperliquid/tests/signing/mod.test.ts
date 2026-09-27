@@ -260,6 +260,24 @@ describe("signing", () => {
 
       assertEquals(actual, expected);
     });
+
+    // A malformed vault address must throw rather than hash a different action than described.
+    for (const [name, vaultAddress] of [
+      ["too short", "0x12345678901234567890123456789012345678"],
+      ["32-byte", `0x${"12".repeat(32)}`],
+      ["missing 0x prefix", `12${"34".repeat(20)}`],
+      ["non-hex character", "0x123456789012345678901234567890123456789g"],
+    ] as const) {
+      test(`rejects a ${name} vaultAddress`, () => {
+        expect(() =>
+          createL1ActionHash({
+            action: L1_ACTION.action,
+            nonce: L1_ACTION.nonce,
+            vaultAddress: vaultAddress as `0x${string}`,
+          }),
+        ).toThrow("Invalid vault address");
+      });
+    }
   });
 
   describe("signL1Action()", () => {

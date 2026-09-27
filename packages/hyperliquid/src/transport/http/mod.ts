@@ -387,7 +387,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
     const hasTimeout = timeoutMs !== null && Number.isFinite(timeoutMs);
     const controller = hasSignal || hasTimeout ? new AbortController() : undefined;
     const detachRelay = controller !== undefined && hasSignal ? abort.relay([signal, fetchSignal], controller) : noop;
-    let timeout: ReturnType<typeof abort.scheduleTimeout> | undefined;
+    let timeout: ReturnType<abort.TimeoutWheel["schedule"]> | undefined;
     // The one serialization of the payload — wire form, weight source, and error snapshot all
     // derive from it, so getters/proxies/toJSON run exactly once per request.
     let body: string | undefined;

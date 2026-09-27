@@ -32,15 +32,18 @@ class PendingSubscriptionTransport extends MockSubscriptionTransport {
     });
   }
 
-  /** Resolves the oldest pending subscribe with a counted unsubscribe handle. */
-  confirmNext(): void {
+  /**
+   * Resolves the oldest pending subscribe with a counted unsubscribe handle, whose unsubscribe
+   * rejects with `unsubscribeError` when one is given.
+   */
+  confirmNext(unsubscribeError?: Error): void {
     const resolve = this._resolvers.shift();
     this._rejecters.shift();
     if (resolve === undefined) throw new Error("no pending subscribe");
     resolve({
       unsubscribe: () => {
         this.unsubscribeCalls++;
-        return Promise.resolve();
+        return unsubscribeError === undefined ? Promise.resolve() : Promise.reject(unsubscribeError);
       },
     });
   }
@@ -149,6 +152,19 @@ describe("SubscriptionClient.unsubscribeAll", () => {
     expect(transport.unsubscribeCalls).toBe(1);
 
     await client.unsubscribeAll(); // the late handle never joined the registry
+    expect(transport.unsubscribeCalls).toBe(1);
+  });
+
+  test("retiring a late confirmation swallows its unsubscribe failure", async () => {
+    const transport = new PendingSubscriptionTransport();
+    const client = new SubscriptionClient({ transport });
+
+    const pending = client.allMids(() => {});
+    await client.unsubscribeAll();
+
+    transport.confirmNext(new Error("socket closed"));
+    await pending; // resolves: the caller's promise neither waits for nor rejects with the teardown
+    await new Promise((resolve) => setTimeout(resolve, 0)); // let the retiring unsubscribe settle
     expect(transport.unsubscribeCalls).toBe(1);
   });
 

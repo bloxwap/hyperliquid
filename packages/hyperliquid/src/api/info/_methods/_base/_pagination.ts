@@ -6,8 +6,8 @@
  * to the last returned timestamp (`startTime` is inclusive). {@linkcode fetchPages} drives that
  * loop as an async generator: it re-requests the boundary timestamp and discards the records it
  * has already yielded, so a page capped in the middle of a same-millisecond cluster neither skips
- * the cluster's remainder nor duplicates the overlap. {@linkcode fetchAllPages} is the buffered
- * form: it collects every yielded page into one array.
+ * the cluster's remainder nor duplicates the overlap. {@linkcode collectPages} buffers such a
+ * stream into one array.
  *
  * @module
  */
@@ -123,35 +123,6 @@ export async function* fetchPages<T>(
     if (items.length < pageLimit) return; // short page: nothing more to fetch
     nextStartTime = watermark; // inclusive: re-requests the boundary, overlap dropped above
   }
-}
-
-/**
- * Fetches every page of a time-ranged endpoint and concatenates them in request order.
- *
- * Buffered form of {@linkcode fetchPages} — same walk, same boundary handling, but the caller
- * gets one array instead of a page stream. See {@linkcode fetchPages} for the pagination
- * contract.
- *
- * @param fetchPage Issues one request for the given `startTime` and resolves with its page.
- * @param startTime Start time of the whole range (in ms since epoch).
- * @param pageLimit The endpoint's per-response cap; a page with fewer elements ends the range.
- * @param timeOf Reads an element's timestamp (in ms since epoch).
- * @param keyOf Reads an element's identity, unique within one millisecond (used to drop the
- *   inclusive-boundary overlap).
- * @param options Pagination options; validated before the first request is made.
- * @return The concatenation of every fetched page, without duplicates.
- *
- * @throws {ValidationError} When `options` fails validation (before any request is sent).
- */
-export async function fetchAllPages<T>(
-  fetchPage: (startTime: number) => Promise<T[]>,
-  startTime: number,
-  pageLimit: number,
-  timeOf: (item: T) => number,
-  keyOf: (item: T) => string,
-  options?: PaginationOptions,
-): Promise<T[]> {
-  return collectPages(fetchPages(fetchPage, startTime, pageLimit, timeOf, keyOf, options));
 }
 
 /**

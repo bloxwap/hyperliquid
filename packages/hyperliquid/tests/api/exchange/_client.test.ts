@@ -922,6 +922,30 @@ describe("ExchangeClient options plumbing (offline)", () => {
     assertEquals(calls.length, 1);
     assertEquals(calls[0].payload.action.signatureChainId, "0x1");
   });
+
+  test("a function signatureChainId is awaited on every user-signed action", async () => {
+    const { calls, transport } = recordingTransport();
+    const chainIds: `0x${string}`[] = ["0xa4b1", "0x66eee"];
+    const client = new ExchangeClient(
+      singleWalletConfig(transport, { signatureChainId: async () => chainIds.shift()! }),
+    );
+
+    await client.approveAgent({ agentAddress: ADDR1, agentName: "agentName" });
+    await client.approveAgent({ agentAddress: ADDR1, agentName: "agentName" });
+
+    assertEquals(
+      calls.map((call) => call.payload.action.signatureChainId),
+      ["0xa4b1", "0x66eee"],
+    );
+  });
+
+  test("a function signatureChainId returning a non-hex value is rejected before signing", async () => {
+    const { calls, transport } = recordingTransport();
+    const client = new ExchangeClient(singleWalletConfig(transport, { signatureChainId: () => "chain" as never }));
+
+    await assertRejects(() => client.approveAgent({ agentAddress: ADDR1, agentName: "agentName" }), ValidationError);
+    assertEquals(calls.length, 0);
+  });
 });
 
 // ============================================================

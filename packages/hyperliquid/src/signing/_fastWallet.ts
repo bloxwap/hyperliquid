@@ -90,14 +90,19 @@ export type PrivateKeyToAccount = (privateKey: `0x${string}`) => AbstractViemLoc
  *
  * When neither is possible the failure is reported for what it is, rather than surfacing the
  * host's opaque message from somewhere deep in the signing path.
+ *
+ * Exported (never from `mod.ts`) for the same reason as {@linkcode loadTinySecp256k1}: a failing
+ * real import can only be driven through the `importViem` parameter. Production calls always take
+ * the default real import.
  */
-async function resolvePrivateKeyToAccount(
+export async function resolvePrivateKeyToAccount(
   provided: PrivateKeyToAccount | undefined,
   need: "the tiny-secp256k1 fallback" | "signTypedData",
+  importViem: () => Promise<{ privateKeyToAccount: unknown }> = () => import("viem/accounts"),
 ): Promise<PrivateKeyToAccount> {
   if (provided !== undefined) return provided;
   try {
-    const { privateKeyToAccount } = await import("viem/accounts");
+    const { privateKeyToAccount } = await importViem();
     return privateKeyToAccount as PrivateKeyToAccount;
   } catch (cause) {
     // Two very different situations land here and the remedy differs, so name both rather than

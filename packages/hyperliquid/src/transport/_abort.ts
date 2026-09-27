@@ -11,24 +11,6 @@ function noop(): void {
   return;
 }
 
-/** Aborts `target` with a `TimeoutError` after `ms`; `cancel` clears the timer, `reason` identifies the abort. */
-export function scheduleTimeout(target: AbortController, ms: number | null): { reason: Error; cancel: () => void } {
-  // The TimeoutError is created lazily: a request that settles before the timer fires never needs
-  // it. It is memoized because callers classify timeouts by reference (`error === timeout.reason`),
-  // so the timer callback and every `reason` read must observe the same object.
-  let reason: Error | undefined;
-  const getReason = (): Error => (reason ??= new DOMException_("Signal timed out.", "TimeoutError"));
-  // `null` disables the timeout. setTimeout also clamps a non-finite delay to
-  // 1 ms, which would turn `Infinity` ("never time out") into an instant abort.
-  const timeoutId = ms !== null && Number.isFinite(ms) ? setTimeout(() => target.abort(getReason()), ms) : undefined;
-  return {
-    get reason(): Error {
-      return getReason();
-    },
-    cancel: () => clearTimeout(timeoutId),
-  };
-}
-
 /** Longest delay `setTimeout` accepts without clamping to ~1 ms: 2^31-1, the same bound the rate limiter slices at. */
 const MAX_TIMEOUT_DELAY_MS = 2_147_483_647;
 
@@ -59,7 +41,11 @@ interface TimeoutEntry {
   deadline: number;
   /** Controller aborted with {@linkcode reason} once the deadline passes. */
   target: AbortController;
-  /** Memoized abort reason, created lazily — see {@linkcode scheduleTimeout} for why. */
+  /**
+   * Memoized abort reason, created lazily: a request that settles before its deadline never needs
+   * it, and callers classify timeouts by reference (`error === timeout.reason`), so the abort and
+   * every `reason` read must observe the same object.
+   */
   reason?: Error;
   /** Set by `cancel()`: the entry is drained without aborting when it reaches the head. */
   cancelled: boolean;
@@ -67,8 +53,8 @@ interface TimeoutEntry {
 
 /**
  * A shared request-timeout scheduler: one deadline-sorted queue with at most ONE armed native
- * timer, replacing {@linkcode scheduleTimeout}'s per-request `setTimeout`/`clearTimeout` pair on
- * the HTTP transport's hot path.
+ * timer, in place of a per-request `setTimeout`/`clearTimeout` pair on the HTTP transport's hot
+ * path.
  *
  * Per-request semantics are preserved exactly: the abort fires no earlier than `Date.now() + ms`
  * stamped at schedule time (the callback re-checks the deadline, so an early wake-up only
@@ -98,8 +84,7 @@ export class TimeoutWheel {
   }
 
   /**
-   * Arms a timeout for `target`, returning the same handle shape as {@linkcode scheduleTimeout}:
-   * `reason` is the lazily-created, memoized `TimeoutError` the abort fires with, and `cancel`
+   * Arms a timeout for `target`, returning a handle whose `reason` is the lazily-created, memoized `TimeoutError` the abort fires with, and `cancel`
    * withdraws the entry (clear-on-settle).
    *
    * `null` — and any non-finite value — disables the timeout: no queue entry, no timer, just

@@ -822,6 +822,42 @@ describe("fastAssetCtxs", () => {
     }
   });
 
+  test("stream path rejects non-alphabet base64 even when Buffer would accept it", async () => {
+    const { _setForceStreamDecompressForTests } = await import(
+      "../../../src/api/subscription/_methods/fastAssetCtxs.ts"
+    );
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    const transport = new MockSubscriptionTransport();
+    const client = new SubscriptionClient({ transport });
+    const received: unknown[] = [];
+    await client.fastAssetCtxs((data) => received.push(data));
+
+    _setForceStreamDecompressForTests(true);
+    try {
+      transport.emit("AB!D");
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      expect(received).toEqual([]);
+      expect(String(errorSpy.mock.calls[0]?.[1])).toContain("Invalid base64");
+    } finally {
+      _setForceStreamDecompressForTests(false);
+      errorSpy.mockRestore();
+    }
+  });
+
+  test("resolveInflateRawSync() uses node:zlib without Bun, and nothing without either", async () => {
+    const { resolveInflateRawSync } = await import("../../../src/api/subscription/_methods/fastAssetCtxs.ts");
+    const zlib = await import("node:zlib");
+    const json = JSON.stringify({ BTC: { markPx: "100" } });
+
+    const inflate = resolveInflateRawSync({
+      process: { getBuiltinModule: (id: string) => (id === "node:zlib" ? zlib : undefined) },
+    });
+    expect(inflate?.(zlib.deflateRawSync(json))).toBe(json);
+
+    expect(resolveInflateRawSync({})).toBeUndefined();
+    expect(resolveInflateRawSync({ process: { getBuiltinModule: () => undefined } })).toBeUndefined();
+  });
+
   // The native path prefers `Bun.inflateSync` over `node:zlib`'s `inflateRawSync` on Bun. That swap is
   // only sound if both are raw DEFLATE (RFC 1951) with identical output and both reject what the
   // other rejects, so the existing error handling still applies — pinned here directly.

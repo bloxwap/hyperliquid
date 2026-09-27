@@ -347,6 +347,19 @@ describe("createUserSignedDigestBytes() fallback", () => {
     expect(createUserSignedDigestBytes(action, ApproveAgentTypes, "0x66eee")).toBeUndefined();
   });
 
+  test("returns undefined for a malformed address — wrong length, no 0x prefix, or not a string", () => {
+    for (const agentAddress of ["0x1234", `12${USER.slice(2)}`, 1234]) {
+      expect(createUserSignedDigestBytes({ ...ACTION, agentAddress }, ApproveAgentTypes, "0x66eee")).toBeUndefined();
+    }
+  });
+
+  test("returns undefined for a malformed dynamic bytes value — odd length, no 0x prefix, or not a string", () => {
+    const base = CASES.find((c) => c.label === "sendToEvmWithData (bytes + uint32 fields)")!.message;
+    for (const data of ["0x123", "abcd", 1234]) {
+      expect(createUserSignedDigestBytes({ ...base, data }, SendToEvmWithDataTypes, "0x66eee")).toBeUndefined();
+    }
+  });
+
   test("returns undefined for a missing declared field", () => {
     const { agentName: _, ...action } = ACTION;
     expect(createUserSignedDigestBytes(action, ApproveAgentTypes, "0x66eee")).toBeUndefined();
