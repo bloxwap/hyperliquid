@@ -114,3 +114,5 @@ export * from "./_methods/validatorSummaries.ts";
 export * from "./_methods/vaultDetails.ts";
 export * from "./_methods/vaultSummaries.ts";
 export * from "./_methods/webData2.ts";
+
+export * from "./_methods/outcomeDeployerLimits.ts";
