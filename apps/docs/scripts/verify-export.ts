@@ -184,7 +184,7 @@ for (const [file, route] of contentPages) {
   // Social metadata always describes the published site, including in local builds
   // whose assets and navigation are served without the GitHub Pages base path.
   const canonicalUrl = `${publishedOrigin}${publishedBasePath}${route}`;
-  const card = `og/${route.replace(/^\/+|\/+$/g, "") || "index"}.png`;
+  const card = `og/${route.replace(/^\/+|\/+$/g, "") || "home"}.png`;
   const imageUrl = `${publishedOrigin}${publishedBasePath}/${card}`;
   expectedCards.add(card);
   const canonical = requiredValue(page.canonicals, `${file}: canonical URL`);

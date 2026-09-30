@@ -83,14 +83,14 @@ from the same Markdown frontmatter used by the site; new pages receive cards aut
 metadata share the same image, title, description, and accessible image text. Canonical URLs and social image URLs
 always point to the published GitHub Pages site, including when previewing locally.
 
-- `lib/og-image.tsx` defines the GitHub-style card layout: a `section/Title` path headline, description, app icon,
-  a facts row with the wordmark, and the brand palette as a bottom bar.
+- `lib/og-image.tsx` defines the GitHub-style card layout shared with the chart and sfx sites: an owner/repo
+  headline, description, app icon, a stats row counted from the SDK's clients, and the brand palette as a bottom bar.
 - `lib/brand.ts` vendors the official brand geometry from the Bloxwap monorepo's `packages/tokens/src/brand.ts`.
   Cards draw the wordmark from these SVG paths. Re-copy the geometry from the monorepo when the marks change.
 - `lib/social.ts` defines the published URL and metadata. Update it if the repository or public hostname changes.
-- `app/og/[...slug]/route.tsx` generates `/og/index.png`, `/og/docs.png`, and `/og/docs/<slug>.png` during the static build.
+- `app/og/[...slug]/route.tsx` generates `/og/home.png`, `/og/docs.png`, and `/og/docs/<slug>.png` during the static build.
 
-Cards use Nunito Black for page titles and Nunito Bold for the path prefix, description, and facts. The static Nunito
+Cards use Nunito Black for titles and Nunito Bold for the owner, description, and stats. The static Nunito
 faces come from the Bloxwap monorepo's `packages/og/assets/`; their license is included as
 `public/fonts/Nunito-OG-OFL.txt`.
 The renderer uses bundled fonts and brand geometry locally; it needs no font CDN, API credentials, or image server after
