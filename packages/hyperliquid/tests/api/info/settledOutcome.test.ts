@@ -24,6 +24,8 @@ runTest({
       // deployer/question are only present for template-deployed named outcomes (unobserved
       // live); the offline block below covers them.
       "#/anyOf/0/properties/spec/properties/deployer/present",
+      "#/anyOf/0/properties/spec/properties/venue/present",
+      "#/anyOf/0/properties/spec/properties/deployerFeeScale/present",
       "#/anyOf/0/properties/question/missing",
       "#/anyOf/0/properties/question/present",
       "#/anyOf/0/properties/question/properties/question/anyOf/0",
@@ -55,7 +57,12 @@ describe("settledOutcome (offline)", () => {
       base,
       {
         ...base,
-        spec: { ...base.spec, deployer: "0x0000000000000000000000000000000000000001" },
+        spec: {
+          ...base.spec,
+          deployer: "0x0000000000000000000000000000000000000001",
+          venue: "ab",
+          deployerFeeScale: "1",
+        },
         question: { question: { active: 5 }, name: "Will it rain?", description: "Rain market" },
       },
       {

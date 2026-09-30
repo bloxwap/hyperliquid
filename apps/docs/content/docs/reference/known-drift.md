@@ -156,9 +156,10 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   `outcomeDeploy({ venue, operation })` for all six current operations and their required template fee scales.
   Migrate older `spotDeploy({ outcome: ... })` calls by moving the outcome operation to `operation` and supplying
   the venue; the retained legacy shape is not accepted by the current testnet server.
-- **Read API gap:** testnet `outcomeMeta` also returns top-level `deployers` and `feeScale`, and optional per-outcome
-  `venue` and `deployerFeeScale`, which the current response type does not declare. The queried templates still
-  omit the documented `semanticRestriction` field; its live shape remains unverified.
+- **Read API behavior:** the response types include deployment metadata (`deployers`, `feeScale`, per-outcome
+  `venue` and `deployerFeeScale`) and the same specification fields on settled outcomes. Legacy outcomes may omit
+  these fields. The queried templates still omit the documented `semanticRestriction` field; its live shape
+  remains unverified.
 
 ## Resolved
 
