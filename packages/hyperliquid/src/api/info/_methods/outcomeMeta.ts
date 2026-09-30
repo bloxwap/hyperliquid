@@ -21,6 +21,17 @@ export type OutcomeMetaRequest = v.InferOutput<typeof OutcomeMetaRequest>;
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-outcome-metadata
  */
 export type OutcomeMetaResponse = {
+  /** Outcome deployers, when supplied by the deployment API. */
+  deployers?: {
+    /** Deployer address. @pattern ^0x[a-fA-F0-9]{40}$ */
+    deployer: `0x${string}`;
+    /** Unique venue name. */
+    venue: string;
+    /** Permission names and authorized sub-deployer addresses. */
+    subDeployers: [permission: string, users: `0x${string}`[]][];
+  }[];
+  /** Protocol-wide outcome fee multiplier, when supplied by the server. */
+  feeScale?: string;
   /** Array of prediction market outcomes. */
   outcomes: {
     /** Outcome identifier. */
@@ -43,6 +54,10 @@ export type OutcomeMetaResponse = {
      * @pattern ^0x[a-fA-F0-9]{40}$
      */
     deployer?: `0x${string}`;
+    /** Venue name for template-deployed outcomes; absent on legacy outcomes. */
+    venue?: string;
+    /** Deployer fee multiplier for template-deployed outcomes. */
+    deployerFeeScale?: string;
   }[];
   /** Array of prediction market questions. */
   questions: {

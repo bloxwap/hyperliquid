@@ -47,6 +47,10 @@ export type SettledOutcomeResponse = {
      * @pattern ^0x[a-fA-F0-9]{40}$
      */
     deployer?: `0x${string}`;
+    /** Venue name for template-deployed outcomes; absent on legacy outcomes. */
+    venue?: string;
+    /** Deployer fee multiplier for template-deployed outcomes. */
+    deployerFeeScale?: string;
   };
   /**
    * Settlement fraction.

@@ -13,6 +13,9 @@ runTest({
     const data = await Promise.all([client.outcomeMeta()]);
 
     schemaCoverage(responseSchema, data, [
+      // Current servers always include these; the offline snapshots cover legacy omission.
+      "#/properties/deployers/missing",
+      "#/properties/feeScale/missing",
       "#/properties/outcomes/items/properties/sideSpecs/items/properties/token/present",
       // deployer is only present for outcomes deployed from a template (unobserved live).
       "#/properties/outcomes/items/properties/deployer/present",
