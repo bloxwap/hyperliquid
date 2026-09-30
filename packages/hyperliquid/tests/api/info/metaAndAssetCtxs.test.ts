@@ -22,7 +22,11 @@ runTest({
     const data = await Promise.all(params.map((p) => client.metaAndAssetCtxs(p)));
 
     schemaCoverage(paramsSchema, params);
-    schemaCoverage(responseSchema, data);
+    schemaCoverage(responseSchema, data, [
+      // Legacy timestamps and explicit normal mode are covered by offline snapshots.
+      "#/items/0/properties/universe/items/properties/marginMode/enum/2",
+      "#/items/0/properties/universe/items/properties/lastGrowthModeChangeTime/present",
+    ]);
   },
 });
 

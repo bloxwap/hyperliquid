@@ -154,6 +154,10 @@ runTest({
           ["TEST1", "-0.005"],
         ],
       },
+      { setFundingClamps: [["TEST0", "0.0003"]] },
+      { setDeployerFees: [["TEST0", { scale: "1", growthMode: false }]] },
+      { setOpenInterestCaps: [["TEST0", null]] },
+      { setMarginModes: [["TEST0", "normal"]] },
       { haltTrading: { coin: "TEST0", isHalted: true } },
       { setMarginTableIds: [["TEST0", 1]] },
       {
