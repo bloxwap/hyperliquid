@@ -116,3 +116,5 @@ export * from "./_methods/vaultSummaries.ts";
 export * from "./_methods/webData2.ts";
 
 export * from "./_methods/outcomeDeployerLimits.ts";
+
+export * from "./_methods/userStarState.ts";
