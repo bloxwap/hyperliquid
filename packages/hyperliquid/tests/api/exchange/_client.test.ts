@@ -68,9 +68,22 @@ interface MethodCase {
 // ============================================================
 
 const METHOD_CASES: Record<string, MethodCase> = {
+  outcomeDeploy: {
+    run: (c) =>
+      c.outcomeDeploy({
+        venue: "ab",
+        operation: { registerStandaloneOutcomeFromTemplate: { id: "abc", keywordToValue: [], deployerFeeScale: "1" } },
+      }),
+    action: {
+      type: "outcomeDeploy",
+      venue: "ab",
+      operation: { registerStandaloneOutcomeFromTemplate: { id: "abc", keywordToValue: [], deployerFeeScale: "1" } },
+    },
+    invalid: (c) => c.outcomeDeploy({} as never),
+  },
   activateOutcomeDeployer: {
-    run: (c) => c.activateOutcomeDeployer({ isDeactivate: false }),
-    action: { type: "activateOutcomeDeployer", isDeactivate: false },
+    run: (c) => c.activateOutcomeDeployer({ activate: { venueName: "ab" } }),
+    action: { type: "activateOutcomeDeployer", activate: { venueName: "ab" } },
     invalid: (c) => c.activateOutcomeDeployer({} as never),
   },
   agentEnableDexAbstraction: {

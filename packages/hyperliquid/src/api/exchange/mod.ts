@@ -122,3 +122,5 @@ export * from "./_methods/vaultTransfer.ts";
 export * from "./_methods/warmup.ts";
 export * from "./_methods/withdraw.ts";
 export * from "./_methods/withdraw3.ts";
+
+export * from "./_methods/outcomeDeploy.ts";
