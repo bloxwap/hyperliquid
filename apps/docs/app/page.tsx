@@ -1,8 +1,9 @@
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { ArrowRight } from "lucide-react";
+import { ArrowDown, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
 import { InstallCommand } from "@/components/install-command";
+import { MarketPlayground } from "@/components/market-playground";
 import { SiteFooter } from "@/components/site-footer";
 import { baseOptions } from "@/lib/layout.shared";
 import { siteUrl } from "@/lib/social";
@@ -109,11 +110,11 @@ export default function Home() {
               JavaScript.
             </p>
             <div className="hero-actions">
-              <Link className="button-primary" href="/docs/">
+              <a className="button-primary" href="#playground">
+                Try the playground <ArrowDown size={16} aria-hidden />
+              </a>
+              <Link className="button-secondary" href="/docs/">
                 Get started <ArrowRight size={16} aria-hidden />
-              </Link>
-              <Link className="button-secondary" href="/docs/guides/">
-                Explore the guides <ArrowRight size={16} aria-hidden />
               </Link>
             </div>
             <InstallCommand />
@@ -161,6 +162,16 @@ export default function Home() {
             </div>
           </div>
         </div>
+        <section id="playground" className="playground-section" aria-labelledby="playground-title">
+          <div className="section-intro">
+            <p className="eyebrow">
+              <span /> LIVE · HYPERLIQUID MAINNET
+            </p>
+            <h2 id="playground-title">Market data playground</h2>
+            <p>Pick an asset and a feed to stream real market data over a WebSocket. The code updates as you go.</p>
+          </div>
+          <MarketPlayground />
+        </section>
         <div className="feature-grid">
           {features.map((feature) => (
             <Link key={feature.number} href={feature.href} className="feature-card">

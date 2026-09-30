@@ -10,6 +10,8 @@
     "check:content": "bun run scripts/check-content.ts && markdownlint-cli2 --config ../../.markdownlint-cli2.jsonc ../../README.md ../../packages/hyperliquid/README.md README.md \"content/**/*.md\""
   },
   "dependencies": {
+    "@bloxwap/hyperliquid": "workspace:*",
+    "animejs": "4.4.0",
     "fumadocs-core": "16.15.14",
     "fumadocs-mdx": "15.4.5",
     "fumadocs-ui": "16.15.14",

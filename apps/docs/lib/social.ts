@@ -5,8 +5,9 @@ export const socialImageSize = { width: 1200, height: 630 };
 export const homeDescription =
   "A fast, typed Hyperliquid SDK for TypeScript and JavaScript. Connect, trade, and subscribe with Bloxwap.";
 
+/** Explicit PNG paths work on GitHub Pages without an image service; the landing card is home.png. */
 export function socialImagePath(pageUrl: string) {
-  return `/og/${pageUrl.replace(/^\/+|\/+$/g, "") || "index"}.png`;
+  return `/og/${pageUrl.replace(/^\/+|\/+$/g, "") || "home"}.png`;
 }
 
 export function socialMetadata(pageUrl: string, title: string, description: string): Metadata {

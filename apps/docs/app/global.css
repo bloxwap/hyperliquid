@@ -357,6 +357,201 @@ textarea:focus-visible {
   color: var(--color-text-muted);
 }
 
+/* Live market data playground: its own section below the hero, like the chart and sfx sites. */
+.playground-section {
+  margin-top: --spacing(24);
+  /* The hero's "Try the playground" jump lands the intro below the sticky header. */
+  scroll-margin-top: --spacing(20);
+}
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.landing) {
+    scroll-behavior: smooth;
+  }
+}
+.section-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: --spacing(4);
+  margin-bottom: --spacing(8);
+  text-align: center;
+}
+.section-intro h2 {
+  font-family: var(--font-docs-display), var(--font-sans);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+}
+.section-intro > p:not(.eyebrow) {
+  max-width: 440px;
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--color-text-muted);
+}
+.playground {
+  min-width: 0;
+  transform: none;
+}
+/* Wide: controls and code on the left, the live output filling the right column. */
+.playground-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.playground-editor {
+  min-width: 0;
+}
+.playground-controls {
+  display: grid;
+  gap: --spacing(4);
+  padding: --spacing(6) --spacing(6) 0;
+}
+.playground-controls fieldset {
+  min-width: 0;
+}
+.playground-controls legend {
+  display: flex;
+  gap: --spacing(3);
+  margin-bottom: --spacing(2);
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+}
+.playground-controls legend > span {
+  color: var(--color-text-quiet);
+}
+.playground-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: --spacing(1);
+}
+.playground-options button {
+  min-height: 32px;
+  padding: --spacing(1) --spacing(3);
+  border-radius: calc(var(--radius) - 2px);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  transition:
+    color var(--duration-interactive) var(--ease-out),
+    background var(--duration-interactive) var(--ease-out);
+}
+.playground-options button:hover {
+  color: var(--color-text);
+  background: var(--color-fill-subtle);
+}
+.playground-options button[aria-pressed="true"] {
+  color: var(--color-accent-on);
+  background: var(--color-accent);
+}
+.playground-code {
+  position: relative;
+}
+.playground-code-viewport {
+  overflow: hidden;
+}
+.playground-code-line {
+  display: block;
+  min-height: 1.85em;
+}
+.playground .playground-code-measure {
+  position: absolute;
+  inset: 0 0 auto;
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Size containment: the code column sets the row height and the output scrolls within it. */
+.playground-output {
+  contain: size;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: --spacing(4) --spacing(4) --spacing(4) 0;
+  padding: --spacing(4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+.playground-output-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: --spacing(2);
+  min-height: 20px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+}
+.playground-status {
+  display: inline-flex;
+  align-items: center;
+  gap: --spacing(2);
+}
+.playground-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-quiet);
+}
+.playground-status[data-status="live"] {
+  color: var(--color-accent);
+}
+.playground-status[data-status="live"] i {
+  background: var(--color-accent);
+  animation: playground-pulse 2s ease-in-out infinite;
+}
+.playground-status[data-status="connecting"] i,
+.playground-status[data-status="waiting"] i,
+.playground-status[data-status="reconnecting"] i {
+  animation: playground-pulse 1s ease-in-out infinite;
+}
+.playground-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: --spacing(2);
+  min-height: 128px;
+  text-align: center;
+}
+.playground .playground-empty > svg {
+  color: var(--color-text-quiet);
+  margin-bottom: --spacing(1);
+}
+.playground-empty p {
+  font-size: var(--text-sm);
+}
+.playground-empty > span {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+.playground .playground-json {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: --spacing(3) 0 0;
+  color: var(--color-code-string);
+}
+.playground-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: --spacing(1);
+  color: var(--color-text);
+}
+@keyframes playground-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .playground-status i {
+    animation: none;
+  }
+  .playground-options button {
+    transition: none;
+  }
+}
+
 /* Feature links: fill-only cards, matching the code window. */
 .feature-grid {
   display: grid;
@@ -499,13 +694,13 @@ textarea:focus-visible {
 .hero-copy > .eyebrow,
 .hero-copy > h1,
 .hero-copy > :not(.eyebrow, h1),
-.code-window {
+.hero .code-window {
   animation: landing-rise 600ms var(--ease-out) both;
 }
 .hero-copy > :not(.eyebrow, h1) {
   animation-delay: 200ms;
 }
-.code-window {
+.hero .code-window {
   animation-delay: 400ms;
 }
 
@@ -744,9 +939,24 @@ textarea:focus-visible {
   .hero-description {
     max-width: 500px;
   }
-  .code-window {
+  .hero .code-window {
     max-width: 580px;
     transform: none;
+  }
+  .playground-section {
+    margin-top: --spacing(16);
+  }
+  .playground-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .playground-output {
+    contain: none;
+    margin: 0 --spacing(3) --spacing(3);
+  }
+  .playground .playground-json {
+    flex: none;
+    min-height: 128px;
+    max-height: 260px;
   }
   .feature-grid {
     margin-top: --spacing(12);
@@ -792,7 +1002,7 @@ textarea:focus-visible {
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-copy > *,
-  .code-window,
+  .hero .code-window,
   .search-skeleton > span {
     animation: none;
   }
