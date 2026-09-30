@@ -173,6 +173,17 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   should use `setDeployerFees`. Their absence from current docs does not establish server-side removal;
   no state-changing probe was used to infer their status. Legacy response fields remain optional.
 
+### 14. HIP-3* user state is serialized as tuples
+
+- **Verified:** 2026-09-29 using read-only testnet requests.
+- **Docs claim:** `userStarState.dexToState` is an object keyed by venue.
+- **Server reality:** empty state is `[]`; a nonempty response for
+  `0x0c839e7f21c712e64f80ca0775ec1f35a43af3ee` is `[["nimb", null]]`, confirming tuple serialization
+  and removed-approval state. Approved-state flag names follow the documented schema.
+- **SDK behavior:** types the observed tuple array. HIP-3* registration, star oracle/proxy operations,
+  object-valued grants and `userStarState` are supported; these features are documented as testnet-only.
+  Proxied orders must be reduce-only, and scoped cancellation accepts 1-10 asset IDs or null/omission for all.
+
 ## Resolved
 
 _None yet._

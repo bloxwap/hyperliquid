@@ -3,6 +3,7 @@
  * @module
  */
 
+import { userStarState, type UserStarStateParameters, type UserStarStateResponse } from "./_methods/userStarState.ts";
 import {
   outcomeDeployerLimits,
   type OutcomeDeployerLimitsParameters,
@@ -2826,6 +2827,34 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   ): Promise<OutcomeDeployerLimitsResponse> {
     return outcomeDeployerLimits(this.config, params, signal);
   }
+  /**
+   * Request user HIP-3* approval state (testnet only).
+   *
+   * @param params Parameters specific to the API request.
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return User HIP-3* approval state.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { InfoClient } from "@bloxwap/hyperliquid";
+   *
+   * const transport = new HttpTransport(); // or `WebSocketTransport`
+   * const client = new InfoClient({ transport });
+   *
+   * const data = await client.userStarState({
+   *   user: "0x...",
+   * });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-3-deployer-actions#user-star-state
+   */
+  userStarState(params: UserStarStateParameters, signal?: AbortSignal): Promise<UserStarStateResponse> {
+    return userStarState(this.config, params, signal);
+  }
 }
 
 // ============================================================
@@ -2952,3 +2981,5 @@ export type {
   OutcomeDeployerLimitsParameters,
   OutcomeDeployerLimitsResponse,
 } from "./_methods/outcomeDeployerLimits.ts";
+
+export type { UserStarStateParameters, UserStarStateResponse } from "./_methods/userStarState.ts";

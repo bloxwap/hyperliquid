@@ -5,6 +5,8 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Decimal, Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.ts";
+import { CancelRequest } from "./cancel.ts";
+import { OrderRequest } from "./order.ts";
 
 /**
  * Deploying HIP-3 assets.
@@ -45,6 +47,8 @@ export const PerpDeployRequest = /* @__PURE__ */ (() => {
               collateralToken: UnsignedInteger,
               /** User to update oracles. If not provided, then deployer is assumed to be oracle updater. */
               oracleUpdater: v.nullable(Address),
+              /** Whether this is a HIP-3* venue (testnet only). Defaults to false. */
+              isStar: v.optional(v.boolean()),
             }),
           ),
         }),
@@ -80,6 +84,8 @@ export const PerpDeployRequest = /* @__PURE__ */ (() => {
               collateralToken: UnsignedInteger,
               /** User to update oracles. If not provided, then deployer is assumed to be oracle updater. */
               oracleUpdater: v.nullable(Address),
+              /** Whether this is a HIP-3* venue (testnet only). Defaults to false. */
+              isStar: v.optional(v.boolean()),
             }),
           ),
         }),
@@ -221,7 +227,22 @@ export const PerpDeployRequest = /* @__PURE__ */ (() => {
           subDeployers: v.array(
             v.object({
               /** Corresponds to a variant of PerpDeployAction. */
-              variant: v.string(),
+              variant: v.union([
+                v.string(),
+                v.object({
+                  /** HIP-3* operation authorized by this grant (testnet only). */
+                  hip3Star: v.picklist([
+                    "modifyApproval",
+                    "modifyBackstopLiquidatorApproval",
+                    "setReduceOnly",
+                    "cancel",
+                    "cancelAll",
+                    "order",
+                    "sendAsset",
+                    "setOracle",
+                  ]),
+                }),
+              ]),
               /** Sub-deployer address. */
               user: Address,
               /** Add or remove the subDeployer from the authorized set for the action variant. */
@@ -268,6 +289,75 @@ export const PerpDeployRequest = /* @__PURE__ */ (() => {
           displayName: v.nullable(v.string()),
           /** Keywords used as hints to match against searches. */
           keywords: v.array(v.string()),
+        }),
+      }),
+      v.object({
+        /** Type of action. */
+        type: v.literal("perpDeploy"),
+        /** HIP-3* venue operation (testnet only). */
+        star: v.object({
+          /** DEX name. */
+          dex: v.string(),
+          /** Oracle update or action proxied on behalf of an approved user. */
+          operation: v.union([
+            v.object({
+              /** Spot oracle prices, sorted by asset symbol. */
+              setOracle: v.object({
+                /** Sorted asset/price tuples. */
+                oraclePxs: v.array(v.tuple([v.string(), UnsignedDecimal])),
+              }),
+            }),
+            v.object({
+              /** User address and the operation applied to their account. */
+              proxy: v.tuple([
+                Address,
+                v.union([
+                  v.object({
+                    /** Add/remove the user from the venue allowlist. */
+                    modifyApproval: v.boolean(),
+                  }),
+                  v.object({
+                    /** Allow/revoke deposits into the venue backstop liquidator. */
+                    modifyBackstopLiquidatorApproval: v.boolean(),
+                  }),
+                  v.object({
+                    /** Restrict/restore the user's trading to reduce-only actions. */
+                    setReduceOnly: v.boolean(),
+                  }),
+                  v.object({
+                    /** Standard cancellation payload without its action type. */
+                    cancel: v.omit(CancelRequest.entries.action, ["type"]),
+                  }),
+                  v.object({
+                    /** Cancel resting orders and TWAPs on this venue. */
+                    cancelAll: v.object({
+                      /** Restrict cancellation to 1-10 assets, or omit/use null for all. */
+                      assets: v.optional(v.nullable(v.pipe(v.array(UnsignedInteger), v.minLength(1), v.maxLength(10)))),
+                    }),
+                  }),
+                  v.object({
+                    /** Standard order payload; every order must be reduce-only. */
+                    order: v.pipe(
+                      v.omit(OrderRequest.entries.action, ["type"]),
+                      v.check(
+                        (action) => action.orders.every((order) => order.r),
+                        "Every proxied order must be reduce-only.",
+                      ),
+                    ),
+                  }),
+                  v.object({
+                    /** Move collateral to another user on the same venue. */
+                    sendAsset: v.object({
+                      /** Recipient address. */
+                      destination: Address,
+                      /** Collateral amount. */
+                      amount: UnsignedDecimal,
+                    }),
+                  }),
+                ]),
+              ]),
+            }),
+          ]),
         }),
       }),
       v.object({

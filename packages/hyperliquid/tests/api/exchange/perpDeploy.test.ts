@@ -228,6 +228,12 @@ runTest({
       ),
     );
 
-    schemaCoverage(paramsSchema, params);
+    schemaCoverage(paramsSchema, params, [
+      // Star signing/request variants have dedicated offline coverage; avoid live mutations.
+      "#/anyOf/0/properties/registerAsset2/properties/schema/anyOf/0/properties/isStar/present",
+      "#/anyOf/1/properties/registerAsset/properties/schema/anyOf/0/properties/isStar/present",
+      "#/anyOf/12/properties/setSubDeployers/properties/subDeployers/items/properties/variant/anyOf/1",
+      "#/anyOf/17",
+    ]);
   },
 });
