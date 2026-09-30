@@ -13,12 +13,27 @@ import { Hex, UnsignedInteger } from "../../_schemas.ts";
 export const ActivateOutcomeDeployerRequest = /* @__PURE__ */ (() => {
   return v.object({
     /** Action to perform. */
-    action: v.object({
-      /** Type of action. */
-      type: v.literal("activateOutcomeDeployer"),
-      /** Deactivate instead of activate. */
-      isDeactivate: v.boolean(),
-    }),
+    action: v.union([
+      v.object({
+        /** Type of action. */
+        type: v.literal("activateOutcomeDeployer"),
+        /** Activate a unique outcome venue (testnet-only). */
+        activate: v.object({
+          /** Two to four lowercase ASCII letters. */
+          venueName: v.pipe(v.string(), v.regex(/^[a-z]{2,4}$/)),
+        }),
+        /** Activation and deactivation are mutually exclusive. */
+        deactivate: v.optional(v.never()),
+      }),
+      v.object({
+        /** Type of action. */
+        type: v.literal("activateOutcomeDeployer"),
+        /** Activation and deactivation are mutually exclusive. */
+        activate: v.optional(v.never()),
+        /** Permanently deactivate the outcome deployer. */
+        deactivate: v.null(),
+      }),
+    ]),
     /** Nonce (timestamp in ms) used to prevent replay attacks. */
     nonce: UnsignedInteger,
     /** ECDSA signature components. */
@@ -71,11 +86,16 @@ import {
 
 /** Schema for action fields (excludes request-level system fields). */
 const ActivateOutcomeDeployerActionSchema = /* @__PURE__ */ (() => {
-  return v.object(ActivateOutcomeDeployerRequest.entries.action.entries);
+  return v.union(ActivateOutcomeDeployerRequest.entries.action.options);
 })();
 
 /** Action parameters for the {@linkcode activateOutcomeDeployer} function. */
-export type ActivateOutcomeDeployerParameters = Omit<v.InferInput<typeof ActivateOutcomeDeployerActionSchema>, "type">;
+export type ActivateOutcomeDeployerParameters =
+  v.InferInput<typeof ActivateOutcomeDeployerActionSchema> extends infer T
+    ? T extends unknown
+      ? Omit<T, "type">
+      : never
+    : never;
 
 /** Request options for the {@linkcode activateOutcomeDeployer} function. */
 export type ActivateOutcomeDeployerOptions = ExtractRequestOptions<v.InferInput<typeof ActivateOutcomeDeployerRequest>>;
@@ -107,7 +127,7 @@ export type ActivateOutcomeDeployerSuccessResponse = ExcludeErrorResponse<Activa
  * const transport = new HttpTransport(); // or `WebSocketTransport`
  *
  * await activateOutcomeDeployer({ transport, wallet }, {
- *   isDeactivate: false,
+ *   activate: { venueName: "ab" },
  * });
  * ```
  *

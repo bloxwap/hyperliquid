@@ -3,6 +3,12 @@
  * @module
  */
 
+import {
+  outcomeDeploy,
+  type OutcomeDeployParameters,
+  type OutcomeDeploySuccessResponse,
+  type OutcomeDeployOptions,
+} from "./_methods/outcomeDeploy.ts";
 import { HyperliquidError } from "../../_base.ts";
 import { preloadWasmKeccak } from "../../signing/mod.ts";
 import { SymbolConverter } from "../../utils/mod.ts";
@@ -629,7 +635,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    * const client = new hl.ExchangeClient({ transport, wallet });
    *
-   * await client.activateOutcomeDeployer({ isDeactivate: false });
+   * await client.activateOutcomeDeployer({ activate: { venueName: "ab" } });
    * ```
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions#activation
@@ -3086,6 +3092,32 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
   withdraw3(params: Withdraw3Parameters, opts?: Withdraw3Options): Promise<Withdraw3SuccessResponse> {
     return withdraw3(this.config, params, opts);
   }
+  /**
+   * Deploy or settle outcomes for a venue (testnet-only).
+   *
+   * Signing: L1 Action. Keyword tuples must be sorted before signing.
+   *
+   * @param params Parameters specific to the API request.
+   * @param opts Request execution options.
+   * @return Successful response without specific data.
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   * @throws {ApiRequestError} When the API returns an unsuccessful response.
+   * @example
+   * ```ts
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { ExchangeClient } from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new HttpTransport(); // or `WebSocketTransport`
+   * const client = new ExchangeClient({ transport, wallet });
+   * await client.outcomeDeploy({ venue: "ab", operation: { registerStandaloneOutcomeFromTemplate: { id: "abc", keywordToValue: [], deployerFeeScale: "1" } } });
+   * ```
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions
+   */
+  outcomeDeploy(params: OutcomeDeployParameters, opts?: OutcomeDeployOptions): Promise<OutcomeDeploySuccessResponse> {
+    return outcomeDeploy(this.config, params, opts);
+  }
 }
 
 // ============================================================
@@ -3336,3 +3368,9 @@ export type {
 } from "./_methods/vaultTransfer.ts";
 export type { WithdrawOptions, WithdrawParameters, WithdrawSuccessResponse } from "./_methods/withdraw.ts";
 export type { Withdraw3Options, Withdraw3Parameters, Withdraw3SuccessResponse } from "./_methods/withdraw3.ts";
+
+export type {
+  OutcomeDeployParameters,
+  OutcomeDeploySuccessResponse,
+  OutcomeDeployOptions,
+} from "./_methods/outcomeDeploy.ts";

@@ -152,9 +152,10 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   return `Unable to recover signer.` No action executes. These results verify request parsing, not staking,
   permissions, settlement rules, or successful deployment. Repeat with
   `bun run packages/hyperliquid/.dev/verify_hip4_actions.ts`.
-- **SDK gap:** `activateOutcomeDeployer` still requires `isDeactivate`, and deployment operations still use
-  `spotDeploy.outcome`. The SDK needs the new activation union and an `outcomeDeploy` method, including template
-  fee scales, `registerAndAssociateNamedOutcomeFromTemplate`, and `setSubDeployers`.
+- **SDK behavior:** activation now accepts `activate: { venueName }` or `deactivate: null`. Use
+  `outcomeDeploy({ venue, operation })` for all six current operations and their required template fee scales.
+  Migrate older `spotDeploy({ outcome: ... })` calls by moving the outcome operation to `operation` and supplying
+  the venue; the retained legacy shape is not accepted by the current testnet server.
 - **Read API gap:** testnet `outcomeMeta` also returns top-level `deployers` and `feeScale`, and optional per-outcome
   `venue` and `deployerFeeScale`, which the current response type does not declare. The queried templates still
   omit the documented `semanticRestriction` field; its live shape remains unverified.

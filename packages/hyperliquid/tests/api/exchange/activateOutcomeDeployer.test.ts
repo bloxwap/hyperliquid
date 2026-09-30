@@ -12,18 +12,16 @@ import { valibotToJsonSchema } from "../_utils/valibotToJsonSchema.ts";
 import { FIXED_NONCE, recordingTransport, singleWalletConfig } from "./_mockTransport.ts";
 import { runTest } from "./_t.ts";
 
-const paramsSchema = valibotToJsonSchema(
-  v.omit(v.object(ActivateOutcomeDeployerRequest.entries.action.entries), ["type"]),
-);
+const paramsSchema = valibotToJsonSchema(ActivateOutcomeDeployerRequest.entries.action);
 
 runTest({
   name: "activateOutcomeDeployer",
   codeTestFn: async (_t, exchClient) => {
     const params: ActivateOutcomeDeployerParameters[] = [
       // activate
-      { isDeactivate: false },
+      { activate: { venueName: "ab" } },
       // deactivate
-      { isDeactivate: true },
+      { deactivate: null },
     ];
 
     await assertRejects(
@@ -41,7 +39,10 @@ runTest({
       "Error deploying outcome: not an outcome deployer",
     );
 
-    schemaCoverage(paramsSchema, params);
+    schemaCoverage(
+      paramsSchema,
+      params.map((p) => ({ type: "activateOutcomeDeployer", ...p })),
+    );
   },
 });
 
@@ -50,34 +51,50 @@ runTest({
 // ============================================================
 
 describe("activateOutcomeDeployer (offline)", () => {
-  test("posts the exact action with a deterministic signature (fixed nonce and wallet)", async () => {
-    for (const [params, expectedSignature] of [
-      [
-        { isDeactivate: false },
-        {
-          r: "0x301138913ffc553e9c0aed05982601cfaca2c0ea1bdf253695cb9dbfb0797a81",
-          s: "0x102f87b005f398872b39adb47bd9688768784896d2e2f8fdb7e68f85373870c8",
-          v: 28,
-        },
-      ],
-      [
-        { isDeactivate: true },
-        {
-          r: "0x14f0821a33e2cfbbada1a27891eb956ced25bee71ff7f004438fec57c1491e66",
-          s: "0x55826b27bb1fb76223b21e3908ad207f03a713d3dcd2705761fe1ed79232c96b",
-          v: 28,
-        },
-      ],
-    ] as const) {
+  test("posts both venue activation variants and rejects mixed/legacy input", async () => {
+    for (const params of [{ activate: { venueName: "ab" } }, { deactivate: null }] as const) {
       const { calls, transport } = recordingTransport();
-
       await activateOutcomeDeployer(singleWalletConfig(transport), params);
-
-      assertEquals(calls.length, 1);
-      assertEquals(calls[0].endpoint, "exchange");
       assertEquals(calls[0].payload.action, { type: "activateOutcomeDeployer", ...params });
       assertEquals(calls[0].payload.nonce, FIXED_NONCE);
-      assertEquals(calls[0].payload.signature, expectedSignature);
+    }
+    for (const params of [
+      { isDeactivate: false },
+      { activate: { venueName: "ab" }, deactivate: null },
+      { activate: { venueName: "A" } },
+    ]) {
+      const { calls, transport } = recordingTransport();
+      await assertRejects(async () => activateOutcomeDeployer(singleWalletConfig(transport), params as never));
+      assertEquals(calls.length, 0);
+    }
+  });
+});
+
+// Golden signatures pin the new activation envelope at the shared fixture nonce.
+describe("activateOutcomeDeployer golden vectors", () => {
+  test("venue activation and permanent deactivation sign the exact wire envelope", async () => {
+    const vectors = [
+      [
+        { activate: { venueName: "ab" } },
+        {
+          r: "0x7450adb51d086b9c31dae14cd4a1c5d190409ceaf5038f0758eee694bb8a9995",
+          s: "0x55f3ee595785e17cade1199cdf40ec9ad10fd6213e0c3e47e682404dd63091aa",
+          v: 28,
+        },
+      ],
+      [
+        { deactivate: null },
+        {
+          r: "0xf36ff939c53699e890ee20a9b312858bc36e24f2f51ef26849cebe549aa8694f",
+          s: "0x64804292791001893e3df9bfd1623fbe2f785dd3709a9e0b031e559334a0a75d",
+          v: 27,
+        },
+      ],
+    ] as const;
+    for (const [params, signature] of vectors) {
+      const { transport, calls } = recordingTransport();
+      await activateOutcomeDeployer(singleWalletConfig(transport), params);
+      assertEquals(calls[0].payload.signature, signature);
     }
   });
 });
