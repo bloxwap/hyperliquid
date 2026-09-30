@@ -3,6 +3,11 @@
  * @module
  */
 
+import {
+  outcomeDeployerLimits,
+  type OutcomeDeployerLimitsParameters,
+  type OutcomeDeployerLimitsResponse,
+} from "./_methods/outcomeDeployerLimits.ts";
 import { isAbortSignal, type InfoConfig, type PaginationOptions } from "./_methods/_base/mod.ts";
 
 // ============================================================
@@ -2791,6 +2796,36 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   webData2(params: WebData2Parameters, signal?: AbortSignal): Promise<WebData2Response> {
     return webData2(this.config, params, signal);
   }
+  /**
+   * Request the remaining outcome deployment capacity for a venue.
+   *
+   * @param params Parameters specific to the API request.
+   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @return Remaining daily and active outcome deployment capacity.
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-outcome-deployer-limits
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   *
+   * @example
+   * ```ts
+   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { InfoClient } from "@bloxwap/hyperliquid";
+   *
+   * const transport = new HttpTransport(); // or `WebSocketTransport`
+   * const client = new InfoClient({ transport });
+   *
+   * const data = await client.outcomeDeployerLimits({
+   *   venue: "ab",
+   * });
+   * ```
+   */
+  outcomeDeployerLimits(
+    params: OutcomeDeployerLimitsParameters,
+    signal?: AbortSignal,
+  ): Promise<OutcomeDeployerLimitsResponse> {
+    return outcomeDeployerLimits(this.config, params, signal);
+  }
 }
 
 // ============================================================
@@ -2912,3 +2947,8 @@ export type { ValidatorSummariesResponse } from "./_methods/validatorSummaries.t
 export type { VaultDetailsParameters, VaultDetailsResponse } from "./_methods/vaultDetails.ts";
 export type { VaultSummariesResponse } from "./_methods/vaultSummaries.ts";
 export type { WebData2Parameters, WebData2Response } from "./_methods/webData2.ts";
+
+export type {
+  OutcomeDeployerLimitsParameters,
+  OutcomeDeployerLimitsResponse,
+} from "./_methods/outcomeDeployerLimits.ts";
