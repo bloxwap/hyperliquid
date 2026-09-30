@@ -157,3 +157,11 @@ symptoms have the same cause; a fix that isolates listener errors per message re
 - [`results/baseline.txt`](results/baseline.txt), `results/baseline_bench.log` and `results/baseline_test.log` are
   historical artifacts: the pre-fix output of the original Deno `bench`/`test` suite this harness replaced. They are kept
   as evidence of the pre-fix numbers and are not read by any tooling.
+
+## Quota isolation
+
+CPU scenarios create an accounting-only `WebSocketQuota` for each mock transport. They never spend
+the process-wide paced quota, so a post benchmark cannot delay a later subscription benchmark.
+Message pacing itself is verified with controlled clocks in `tests/transport/websocket/_quota.test.ts`;
+it is excluded from CPU timings. Changing this setup changes the suite fingerprint intentionally, so
+review the suite migration and record a fresh matching-machine baseline.

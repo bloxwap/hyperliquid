@@ -17,7 +17,7 @@
  */
 
 import { deflateRawSync } from "node:zlib";
-import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
+import { SubscriptionClient, WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
 import { scenario } from "../_harness.ts";
 import { installMockWebSocket, lastMockWebSocket, type MockWebSocket, restoreWebSocket } from "../_helpers.ts";
 
@@ -66,7 +66,7 @@ function makeScenario(name: string, coinCount: number, frames: number, descripti
     iterations: 1,
     setup: async (): Promise<DecompressContext> => {
       installMockWebSocket();
-      const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+      const transport = new WebSocketTransport({ url: "wss://perf.local/ws", quota: new WebSocketQuota() });
       await transport.ready();
       const socket = lastMockWebSocket();
 

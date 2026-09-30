@@ -15,7 +15,7 @@
  * @module
  */
 
-import { HttpTransport, WebSocketTransport } from "@bloxwap/hyperliquid";
+import { HttpTransport, WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
 import { scenario } from "../_harness.ts";
 import { installMockWebSocket, lastMockWebSocket, type MockWebSocket, restoreWebSocket } from "../_helpers.ts";
 
@@ -125,7 +125,7 @@ scenario({
   samples: 25,
   setup: async (): Promise<WsContext> => {
     installMockWebSocket();
-    const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+    const transport = new WebSocketTransport({ url: "wss://perf.local/ws", quota: new WebSocketQuota() });
     await transport.ready();
     const socket = lastMockWebSocket();
     socket.postData = JSON.parse(SMALL_BODY);

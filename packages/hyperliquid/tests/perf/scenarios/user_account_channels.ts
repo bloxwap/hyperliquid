@@ -146,7 +146,7 @@ function frameDispatchScenario(
     samples: 10,
     setup: async (): Promise<FrameDispatchContext> => {
       installMockWebSocket();
-      const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+      const transport = new WebSocketTransport({ url: "wss://perf.local/ws", quota: new WebSocketQuota() });
       await transport.ready();
       const socket = lastMockWebSocket();
 
@@ -192,7 +192,7 @@ scenario({
   samples: 10,
   setup: async (): Promise<FrameDispatchContext> => {
     installMockWebSocket();
-    const transport = new WebSocketTransport({ url: "wss://perf.local/ws" });
+    const transport = new WebSocketTransport({ url: "wss://perf.local/ws", quota: new WebSocketQuota() });
     await transport.ready();
     const socket = lastMockWebSocket();
 
