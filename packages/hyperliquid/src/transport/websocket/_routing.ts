@@ -180,10 +180,18 @@ export function payloadEventType(channel: string, payload: unknown): string {
 /**
  * Interned routed types, `channel → key → routedType`: repeat frames on one route reuse a single
  * string instead of allocating `channel + KEY_SEPARATOR + key` per frame, and the shared identity
- * also speeds the listener-map hashing the routed type feeds into. Keys are bounded by the
- * coins/users actually seen on the wire, so no eviction is needed.
+ * also speeds the listener-map hashing the routed type feeds into. Each known channel retains
+ * at most 1024 recent keys; FIFO eviction runs only on misses, leaving repeat dispatch unchanged.
+ * Routes compare by string value, so dropping an interned string cannot invalidate live listeners.
+ * Unregistered transient frames share this bound too; storage cannot grow with lifetime churn.
  */
 const ROUTED_TYPES: Map<string, Map<string, string>> = new Map();
+const MAX_INTERNED_KEYS_PER_CHANNEL = 1024;
+
+/** Package-internal diagnostic for bounded-retention regression tests (not a public barrel export). */
+export function _routedTypeCacheSizeForTests(channel: string): number {
+  return ROUTED_TYPES.get(channel)?.size ?? 0;
+}
 
 /** The interned routed type of `channel` + `key`. */
 function internRoutedType(channel: string, key: string): string {
@@ -195,6 +203,7 @@ function internRoutedType(channel: string, key: string): string {
   let routed = byKey.get(key);
   if (routed === undefined) {
     routed = channel + KEY_SEPARATOR + key;
+    if (byKey.size >= MAX_INTERNED_KEYS_PER_CHANNEL) byKey.delete(byKey.keys().next().value!);
     byKey.set(key, routed);
   }
   return routed;
