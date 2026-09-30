@@ -97,6 +97,10 @@ export interface WebSocketRateLimitOptions {
 
 /** Configuration options for a {@linkcode WebSocketQuota}. */
 export interface WebSocketQuotaOptions {
+  /** Maximum connecting/open/closing sockets sharing this quota; null disables. Default: 10. */
+  maxConnections?: number | null;
+  /** Maximum new socket attempts in any rolling minute; null disables. Default: 30. */
+  maxConnectionAttemptsPerMinute?: number | null;
   /**
    * Pacing of outbound messages against Hyperliquid's 2000-per-minute per-IP budget.
    *
@@ -142,6 +146,19 @@ export type QuotaRefusal = "subscriptions" | "users";
  * cannot see — a process behind several egress IPs, or a test that wants isolation.
  */
 export class WebSocketQuota {
+  /** Maximum sockets sharing this quota, including handshakes and closing sockets. */
+  readonly maxConnections: number | null;
+  /** Maximum attempts in the preceding rolling minute. */
+  readonly maxConnectionAttemptsPerMinute: number | null;
+  private _connections = 0;
+  private readonly _attempts: number[] = [];
+  private readonly _connectionWaiters: {
+    resolve: (release: () => void) => void;
+    reject: (reason: unknown) => void;
+    signal?: AbortSignal;
+    abort: () => void;
+  }[] = [];
+  private _connectionTimer: ReturnType<typeof setTimeout> | undefined;
   /** Maximum concurrent subscriptions, or `null` when the guard is disabled. */
   readonly maxSubscriptions: number | null;
   /** Maximum unique users across user-specific subscriptions, or `null` when the guard is disabled. */
@@ -161,6 +178,13 @@ export class WebSocketQuota {
   private readonly _limiter: TokenBucketRateLimiter | null;
 
   constructor(options?: WebSocketQuotaOptions) {
+    this.maxConnections = options?.maxConnections === undefined ? 10 : options.maxConnections;
+    this.maxConnectionAttemptsPerMinute =
+      options?.maxConnectionAttemptsPerMinute === undefined ? 30 : options.maxConnectionAttemptsPerMinute;
+    for (const limit of [this.maxConnections, this.maxConnectionAttemptsPerMinute]) {
+      if (limit !== null && (!Number.isSafeInteger(limit) || limit < 1))
+        throw new TypeError("Connection limits must be positive safe integers or null.");
+    }
     this.maxSubscriptions = options?.maxSubscriptions === undefined ? MAX_SUBSCRIPTIONS : options.maxSubscriptions;
     this.maxUniqueUsers = options?.maxUniqueUsers === undefined ? MAX_UNIQUE_USERS : options.maxUniqueUsers;
     this._limiter =
@@ -170,6 +194,86 @@ export class WebSocketQuota {
             options.rateLimit.capacity ?? MAX_MESSAGES_PER_MINUTE,
             options.rateLimit.refillPerMinute ?? MAX_MESSAGES_PER_MINUTE,
           );
+  }
+
+  /** Number of sockets currently holding a connection reservation. */
+  get connections(): number {
+    return this._connections;
+  }
+
+  /**
+   * Reserves a connection slot and charges one attempt. Admission is synchronous when there
+   * is room, otherwise FIFO and abortable. At most the configured number of attempts is
+   * admitted in (now - 60 seconds, now]; failures consume an attempt too.
+   * The returned idempotent release must run when the socket closes or construction fails.
+   */
+  acquireConnection(signal?: AbortSignal): (() => void) | Promise<() => void> {
+    signal?.throwIfAborted();
+    this._pruneAttempts();
+    if (this._connectionWaiters.length === 0 && this._canConnect()) return this._takeConnection();
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        resolve,
+        reject,
+        signal,
+        abort: (): void => {
+          const index = this._connectionWaiters.indexOf(waiter);
+          if (index < 0) return;
+          this._connectionWaiters.splice(index, 1);
+          signal?.removeEventListener("abort", waiter.abort);
+          reject(signal?.reason);
+          this._drainConnections();
+        },
+      };
+      this._connectionWaiters.push(waiter);
+      signal?.addEventListener("abort", waiter.abort, { once: true });
+      this._drainConnections();
+    });
+  }
+
+  private _pruneAttempts(): void {
+    const cutoff = Date.now() - 60_000;
+    while (this._attempts.length && this._attempts[0] <= cutoff) this._attempts.shift();
+  }
+
+  private _canConnect(): boolean {
+    return (
+      (this.maxConnections === null || this._connections < this.maxConnections) &&
+      (this.maxConnectionAttemptsPerMinute === null || this._attempts.length < this.maxConnectionAttemptsPerMinute)
+    );
+  }
+
+  private _takeConnection(): () => void {
+    this._connections++;
+    if (this.maxConnectionAttemptsPerMinute !== null) this._attempts.push(Date.now());
+    let released = false;
+    return (): void => {
+      if (released) return;
+      released = true;
+      this._connections--;
+      this._drainConnections();
+    };
+  }
+
+  private _drainConnections(): void {
+    clearTimeout(this._connectionTimer);
+    this._connectionTimer = undefined;
+    this._pruneAttempts();
+    while (this._connectionWaiters.length && this._canConnect()) {
+      const waiter = this._connectionWaiters.shift()!;
+      waiter.signal?.removeEventListener("abort", waiter.abort);
+      waiter.resolve(this._takeConnection());
+    }
+    if (
+      this._connectionWaiters.length &&
+      (this.maxConnections === null || this._connections < this.maxConnections) &&
+      this._attempts.length
+    ) {
+      this._connectionTimer = setTimeout(
+        () => this._drainConnections(),
+        Math.max(1, this._attempts[0] + 60_000 - Date.now()),
+      );
+    }
   }
 
   // ===========================================================================
