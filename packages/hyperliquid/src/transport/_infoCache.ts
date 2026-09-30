@@ -126,6 +126,11 @@ export interface InfoCacheOptions {
 
 /** One cached response: the in-flight or settled promise plus its expiry. */
 interface CacheEntry {
+  key: string;
+  /** Index in the expiry heap; -1 for unindexed entries (including infinite TTLs). */
+  expiryIndex: number;
+  previous?: CacheEntry;
+  next?: CacheEntry;
   promise: Promise<unknown>;
   expiresAt: number;
 }
@@ -187,6 +192,11 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
   private readonly _maxSize: number;
   /** Cached responses keyed by type + sorted params, in insertion order (oldest first). */
   private readonly _entries = new Map<string, CacheEntry>();
+  /** One indexed node per finite-expiry entry; no stale/tombstone accumulation. */
+  private readonly _expiry: CacheEntry[] = [];
+  /** Intrusive insertion-order list avoids rescanning Map iterator tombstones on eviction. */
+  private _oldest: CacheEntry | undefined;
+  private _newest: CacheEntry | undefined;
   /** Info types to coalesce: `true` for all, a set for a list, `undefined` when disabled. */
   private readonly _coalesce: true | ReadonlySet<string> | undefined;
   /** Coalesced requests still in flight, keyed like {@linkcode _entries}. */
@@ -253,12 +263,17 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
     // TTL runs from dispatch: a response is served until `ttl` after its request started, and a
     // rejection evicts the entry (guarded against evicting a newer entry for the same key).
     const promise = this.inner.request<T>(endpoint, payload, signal);
-    const entry: CacheEntry = { promise, expiresAt: now + (this._ttlByType[type] ?? this._ttl) };
-    this._entries.delete(key); // re-insert so eviction order tracks recency
+    const entry: CacheEntry = { key, expiryIndex: -1, promise, expiresAt: now + (this._ttlByType[type] ?? this._ttl) };
+    this._removeEntry(key); // re-insert so eviction order tracks recency
     this._evict(now);
     this._entries.set(key, entry);
+    entry.previous = this._newest;
+    if (this._newest !== undefined) this._newest.next = entry;
+    else this._oldest = entry;
+    this._newest = entry;
+    this._indexExpiry(entry);
     promise.catch(() => {
-      if (this._entries.get(key) === entry) this._entries.delete(key);
+      if (this._entries.get(key) === entry) this._removeEntry(key);
     });
     return promise;
   }
@@ -269,7 +284,13 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
    * longer join them.
    */
   clear(): void {
+    for (const entry of this._entries.values()) {
+      entry.previous = entry.next = undefined;
+      entry.expiryIndex = -1;
+    }
     this._entries.clear();
+    this._expiry.length = 0;
+    this._oldest = this._newest = undefined;
     this._inFlight.clear();
   }
 
@@ -334,17 +355,71 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
     });
   }
 
-  /** Makes room for one more entry: expired entries first, then the oldest. */
+  /** Makes room with O(log maxSize) expiry discovery, then oldest-entry fallback. */
   private _evict(now: number): void {
-    if (this._entries.size < this._maxSize) return;
-    for (const [key, entry] of this._entries) {
-      if (this._entries.size < this._maxSize) return;
-      if (entry.expiresAt <= now) this._entries.delete(key);
-    }
     while (this._entries.size >= this._maxSize) {
-      const oldest = this._entries.keys().next();
-      if (oldest.done === true) return;
-      this._entries.delete(oldest.value);
+      const expired = this._expiry[0];
+      if (expired !== undefined && expired.expiresAt <= now) this._removeEntry(expired.key);
+      else {
+        if (this._oldest === undefined) return;
+        this._removeEntry(this._oldest.key);
+      }
+    }
+  }
+
+  private _indexExpiry(entry: CacheEntry): void {
+    if (entry.expiresAt === Infinity) return;
+    entry.expiryIndex = this._expiry.length;
+    this._expiry.push(entry);
+    this._riseExpiry(entry.expiryIndex);
+  }
+
+  /** Removes from both indexes, including overwrites and rejected requests. */
+  private _removeEntry(key: string): void {
+    const entry = this._entries.get(key);
+    if (entry === undefined) return;
+    this._entries.delete(key);
+    if (entry.previous !== undefined) entry.previous.next = entry.next;
+    else this._oldest = entry.next;
+    if (entry.next !== undefined) entry.next.previous = entry.previous;
+    else this._newest = entry.previous;
+    entry.previous = entry.next = undefined;
+    const index = entry.expiryIndex;
+    if (index < 0) return;
+    const last = this._expiry.pop()!;
+    entry.expiryIndex = -1;
+    if (last === entry) return;
+    this._expiry[index] = last;
+    last.expiryIndex = index;
+    if (index > 0 && last.expiresAt < this._expiry[(index - 1) >> 1].expiresAt) this._riseExpiry(index);
+    else this._sinkExpiry(index);
+  }
+
+  private _swapExpiry(a: number, b: number): void {
+    const entry = this._expiry[a];
+    this._expiry[a] = this._expiry[b];
+    this._expiry[b] = entry;
+    this._expiry[a].expiryIndex = a;
+    entry.expiryIndex = b;
+  }
+
+  private _riseExpiry(index: number): void {
+    while (index > 0) {
+      const parent = (index - 1) >> 1;
+      if (this._expiry[parent].expiresAt <= this._expiry[index].expiresAt) return;
+      this._swapExpiry(parent, index);
+      index = parent;
+    }
+  }
+
+  private _sinkExpiry(index: number): void {
+    const heap = this._expiry;
+    while (index * 2 + 1 < heap.length) {
+      let child = index * 2 + 1;
+      if (child + 1 < heap.length && heap[child + 1].expiresAt < heap[child].expiresAt) child++;
+      if (heap[index].expiresAt <= heap[child].expiresAt) return;
+      this._swapExpiry(index, child);
+      index = child;
     }
   }
 }
