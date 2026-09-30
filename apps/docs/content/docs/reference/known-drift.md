@@ -161,6 +161,18 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   these fields. The queried templates still omit the documented `semanticRestriction` field; its live shape
   remains unverified.
 
+### 13. HIP-3 fees moved to asset metadata
+
+- **Verified:** 2026-09-29 on mainnet and testnet.
+- **Current docs:** [HIP-3 deployer actions](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-3-deployer-actions)
+  describe `setFundingClamps`, `setDeployerFees`, nullable open-interest caps, and `normal` margin mode.
+- **Server reality:** DEX metadata includes `assetToFundingClamp`; fee scale and change timestamps are
+  per-asset metadata. Sampled DEX objects omit the older DEX-level fee fields.
+- **SDK behavior:** supports the current setters and metadata, including `[0, 3]` fee scales and `[0, 10)`
+  in growth mode. Legacy `setFeeScale` / `setGrowthModes` remain available for compatibility, but new integrations
+  should use `setDeployerFees`. Their absence from current docs does not establish server-side removal;
+  no state-changing probe was used to infer their status. Legacy response fields remain optional.
+
 ## Resolved
 
 _None yet._

@@ -114,6 +114,42 @@ export const PerpDeployRequest = /* @__PURE__ */ (() => {
       v.object({
         /** Type of action. */
         type: v.literal("perpDeploy"),
+        /** Sorted asset/clamp tuples. Funding clamps must be between 0 and 0.01. */
+        setFundingClamps: v.array(
+          v.tuple([
+            v.string(),
+            v.pipe(
+              UnsignedDecimal,
+              v.check((value) => Number(value) <= 0.01, "Funding clamp must be at most 0.01."),
+            ),
+          ]),
+        ),
+      }),
+      v.object({
+        /** Type of action. */
+        type: v.literal("perpDeploy"),
+        /** Sorted asset/fee tuples. Scale is [0, 3], or [0, 10) with growth mode. */
+        setDeployerFees: v.array(
+          v.tuple([
+            v.string(),
+            v.pipe(
+              v.object({
+                /** Deployer fee scale. */
+                scale: UnsignedDecimal,
+                /** Whether growth mode is enabled. */
+                growthMode: v.boolean(),
+              }),
+              v.check(
+                (fees) => (fees.growthMode ? Number(fees.scale) < 10 : Number(fees.scale) <= 3),
+                "Fee scale exceeds the range for this growth mode.",
+              ),
+            ),
+          ]),
+        ),
+      }),
+      v.object({
+        /** Type of action. */
+        type: v.literal("perpDeploy"),
         /** Parameters for halting or resuming trading for an asset. */
         haltTrading: v.object({
           /** Asset symbol for the asset to halt or resume. */
@@ -172,7 +208,7 @@ export const PerpDeployRequest = /* @__PURE__ */ (() => {
         /** Type of action. */
         type: v.literal("perpDeploy"),
         /** A list (sorted by key) of asset and open interest cap notionals. */
-        setOpenInterestCaps: v.array(v.tuple([v.string(), UnsignedInteger])),
+        setOpenInterestCaps: v.array(v.tuple([v.string(), v.nullable(UnsignedInteger)])),
       }),
       v.object({
         /** Type of action. */
@@ -198,7 +234,7 @@ export const PerpDeployRequest = /* @__PURE__ */ (() => {
         /** Type of action. */
         type: v.literal("perpDeploy"),
         /** A list (sorted by key) of asset and margin modes. */
-        setMarginModes: v.array(v.tuple([v.string(), v.picklist(["strictIsolated", "noCross"])])),
+        setMarginModes: v.array(v.tuple([v.string(), v.picklist(["strictIsolated", "noCross", "normal"])])),
       }),
       v.object({
         /** Type of action. */

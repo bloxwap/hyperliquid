@@ -12,7 +12,12 @@ runTest({
   codeTestFn: async (_t, client) => {
     const data = await Promise.all([client.perpDexs()]);
 
-    schemaCoverage(responseSchema, data);
+    schemaCoverage(responseSchema, data, [
+      // Legacy fee fields and pre-clamp snapshots are covered offline.
+      "#/items/anyOf/0/properties/deployerFeeScale/present",
+      "#/items/anyOf/0/properties/lastDeployerFeeScaleChangeTime/present",
+      "#/items/anyOf/0/properties/assetToFundingClamp/missing",
+    ]);
   },
 });
 

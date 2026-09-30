@@ -12,7 +12,11 @@ runTest({
   codeTestFn: async (_t, client) => {
     const data = await Promise.all([client.allPerpMetas()]);
 
-    schemaCoverage(responseSchema, data);
+    schemaCoverage(responseSchema, data, [
+      // Legacy timestamps and explicit normal mode are covered by offline snapshots.
+      "#/items/properties/universe/items/properties/marginMode/enum/2",
+      "#/items/properties/universe/items/properties/lastGrowthModeChangeTime/present",
+    ]);
   },
 });
 

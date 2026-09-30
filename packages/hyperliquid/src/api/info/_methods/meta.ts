@@ -44,9 +44,13 @@ export type MetaResponse = {
     /** Indicates if the universe is delisted. */
     isDelisted?: true;
     /** Trading margin mode constraint. */
-    marginMode?: "strictIsolated" | "noCross";
+    marginMode?: "strictIsolated" | "noCross" | "normal";
     /** Indicates if growth mode is enabled. */
     growthMode?: "enabled";
+    /** Per-asset deployer fee scale. */
+    deployerFeeScale?: string;
+    /** Timestamp of the last per-asset fee scale change. */
+    lastFeeScaleChangeTime?: string;
     /** Timestamp of the last growth mode change. */
     lastGrowthModeChangeTime?: string;
   }[];

@@ -1,0 +1,768 @@
+import { expect, test } from "bun:test";
+import Ajv from "ajv";
+import { typeToJsonSchema } from "../_utils/typeToJsonSchema.ts";
+const snapshots = [
+  {
+    network: "mainnet",
+    metas: [
+      {
+        universe: [
+          {
+            szDecimals: 4,
+            name: "xyz:XYZ100",
+            maxLeverage: 30,
+            marginTableId: 30,
+            growthMode: "enabled",
+            lastFeeScaleChangeTime: "2025-11-23T17:37:10.033211662",
+            deployerFeeScale: "1.0",
+          },
+          {
+            szDecimals: 3,
+            name: "xyz:TSLA",
+            maxLeverage: 20,
+            marginTableId: 20,
+            growthMode: "enabled",
+            lastFeeScaleChangeTime: "2025-11-23T17:37:10.033211662",
+            deployerFeeScale: "1.0",
+          },
+        ],
+        marginTables: [
+          [
+            50,
+            {
+              description: "",
+              marginTiers: [
+                {
+                  lowerBound: "0.0",
+                  maxLeverage: 50,
+                },
+              ],
+            },
+          ],
+        ],
+        collateralToken: 0,
+      },
+      {
+        universe: [
+          {
+            szDecimals: 2,
+            name: "flx:TSLA",
+            maxLeverage: 10,
+            marginTableId: 10,
+            isDelisted: true,
+            growthMode: "enabled",
+            lastFeeScaleChangeTime: "2025-11-24T21:19:25.980742012",
+            deployerFeeScale: "1.0",
+          },
+          {
+            szDecimals: 2,
+            name: "flx:NVDA",
+            maxLeverage: 10,
+            marginTableId: 10,
+            isDelisted: true,
+            growthMode: "enabled",
+            lastFeeScaleChangeTime: "2026-03-08T03:42:24.011287219",
+            deployerFeeScale: "1.0",
+          },
+        ],
+        marginTables: [
+          [
+            50,
+            {
+              description: "",
+              marginTiers: [
+                {
+                  lowerBound: "0.0",
+                  maxLeverage: 50,
+                },
+              ],
+            },
+          ],
+          [
+            51,
+            {
+              description: "5x leverage for small positions, 3x for large positions (>$1M)",
+              marginTiers: [
+                {
+                  lowerBound: "0.0",
+                  maxLeverage: 5,
+                },
+                {
+                  lowerBound: "1000000.0",
+                  maxLeverage: 3,
+                },
+              ],
+            },
+          ],
+          [
+            52,
+            {
+              description: "3x leverage for small positions, 2x for large positions (>$1M)",
+              marginTiers: [
+                {
+                  lowerBound: "0.0",
+                  maxLeverage: 3,
+                },
+                {
+                  lowerBound: "1000000.0",
+                  maxLeverage: 2,
+                },
+              ],
+            },
+          ],
+          [
+            53,
+            {
+              description: "10x/5x/3x leverage tiers based on position size",
+              marginTiers: [
+                {
+                  lowerBound: "0.0",
+                  maxLeverage: 10,
+                },
+                {
+                  lowerBound: "500000.0",
+                  maxLeverage: 5,
+                },
+                {
+                  lowerBound: "2000000.0",
+                  maxLeverage: 3,
+                },
+              ],
+            },
+          ],
+          [
+            54,
+            {
+              description: "20x/15x/10x leverage tiers based on position size",
+              marginTiers: [
+                {
+                  lowerBound: "0.0",
+                  maxLeverage: 20,
+                },
+                {
+                  lowerBound: "1000000.0",
+                  maxLeverage: 15,
+                },
+                {
+                  lowerBound: "2000000.0",
+                  maxLeverage: 10,
+                },
+              ],
+            },
+          ],
+          [
+            55,
+            {
+              description: "20x/10x leverage tiers based on position size",
+              marginTiers: [
+                {
+                  lowerBound: "0.0",
+                  maxLeverage: 20,
+                },
+                {
+                  lowerBound: "5000000.0",
+                  maxLeverage: 10,
+                },
+              ],
+            },
+          ],
+        ],
+        collateralToken: 360,
+      },
+    ],
+    dexs: [
+      null,
+      {
+        name: "xyz",
+        fullName: "XYZ",
+        deployer: "0x88806a71d74ad0a510b350545c9ae490912f0888",
+        oracleUpdater: null,
+        feeRecipient: "0x83ffcfb1f2ad843c474b2e28df86c721cb869d3a",
+        assetToStreamingOiCap: [
+          ["xyz:AAOI", "25000000.0"],
+          ["xyz:AAPL", "200000000.0"],
+          ["xyz:ALUMINIUM", "25000000.0"],
+          ["xyz:AMAT", "25000000.0"],
+          ["xyz:AMD", "100000000.0"],
+          ["xyz:AMZN", "100000000.0"],
+          ["xyz:ARM", "50000000.0"],
+          ["xyz:ASML", "25000000.0"],
+          ["xyz:AVGO", "75000000.0"],
+          ["xyz:BABA", "50000000.0"],
+          ["xyz:BB", "75000000.0"],
+          ["xyz:BE", "25000000.0"],
+          ["xyz:BIRD", "25000000.0"],
+          ["xyz:BMNR", "25000000.0"],
+          ["xyz:BOT", "25000000.0"],
+          ["xyz:BRENTOIL", "750000000.0"],
+          ["xyz:BX", "25000000.0"],
+          ["xyz:CBRS", "150000000.0"],
+          ["xyz:CL", "1000000000.0"],
+          ["xyz:COIN", "50000000.0"],
+          ["xyz:COPPER", "300000000.0"],
+          ["xyz:CORN", "25000000.0"],
+          ["xyz:COST", "25000000.0"],
+          ["xyz:CRCL", "150000000.0"],
+          ["xyz:CRWD", "25000000.0"],
+          ["xyz:CRWV", "50000000.0"],
+          ["xyz:CVX", "25000000.0"],
+          ["xyz:CXMT", "250000000.0"],
+          ["xyz:DELL", "25000000.0"],
+          ["xyz:DKNG", "25000000.0"],
+          ["xyz:DRAM", "250000000.0"],
+          ["xyz:DXY", "25000000.0"],
+          ["xyz:EBAY", "25000000.0"],
+          ["xyz:EUR", "50000000.0"],
+          ["xyz:EWJ", "25000000.0"],
+          ["xyz:EWT", "25000000.0"],
+          ["xyz:EWY", "100000000.0"],
+          ["xyz:EWZ", "25000000.0"],
+          ["xyz:GBP", "25000000.0"],
+          ["xyz:GEV", "25000000.0"],
+          ["xyz:GIGADEV", "25000000.0"],
+          ["xyz:GME", "25000000.0"],
+          ["xyz:GOLD", "750000000.0"],
+          ["xyz:GOOGL", "350000000.0"],
+          ["xyz:H100", "25000000.0"],
+          ["xyz:HIMS", "25000000.0"],
+          ["xyz:HOOD", "150000000.0"],
+          ["xyz:HYUNDAI", "25000000.0"],
+          ["xyz:IBIDEN", "25000000.0"],
+          ["xyz:IBM", "50000000.0"],
+          ["xyz:IBOV", "25000000.0"],
+          ["xyz:INTC", "350000000.0"],
+          ["xyz:IREN", "25000000.0"],
+          ["xyz:JP225", "25000000.0"],
+          ["xyz:JPY", "100000000.0"],
+          ["xyz:KIOXIA", "50000000.0"],
+          ["xyz:KORU", "25000000.0"],
+          ["xyz:KR200", "25000000.0"],
+          ["xyz:KRW", "25000000.0"],
+          ["xyz:KSTR", "25000000.0"],
+          ["xyz:LITE", "100000000.0"],
+          ["xyz:LLY", "25000000.0"],
+          ["xyz:LYTE", "25000000.0"],
+          ["xyz:MAGS", "25000000.0"],
+          ["xyz:META", "200000000.0"],
+          ["xyz:MINIMAX", "50000000.0"],
+          ["xyz:MRNA", "75000000.0"],
+          ["xyz:MRVL", "200000000.0"],
+          ["xyz:MSFT", "250000000.0"],
+          ["xyz:MSTR", "150000000.0"],
+          ["xyz:MU", "500000000.0"],
+          ["xyz:NATGAS", "100000000.0"],
+          ["xyz:NBIS", "150000000.0"],
+          ["xyz:NCLD", "25000000.0"],
+          ["xyz:NET", "25000000.0"],
+          ["xyz:NFLX", "50000000.0"],
+          ["xyz:NIFTY", "25000000.0"],
+          ["xyz:NOK", "25000000.0"],
+          ["xyz:NOW", "25000000.0"],
+          ["xyz:NVDA", "500000000.0"],
+          ["xyz:ORCL", "150000000.0"],
+          ["xyz:OURA", "25000000.0"],
+          ["xyz:PALLADIUM", "25000000.0"],
+          ["xyz:PLATINUM", "25000000.0"],
+          ["xyz:PLTR", "150000000.0"],
+          ["xyz:PURRDAT", "50000000.0"],
+          ["xyz:QCOM", "25000000.0"],
+          ["xyz:QNT", "20000000.0"],
+          ["xyz:RDDT", "25000000.0"],
+          ["xyz:RIVN", "25000000.0"],
+          ["xyz:RKLB", "50000000.0"],
+          ["xyz:SHAZ", "25000000.0"],
+          ["xyz:SHEIN", "25000000.0"],
+          ["xyz:SILVER", "500000000.0"],
+          ["xyz:SKHX", "1000000000.0"],
+          ["xyz:SKHY", "400000000.0"],
+          ["xyz:SMH", "25000000.0"],
+          ["xyz:SMSN", "250000000.0"],
+          ["xyz:SNDK", "500000000.0"],
+          ["xyz:SNXX", "25000000.0"],
+          ["xyz:SOFTBANK", "25000000.0"],
+          ["xyz:SOXL", "50000000.0"],
+          ["xyz:SP500", "1250000000.0"],
+          ["xyz:SPCX", "750000000.0"],
+          ["xyz:STRC", "50000000.0"],
+          ["xyz:TLT", "25000000.0"],
+          ["xyz:TSLA", "100000000.0"],
+          ["xyz:TSM", "50000000.0"],
+          ["xyz:TTF", "25000000.0"],
+          ["xyz:UNITREE", "100000000.0"],
+          ["xyz:URANIUM", "25000000.0"],
+          ["xyz:URNM", "25000000.0"],
+          ["xyz:USAR", "25000000.0"],
+          ["xyz:VIX", "25000000.0"],
+          ["xyz:VOL", "25000000.0"],
+          ["xyz:WDC", "50000000.0"],
+          ["xyz:WHEAT", "25000000.0"],
+          ["xyz:XBI", "25000000.0"],
+          ["xyz:XLE", "25000000.0"],
+          ["xyz:XYZ100", "1000000000.0"],
+          ["xyz:YMTC", "25000000.0"],
+          ["xyz:ZHIPU", "100000000.0"],
+          ["xyz:ZM", "25000000.0"],
+        ],
+        subDeployers: [
+          [
+            "registerAsset",
+            [
+              "0x7d16f116d252db609c56d27d6c9605eb03e16657",
+              "0x8c4190018486a2dbac2629d688136e8990170ff2",
+              "0xc0892b4f864807ec26dde6ad8dad6914e079059d",
+            ],
+          ],
+          ["setOracle", ["0x1234567890545d1df9ee64b35fdd16966e08acec"]],
+          [
+            "setFeeRecipient",
+            ["0x7d16f116d252db609c56d27d6c9605eb03e16657", "0xc0892b4f864807ec26dde6ad8dad6914e079059d"],
+          ],
+          ["haltTrading", ["0x7d16f116d252db609c56d27d6c9605eb03e16657", "0xc0892b4f864807ec26dde6ad8dad6914e079059d"]],
+          [
+            "setMarginTableIds",
+            [
+              "0x7d16f116d252db609c56d27d6c9605eb03e16657",
+              "0x8c4190018486a2dbac2629d688136e8990170ff2",
+              "0xc0892b4f864807ec26dde6ad8dad6914e079059d",
+            ],
+          ],
+          [
+            "setOpenInterestCaps",
+            [
+              "0x7d16f116d252db609c56d27d6c9605eb03e16657",
+              "0x8c4190018486a2dbac2629d688136e8990170ff2",
+              "0xc0892b4f864807ec26dde6ad8dad6914e079059d",
+            ],
+          ],
+          [
+            "setFundingMultipliers",
+            [
+              "0x7d16f116d252db609c56d27d6c9605eb03e16657",
+              "0x8c4190018486a2dbac2629d688136e8990170ff2",
+              "0xc0892b4f864807ec26dde6ad8dad6914e079059d",
+            ],
+          ],
+          [
+            "setMarginModes",
+            [
+              "0x7d16f116d252db609c56d27d6c9605eb03e16657",
+              "0x8c4190018486a2dbac2629d688136e8990170ff2",
+              "0xc0892b4f864807ec26dde6ad8dad6914e079059d",
+            ],
+          ],
+          [
+            "setDeployerFees",
+            ["0x7d16f116d252db609c56d27d6c9605eb03e16657", "0x8c4190018486a2dbac2629d688136e8990170ff2"],
+          ],
+          [
+            "setFundingInterestRates",
+            [
+              "0x7d16f116d252db609c56d27d6c9605eb03e16657",
+              "0x8c4190018486a2dbac2629d688136e8990170ff2",
+              "0xc0892b4f864807ec26dde6ad8dad6914e079059d",
+            ],
+          ],
+          [
+            "setPerpAnnotation",
+            [
+              "0x7d16f116d252db609c56d27d6c9605eb03e16657",
+              "0x8c4190018486a2dbac2629d688136e8990170ff2",
+              "0xc0892b4f864807ec26dde6ad8dad6914e079059d",
+            ],
+          ],
+        ],
+        assetToFundingMultiplier: [
+          ["xyz:AAOI", "0.5"],
+          ["xyz:AAPL", "0.5"],
+          ["xyz:ALUMINIUM", "0.5"],
+          ["xyz:AMAT", "0.5"],
+          ["xyz:AMD", "0.5"],
+          ["xyz:AMZN", "0.5"],
+          ["xyz:ARM", "0.5"],
+          ["xyz:ASML", "0.5"],
+          ["xyz:AVGO", "0.5"],
+          ["xyz:BABA", "0.5"],
+          ["xyz:BB", "0.5"],
+          ["xyz:BE", "0.5"],
+          ["xyz:BIRD", "0.5"],
+          ["xyz:BMNR", "0.5"],
+          ["xyz:BOT", "0.5"],
+          ["xyz:BRENTOIL", "0.5"],
+          ["xyz:BX", "0.5"],
+          ["xyz:CBRS", "0.5"],
+          ["xyz:CL", "0.5"],
+          ["xyz:COIN", "0.5"],
+          ["xyz:COPPER", "0.5"],
+          ["xyz:CORN", "0.5"],
+          ["xyz:COST", "0.5"],
+          ["xyz:CRCL", "0.5"],
+          ["xyz:CRWD", "0.5"],
+          ["xyz:CRWV", "0.5"],
+          ["xyz:CVX", "0.5"],
+          ["xyz:CXMT", "0.5"],
+          ["xyz:DELL", "0.5"],
+          ["xyz:DKNG", "0.5"],
+          ["xyz:DRAM", "0.5"],
+          ["xyz:DXY", "0.5"],
+          ["xyz:EBAY", "0.5"],
+          ["xyz:EUR", "0.5"],
+          ["xyz:EWJ", "0.5"],
+          ["xyz:EWT", "0.5"],
+          ["xyz:EWY", "0.5"],
+          ["xyz:EWZ", "0.5"],
+          ["xyz:GBP", "0.5"],
+          ["xyz:GEV", "0.5"],
+          ["xyz:GIGADEV", "0.5"],
+          ["xyz:GME", "0.5"],
+          ["xyz:GOLD", "0.5"],
+          ["xyz:GOOGL", "0.5"],
+          ["xyz:H100", "0.5"],
+          ["xyz:HIMS", "0.5"],
+          ["xyz:HOOD", "0.5"],
+          ["xyz:HYUNDAI", "0.5"],
+          ["xyz:IBIDEN", "0.5"],
+          ["xyz:IBM", "0.5"],
+          ["xyz:IBOV", "0.5"],
+          ["xyz:INTC", "0.5"],
+          ["xyz:IREN", "0.5"],
+          ["xyz:JP225", "0.5"],
+          ["xyz:JPY", "0.5"],
+          ["xyz:KIOXIA", "0.5"],
+          ["xyz:KORU", "0.5"],
+          ["xyz:KR200", "0.5"],
+          ["xyz:KRW", "0.5"],
+          ["xyz:KSTR", "0.5"],
+          ["xyz:LITE", "0.5"],
+          ["xyz:LLY", "0.5"],
+          ["xyz:LYTE", "0.5"],
+          ["xyz:MAGS", "0.5"],
+          ["xyz:META", "0.5"],
+          ["xyz:MINIMAX", "0.5"],
+          ["xyz:MRNA", "0.5"],
+          ["xyz:MRVL", "0.5"],
+          ["xyz:MSFT", "0.5"],
+          ["xyz:MSTR", "0.5"],
+          ["xyz:MU", "0.5"],
+          ["xyz:NATGAS", "0.5"],
+          ["xyz:NBIS", "0.5"],
+          ["xyz:NCLD", "0.5"],
+          ["xyz:NET", "0.5"],
+          ["xyz:NFLX", "0.5"],
+          ["xyz:NIFTY", "0.5"],
+          ["xyz:NOK", "0.5"],
+          ["xyz:NOW", "0.5"],
+          ["xyz:NVDA", "0.5"],
+          ["xyz:ORCL", "0.5"],
+          ["xyz:OURA", "0.005"],
+          ["xyz:PALLADIUM", "0.5"],
+          ["xyz:PLATINUM", "0.5"],
+          ["xyz:PLTR", "0.5"],
+          ["xyz:PURRDAT", "0.5"],
+          ["xyz:QCOM", "0.5"],
+          ["xyz:QNT", "0.5"],
+          ["xyz:RDDT", "0.5"],
+          ["xyz:RIVN", "0.5"],
+          ["xyz:RKLB", "0.5"],
+          ["xyz:SHAZ", "0.5"],
+          ["xyz:SHEIN", "0.5"],
+          ["xyz:SILVER", "0.5"],
+          ["xyz:SKHX", "0.5"],
+          ["xyz:SKHY", "0.5"],
+          ["xyz:SMH", "0.5"],
+          ["xyz:SMSN", "0.5"],
+          ["xyz:SNDK", "0.5"],
+          ["xyz:SNXX", "0.5"],
+          ["xyz:SOFTBANK", "0.5"],
+          ["xyz:SOXL", "0.5"],
+          ["xyz:SP500", "0.5"],
+          ["xyz:SPCX", "0.5"],
+          ["xyz:STRC", "0.5"],
+          ["xyz:TLT", "0.5"],
+          ["xyz:TSLA", "0.5"],
+          ["xyz:TSM", "0.5"],
+          ["xyz:TTF", "0.5"],
+          ["xyz:UNITREE", "0.5"],
+          ["xyz:URANIUM", "0.5"],
+          ["xyz:URNM", "0.5"],
+          ["xyz:USAR", "0.5"],
+          ["xyz:VIX", "0.5"],
+          ["xyz:VOL", "0.5"],
+          ["xyz:WDC", "0.5"],
+          ["xyz:WHEAT", "0.5"],
+          ["xyz:XBI", "0.5"],
+          ["xyz:XLE", "0.5"],
+          ["xyz:XYZ100", "0.5"],
+          ["xyz:YMTC", "0.5"],
+          ["xyz:ZHIPU", "0.5"],
+          ["xyz:ZM", "0.5"],
+        ],
+        assetToFundingInterestRate: [
+          ["xyz:EUR", "0.0"],
+          ["xyz:GBP", "0.0"],
+          ["xyz:JPY", "0.0"],
+          ["xyz:KRW", "0.0"],
+        ],
+        assetToFundingClamp: [],
+      },
+      {
+        name: "flx",
+        fullName: "Felix Exchange",
+        deployer: "0x2fab552502a6d45920d5741a2f3ebf4c35536352",
+        oracleUpdater: "0x94757f8dcb4bf73b850195660e959d1105cfedd5",
+        feeRecipient: "0xe2872b5ae7dcbba40cc4510d08c8bbea95b42d43",
+        assetToStreamingOiCap: [
+          ["flx:COIN", "8000000.0"],
+          ["flx:COPPER", "5000000.0"],
+          ["flx:CRCL", "5000000.0"],
+          ["flx:GAS", "5000000.0"],
+          ["flx:GOLD", "10000000.0"],
+          ["flx:NVDA", "2500000.0"],
+          ["flx:OIL", "22500000.0"],
+          ["flx:PALLADIUM", "2500000.0"],
+          ["flx:PLATINUM", "10000000.0"],
+          ["flx:SILVER", "20000000.0"],
+          ["flx:TSLA", "8000000.0"],
+          ["flx:USA100", "2500000.0"],
+          ["flx:USA500", "5000000.0"],
+          ["flx:USDE", "7500000.0"],
+          ["flx:XMR", "4000000.0"],
+        ],
+        subDeployers: [
+          ["registerAsset", ["0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+          ["setOracle", ["0x94757f8dcb4bf73b850195660e959d1105cfedd5", "0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+          ["insertMarginTable", ["0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+          ["setFeeRecipient", ["0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+          ["haltTrading", ["0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+          ["setMarginTableIds", ["0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+          [
+            "setOpenInterestCaps",
+            ["0x17f5d164a9fa8ed292cdc91e34c0edeed6fc9b90", "0xd0d4ef34424af3da883672b8cdeca751293655a5"],
+          ],
+          [
+            "setFundingMultipliers",
+            ["0xae083732032a813f9142733cdf380e1bc9e518af", "0xd0d4ef34424af3da883672b8cdeca751293655a5"],
+          ],
+          ["setMarginModes", ["0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+          ["setDeployerFees", ["0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+          ["setFundingInterestRates", ["0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+          ["setPerpAnnotation", ["0xd0d4ef34424af3da883672b8cdeca751293655a5"]],
+        ],
+        assetToFundingMultiplier: [
+          ["flx:COIN", "0.0"],
+          ["flx:COPPER", "0.0"],
+          ["flx:CRCL", "0.0"],
+          ["flx:GAS", "0.0"],
+          ["flx:GOLD", "0.0"],
+          ["flx:NVDA", "0.0"],
+          ["flx:OIL", "0.0"],
+          ["flx:PALLADIUM", "0.0"],
+          ["flx:PLATINUM", "0.0"],
+          ["flx:SILVER", "0.0"],
+          ["flx:TSLA", "0.0"],
+          ["flx:USA100", "0.0"],
+          ["flx:USA500", "0.0"],
+          ["flx:USDE", "0.0"],
+          ["flx:XMR", "0.0"],
+        ],
+        assetToFundingInterestRate: [],
+        assetToFundingClamp: [],
+      },
+    ],
+  },
+  {
+    network: "testnet",
+    metas: [
+      {
+        universe: [
+          {
+            szDecimals: 0,
+            name: "test:ABC",
+            maxLeverage: 3,
+            marginTableId: 3,
+            lastFeeScaleChangeTime: "1970-01-01T00:00:00",
+            deployerFeeScale: "1.0",
+          },
+        ],
+        marginTables: [
+          [
+            50,
+            {
+              description: "",
+              marginTiers: [
+                {
+                  lowerBound: "0.0",
+                  maxLeverage: 50,
+                },
+              ],
+            },
+          ],
+        ],
+        collateralToken: 0,
+      },
+      {
+        universe: [
+          {
+            szDecimals: 2,
+            name: "unit:ES",
+            maxLeverage: 20,
+            marginTableId: 20,
+            onlyIsolated: true,
+            marginMode: "strictIsolated",
+            lastFeeScaleChangeTime: "1970-01-01T00:00:00",
+            deployerFeeScale: "1.0",
+          },
+          {
+            szDecimals: 2,
+            name: "unit:NQ",
+            maxLeverage: 20,
+            marginTableId: 20,
+            onlyIsolated: true,
+            isDelisted: true,
+            marginMode: "strictIsolated",
+            lastFeeScaleChangeTime: "1970-01-01T00:00:00",
+            deployerFeeScale: "1.0",
+          },
+        ],
+        marginTables: [
+          [
+            50,
+            {
+              description: "",
+              marginTiers: [
+                {
+                  lowerBound: "0.0",
+                  maxLeverage: 50,
+                },
+              ],
+            },
+          ],
+        ],
+        collateralToken: 0,
+      },
+    ],
+    dexs: [
+      null,
+      {
+        name: "test",
+        fullName: "test dex",
+        deployer: "0x5e89b26d8d66da9888c835c9bfcc2aa51813e152",
+        oracleUpdater: null,
+        feeRecipient: null,
+        assetToStreamingOiCap: [],
+        subDeployers: [],
+        assetToFundingMultiplier: [],
+        assetToFundingInterestRate: [],
+        assetToFundingClamp: [],
+      },
+      {
+        name: "unit",
+        fullName: "unit dex",
+        deployer: "0x888888880c61928866d8fcd1ac8655b7760b9f71",
+        oracleUpdater: null,
+        feeRecipient: null,
+        assetToStreamingOiCap: [],
+        subDeployers: [["setOracle", ["0x2d2bce037fc7b1b8a94af488d01ec20bec8117db"]]],
+        assetToFundingMultiplier: [],
+        assetToFundingInterestRate: [],
+        assetToFundingClamp: [],
+      },
+    ],
+  },
+];
+const starDex = {
+  name: "fcmt",
+  fullName: "FCM control test",
+  deployer: "0x19e0af27ea5db8f8a5d060dadbf7d8b4c2348a87",
+  oracleUpdater: null,
+  feeRecipient: null,
+  assetToStreamingOiCap: [],
+  subDeployers: [
+    [
+      {
+        hip3Star: "modifyApproval",
+      },
+      ["0x73b69db46d41c6b721fb5cb9ce9f29193140950e"],
+    ],
+    [
+      {
+        hip3Star: "modifyBackstopLiquidatorApproval",
+      },
+      ["0x73b69db46d41c6b721fb5cb9ce9f29193140950e"],
+    ],
+    [
+      {
+        hip3Star: "setReduceOnly",
+      },
+      ["0x73b69db46d41c6b721fb5cb9ce9f29193140950e"],
+    ],
+    [
+      {
+        hip3Star: "cancel",
+      },
+      ["0x73b69db46d41c6b721fb5cb9ce9f29193140950e"],
+    ],
+    [
+      {
+        hip3Star: "cancelAll",
+      },
+      ["0x73b69db46d41c6b721fb5cb9ce9f29193140950e"],
+    ],
+    [
+      {
+        hip3Star: "order",
+      },
+      ["0x73b69db46d41c6b721fb5cb9ce9f29193140950e"],
+    ],
+    [
+      {
+        hip3Star: "sendAsset",
+      },
+      ["0x73b69db46d41c6b721fb5cb9ce9f29193140950e"],
+    ],
+  ],
+  assetToFundingMultiplier: [],
+  assetToFundingInterestRate: [],
+  assetToFundingClamp: [],
+};
+const ajv = new Ajv({ strict: false });
+function validator(method: string, type: string) {
+  return ajv.compile(
+    typeToJsonSchema(new URL(`../../../src/api/info/_methods/${method}.ts`, import.meta.url).pathname, type),
+  );
+}
+test("both-network HIP-3 snapshots validate through all shared metadata response types", () => {
+  const meta = validator("meta", "MetaResponse");
+  const all = validator("allPerpMetas", "AllPerpMetasResponse");
+  const ctxs = validator("metaAndAssetCtxs", "MetaAndAssetCtxsResponse");
+  const dexs = validator("perpDexs", "PerpDexsResponse");
+  const dexes = validator("perpDexes", "PerpDexesResponse");
+  expect(dexs([starDex]), JSON.stringify(dexs.errors)).toBe(true);
+  expect(dexes([starDex]), JSON.stringify(dexes.errors)).toBe(true);
+  for (const snapshot of snapshots) {
+    expect(snapshot.metas.length).toBeGreaterThan(0);
+    for (const value of snapshot.metas) {
+      expect(meta(value), JSON.stringify(meta.errors)).toBe(true);
+      expect(ctxs([value, []]), JSON.stringify(ctxs.errors)).toBe(true);
+    }
+    expect(all(snapshot.metas), JSON.stringify(all.errors)).toBe(true);
+    expect(dexs(snapshot.dexs), JSON.stringify(dexs.errors)).toBe(true);
+    expect(dexes(snapshot.dexs), JSON.stringify(dexes.errors)).toBe(true);
+    const legacyAsset = {
+      ...snapshot.metas[0],
+      universe: snapshot.metas[0].universe.map((asset) => ({
+        ...asset,
+        marginMode: "normal",
+        lastGrowthModeChangeTime: "2026-01-01T00:00:00",
+      })),
+    };
+    expect(meta(legacyAsset), JSON.stringify(meta.errors)).toBe(true);
+    const legacy = snapshot.dexs
+      .filter((x) => x !== null)
+      .map(({ assetToFundingClamp: _, ...x }) => ({
+        ...x,
+        deployerFeeScale: "1.0",
+        lastDeployerFeeScaleChangeTime: "2026-01-01T00:00:00",
+      }));
+    expect(dexs(legacy), JSON.stringify(dexs.errors)).toBe(true);
+  }
+});

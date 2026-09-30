@@ -53,7 +53,19 @@ export type PerpDexsResponse = /** Perpetual dex metadata. */ ({
   /** List of delegated function names and their authorized executor addresses. */
   subDeployers: [
     /** Function name. */
-    functionName: string,
+    functionName:
+      | string
+      | {
+          hip3Star:
+            | "modifyApproval"
+            | "modifyBackstopLiquidatorApproval"
+            | "setReduceOnly"
+            | "cancel"
+            | "cancelAll"
+            | "order"
+            | "sendAsset"
+            | "setOracle";
+        },
     /**
      * Authorized executor addresses.
      * @pattern ^0x[a-fA-F0-9]{40}$
@@ -64,12 +76,12 @@ export type PerpDexsResponse = /** Perpetual dex metadata. */ ({
    * Fee scale applied to deployer fees.
    * @pattern ^[0-9]+(\.[0-9]+)?$
    */
-  deployerFeeScale: string;
+  deployerFeeScale?: string;
   /**
    * ISO 8601 timestamp (without timezone) of the last deployer fee scale change.
    * @pattern ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$
    */
-  lastDeployerFeeScaleChangeTime: string;
+  lastDeployerFeeScaleChangeTime?: string;
   /** Array of tuples mapping asset symbols to their funding multipliers. */
   assetToFundingMultiplier: [
     /** Asset symbol (e.g., xyz:AAPL). */
@@ -80,6 +92,8 @@ export type PerpDexsResponse = /** Perpetual dex metadata. */ ({
      */
     multiplier: string,
   ][];
+  /** Sorted asset/funding-clamp tuples (absent in older snapshots). */
+  assetToFundingClamp?: [asset: string, clamp: string][];
   /** Array of tuples mapping asset symbols to their funding interest rates. */
   assetToFundingInterestRate: [
     /** Asset symbol (e.g., xyz:AAPL). */
