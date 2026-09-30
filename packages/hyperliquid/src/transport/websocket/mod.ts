@@ -187,7 +187,11 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
 
     this.socket = new ReconnectingWebSocket(
       options?.url ?? (this.isTestnet ? TESTNET_API_WS_URL : MAINNET_API_WS_URL),
-      options?.reconnect,
+      {
+        ...options?.reconnect,
+        acquireConnection: (signal: AbortSignal): (() => void) | Promise<() => void> =>
+          this.quota.acquireConnection(signal),
+      },
     );
     this.events = new WebSocketConnectionEvents(this.socket);
 

@@ -350,7 +350,7 @@ when the server frees them too. Call `transport.close()` on a transport you are 
 
 Pass your own `quota` when the default's assumption does not hold — a process behind several egress IPs needs one per
 IP, and tests usually want isolation. Pass `rateLimit` to keep the default's [message pacing](#websocket-rate-limiting)
-on the replacement; a `WebSocketQuota` constructed without it is accounting-only:
+on the replacement; a `WebSocketQuota` constructed without it disables message pacing while retaining connection admission:
 
 ```ts
 import { WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
@@ -371,12 +371,12 @@ and delaying the keep-alive watchdog is how a half-open connection goes unnotice
 burst of orders correctly slows subscription traffic rather than silently overrunning the shared limit.
 
 To opt out of pacing — or to resize the bucket — pass your own `quota`; constructed without `rateLimit`, it keeps the
-subscription and unique-user guards but never delays a frame client-side:
+subscription, unique-user and connection guards but never delays an outbound frame client-side:
 
 ```ts
 import { WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
 
-// Accounting only: nothing waits client-side.
+// No message pacing; connection admission still applies.
 const transport = new WebSocketTransport({ quota: new WebSocketQuota() });
 
 // Or keep pacing with a custom burst size and refill rate.
@@ -387,3 +387,16 @@ const paced = new WebSocketTransport({
 
 As with [HTTP rate limiting](#rate-limiting), the budget is client-side bookkeeping: other processes, other machines
 behind the same IP, and traffic the SDK cannot see all draw on the same server-side bucket.
+
+### WebSocket connection limits
+
+The shared quota admits at most **10 connecting/open/closing sockets** and **30 new connection attempts in
+any rolling 60 seconds**, including initial handshakes, failures and reconnects. Excess attempts wait in FIFO order;
+closing a waiting transport cancels its admission. A socket reservation is released when the underlying socket closes,
+so reconnecting while the old socket is still closing cannot temporarily exceed the connection cap.
+
+These settings apply independently of message pacing. Configure `maxConnections` and
+`maxConnectionAttemptsPerMinute` on an explicit `WebSocketQuota`; set either to `null` to disable that guard.
+Each quota coordinates only transports in the current process. Separate processes and other hosts behind the same IP
+must coordinate externally or choose lower limits to leave room for one another. Connected order/post dispatch is
+unchanged; the connection gate only delays creation of sockets.

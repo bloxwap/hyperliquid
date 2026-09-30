@@ -45,6 +45,8 @@ export type ReconnectingWebSocketErrorCode =
 
 /** Configuration options for the {@linkcode ReconnectingWebSocket}. */
 export interface ReconnectingWebSocketOptions {
+  /** Admission hook for shared connection budgets. Its release runs on socket close or construction failure. */
+  acquireConnection?: (signal: AbortSignal) => (() => void) | Promise<() => void>;
   /**
    * Maximum number of consecutive failed reconnection attempts.
    *
@@ -254,7 +256,10 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
   private readonly _abortController = new AbortController();
 
   /** Reconnection configuration options. Read on every attempt, so changes apply live. */
-  reconnectOptions: Required<ReconnectingWebSocketOptions>;
+  reconnectOptions: Required<Omit<ReconnectingWebSocketOptions, "acquireConnection">> &
+    Pick<ReconnectingWebSocketOptions, "acquireConnection">;
+  private _attemptController: AbortController | undefined;
+  private _releaseConnection: (() => void) | undefined;
 
   /**
    * AbortSignal that is aborted when the instance is permanently terminated.
@@ -322,6 +327,9 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
    * retry policy as a closed connection.
    */
   private async _connect(): Promise<void> {
+    this._attemptController?.abort();
+    const attemptController = new AbortController();
+    this._attemptController = attemptController;
     const generation = ++this._connectGeneration;
 
     let url: string | URL;
@@ -339,17 +347,33 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
 
     if (generation !== this._connectGeneration || this._abortController.signal.aborted) return;
 
+    let release: (() => void) | undefined;
+    try {
+      const admission = this.reconnectOptions.acquireConnection?.(attemptController.signal);
+      release = typeof admission === "function" ? admission : admission === undefined ? undefined : await admission;
+    } catch (error) {
+      if (generation !== this._connectGeneration || this._abortController.signal.aborted) return;
+      this._handleClosed(new CloseEvent_("close", { code: 1006 }), error);
+      return;
+    }
+    if (generation !== this._connectGeneration || this._abortController.signal.aborted) {
+      release?.();
+      return;
+    }
+
     let socket: WebSocket;
     try {
       this._url = String(url);
       socket = protocols === undefined ? new WebSocket(this._url) : new WebSocket(this._url, protocols);
       socket.binaryType = this._binaryType;
     } catch (error) {
+      release?.();
       this._handleClosed(new CloseEvent_("close", { code: 1006 }), error);
       return;
     }
 
     this._socket = socket;
+    this._releaseConnection = release;
 
     socket.addEventListener("open", () => {
       if (this._socket !== socket) return;
@@ -377,7 +401,9 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
       this.dispatchEvent(new Event("error"));
     });
     socket.addEventListener("close", (event) => {
+      release?.(); // Also release superseded/closing sockets; their other events are ignored.
       if (this._socket !== socket) return;
+      this._releaseConnection = undefined;
       this._socket = undefined;
       clearTimeout(this._connectionTimer);
       this._connectionTimer = undefined;
@@ -402,6 +428,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
         try {
           socket.close();
         } catch {
+          release?.();
           // Already closing/closed — its events are ignored either way.
         }
         this._handleClosed(new CloseEvent_("close", { code: 1006, reason: "connection timeout" }));
@@ -518,6 +545,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
   private _terminate(error: ReconnectingWebSocketError, closeEvent: CloseEvent): void {
     if (this._abortController.signal.aborted) return;
     this._abortController.abort(error);
+    this._attemptController?.abort(error);
 
     clearTimeout(this._retryTimer);
     this._retryTimer = undefined;
@@ -737,10 +765,13 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
 
     const socket = this._socket;
     if (socket !== undefined) {
+      const release = this._releaseConnection;
+      this._releaseConnection = undefined;
       this._socket = undefined; // its events are ignored from here on
       try {
         socket.close(code, reason);
       } catch {
+        release?.();
         // Already closing/closed.
       }
     }
@@ -773,6 +804,8 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
 
     const socket = this._socket;
     if (socket !== undefined) {
+      const release = this._releaseConnection;
+      this._releaseConnection = undefined;
       this._socket = undefined; // its events are ignored from here on
       clearTimeout(this._connectionTimer);
       this._connectionTimer = undefined;
@@ -784,6 +817,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
       try {
         socket.close(code, reason);
       } catch {
+        release?.();
         // Already closing/closed.
       }
       // Consumers observe the drop exactly like a server close, except it never counts as a retry.
