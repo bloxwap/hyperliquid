@@ -43,7 +43,7 @@ export type FastAssetCtxsEvent = {
 // ============================================================
 
 import { parse } from "../../../_base.ts";
-import type { ISubscription } from "../../../transport/mod.ts";
+import type { ISubscription, ISubscriptionTransport, TransportError } from "../../../transport/mod.ts";
 import type { SubscriptionConfig, SubscriptionOptions } from "./_base/mod.ts";
 
 /**
@@ -78,65 +78,131 @@ export function fastAssetCtxs(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(FastAssetCtxsRequest, { type: "fastAssetCtxs" });
-  // The server pushes each update as a base64 + raw DEFLATE (RFC 1951) compressed JSON string (assumed to be valid).
-  // Decompress sequentially so events reach the listener in arrival order.
-  let queue = Promise.resolve();
-  /** Frames still waiting on the async queue; the synchronous path may only run at zero. */
-  let queued = 0;
-  return config.transport.subscribe<string>(
-    payload.type,
-    payload,
-    (e) => {
-      // Read synchronously: the event is a recycled shell whose `detail` is only valid during this
-      // call, and the queued continuation runs after later frames have already overwritten it.
-      const data = e.detail;
+  let decoder = DECODERS.get(config.transport);
+  if (decoder === undefined) {
+    decoder = createDecoder();
+    DECODERS.set(config.transport, decoder);
+  }
+  const recipient: Recipient = { listener, active: true };
+  decoder.recipients.add(recipient);
+  let failureSignal: AbortSignal | undefined;
+  const retire = (): void => {
+    recipient.active = false;
+    decoder.recipients.delete(recipient);
+    options?.signal?.removeEventListener("abort", retire);
+    failureSignal?.removeEventListener("abort", retire);
+  };
+  options?.signal?.addEventListener("abort", retire, { once: true });
+  if (options?.signal?.aborted) retire();
+  try {
+    // One shared listener identity gives the transport manager one event registration while
+    // retaining an independent transport lease, cancellation and error callback for each caller.
+    return config.transport
+      .subscribe<string>(payload.type, payload, decoder.onFrame, {
+        ...options,
+        onError: (error: TransportError): void => {
+          retire();
+          options?.onError?.(error);
+        },
+      })
+      .then(
+        (subscription) => {
+          failureSignal = subscription.failureSignal;
+          failureSignal?.addEventListener("abort", retire, { once: true });
+          if (failureSignal?.aborted) retire();
+          return {
+            failureSignal,
+            unsubscribe: (): Promise<void> => {
+              retire();
+              return subscription.unsubscribe();
+            },
+          };
+        },
+        (error) => {
+          retire();
+          throw error;
+        },
+      );
+  } catch (error) {
+    retire();
+    throw error;
+  }
+}
 
-      // With a native inflater there is nothing to await, so the frame is delivered in this tick
-      // and never touches the queue. Guarded on an empty queue: if the stream path ever ran, its
-      // frames are still pending and jumping them would break arrival order.
+/** A local caller whose lease is independent of the shared decode queue. */
+interface Recipient {
+  listener: (data: FastAssetCtxsEvent) => void;
+  active: boolean;
+}
+interface Decoder {
+  recipients: Set<Recipient>;
+  onFrame: (event: CustomEvent<string>) => void;
+}
+/** Weak transport ownership: decoders never retain unrelated or discarded transports. */
+const DECODERS = new WeakMap<ISubscriptionTransport, Decoder>();
+/** Logged for a nonterminal corrupt frame or throwing listener. */
+const DELIVERY_FAILED = "fastAssetCtxs: failed to deliver an event, continuing with the next one:";
+
+function createDecoder(): Decoder {
+  const recipients = new Set<Recipient>();
+  let queue = Promise.resolve();
+  let queued = 0;
+  return {
+    recipients,
+    onFrame: (event: CustomEvent<string>): void => {
+      // Capture the recycled shell and current leases synchronously. Later subscribers must
+      // not receive old queued frames, and retiring a lease suppresses its pending delivery.
+      const data = event.detail;
+      const targets = recipients.size === 1 ? recipients.values().next().value! : [...recipients];
+      if (recipients.size === 0) return;
       if (INFLATE_RAW_SYNC !== undefined && !forceStreamDecompressForTests && queued === 0) {
         try {
-          listener(decompressSync(data));
+          fanOut(decompressSync(data), targets);
         } catch (error) {
           console.error(DELIVERY_FAILED, error);
         }
         return;
       }
-
-      // `deliver` never rejects, so a failing event cannot poison the chain. Chaining a rejected
-      // promise would skip every subsequent `.then` callback, silently dropping all later updates
-      // for the life of the subscription.
       queued++;
-      // One chained step per frame: the release rides the same continuation via try/finally, so
-      // `queued` still drains even if `deliver` ever does reject.
       queue = queue.then(async () => {
         try {
-          await deliver(data, listener);
+          fanOut(await decompress(data), targets);
+        } catch (error) {
+          console.error(DELIVERY_FAILED, error);
         } finally {
           queued--;
         }
       });
     },
-    options,
-  );
+  };
 }
 
-/** Logged when one frame cannot be delivered; the subscription continues with the next. */
-const DELIVERY_FAILED = "fastAssetCtxs: failed to deliver an event, continuing with the next one:";
-
 /**
- * Decompresses one frame and hands it to the listener, absorbing any failure.
- *
- * A decompression failure or a throwing listener affects only its own event: the returned promise
- * always fulfills, keeping the sequential queue alive for later updates.
- *
- * The error is reported to the console rather than through `options.onError`, because that callback
- * is terminal by contract — it fires at most once and means the subscription has ended — whereas one
- * bad frame or one throwing listener callback does not end the stream.
+ * Decode once, retaining the existing mutable callback contract: multiple callers receive
+ * independent outer maps and price records. One caller uses the parsed object directly.
  */
-async function deliver(data: string, listener: (data: FastAssetCtxsEvent) => void): Promise<void> {
+function fanOut(data: FastAssetCtxsEvent, targets: Recipient | Recipient[]): void {
+  if (!Array.isArray(targets)) {
+    invoke(targets, data);
+    return;
+  }
+  const coins = Object.keys(data);
+  for (const recipient of targets) {
+    if (!recipient.active) continue;
+    const copy: FastAssetCtxsEvent = {};
+    for (const coin of coins) {
+      const prices = { ...data[coin] };
+      if (coin === "__proto__")
+        Object.defineProperty(copy, coin, { value: prices, enumerable: true, writable: true, configurable: true });
+      else copy[coin] = prices;
+    }
+    invoke(recipient, copy);
+  }
+}
+function invoke(recipient: Recipient, data: FastAssetCtxsEvent): void {
+  if (!recipient.active) return;
   try {
-    listener(await decompress(data));
+    recipient.listener(data);
   } catch (error) {
     console.error(DELIVERY_FAILED, error);
   }

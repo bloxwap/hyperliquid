@@ -762,3 +762,11 @@ await client.order({ orders: [/* ... */], grouping: "na" }, {
 > Invalid input is the caller's problem: instead of a client-side `ValidationError`, the server rejects the request —
 > detecting that drift is the cost of the saved microseconds. Cheap deterministic guards for documented constraints
 > (e.g. `scheduleCancel`'s 5-second lead time) still run.
+
+### Shared fast price decoding
+
+`fastAssetCtxs` decodes each compressed frame once per transport, then delivers it to that transport's
+local subscribers in arrival order. Each callback receives its own mutable asset map and price records,
+so changes made by one subscriber do not affect another. Unsubscribing or aborting suppresses queued deliveries;
+listeners added later do not receive previously queued frames. A corrupt frame or throwing callback does not end
+other listeners or stop subsequent updates. Separate transports keep separate decode queues.
