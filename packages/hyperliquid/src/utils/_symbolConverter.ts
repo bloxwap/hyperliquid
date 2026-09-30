@@ -1,4 +1,4 @@
-// Imported from the four method modules directly, NOT from `../api/info/mod.ts`.
+// Imported from individual method modules directly, NOT from `../api/info/mod.ts`.
 //
 // That barrel re-exports every Info method, and this was the only value import of it anywhere in
 // `src/` — so importing four functions pulled the whole Info surface, and with it valibot's
@@ -10,6 +10,7 @@
 // `.dev/import_graph_check.ts` gates this: it fails if `dist/utils/mod.js` ever pulls in more
 // than a handful of modules again, which is the only thing standing between this file and a
 // future `import { … } from "../api/info/mod.ts"` quietly restoring the 22 ms.
+import { allPerpMetas, type AllPerpMetasResponse } from "../api/info/_methods/allPerpMetas.ts";
 import { meta, type MetaResponse } from "../api/info/_methods/meta.ts";
 import { outcomeMeta, type OutcomeMetaResponse } from "../api/info/_methods/outcomeMeta.ts";
 import { perpDexs, type PerpDexsResponse } from "../api/info/_methods/perpDexs.ts";
@@ -221,12 +222,17 @@ export class SymbolConverter {
     const config = { transport: this._transport };
     const needDexs = this._dexOption === true || (Array.isArray(this._dexOption) && this._dexOption.length > 0);
 
-    const [perpMetaData, spotMetaData, perpDexsData, outcomeMetaData] = await Promise.all([
-      meta(config),
+    const bulk = this._dexOption === true;
+    const [perpData, spotMetaData, perpDexsData, outcomeMetaData] = await Promise.all([
+      bulk ? allPerpMetas(config) : meta(config),
       spotMeta(config),
       needDexs ? perpDexs(config) : undefined,
       outcomeMeta(config),
     ]);
+
+    if (bulk) this._validateBulkMetas(perpData as AllPerpMetasResponse, perpDexsData!);
+    const bulkMetas = bulk ? (perpData as AllPerpMetasResponse) : undefined;
+    const perpMetaData = bulkMetas === undefined ? (perpData as MetaResponse) : bulkMetas[0];
 
     // Build the new mappings into a private draft so readers keep observing the previously
     // published snapshot until the replacement is fully populated.
@@ -241,7 +247,14 @@ export class SymbolConverter {
     this._processPerps(draft, perpMetaData);
     this._processSpot(draft, spotMetaData);
     this._processOutcomeMarkets(draft, outcomeMetaData);
-    if (perpDexsData) await this._processBuilderDexs(draft, perpDexsData);
+    if (perpDexsData) {
+      if (bulkMetas !== undefined) {
+        perpDexsData.forEach((dex, index) => {
+          if (index > 0 && dex !== null && dex.name.length > 0)
+            this._processBuilderMeta(draft, bulkMetas[index], index);
+        });
+      } else await this._processBuilderDexs(draft, perpDexsData);
+    }
 
     // Publish atomically: no await may run between these assignments, so a concurrent
     // reader can never observe a half-built cache.
@@ -311,14 +324,43 @@ export class SymbolConverter {
     results.forEach((result, idx) => {
       if (result.status !== "fulfilled") return;
 
-      const dexIndex = dexsToProcess[idx].index;
-      const offset = 100000 + dexIndex * 10000;
+      this._processBuilderMeta(draft, result.value, dexsToProcess[idx].index);
+    });
+  }
 
-      result.value.universe.forEach((asset, index) => {
-        const assetId = offset + index;
-        draft.nameToAssetId.set(asset.name, assetId);
-        draft.nameToSzDecimals.set(asset.name, asset.szDecimals);
-      });
+  private _processBuilderMeta(draft: SymbolConverterDraft, data: MetaResponse, dexIndex: number): void {
+    const offset = 100000 + dexIndex * 10000;
+    data.universe.forEach((asset, index) => {
+      draft.nameToAssetId.set(asset.name, offset + index);
+      draft.nameToSzDecimals.set(asset.name, asset.szDecimals);
+    });
+  }
+
+  /** Reject mismatched registry/metas instead of publishing incorrect index-derived asset IDs. */
+  private _validateBulkMetas(metas: AllPerpMetasResponse, registry: PerpDexsResponse): void {
+    if (
+      !Array.isArray(metas) ||
+      !Array.isArray(registry) ||
+      registry.length === 0 ||
+      metas.length !== registry.length
+    ) {
+      throw new Error("SymbolConverter: allPerpMetas must align with perpDexs by index; retry with fresh metadata.");
+    }
+    metas.forEach((data, index) => {
+      const dex = registry[index];
+      if (
+        !data ||
+        !Array.isArray(data.universe) ||
+        data.universe.some((asset) => {
+          if (typeof asset.name !== "string") return true;
+          if (index === 0) return asset.name.includes(":");
+          return dex !== null && dex.name.length > 0 && !asset.name.startsWith(`${dex.name}:`);
+        })
+      ) {
+        throw new Error(
+          `SymbolConverter: perpetual metadata does not match DEX index ${index}; retry with fresh metadata.`,
+        );
+      }
     });
   }
 

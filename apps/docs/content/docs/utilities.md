@@ -281,9 +281,15 @@ converter.getSzDecimals("test:ABC"); // 0
 
 > [!NOTE]
 >
-> Enabling `dexs` adds a `perpDexs()` call plus one `meta({ dex })` request per builder DEX. Only enable it if you
-> actually trade there — the default `SymbolConverter.create()` is one round-trip each to `meta`, `spotMeta`, and
-> `outcomeMeta` in parallel.
+> With `dexs: true`, the converter fetches `allPerpMetas`, `perpDexs`, `spotMeta`, and `outcomeMeta` in parallel:
+> four requests regardless of the number of builder DEXs. Selected DEX arrays retain one `meta({ dex })` request
+> per selected registered venue; the default uses three parallel requests (`meta`, `spotMeta`, `outcomeMeta`).
+>
+> All-DEX loading checks registry/metadata alignment before publishing asset IDs. A failed request, mismatched
+> array length or mismatched venue prefix rejects the reload and preserves the previous complete snapshot.
+> It does not silently fall back to per-DEX requests. If you cache metadata, clear the cache before retrying a
+> mismatch so the registry and bulk metadata can refresh together. Empty/null registry slots keep their indices.
+> Selected-DEX loading keeps its existing behavior of skipping individual failed venue requests.
 
 ## End-to-end: resolve, format, place
 

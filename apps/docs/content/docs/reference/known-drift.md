@@ -184,6 +184,16 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
   object-valued grants and `userStarState` are supported; these features are documented as testnet-only.
   Proxied orders must be reduce-only, and scoped cancellation accepts 1-10 asset IDs or null/omission for all.
 
+### 15. `allPerpMetas` returns metadata without contexts
+
+- **Verified:** 2026-09-29 on mainnet and testnet.
+- **Docs example:** [all perpetual metadata](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetuals-metadata-universe-and-margin-tables)
+  depicts metadata/context tuples for each venue.
+- **Server reality:** the response is an array of plain metadata objects, aligned with `perpDexs` indices.
+  Captured arrays had 11 mainnet entries and 268 testnet entries, including the main venue.
+- **SDK behavior:** `AllPerpMetasResponse` follows the plain-object format. `SymbolConverter` uses it for
+  four-request all-DEX reloads and rejects registry/metadata mismatches before publishing asset IDs.
+
 ## Resolved
 
 _None yet._
