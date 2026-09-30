@@ -1,7 +1,7 @@
 import { expect, test, spyOn } from "bun:test";
 import { deflateRawSync } from "node:zlib";
 import { SubscriptionClient, WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
-import { type FastAssetCtxsEvent } from "@bloxwap/hyperliquid/api/subscription";
+import type { FastAssetCtxsEvent } from "@bloxwap/hyperliquid/api/subscription";
 import { _setForceStreamDecompressForTests } from "../../../src/api/subscription/_methods/fastAssetCtxs.ts";
 import { installMockWebSocket, lastMockWebSocket, restoreWebSocket } from "../../perf/_helpers.ts";
 function data(seq: number): string {

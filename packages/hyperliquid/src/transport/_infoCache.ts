@@ -161,7 +161,7 @@ interface InFlightEntry {
  * hides its subscription interface, so pass the raw WebSocket transport to `SubscriptionClient`
  * and the wrapped one to `InfoClient`.
  *
- * Note on `SymbolConverter`: it fetches `meta`/`spotMeta`/`perpDexs`/`outcomeMeta` through
+ * Note on `SymbolConverter`: it fetches `meta` (or `allPerpMetas`)/`spotMeta`/`perpDexs`/`outcomeMeta` through
  * whatever transport it is given. If that transport is an `InfoCacheTransport`, `reload()`
  * serves cached data within the TTL — give the converter its own unwrapped transport, or call
  * {@linkcode clear} first, when a reload must see fresh listings.

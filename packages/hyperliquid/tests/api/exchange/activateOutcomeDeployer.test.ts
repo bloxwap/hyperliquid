@@ -4,7 +4,6 @@ import {
   ActivateOutcomeDeployerRequest,
   activateOutcomeDeployer,
 } from "@bloxwap/hyperliquid/api/exchange";
-import * as v from "valibot";
 import { describe, test } from "bun:test";
 import { assertEquals, assertRejects } from "@jsr/std__assert";
 import { schemaCoverage } from "../_utils/schemaCoverage.ts";
