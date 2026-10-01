@@ -8,7 +8,7 @@ import "./global.css";
 export const metadata: Metadata = {
   ...socialMetadata("/", "Hyperliquid SDK · Bloxwap", homeDescription),
   metadataBase: siteUrl,
-  icons: { icon: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/logos/bloxwap-symbol.svg` },
+  icons: { icon: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/logos/bloxwap-icon-green.svg` },
   title: { default: "Hyperliquid SDK · Bloxwap", template: "%s · Hyperliquid SDK" },
 };
 
