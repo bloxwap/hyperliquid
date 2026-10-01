@@ -63,9 +63,12 @@ The build verifies every documentation page, internal link, asset, and anchor, p
 
 The build also exports files that let AI agents use the site without rendering JavaScript:
 
-- `public/llms.txt` is the curated entry point: what the SDK does, when to use it, and links to every page.
+- `app/llms.txt/route.ts` generates the entry point from the docs source: what the SDK does, when to use it,
+  call examples, and links to every page.
+- `app/llms-full.txt/route.ts` generates the complete docs with frontmatter removed and relative Markdown links
+  converted to absolute website URLs.
 - `scripts/export-markdown.ts` runs after `next build` and writes a Markdown mirror for each documentation page
-  (`/docs/clients/` → `/docs/clients.md`, served as `text/markdown`) plus a concatenated `llms-full.txt`.
+  (`/docs/clients/` → `/docs/clients.md`, served as `text/markdown`).
 - `app/sitemap.ts` emits `sitemap.xml`, and `public/robots.txt` explicitly allows AI crawlers.
 - `/about/`, `/contact/`, and `/privacy/` are trust pages, and the homepage carries JSON-LD
   (Organization with a contact point, WebSite, SoftwareApplication).
@@ -74,6 +77,7 @@ The build also exports files that let AI agents use the site without rendering J
 
 `scripts/verify-export.ts` checks all of these after every build. GitHub Pages cannot do server-driven content
 negotiation, so `Accept: text/markdown` requests still receive HTML; the `.md` mirrors are the Markdown path.
+Run `bun run --cwd apps/docs test` to test the agent-document generators and JSON-LD helpers.
 Build without `NEXT_PUBLIC_BASE_PATH` to serve at a domain root instead.
 
 ## Social cards

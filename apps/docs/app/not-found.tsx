@@ -1,9 +1,12 @@
 import { HomeLayout } from "fumadocs-ui/layouts/home";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { baseOptions } from "@/lib/layout.shared";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+export const metadata: Metadata = { title: "Page not found", robots: { index: false } };
 
 export default function NotFound() {
   return (
