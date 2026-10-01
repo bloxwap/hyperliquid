@@ -19,7 +19,8 @@ export function socialMetadata(pageUrl: string, title: string, description: stri
 
   return {
     description,
-    alternates: { canonical },
+    // Point agents at the plain-text index of the whole site from every page.
+    alternates: { canonical, types: { "text/plain": new URL("llms.txt", siteUrl).href } },
     openGraph: {
       type: "website",
       siteName: "Bloxwap",

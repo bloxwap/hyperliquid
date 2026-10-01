@@ -5,55 +5,10 @@ import { CopyButton } from "@/components/copy-button";
 import { InstallCommand } from "@/components/install-command";
 import { MarketPlayground } from "@/components/market-playground";
 import { SiteFooter } from "@/components/site-footer";
+import { homeStructuredData, jsonLdScript } from "@/lib/agent";
 import { baseOptions } from "@/lib/layout.shared";
-import { siteUrl } from "@/lib/social";
 
-const jsonLd = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "@id": "https://bloxwap.com/#organization",
-      name: "Bloxwap, Inc.",
-      url: "https://bloxwap.com",
-      sameAs: [
-        "https://github.com/bloxwap",
-        "https://x.com/bloxwap",
-        "https://t.me/bloxwap",
-        "https://discord.com/invite/cEfkcg6JHT",
-        "https://www.reddit.com/r/Bloxwap/",
-      ],
-      contactPoint: {
-        "@type": "ContactPoint",
-        email: "support@bloxwap.com",
-        contactType: "customer support",
-        url: "https://bloxwap.github.io/hyperliquid/contact/",
-      },
-    },
-    {
-      "@type": "WebSite",
-      "@id": `${siteUrl.href}#website`,
-      url: siteUrl.href,
-      name: "Hyperliquid SDK · Bloxwap",
-      publisher: { "@id": "https://bloxwap.com/#organization" },
-    },
-    {
-      "@type": "SoftwareApplication",
-      name: "@bloxwap/hyperliquid",
-      description:
-        "A fast, fully typed TypeScript and JavaScript SDK for the Hyperliquid exchange API: market data, trading, signing, and real-time subscriptions over HTTP and WebSocket.",
-      applicationCategory: "DeveloperApplication",
-      operatingSystem: "Bun, Node.js, Browsers, React Native",
-      url: siteUrl.href,
-      downloadUrl: "https://www.npmjs.com/package/@bloxwap/hyperliquid",
-      codeRepository: "https://github.com/bloxwap/hyperliquid",
-      license: "https://opensource.org/licenses/MIT",
-      isAccessibleForFree: true,
-      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-      author: { "@id": "https://bloxwap.com/#organization" },
-    },
-  ],
-};
+const jsonLd = homeStructuredData();
 
 const features = [
   {
@@ -93,8 +48,8 @@ export default function Home() {
     // min-h-dvh lets .landing grow into the slack, keeping the footer at the bottom of a tall window.
     <HomeLayout {...baseOptions()} className="min-h-dvh">
       <main className="landing">
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: JSON.stringify of a static constant is the Next.js-documented way to emit ld+json verbatim. */}
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: Static JSON-LD is escaped by jsonLdScript before embedding in HTML. */}
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
         <div className="hero">
           <div className="hero-copy">
             <p className="eyebrow">

@@ -8,6 +8,7 @@ on:
       - "README.md"
       - "apps/docs/**"
       - "packages/hyperliquid/README.md"
+      - "packages/hyperliquid/package.json"
       - ".github/CODEOWNERS"
       - ".github/workflows/docs.yml"
       - ".lycheeignore"
@@ -20,6 +21,7 @@ on:
       - "README.md"
       - "apps/docs/**"
       - "packages/hyperliquid/README.md"
+      - "packages/hyperliquid/package.json"
       - ".github/CODEOWNERS"
       - ".github/workflows/docs.yml"
       - ".lycheeignore"
@@ -61,6 +63,10 @@ jobs:
       - name: Check documentation website types
         working-directory: apps/docs
         run: bun run check
+
+      - name: Test documentation website helpers
+        working-directory: apps/docs
+        run: bun run test
 
       - name: Build static documentation website
         working-directory: apps/docs

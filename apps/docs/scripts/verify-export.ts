@@ -326,6 +326,10 @@ if (!files.has("llms.txt")) {
   if (!llms.startsWith("# ")) errors.add("llms.txt must start with an H1 project name.");
   if (!/when to use/i.test(llms)) errors.add("llms.txt: missing when-to-use guidance for agents.");
   if (!llms.includes(`${publishedBasePath}/llms-full.txt`)) errors.add("llms.txt: no link to llms-full.txt.");
+  for (const route of [...contentPages.values()].filter((route) => route.startsWith("/docs/"))) {
+    const expected = `${publishedOrigin}${publishedBasePath}${route}`;
+    if (!llms.includes(`](${expected})`)) errors.add(`llms.txt: missing a link to ${expected}.`);
+  }
   checkedAgentFiles++;
 }
 
@@ -334,6 +338,12 @@ if (!files.has("llms-full.txt")) {
 } else {
   const full = await readOut("llms-full.txt");
   if (full.length < 10_000) errors.add(`llms-full.txt looks incomplete (${full.length} characters).`);
+  for (const route of [...contentPages.values()].filter((route) => route.startsWith("/docs/"))) {
+    const expected = `${publishedOrigin}${publishedBasePath}${route}`;
+    if (!full.includes(`<!-- Source: ${expected} -->`)) errors.add(`llms-full.txt: missing ${expected}.`);
+  }
+  if (/-->\n\n---\r?\n/.test(full)) errors.add("llms-full.txt: frontmatter was not removed.");
+  if (/\]\((?![a-z]+:|\/|#)[^)]*\.md\b/i.test(full)) errors.add("llms-full.txt: has relative Markdown links.");
   checkedAgentFiles++;
 }
 
@@ -383,6 +393,7 @@ if (homepage) {
       if (!software?.name || !software.description || !software.url) {
         errors.add("index.html: SoftwareApplication JSON-LD needs name, description, and url.");
       }
+      if (!software?.softwareVersion) errors.add("index.html: SoftwareApplication JSON-LD needs the SDK version.");
       const organization = graph.find((node) => node["@type"] === "Organization") as
         | { contactPoint?: { email?: string; contactType?: string } }
         | undefined;
