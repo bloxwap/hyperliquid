@@ -223,28 +223,38 @@ textarea:focus-visible {
   align-items: flex-start;
   gap: --spacing(2);
 }
+/* Package-manager switch: a pill track like the hero buttons, with one thumb that slides to the
+   active tab. Tabs share equal columns so the thumb's offset is just its index times its width. */
 .install-tabs {
-  display: inline-flex;
-  gap: --spacing(1);
+  position: relative;
+  display: inline-grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
   padding: --spacing(1);
-  border-radius: var(--radius);
+  border-radius: 9999px;
   background: var(--color-surface-raised);
 }
+.install-tabs-thumb {
+  position: absolute;
+  inset-block: --spacing(1);
+  left: --spacing(1);
+  width: calc((100% - --spacing(2)) / var(--count));
+  border-radius: 9999px;
+  background: var(--color-fill-subtle);
+  transform: translateX(calc(var(--active) * 100%));
+  transition: transform 240ms var(--ease-out);
+}
 .install-tabs > button {
-  padding: --spacing(1) --spacing(3);
-  border-radius: calc(var(--radius) - 2px);
+  position: relative;
+  padding: --spacing(1) --spacing(4);
+  border-radius: 9999px;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   color: var(--color-text-muted);
-  transition:
-    background var(--duration-interactive) var(--ease-out),
-    color var(--duration-interactive) var(--ease-out);
+  transition: color var(--duration-interactive) var(--ease-out);
 }
-.install-tabs > button:hover {
-  color: var(--color-text);
-}
+.install-tabs > button:hover,
 .install-tabs > button.active {
-  background: var(--color-fill-subtle);
   color: var(--color-text);
 }
 .install-command {
@@ -547,7 +557,9 @@ textarea:focus-visible {
   .playground-status i {
     animation: none;
   }
-  .playground-options button {
+  .playground-options button,
+  .install-tabs-thumb,
+  .install-tabs > button {
     transition: none;
   }
 }

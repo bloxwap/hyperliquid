@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
-import { useRef, useState } from "react";
+import { type CSSProperties, useRef, useState } from "react";
 
 const installers = [
   { name: "bun", command: "bun add @bloxwap/hyperliquid" },
@@ -24,7 +24,13 @@ export function InstallCommand() {
 
   return (
     <div className="install-picker">
-      <div className="install-tabs" role="tablist" aria-label="Package manager">
+      <div
+        className="install-tabs"
+        role="tablist"
+        aria-label="Package manager"
+        style={{ "--count": installers.length, "--active": active } as CSSProperties}
+      >
+        <span className="install-tabs-thumb" aria-hidden="true" />
         {installers.map((installer, index) => (
           <button
             key={installer.name}
