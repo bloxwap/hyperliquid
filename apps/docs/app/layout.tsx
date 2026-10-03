@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Provider } from "@/components/provider";
-import { display, maple, nunito } from "@/lib/fonts";
+import { display, mono, sans } from "@/lib/fonts";
 import { homeDescription, siteUrl, socialMetadata } from "@/lib/social";
 import "./global.css";
 
@@ -16,7 +16,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${nunito.variable} ${maple.variable} ${display.variable} dark`}
+      className={`${sans.variable} ${mono.variable} ${display.variable} dark`}
       suppressHydrationWarning
     >
       <body>

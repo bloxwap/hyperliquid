@@ -13,9 +13,9 @@ The design follows the Bloxwap monorepo's documentation site at commit `15201923
 - `app/brand-tokens.css` is a verbatim snapshot of `packages/ui/src/styles/tokens.generated.css`.
 - Fumadocs colors, typography, navigation, and forced dark mode follow `workers/docs/src/app/global.css` and its layouts.
 - The app icon and favicon in `public/logos/` preserve the original Bloxwap artwork and metadata.
-- Nunito body text, Space Grotesk Bold headings, and Maple Mono code use local assets in `public/fonts/`.
-  Nunito comes from the monorepo's `@fontsource-variable/nunito@5.3.0`; Space Grotesk and Maple Mono come from `workers/www`.
-  All three SIL OFL license notices are included alongside the fonts.
+- Bloxwap Sans body text and Bloxwap Mono code use the self-hosted Next.js exports from `@bloxwap/font@0.1.1`.
+- Space Grotesk Bold headings retain the local asset and OFL notice in `public/fonts/`.
+- Static Open Graph font instances and their license/provenance are documented in `public/fonts/README.md`.
 
 Update these snapshots from the monorepo when its design changes. Keep the artwork and font notices intact.
 Building this site does not require a checkout of the monorepo or a request to a font CDN.
@@ -94,9 +94,9 @@ always point to the published GitHub Pages site, including when previewing local
 - `lib/social.ts` defines the published URL and metadata. Update it if the repository or public hostname changes.
 - `app/og/[...slug]/route.tsx` generates `/og/home.png`, `/og/docs.png`, and `/og/docs/<slug>.png` during the static build.
 
-Cards use Nunito Black for titles and Nunito Bold for the owner, description, and stats. The static Nunito
-faces come from the Bloxwap monorepo's `packages/og/assets/`; their license is included as
-`public/fonts/Nunito-OG-OFL.txt`.
+Cards use Bloxwap Sans Black for titles and Bloxwap Sans Bold for the owner, description, and stats. The static Bloxwap Sans
+faces are instantiated from the published `@bloxwap/font@0.1.1` variable WOFF2;
+their license is included as `public/fonts/Bloxwap-OFL.txt`.
 The renderer uses bundled fonts and brand geometry locally; it needs no font CDN, API credentials, or image server after
 deployment. Generated PNGs live in `out/` and are included in the GitHub Pages artifact.
 

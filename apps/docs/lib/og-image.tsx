@@ -26,8 +26,8 @@ const BAR: [color: string, share: number][] = [
 ];
 
 const assets = Promise.all([
-  readFile(join(process.cwd(), "public/fonts/Nunito-Bold.ttf")),
-  readFile(join(process.cwd(), "public/fonts/Nunito-Black.ttf")),
+  readFile(join(process.cwd(), "public/fonts/BloxwapSans-Bold.ttf")),
+  readFile(join(process.cwd(), "public/fonts/BloxwapSans-Black.ttf")),
   readFile(join(process.cwd(), "../../packages/hyperliquid/package.json"), "utf8"),
 ]);
 
@@ -113,7 +113,7 @@ export async function createSocialImage({ title, description, category, home = f
         height: "100%",
         background: BRAND.black,
         color: BRAND.ink,
-        fontFamily: "Nunito",
+        fontFamily: "Bloxwap Sans",
       }}
     >
       <div style={{ display: "flex", flex: 1, padding: "76px 80px 0" }}>
@@ -195,8 +195,8 @@ export async function createSocialImage({ title, description, category, home = f
     {
       ...socialImageSize,
       fonts: [
-        { name: "Nunito", data: bold, weight: 700, style: "normal" },
-        { name: "Nunito", data: black, weight: 900, style: "normal" },
+        { name: "Bloxwap Sans", data: bold, weight: 700, style: "normal" },
+        { name: "Bloxwap Sans", data: black, weight: 900, style: "normal" },
       ],
     },
   );

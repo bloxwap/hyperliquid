@@ -11,6 +11,7 @@
     "check:content": "bun run scripts/check-content.ts && markdownlint-cli2 --config ../../.markdownlint-cli2.jsonc ../../README.md ../../packages/hyperliquid/README.md README.md \"content/**/*.md\""
   },
   "dependencies": {
+    "@bloxwap/font": "0.1.1",
     "@bloxwap/hyperliquid": "workspace:*",
     "animejs": "4.4.0",
     "fumadocs-core": "16.15.14",
