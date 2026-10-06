@@ -329,6 +329,22 @@ describe("HttpTransport", () => {
     });
   });
 
+  describe("fetch option", () => {
+    test("calls the injected fetch without the transport as its receiver", async () => {
+      // Mirrors browsers' `window.fetch`, which throws "Illegal invocation" for any other receiver.
+      let calls = 0;
+      const receiverSensitiveFetch = function (this: unknown, _input: FetchArgs[0], _init?: FetchArgs[1]) {
+        if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+        calls++;
+        return Promise.resolve(jsonResponse({ ok: true }));
+      };
+
+      const transport = new HttpTransport({ fetch: receiverSensitiveFetch });
+      assertEquals(await transport.request("info", {}), { ok: true });
+      assertEquals(calls, 1);
+    });
+  });
+
   describe("fetchOptions", () => {
     test("headers as object", async () => {
       mockFetch((_req, init) => {

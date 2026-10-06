@@ -470,9 +470,12 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       // opted-in retry can never outlive the caller's timeout; the wait itself races the
       // request's signal, so caller aborts interrupt it too.
       const retry = this._retryOnRateLimit;
+      // Called through a local, never as `this._fetch(...)`: platform fetches (browsers'
+      // `window.fetch`) throw "Illegal invocation" when their receiver is not the global.
+      const fetchImpl = this._fetch;
       for (let attempt = 0; ; attempt++) {
         try {
-          const response = await (this._fetch === undefined ? fetch(url, init) : this._fetch(url, init));
+          const response = await (fetchImpl === undefined ? fetch(url, init) : fetchImpl(url, init));
           if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) {
             const clone = response.clone();
             const text = await response.text().catch(() => undefined); // releases connection, clone stays readable
