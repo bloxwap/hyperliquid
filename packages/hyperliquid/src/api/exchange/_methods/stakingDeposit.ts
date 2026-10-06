@@ -52,3 +52,5 @@ export function stakingDeposit(
 ): Promise<StakingDepositSuccessResponse> {
   return cDeposit(config, params, opts);
 }
+
+export { buildCDeposit as buildStakingDeposit } from "./cDeposit.ts";

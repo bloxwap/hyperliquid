@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -116,4 +117,12 @@ export function registerReferrer(
 ): Promise<RegisterReferrerSuccessResponse> {
   const action = buildAction(RegisterReferrerActionSchema, { type: "registerReferrer", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical registerReferrer action without allocating a nonce or calling a wallet/transport. */
+export function buildRegisterReferrer(
+  params: RegisterReferrerParameters,
+): CanonicalAction<RegisterReferrerSuccessResponse> {
+  const action = buildAction(RegisterReferrerActionSchema, { type: "registerReferrer", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

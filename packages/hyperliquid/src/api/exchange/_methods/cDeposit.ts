@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -135,4 +136,10 @@ export function cDeposit(
 ): Promise<CDepositSuccessResponse> {
   const action = buildAction(CDepositActionSchema, { type: "cDeposit", ...params }, opts);
   return executeUserSignedAction(config, action, CDepositTypes, opts);
+}
+
+/** Validate and own a canonical cDeposit action without allocating a nonce or calling a wallet/transport. */
+export function buildCDeposit(params: CDepositParameters): CanonicalAction<CDepositSuccessResponse> {
+  const action = buildAction(CDepositActionSchema, { type: "cDeposit", ...params });
+  return canonicalAction(action, { kind: "user", types: CDepositTypes });
 }

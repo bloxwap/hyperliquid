@@ -1,3 +1,5 @@
+import { parse } from "../../../_base.ts";
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -118,4 +120,10 @@ export type NoopSuccessResponse = ExcludeErrorResponse<NoopResponse>;
 export function noop(config: ExchangeConfig, params: NoopParameters, opts?: NoopOptions): Promise<NoopSuccessResponse> {
   const action = buildAction(NoopActionSchema, { type: "noop" }, opts);
   return executeL1Action({ ...config, nonceManager: () => params.nonce }, action, opts);
+}
+
+/** Validate and own a canonical noop action without allocating a nonce or calling a wallet/transport. */
+export function buildNoop(params: NoopParameters): CanonicalAction<NoopSuccessResponse> {
+  const action = buildAction(NoopActionSchema, { type: "noop" });
+  return canonicalAction(action, { kind: "l1", nonce: parse(UnsignedInteger, params.nonce) });
 }

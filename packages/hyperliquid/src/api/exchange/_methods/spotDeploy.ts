@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -353,4 +354,10 @@ export function spotDeploy(
 ): Promise<SpotDeploySuccessResponse> {
   const action = buildAction(SpotDeployActionSchema, { type: "spotDeploy", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical spotDeploy action without allocating a nonce or calling a wallet/transport. */
+export function buildSpotDeploy(params: SpotDeployParameters): CanonicalAction<SpotDeploySuccessResponse> {
+  const action = buildAction(SpotDeployActionSchema, { type: "spotDeploy", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

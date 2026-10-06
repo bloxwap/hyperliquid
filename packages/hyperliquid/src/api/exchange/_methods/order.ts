@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -254,4 +255,10 @@ export function order(
 ): Promise<OrderSuccessResponse> {
   const action = buildAction(OrderActionSchema, { type: "order", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical order action without allocating a nonce or calling a wallet/transport. */
+export function buildOrder(params: OrderParameters): CanonicalAction<OrderSuccessResponse> {
+  const action = buildAction(OrderActionSchema, { type: "order", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

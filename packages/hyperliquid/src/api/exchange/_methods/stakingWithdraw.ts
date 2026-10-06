@@ -57,3 +57,5 @@ export function stakingWithdraw(
 ): Promise<StakingWithdrawSuccessResponse> {
   return cWithdraw(config, params, opts);
 }
+
+export { buildCWithdraw as buildStakingWithdraw } from "./cWithdraw.ts";

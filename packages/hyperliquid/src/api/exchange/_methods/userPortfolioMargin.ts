@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -141,4 +142,12 @@ export function userPortfolioMargin(
 ): Promise<UserPortfolioMarginSuccessResponse> {
   const action = buildAction(UserPortfolioMarginActionSchema, { type: "userPortfolioMargin", ...params }, opts);
   return executeUserSignedAction(config, action, UserPortfolioMarginTypes, opts);
+}
+
+/** Validate and own a canonical userPortfolioMargin action without allocating a nonce or calling a wallet/transport. */
+export function buildUserPortfolioMargin(
+  params: UserPortfolioMarginParameters,
+): CanonicalAction<UserPortfolioMarginSuccessResponse> {
+  const action = buildAction(UserPortfolioMarginActionSchema, { type: "userPortfolioMargin", ...params });
+  return canonicalAction(action, { kind: "user", types: UserPortfolioMarginTypes });
 }

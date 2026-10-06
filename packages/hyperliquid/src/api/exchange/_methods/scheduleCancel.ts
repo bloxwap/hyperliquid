@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -176,4 +177,13 @@ export function scheduleCancel(
 
   const action = buildAction(ScheduleCancelActionSchema, actionInput, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical scheduleCancel action without allocating a nonce or calling a wallet/transport. */
+export function buildScheduleCancel(params?: ScheduleCancelParameters): CanonicalAction<ScheduleCancelSuccessResponse> {
+  const actionInput: Record<string, unknown> = { type: "scheduleCancel", ...params };
+  if (actionInput.time === null) delete actionInput.time;
+  if (actionInput.time !== undefined) parse(ScheduleCancelTimeSchema, actionInput.time);
+  const action = buildAction(ScheduleCancelActionSchema, actionInput);
+  return canonicalAction(action, { kind: "l1" });
 }

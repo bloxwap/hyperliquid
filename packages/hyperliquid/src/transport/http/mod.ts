@@ -33,6 +33,7 @@ import { type IRequestTransport, TransportError } from "../_base.ts";
 import * as abort from "../_abort.ts";
 import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import { TokenBucketRateLimiter } from "../_rateLimiter.ts";
+import { exchangeWireJSON } from "../_wire.ts";
 
 /** Configuration options for the HTTP transport layer. */
 export interface HttpTransportOptions {
@@ -397,7 +398,7 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
 
     try {
       // --- Serialize -----------------------------------------------------------
-      body = JSON.stringify(payload);
+      body = (endpoint === "exchange" ? exchangeWireJSON(payload) : undefined) ?? JSON.stringify(payload);
 
       // --- Rate limiting -------------------------------------------------------
       // Opt-in token bucket: the request waits here for its weight. The wait honors caller

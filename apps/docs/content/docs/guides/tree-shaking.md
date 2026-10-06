@@ -32,8 +32,8 @@ Each method accepts the same config as its client as the first argument:
 Info methods use [`InfoClient`](../clients.md#info-endpoint) config:
 
 ```ts
-import { HttpTransport } from "@bloxwap/hyperliquid";
-import { allMids } from "@bloxwap/hyperliquid/api/info";
+import { HttpTransport } from "@bloxwap/hyperliquid/transport/http";
+import { allMids } from "@bloxwap/hyperliquid/api/info/allMids";
 
 const transport = new HttpTransport();
 const result = await allMids({ transport });
@@ -42,8 +42,8 @@ const result = await allMids({ transport });
 Exchange methods use [`ExchangeClient`](../clients.md#exchange-endpoint) config:
 
 ```ts
-import { HttpTransport } from "@bloxwap/hyperliquid";
-import { order } from "@bloxwap/hyperliquid/api/exchange";
+import { HttpTransport } from "@bloxwap/hyperliquid/transport/http";
+import { order } from "@bloxwap/hyperliquid/api/exchange/order";
 import { privateKeyToAccount } from "viem/accounts";
 
 const transport = new HttpTransport();
@@ -80,9 +80,20 @@ const subscription = await allMids({ transport }, (data) => {
 Explorer methods use [`ExplorerClient`](../clients.md#explorer-endpoint) config:
 
 ```ts
-import { HttpTransport } from "@bloxwap/hyperliquid";
+import { HttpTransport } from "@bloxwap/hyperliquid/transport/http";
 import { blockDetails } from "@bloxwap/hyperliquid/api/explorer";
 
 const transport = new HttpTransport();
 const block = await blockDetails({ transport }, { height: 123 });
 ```
+
+## One-operation entry points
+
+Every public method is available at `@bloxwap/hyperliquid/api/<family>/<method>`, including its parameter and response
+types. The four families are `info`, `exchange`, `explorer`, and `subscription`. Existing API barrels and client paths
+remain available. Per-operation imports reduce runtime module evaluation even when Node or Bun runs without a bundler;
+API barrel imports rely on bundling/tree-shaking to remove sibling operations.
+
+Canonical builders are available at `@bloxwap/hyperliquid/actions/<method>` (for example `buildOrder` from
+`actions/order`). Import execution stages separately from `actions/execution` when you need only a few builders.
+The `actions` barrel contains every builder.

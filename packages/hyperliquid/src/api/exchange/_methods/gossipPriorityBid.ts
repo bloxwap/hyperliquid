@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -126,4 +127,12 @@ export function gossipPriorityBid(
 ): Promise<GossipPriorityBidSuccessResponse> {
   const action = buildAction(GossipPriorityBidActionSchema, { type: "gossipPriorityBid", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical gossipPriorityBid action without allocating a nonce or calling a wallet/transport. */
+export function buildGossipPriorityBid(
+  params: GossipPriorityBidParameters,
+): CanonicalAction<GossipPriorityBidSuccessResponse> {
+  const action = buildAction(GossipPriorityBidActionSchema, { type: "gossipPriorityBid", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

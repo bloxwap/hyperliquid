@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -185,4 +186,10 @@ export function modify(
 ): Promise<ModifySuccessResponse> {
   const action = buildAction(ModifyActionSchema, { type: "modify", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical modify action without allocating a nonce or calling a wallet/transport. */
+export function buildModify(params: ModifyParameters): CanonicalAction<ModifySuccessResponse> {
+  const action = buildAction(ModifyActionSchema, { type: "modify", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

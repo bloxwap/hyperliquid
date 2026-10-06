@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -138,4 +139,12 @@ export function finalizeEvmContract(
 ): Promise<FinalizeEvmContractSuccessResponse> {
   const action = buildAction(FinalizeEvmContractActionSchema, { type: "finalizeEvmContract", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical finalizeEvmContract action without allocating a nonce or calling a wallet/transport. */
+export function buildFinalizeEvmContract(
+  params: FinalizeEvmContractParameters,
+): CanonicalAction<FinalizeEvmContractSuccessResponse> {
+  const action = buildAction(FinalizeEvmContractActionSchema, { type: "finalizeEvmContract", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

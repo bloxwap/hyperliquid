@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -140,4 +141,10 @@ export function createVault(
     action,
     opts,
   );
+}
+
+/** Validate and own a canonical createVault action without allocating a nonce or calling a wallet/transport. */
+export function buildCreateVault(params: CreateVaultParameters): CanonicalAction<CreateVaultSuccessResponse> {
+  const action = buildAction(CreateVaultActionSchema, { type: "createVault", ...params, nonce: 0 });
+  return canonicalAction(action, { kind: "l1" });
 }

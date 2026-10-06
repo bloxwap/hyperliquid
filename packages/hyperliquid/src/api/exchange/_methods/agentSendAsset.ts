@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -152,4 +153,10 @@ export function agentSendAsset(
     action,
     opts,
   );
+}
+
+/** Validate and own a canonical agentSendAsset action without allocating a nonce or calling a wallet/transport. */
+export function buildAgentSendAsset(params: AgentSendAssetParameters): CanonicalAction<AgentSendAssetSuccessResponse> {
+  const action = buildAction(AgentSendAssetActionSchema, { type: "agentSendAsset", ...params, nonce: 0 });
+  return canonicalAction(action, { kind: "l1" });
 }

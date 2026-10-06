@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -124,4 +125,10 @@ export function borrowLend(
 ): Promise<BorrowLendSuccessResponse> {
   const action = buildAction(BorrowLendActionSchema, { type: "borrowLend", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical borrowLend action without allocating a nonce or calling a wallet/transport. */
+export function buildBorrowLend(params: BorrowLendParameters): CanonicalAction<BorrowLendSuccessResponse> {
+  const action = buildAction(BorrowLendActionSchema, { type: "borrowLend", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

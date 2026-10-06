@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -156,4 +157,12 @@ export function userSetAbstraction(
 ): Promise<UserSetAbstractionSuccessResponse> {
   const action = buildAction(UserSetAbstractionActionSchema, { type: "userSetAbstraction", ...params }, opts);
   return executeUserSignedAction(config, action, UserSetAbstractionTypes, { ...opts, toMultiSigPayloadAction });
+}
+
+/** Validate and own a canonical userSetAbstraction action without allocating a nonce or calling a wallet/transport. */
+export function buildUserSetAbstraction(
+  params: UserSetAbstractionParameters,
+): CanonicalAction<UserSetAbstractionSuccessResponse> {
+  const action = buildAction(UserSetAbstractionActionSchema, { type: "userSetAbstraction", ...params });
+  return canonicalAction(action, { kind: "user", types: UserSetAbstractionTypes, toMultiSigPayloadAction });
 }

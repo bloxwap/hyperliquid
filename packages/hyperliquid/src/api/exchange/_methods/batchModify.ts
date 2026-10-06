@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -180,4 +181,10 @@ export function batchModify(
 ): Promise<BatchModifySuccessResponse> {
   const action = buildAction(BatchModifyActionSchema, { type: "batchModify", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical batchModify action without allocating a nonce or calling a wallet/transport. */
+export function buildBatchModify(params: BatchModifyParameters): CanonicalAction<BatchModifySuccessResponse> {
+  const action = buildAction(BatchModifyActionSchema, { type: "batchModify", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

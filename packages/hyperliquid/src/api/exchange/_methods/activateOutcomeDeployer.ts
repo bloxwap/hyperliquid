@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -140,4 +141,12 @@ export function activateOutcomeDeployer(
 ): Promise<ActivateOutcomeDeployerSuccessResponse> {
   const action = buildAction(ActivateOutcomeDeployerActionSchema, { type: "activateOutcomeDeployer", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical activateOutcomeDeployer action without allocating a nonce or calling a wallet/transport. */
+export function buildActivateOutcomeDeployer(
+  params: ActivateOutcomeDeployerParameters,
+): CanonicalAction<ActivateOutcomeDeployerSuccessResponse> {
+  const action = buildAction(ActivateOutcomeDeployerActionSchema, { type: "activateOutcomeDeployer", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

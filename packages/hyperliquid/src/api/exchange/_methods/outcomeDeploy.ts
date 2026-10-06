@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 import { Address, Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.ts";
 
@@ -192,4 +193,10 @@ export function outcomeDeploy(
     buildAction(OutcomeDeployActionSchema, { type: "outcomeDeploy", ...params }, opts),
     opts,
   );
+}
+
+/** Validate and own a canonical outcomeDeploy action without allocating a nonce or calling a wallet/transport. */
+export function buildOutcomeDeploy(params: OutcomeDeployParameters): CanonicalAction<OutcomeDeploySuccessResponse> {
+  const action = buildAction(OutcomeDeployActionSchema, { type: "outcomeDeploy", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -165,4 +166,12 @@ export function sendToEvmWithData(
 ): Promise<SendToEvmWithDataSuccessResponse> {
   const action = buildAction(SendToEvmWithDataActionSchema, { type: "sendToEvmWithData", ...params }, opts);
   return executeUserSignedAction(config, action, SendToEvmWithDataTypes, opts);
+}
+
+/** Validate and own a canonical sendToEvmWithData action without allocating a nonce or calling a wallet/transport. */
+export function buildSendToEvmWithData(
+  params: SendToEvmWithDataParameters,
+): CanonicalAction<SendToEvmWithDataSuccessResponse> {
+  const action = buildAction(SendToEvmWithDataActionSchema, { type: "sendToEvmWithData", ...params });
+  return canonicalAction(action, { kind: "user", types: SendToEvmWithDataTypes });
 }

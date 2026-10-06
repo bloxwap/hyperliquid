@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -120,4 +121,12 @@ export function validatorL1Stream(
 ): Promise<ValidatorL1StreamSuccessResponse> {
   const action = buildAction(ValidatorL1StreamActionSchema, { type: "validatorL1Stream", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical validatorL1Stream action without allocating a nonce or calling a wallet/transport. */
+export function buildValidatorL1Stream(
+  params: ValidatorL1StreamParameters,
+): CanonicalAction<ValidatorL1StreamSuccessResponse> {
+  const action = buildAction(ValidatorL1StreamActionSchema, { type: "validatorL1Stream", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

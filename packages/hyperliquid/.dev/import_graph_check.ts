@@ -22,7 +22,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 import ts from "typescript";
@@ -61,6 +61,21 @@ const BUDGETS: readonly { entry: string; limit: number; why: string }[] = [
     entry: "src/api/info/client.ts",
     limit: 110,
     why: "The narrow read-only entry point. It legitimately pulls the Info methods it wraps, but must not also pull the exchange, subscription or signing graphs.",
+  },
+  {
+    entry: "src/api/info/_methods/allMids.ts",
+    limit: 12,
+    why: "A single Info operation must not load sibling operations or signing.",
+  },
+  {
+    entry: "src/api/explorer/_methods/explorerBlock.ts",
+    limit: 12,
+    why: "A single Explorer operation must remain independent of the other API families.",
+  },
+  {
+    entry: "src/actions/order.ts",
+    limit: 35,
+    why: "An individual builder must not load the ExchangeClient or sibling action schemas.",
   },
 ];
 

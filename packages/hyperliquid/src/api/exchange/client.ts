@@ -1,3 +1,11 @@
+import {
+  executeAction,
+  signAction,
+  submitAction,
+  type CanonicalAction,
+  type SignedAction,
+  type ActionOptions,
+} from "../../actions/execution.ts";
 /**
  * Client for the Hyperliquid Exchange API endpoint.
  * @module
@@ -577,6 +585,39 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     // Start loading the optional WASM keccak now rather than on the first hash, so it is usually
     // ready before the first action is signed. Never rejects; see `preloadWasmKeccak`.
     void preloadWasmKeccak();
+  }
+
+  /**
+   * Allocate a nonce and sign a validated action without posting it.
+   * @param action Action produced by an SDK builder.
+   * @param options Signing options and cancellation signal.
+   * @return An immutable signed request with the action's response type.
+   * @throws {HyperliquidError} When action ownership is invalid.
+   */
+  sign<T>(action: CanonicalAction<T>, options?: ActionOptions): Promise<SignedAction<T>> {
+    return signAction(this.config, action, options);
+  }
+
+  /**
+   * Submit an owned signed action without signing again.
+   * @param signed Signed request produced by signAction.
+   * @param options Cancellation signal for submission.
+   * @return The action's response.
+   * @throws {HyperliquidError} When request ownership, network, is invalid.
+   */
+  submit<T>(signed: SignedAction<T>, options?: { signal?: AbortSignal }): Promise<T> {
+    return submitAction(this.config, signed, options);
+  }
+
+  /**
+   * Execute a reusable validated action through the coordinated signing path.
+   * @param action Action produced by an SDK builder.
+   * @param options Signing options and cancellation signal.
+   * @return The action's response.
+   * @throws {HyperliquidError} When action ownership is invalid.
+   */
+  execute<T>(action: CanonicalAction<T>, options?: ActionOptions): Promise<T> {
+    return executeAction(this.config, action, options);
   }
 
   /**
@@ -3374,3 +3415,5 @@ export type {
   OutcomeDeploySuccessResponse,
   OutcomeDeployOptions,
 } from "./_methods/outcomeDeploy.ts";
+
+export type { CanonicalAction, SignedAction, ActionOptions } from "../../actions/execution.ts";

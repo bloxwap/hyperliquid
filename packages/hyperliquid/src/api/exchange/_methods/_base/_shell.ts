@@ -1,3 +1,5 @@
+import { race } from "../../../../transport/_abort.ts";
+import { registerExchangeWireRequest } from "../../../../transport/_wire.ts";
 /**
  * Common execution shell shared by L1 and user-signed Exchange API actions.
  * @module
@@ -46,6 +48,18 @@ export interface PreparedExchangeRequest<T = unknown> {
    * `submitPrepared` infer the response type of the method the payload was prepared with.
    */
   readonly __responseType?: T;
+}
+
+const signingContexts = new WeakMap<object, { key: string; isTestnet: boolean }>();
+
+/** Internal ownership context of a directly prepared request, outside the wire body. */
+export function getSigningContext(request: object): { key: string; isTestnet: boolean } | undefined {
+  return signingContexts.get(request);
+}
+
+/** Preserve known signer ownership when a directly prepared request is copied and frozen. */
+export function linkSigningContext(request: object, context: { key: string; isTestnet: boolean }): void {
+  signingContexts.set(request, context);
 }
 
 // ============================================================
@@ -102,7 +116,7 @@ const nonceKeyCache = new WeakMap<
  * nonce has been handed to the transport.
  *
  * The nonce lock guarantees the order nonces are ISSUED in; this guarantees the order they reach
- * the WIRE in, which is what the server actually requires. Keeping the two separate is what lets
+ * the WIRE in, the SDK's compatibility policy, rather than a protocol requirement. Keeping the two separate is what lets
  * signing — a network round trip for any remote wallet — run outside the lock and overlap across
  * callers, while a later nonce still cannot overtake an earlier one.
  *
@@ -122,8 +136,8 @@ const dispatchChains = new Map<string, Promise<void>>();
  * difference between one order in flight per wallet and all of them.
  *
  * Wire order is preserved by {@linkcode dispatchChains} rather than by the lock: a request waits
- * for its predecessor to reach `transport.request` before making its own call, so the server still
- * sees strictly increasing nonces per wallet. Network responses resolve concurrently.
+ * for its predecessor to reach `transport.request` before making its own call, so the default policy
+ * preserves nonce issuance order. Network responses resolve concurrently.
  *
  * @param config Exchange API configuration.
  * @param build Callback that, given the nonce, returns the action, signature, and any extras.
@@ -136,11 +150,12 @@ export async function executeWithShell<T>(
   config: ExchangeConfig,
   build: (nonce: number) => Promise<BuildResult>,
   signal?: AbortSignal,
+  prepareOnly = false,
 ): Promise<T> {
   const leader = "wallet" in config ? config.wallet : config.signers[0];
   const walletAddress = await getWalletAddress(leader);
 
-  // Lock per (wallet × testnet) ensures requests are dispatched to the server in nonce order.
+  // Serialize nonce allocation per (wallet × testnet); managed execution preserves delivery order.
   // The key string is cached per (wallet × transport); it is rebuilt only when the wallet's
   // address or the transport's testnet flag no longer matches the cached entry.
   const isTestnet = config.transport.isTestnet;
@@ -157,6 +172,7 @@ export async function executeWithShell<T>(
     }
     perTransport.set(config.transport, { walletAddress, isTestnet, key });
   }
+  if (signal?.aborted) throw signal.reason;
   const box = await withLock(key, async () => {
     // --- Generate nonce --------------------------------------
     // `globalNonceManager.getNonce` returns a plain number: skip the await (and its async hop)
@@ -166,12 +182,12 @@ export async function executeWithShell<T>(
 
     // --- Claim this nonce's slot in the dispatch order --------
     // Taken under the lock, so slots are claimed in the same order nonces are issued.
-    const predecessor = dispatchChains.get(key);
+    const predecessor = prepareOnly ? undefined : dispatchChains.get(key);
     let openGate!: () => void;
     const dispatched = new Promise<void>((resolve) => {
       openGate = resolve;
     });
-    dispatchChains.set(key, dispatched);
+    if (!prepareOnly) dispatchChains.set(key, dispatched);
 
     // --- Sign and dispatch, outside the lock ------------------
     // Signing is a network round trip for a remote wallet; running it here rather than inside the
@@ -180,12 +196,21 @@ export async function executeWithShell<T>(
     const pending = (async (): Promise<T> => {
       let response: Promise<T> | undefined;
       try {
-        const { action, signature, extras } = await build(nonce);
-        if (predecessor !== undefined) await predecessor;
+        const { action, signature, extras } = await race(build(nonce), signal);
+        if (signal?.aborted) throw signal.reason;
+        if (prepareOnly) {
+          const request = { action, signature, nonce, ...extras };
+          registerExchangeWireRequest(request, action);
+          signingContexts.set(request, { key, isTestnet });
+          return request as T;
+        }
+        if (predecessor !== undefined) await race(predecessor, signal);
         // `transport.request` runs synchronously up to its first await, so wire order is fixed
         // here. It is assigned rather than awaited so the gate below opens on dispatch, not on
         // the response.
-        response = config.transport.request<T>("exchange", { action, signature, nonce, ...extras }, signal);
+        const request = { action, signature, nonce, ...extras };
+        registerExchangeWireRequest(request, action);
+        response = config.transport.request<T>("exchange", request, signal);
       } finally {
         // Wait for our turn even when this request never reached the wire. A rejected signature
         // or an abort burns its nonce, which the server tolerates as a gap — but opening the gate
@@ -206,6 +231,6 @@ export async function executeWithShell<T>(
 
   // --- Await response (concurrently across calls) and validate
   const response = await box.pending;
-  assertSuccessResponse(response);
+  if (!prepareOnly) assertSuccessResponse(response);
   return response;
 }

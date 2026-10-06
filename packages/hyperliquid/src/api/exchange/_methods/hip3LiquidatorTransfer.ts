@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -126,4 +127,12 @@ export function hip3LiquidatorTransfer(
 ): Promise<Hip3LiquidatorTransferSuccessResponse> {
   const action = buildAction(Hip3LiquidatorTransferActionSchema, { type: "hip3LiquidatorTransfer", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical hip3LiquidatorTransfer action without allocating a nonce or calling a wallet/transport. */
+export function buildHip3LiquidatorTransfer(
+  params: Hip3LiquidatorTransferParameters,
+): CanonicalAction<Hip3LiquidatorTransferSuccessResponse> {
+  const action = buildAction(Hip3LiquidatorTransferActionSchema, { type: "hip3LiquidatorTransfer", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }
