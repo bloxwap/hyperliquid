@@ -1,7 +1,8 @@
 /**
  * Tests for the reconnecting WebSocket: retry policy, backoff scheduling,
- * offline buffering, and termination semantics, driven by a fake global
- * `WebSocket` the tests steer by hand. The test process runs without a global
+ * offline buffering, and termination semantics, driven by a fake `WebSocket` the
+ * tests steer by hand: installed over the global for the default-construction path,
+ * injected through `webSocketFactory` (with a virtual clock) for the timer-driven tests. The test process runs without a global
  * `CloseEvent` (see `tests/_noCloseEvent.ts`), so every close event the wrapper
  * dispatches also exercises the module's local `CloseEvent` fallback class.
  * @module
@@ -9,7 +10,6 @@
 
 import { afterEach, beforeEach, describe, test } from "bun:test";
 import { assert, assertEquals, assertFalse, assertInstanceOf, assertRejects } from "@jsr/std__assert";
-import { FakeTime } from "@jsr/std__testing/time";
 import {
   ReconnectingWebSocket,
   ReconnectingWebSocketError,
@@ -17,6 +17,7 @@ import {
 } from "../../../src/transport/websocket/_reconnectingSocket.ts";
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
+import { FakeRuntime } from "../../_fakeRuntime.ts";
 import { RealCloseEvent } from "../../_noCloseEvent.ts";
 import { drain } from "./_mock.ts";
 
@@ -108,9 +109,9 @@ function createSocket(
   return ws;
 }
 
-/** Sleeps for real milliseconds (no fake timers installed). */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Injected socket factory: the timer-driven tests construct sockets without touching the global. */
+function webSocketFactory(url: string, protocols?: string | string[]): WebSocket {
+  return new FakeWebSocket(url, protocols) as unknown as WebSocket;
 }
 
 // =============================================================================
@@ -326,36 +327,47 @@ describe("ReconnectingWebSocket", () => {
     });
 
     test("default delay is exponential backoff with equal jitter, capped at 10s", () => {
-      const time = new FakeTime();
-      try {
-        const ws = new ReconnectingWebSocket("ws://localhost/ws");
+      // random() pinned to 0 and to just under 1 brackets the equal-jitter window exactly.
+      for (const [random, attempt0, attempt1] of [
+        [0, 75, 150],
+        [0.999, 149.925, 299.85],
+      ] as const) {
+        FakeWebSocket.instances = [];
+        const clock = new FakeRuntime({ random: () => random });
+        const ws = new ReconnectingWebSocket("ws://localhost/ws", { runtime: clock, webSocketFactory });
         lastSocket().serverClose();
         // attempt 0: 2**0 * 150 = 150 → delay in [75, 150)
-        time.tick(74);
+        clock.advance(Math.ceil(attempt0) - 1);
         assertEquals(FakeWebSocket.instances.length, 1);
-        time.tick(76);
+        clock.advance(1);
         assertEquals(FakeWebSocket.instances.length, 2);
 
         lastSocket().serverClose();
         // attempt 1: 2**1 * 150 = 300 → delay in [150, 300)
-        time.tick(149);
+        clock.advance(Math.ceil(attempt1) - 1);
         assertEquals(FakeWebSocket.instances.length, 2);
-        time.tick(151);
+        clock.advance(1);
         assertEquals(FakeWebSocket.instances.length, 3);
         ws.close();
-      } finally {
-        time.restore();
+        assertEquals(clock.pendingTimers, 0);
       }
     });
 
-    test("retry counter resets after the connection stays open for stableTimeout", async () => {
-      const ws = createSocket("ws://localhost/ws", { stableTimeout: 5 });
+    test("retry counter resets after the connection stays open for stableTimeout", () => {
+      const clock = new FakeRuntime();
+      const ws = createSocket("ws://localhost/ws", { stableTimeout: 5, runtime: clock, webSocketFactory });
       lastSocket().serverOpen();
-      await sleep(10);
+      clock.advance(4);
+      lastSocket().serverClose();
+      assertEquals(ws.retryCount, 1); // dropped 1 ms early: the streak was never reset
+      clock.advance(0); // the 0 ms retry reconnects
+      lastSocket().serverOpen();
+      clock.advance(5);
 
       lastSocket().serverClose();
       assertEquals(ws.retryCount, 1); // first failure of a fresh streak
       ws.close();
+      assertEquals(clock.pendingTimers, 0);
     });
 
     test("retry counter keeps counting when connections drop before stableTimeout", async () => {
@@ -368,23 +380,21 @@ describe("ReconnectingWebSocket", () => {
       ws.close();
     });
 
-    test("connection timeout recycles a stuck handshake", async () => {
-      const ws = createSocket("ws://localhost/ws", { connectionTimeout: 5 });
+    test("connection timeout recycles a stuck handshake", () => {
+      const clock = new FakeRuntime();
+      const ws = createSocket("ws://localhost/ws", { connectionTimeout: 5, runtime: clock, webSocketFactory });
       assertEquals(FakeWebSocket.instances.length, 1);
 
-      // Every attempt that stays stuck past the timeout fails and is retried. Timer scheduling
-      // is unbounded on a loaded CI runner, so poll for the recycle (generous deadline) instead
-      // of asserting after a fixed sleep — what matters is that fresh attempts happen at all.
-      const deadline = Date.now() + 5_000;
-      while (FakeWebSocket.instances.length < 2 && Date.now() < deadline) {
-        await sleep(5);
-      }
-      assert(FakeWebSocket.instances.length >= 2);
-      assert(ws.retryCount >= 1);
+      clock.advance(4); // still within the handshake budget
+      assertEquals(FakeWebSocket.instances.length, 1);
+      clock.advance(1); // the stuck attempt fails; the 0 ms retry is due at the same instant
+      assertEquals(FakeWebSocket.instances.length, 2);
+      assertEquals(ws.retryCount, 1);
 
       lastSocket().serverOpen();
       assertEquals(ws.readyState, ReconnectingWebSocket.OPEN);
       ws.close();
+      assertEquals(clock.pendingTimers, 0);
     });
 
     test("retries without bound by default (maxRetries: Infinity)", async () => {

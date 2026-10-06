@@ -17,4 +17,5 @@
 export * from "./_base.ts";
 export * from "./_infoCache.ts";
 export * from "./http/mod.ts";
+export * from "./runtime.ts";
 export * from "./websocket/mod.ts";

@@ -27,6 +27,7 @@
  */
 
 import type { IRequestTransport } from "./_base.ts";
+import { resolveRuntime, type Runtime } from "./runtime.ts";
 
 /**
  * Info request types whose responses {@linkcode InfoCacheTransport} may cache.
@@ -59,6 +60,11 @@ export type InfoCacheableRequestType =
 
 /** Configuration options for {@linkcode InfoCacheTransport}. */
 export interface InfoCacheOptions {
+  /**
+   * Clock overrides for expiry, which reads {@linkcode Runtime.monotonicNow}. Missing members fall
+   * back to the platform; resolved once at construction.
+   */
+  runtime?: Partial<Runtime>;
   /**
    * Time-to-live in ms applied to every allowlisted endpoint unless overridden in
    * {@linkcode InfoCacheOptions.ttlByType}. Must be a non-negative number; `Infinity` caches
@@ -201,6 +207,8 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
   private readonly _coalesce: true | ReadonlySet<string> | undefined;
   /** Coalesced requests still in flight, keyed like {@linkcode _entries}. */
   private readonly _inFlight = new Map<string, InFlightEntry>();
+  /** Clock resolved once at construction; expiry reads its monotonic time. */
+  private readonly _runtime: Runtime;
 
   /**
    * Creates a caching wrapper around `inner`.
@@ -209,6 +217,7 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
    * @param options Cache configuration. See {@link InfoCacheOptions}.
    */
   constructor(inner: IRequestTransport<E>, options?: InfoCacheOptions) {
+    this._runtime = resolveRuntime(options?.runtime);
     const { ttl = 60_000, ttlByType = {}, maxSize = 1000, coalesce = false } = options ?? {};
     if (
       typeof ttl !== "number" ||
@@ -255,7 +264,7 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
     }
 
     const key = stableKey(payload as Record<string, unknown>);
-    const now = Date.now();
+    const now = this._runtime.monotonicNow();
     const hit = this._entries.get(key);
     if (hit !== undefined && hit.expiresAt > now) return hit.promise as Promise<T>;
 

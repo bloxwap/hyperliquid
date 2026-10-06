@@ -14,6 +14,7 @@ import type { HyperliquidEventTarget, PostResponse, SubscribeUnsubscribeResponse
 import { isSubset, normalize, requestToId, specificity } from "./_id.ts";
 import type { WebSocketQuota } from "./_quota.ts";
 import { exchangeWireJSON } from "../_wire.ts";
+import type { Runtime } from "../runtime.ts";
 
 // =============================================================================
 // Errors
@@ -202,10 +203,11 @@ export class WebSocketDispatcher {
     hlEvents: HyperliquidEventTarget,
     timeout: number | null,
     quota?: WebSocketQuota,
+    runtime?: Partial<Runtime>,
   ) {
     this.timeout = timeout;
     this._socket = socket;
-    this._timeouts = new abort.TimeoutWheel();
+    this._timeouts = new abort.TimeoutWheel(runtime);
     this._quota = quota;
 
     // --- Hyperliquid event handlers ------------------------------------------

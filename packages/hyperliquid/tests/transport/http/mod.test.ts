@@ -1,14 +1,16 @@
 /**
- * Tests for HttpTransport against a mocked global fetch: URL routing,
- * error wrapping, fetch options merging, and abort/timeout handling.
+ * Tests for HttpTransport: URL routing, error wrapping, fetch options merging, and
+ * abort/timeout handling against the default (global) fetch, which is what an omitted
+ * `fetch` option resolves to; retry and rate-limit timing against an injected fetch and
+ * virtual clock.
  * @module
  */
 
-import { afterEach, beforeEach, describe, test } from "bun:test";
+import { beforeEach, describe, test } from "bun:test";
 import { getEventListeners } from "node:events";
 import { assert, assertEquals, assertIsError, assertRejects } from "@jsr/std__assert";
-import { FakeTime } from "@jsr/std__testing/time";
 import { HttpRateLimitError, HttpRequestError, HttpTransport } from "@bloxwap/hyperliquid";
+import { FakeRuntime } from "../../_fakeRuntime.ts";
 
 // =============================================================================
 // Helpers
@@ -60,6 +62,21 @@ function stubFetch(handler: (input: FetchArgs[0], init?: FetchArgs[1]) => Respon
     },
     { preconnect: originalFetch.preconnect },
   );
+  return stub;
+}
+
+/** Injectable fetch, scoped to one transport, counting the requests it answers. */
+function fakeFetch(handler: (input: FetchArgs[0], init?: FetchArgs[1]) => Response | Promise<Response>): {
+  calls: number;
+  fetch: (input: FetchArgs[0], init?: FetchArgs[1]) => Promise<Response>;
+} {
+  const stub = {
+    calls: 0,
+    fetch: async (input: FetchArgs[0], init?: FetchArgs[1]): Promise<Response> => {
+      stub.calls++;
+      return await handler(input, init);
+    },
+  };
   return stub;
 }
 
@@ -783,16 +800,12 @@ describe("HttpTransport", () => {
   });
 
   describe("retryOnRateLimit", () => {
-    // Same FakeTime hook pattern as the rateLimit block: retry waits are real timers,
-    // ticked deterministically here.
-    let time: FakeTime;
+    // Retry waits and timeouts run on an injected virtual clock (jitter pinned to 0) and the
+    // fetch is injected per transport, so nothing global is patched or slept on.
+    let clock: FakeRuntime;
 
     beforeEach(() => {
-      time = new FakeTime();
-    });
-
-    afterEach(() => {
-      time.restore();
+      clock = new FakeRuntime();
     });
 
     /** A 429 response carrying the given Retry-After value (or none). */
@@ -803,210 +816,169 @@ describe("HttpTransport", () => {
       });
 
     test("disabled by default: a 429 throws on the first attempt", async () => {
-      const stub = stubFetch(() => rateLimited("0"));
-      try {
-        const transport = new HttpTransport();
-        await assertRejects(() => transport.request("info", {}), HttpRateLimitError);
-        assertEquals(stub.calls, 1);
-      } finally {
-        stub.restore();
-      }
+      const stub = fakeFetch(() => rateLimited("0"));
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch });
+      await assertRejects(() => transport.request("info", {}), HttpRateLimitError);
+      assertEquals(stub.calls, 1);
     });
 
     test("retries a 429 and resolves once the server recovers", async () => {
-      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("0") : jsonResponse({ ok: true })));
-      try {
-        const transport = new HttpTransport({ retryOnRateLimit: true });
-        const pending = transport.request("info", {});
-        await flush();
-        assertEquals(stub.calls, 1);
+      const stub = fakeFetch(() => (stub.calls === 1 ? rateLimited("0") : jsonResponse({ ok: true })));
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, retryOnRateLimit: true });
+      const pending = transport.request("info", {});
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        time.tick(1_000); // Retry-After 0 plus up to 1 s of jitter
-        assertEquals(await pending, { ok: true });
-        assertEquals(stub.calls, 2);
-      } finally {
-        stub.restore();
-      }
+      clock.advance(1_000); // Retry-After 0 plus up to 1 s of jitter
+      assertEquals(await pending, { ok: true });
+      assertEquals(stub.calls, 2);
     });
 
     test("honors Retry-After: no retry before the asked delay (the jitter only ever adds wait)", async () => {
-      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("2") : jsonResponse()));
-      try {
-        const transport = new HttpTransport({ retryOnRateLimit: true });
-        const pending = transport.request("info", {});
-        await flush();
-        assertEquals(stub.calls, 1);
+      const stub = fakeFetch(() => (stub.calls === 1 ? rateLimited("2") : jsonResponse()));
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, retryOnRateLimit: true });
+      const pending = transport.request("info", {});
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        time.tick(1_999); // 1 ms short of the asked 2 s
-        await flush();
-        assertEquals(stub.calls, 1);
+      clock.advance(1_999); // 1 ms short of the asked 2 s
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        time.tick(1_001); // past 2 s plus the worst-case 1 s of jitter
-        await pending;
-        assertEquals(stub.calls, 2);
-      } finally {
-        stub.restore();
-      }
+      clock.advance(1_001); // past 2 s plus the worst-case 1 s of jitter
+      await pending;
+      assertEquals(stub.calls, 2);
     });
 
     test("without Retry-After falls back to bounded exponential backoff", async () => {
-      const stub = stubFetch(() => (stub.calls < 3 ? rateLimited() : jsonResponse()));
-      try {
-        const transport = new HttpTransport({ retryOnRateLimit: true });
-        const pending = transport.request("info", {});
-        await flush();
-        assertEquals(stub.calls, 1);
+      const stub = fakeFetch(() => (stub.calls < 3 ? rateLimited() : jsonResponse()));
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, retryOnRateLimit: true });
+      const pending = transport.request("info", {});
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        time.tick(1_000); // first backoff: a random wait within [0, 1 s)
-        await flush();
-        assertEquals(stub.calls, 2);
+      clock.advance(1_000); // first backoff: a random wait within [0, 1 s)
+      await flush();
+      assertEquals(stub.calls, 2);
 
-        time.tick(2_000); // second backoff: within [0, 2 s)
-        await pending;
-        assertEquals(stub.calls, 3);
-      } finally {
-        stub.restore();
-      }
+      clock.advance(2_000); // second backoff: within [0, 2 s)
+      await pending;
+      assertEquals(stub.calls, 3);
     });
 
     test("gives up after maxRetries and throws the last 429", async () => {
-      const stub = stubFetch(() => rateLimited());
-      try {
-        const transport = new HttpTransport({ retryOnRateLimit: { maxRetries: 2 } });
-        const pending = transport.request("info", {});
-        const rejection = assertRejects(() => pending, HttpRateLimitError);
-        await flush();
-        assertEquals(stub.calls, 1);
+      const stub = fakeFetch(() => rateLimited());
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, retryOnRateLimit: { maxRetries: 2 } });
+      const pending = transport.request("info", {});
+      const rejection = assertRejects(() => pending, HttpRateLimitError);
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        time.tick(1_000); // retry 1
-        await flush();
-        assertEquals(stub.calls, 2);
+      clock.advance(1_000); // retry 1
+      await flush();
+      assertEquals(stub.calls, 2);
 
-        time.tick(2_000); // retry 2 — the next 429 is final
-        const error = await rejection;
-        assertEquals(error.status, 429);
-        assertEquals(stub.calls, 3); // maxRetries + 1 attempts in total
-      } finally {
-        stub.restore();
-      }
+      clock.advance(2_000); // retry 2 — the next 429 is final
+      const error = await rejection;
+      assertEquals(error.status, 429);
+      assertEquals(stub.calls, 3); // maxRetries + 1 attempts in total
     });
 
     test("a Retry-After beyond maxDelayMs surfaces the 429 instead of waiting", async () => {
-      const stub = stubFetch(() => rateLimited("60"));
-      try {
-        const transport = new HttpTransport({ retryOnRateLimit: true }); // default maxDelayMs: 30 s
-        await assertRejects(() => transport.request("info", {}), HttpRateLimitError);
-        assertEquals(stub.calls, 1);
-      } finally {
-        stub.restore();
-      }
+      const stub = fakeFetch(() => rateLimited("60"));
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, retryOnRateLimit: true }); // default maxDelayMs: 30 s
+      await assertRejects(() => transport.request("info", {}), HttpRateLimitError);
+      assertEquals(stub.calls, 1);
     });
 
     test("maxDelayMs is configurable", async () => {
-      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("60") : jsonResponse()));
-      try {
-        // timeout: null — otherwise the default 10 s timeout (which spans retry waits) fires first.
-        const transport = new HttpTransport({ timeout: null, retryOnRateLimit: { maxDelayMs: 120_000 } });
-        const pending = transport.request("info", {});
-        await flush();
-        assertEquals(stub.calls, 1);
+      const stub = fakeFetch(() => (stub.calls === 1 ? rateLimited("60") : jsonResponse()));
+      // timeout: null — otherwise the default 10 s timeout (which spans retry waits) fires first.
+      const transport = new HttpTransport({
+        runtime: clock,
+        fetch: stub.fetch,
+        timeout: null,
+        retryOnRateLimit: { maxDelayMs: 120_000 },
+      });
+      const pending = transport.request("info", {});
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        time.tick(61_000); // the asked 60 s plus up to 1 s of jitter
-        await pending;
-        assertEquals(stub.calls, 2);
-      } finally {
-        stub.restore();
-      }
+      clock.advance(61_000); // the asked 60 s plus up to 1 s of jitter
+      await pending;
+      assertEquals(stub.calls, 2);
     });
 
     test("the overall request timeout spans every retry wait", async () => {
-      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("5") : jsonResponse()));
-      try {
-        const transport = new HttpTransport({ timeout: 100, retryOnRateLimit: true });
-        const pending = transport.request("info", {});
-        const rejection = assertRejects(() => pending, HttpRequestError, "Request timed out after 100 ms");
-        await flush();
-        assertEquals(stub.calls, 1); // first attempt 429'd; the ~5 s retry wait is pending
+      const stub = fakeFetch(() => (stub.calls === 1 ? rateLimited("5") : jsonResponse()));
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, timeout: 100, retryOnRateLimit: true });
+      const pending = transport.request("info", {});
+      const rejection = assertRejects(() => pending, HttpRequestError, "Request timed out after 100 ms");
+      await flush();
+      assertEquals(stub.calls, 1); // first attempt 429'd; the ~5 s retry wait is pending
 
-        time.tick(100); // the timeout fires mid-wait — the retry never goes out
-        await rejection;
-        assertEquals(stub.calls, 1);
-      } finally {
-        stub.restore();
-      }
+      clock.advance(100); // the timeout fires mid-wait — the retry never goes out
+      await rejection;
+      assertEquals(stub.calls, 1);
     });
 
     test("a caller abort during the retry wait cancels the request", async () => {
-      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("5") : jsonResponse()));
-      try {
-        const controller = new AbortController();
-        const reason = new DOMException("user cancel", "AbortError");
-        const transport = new HttpTransport({ retryOnRateLimit: true });
-        const pending = transport.request("info", {}, controller.signal);
-        const rejection = assertRejects(() => pending, HttpRequestError, "Request aborted");
-        await flush();
-        assertEquals(stub.calls, 1);
+      const stub = fakeFetch(() => (stub.calls === 1 ? rateLimited("5") : jsonResponse()));
+      const controller = new AbortController();
+      const reason = new DOMException("user cancel", "AbortError");
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, retryOnRateLimit: true });
+      const pending = transport.request("info", {}, controller.signal);
+      const rejection = assertRejects(() => pending, HttpRequestError, "Request aborted");
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        controller.abort(reason);
-        const error = await rejection;
-        assertEquals(error.cause, reason);
-        assertEquals(stub.calls, 1); // the retry never went out
-      } finally {
-        stub.restore();
-      }
+      controller.abort(reason);
+      const error = await rejection;
+      assertEquals(error.cause, reason);
+      assertEquals(stub.calls, 1); // the retry never went out
     });
 
     test("only a 429 is retried: other failures surface on the first attempt", async () => {
-      const stub = stubFetch(() => new Response("nope", { status: 500 }));
-      try {
-        const transport = new HttpTransport({ retryOnRateLimit: true });
-        const error = await assertRejects(() => transport.request("info", {}), HttpRequestError);
-        assert(!(error instanceof HttpRateLimitError));
-        assertEquals(stub.calls, 1);
-      } finally {
-        stub.restore();
-      }
+      const stub = fakeFetch(() => new Response("nope", { status: 500 }));
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, retryOnRateLimit: true });
+      const error = await assertRejects(() => transport.request("info", {}), HttpRequestError);
+      assert(!(error instanceof HttpRateLimitError));
+      assertEquals(stub.calls, 1);
     });
 
     test("a 200-OK error envelope is not retried either", async () => {
-      const stub = stubFetch(() => jsonResponse({ type: "error", message: "server-side failure" }));
-      try {
-        const transport = new HttpTransport({ retryOnRateLimit: true });
-        await assertRejects(() => transport.request("info", {}), HttpRequestError, "server-side failure");
-        assertEquals(stub.calls, 1);
-      } finally {
-        stub.restore();
-      }
+      const stub = fakeFetch(() => jsonResponse({ type: "error", message: "server-side failure" }));
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, retryOnRateLimit: true });
+      await assertRejects(() => transport.request("info", {}), HttpRequestError, "server-side failure");
+      assertEquals(stub.calls, 1);
     });
 
     test("composed with rateLimit, each retry debits the bucket again", async () => {
-      const stub = stubFetch(() => (stub.calls === 1 ? rateLimited("0") : jsonResponse()));
-      try {
-        // 1 weight per second: the first attempt acquires 1 (bucket 0), the retry charges 1
-        // more (bucket -1), and the ~1 s retry wait refills exactly that token (bucket 0).
-        const transport = new HttpTransport({
-          rateLimit: { capacity: 1, refillPerMinute: 60 },
-          retryOnRateLimit: true,
-        });
-        const pending = transport.request("exchange", { action: { type: "noop" } });
-        await flush();
-        assertEquals(stub.calls, 1);
+      const stub = fakeFetch(() => (stub.calls === 1 ? rateLimited("0") : jsonResponse()));
+      // 1 weight per second: the first attempt acquires 1 (bucket 0), the retry charges 1
+      // more (bucket -1), and the ~1 s retry wait refills exactly that token (bucket 0).
+      const transport = new HttpTransport({
+        runtime: clock,
+        fetch: stub.fetch,
+        rateLimit: { capacity: 1, refillPerMinute: 60 },
+        retryOnRateLimit: true,
+      });
+      const pending = transport.request("exchange", { action: { type: "noop" } });
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        time.tick(1_000); // Retry-After 0 plus jitter — the retry goes out and succeeds
-        await pending;
-        assertEquals(stub.calls, 2);
+      clock.advance(1_000); // Retry-After 0 plus jitter — the retry goes out and succeeds
+      await pending;
+      assertEquals(stub.calls, 2);
 
-        // The retry's debit left the bucket empty: the next request waits one refill second.
-        // (Had the retry not been charged, the refilled token would send it immediately.)
-        const followUp = transport.request("exchange", { action: { type: "noop" } });
-        await flush();
-        assertEquals(stub.calls, 2);
-        time.tick(1_000);
-        await followUp;
-        assertEquals(stub.calls, 3);
-      } finally {
-        stub.restore();
-      }
+      // The retry's debit left the bucket empty: the next request waits one refill second.
+      // (Had the retry not been charged, the refilled token would send it immediately.)
+      const followUp = transport.request("exchange", { action: { type: "noop" } });
+      await flush();
+      assertEquals(stub.calls, 2);
+      clock.advance(1_000);
+      await followUp;
+      assertEquals(stub.calls, 3);
     });
   });
 
@@ -1226,87 +1198,79 @@ describe("HttpTransport", () => {
   });
 
   describe("rateLimit", () => {
-    // The npm build of `@std/testing/time` drops the `[Symbol.dispose]` member the Deno version
-    // declares, so the clock is installed and restored through hooks instead of a `using` binding.
-    let time: FakeTime;
+    // Bucket refills run on an injected virtual clock and an injected fetch, as in retryOnRateLimit.
+    let clock: FakeRuntime;
 
     beforeEach(() => {
-      time = new FakeTime();
-    });
-
-    afterEach(() => {
-      time.restore();
+      clock = new FakeRuntime();
     });
 
     test("waits for weight before sending instead of throwing", async () => {
-      const stub = stubFetch(() => jsonResponse());
-      try {
-        const transport = new HttpTransport({ rateLimit: { capacity: 1, refillPerMinute: 60 } }); // 1 weight/second
+      const stub = fakeFetch(() => jsonResponse());
+      const transport = new HttpTransport({
+        runtime: clock,
+        fetch: stub.fetch,
+        rateLimit: { capacity: 1, refillPerMinute: 60 },
+      }); // 1 weight/second
 
-        await transport.request("exchange", { action: { type: "noop" } }); // consumes the only token
-        assertEquals(stub.calls, 1);
+      await transport.request("exchange", { action: { type: "noop" } }); // consumes the only token
+      assertEquals(stub.calls, 1);
 
-        const pending = transport.request("exchange", { action: { type: "noop" } }); // bucket empty: waits, no fetch yet
-        await flush();
-        assertEquals(stub.calls, 1);
+      const pending = transport.request("exchange", { action: { type: "noop" } }); // bucket empty: waits, no fetch yet
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        time.tick(1_000); // one token refilled
-        await pending;
-        assertEquals(stub.calls, 2);
-      } finally {
-        stub.restore();
-      }
+      clock.advance(1_000); // one token refilled
+      await pending;
+      assertEquals(stub.calls, 2);
     });
 
     test("exchange batches cost 1 + floor(batchLength / 40) weight", async () => {
-      const stub = stubFetch(() => jsonResponse());
-      try {
-        const transport = new HttpTransport({ rateLimit: { capacity: 2, refillPerMinute: 60 } }); // 1 weight/second
+      const stub = fakeFetch(() => jsonResponse());
+      const transport = new HttpTransport({
+        runtime: clock,
+        fetch: stub.fetch,
+        rateLimit: { capacity: 2, refillPerMinute: 60 },
+      }); // 1 weight/second
 
-        // 41 orders cost 2 weight: the whole bucket.
-        await transport.request("exchange", { action: { type: "order", orders: Array.from({ length: 41 }) } });
-        assertEquals(stub.calls, 1);
+      // 41 orders cost 2 weight: the whole bucket.
+      await transport.request("exchange", { action: { type: "order", orders: Array.from({ length: 41 }) } });
+      assertEquals(stub.calls, 1);
 
-        const pending = transport.request("exchange", { action: { type: "noop" } }); // weight 1: waits 1 s
-        await flush();
-        assertEquals(stub.calls, 1);
+      const pending = transport.request("exchange", { action: { type: "noop" } }); // weight 1: waits 1 s
+      await flush();
+      assertEquals(stub.calls, 1);
 
-        time.tick(1_000);
-        await pending;
-        assertEquals(stub.calls, 2);
-      } finally {
-        stub.restore();
-      }
+      clock.advance(1_000);
+      await pending;
+      assertEquals(stub.calls, 2);
     });
 
     test("throttled waits never trip the request timeout", async () => {
-      const stub = stubFetch(() => jsonResponse());
-      try {
-        const transport = new HttpTransport({ timeout: 100, rateLimit: { capacity: 1, refillPerMinute: 60 } });
+      const stub = fakeFetch(() => jsonResponse());
+      const transport = new HttpTransport({
+        runtime: clock,
+        fetch: stub.fetch,
+        timeout: 100,
+        rateLimit: { capacity: 1, refillPerMinute: 60 },
+      });
 
-        await transport.request("exchange", { action: { type: "noop" } });
-        const pending = transport.request("exchange", { action: { type: "noop" } }); // waits 1 s, far beyond the 100 ms timeout
-        await flush();
+      await transport.request("exchange", { action: { type: "noop" } });
+      const pending = transport.request("exchange", { action: { type: "noop" } }); // waits 1 s, far beyond the 100 ms timeout
+      await flush();
 
-        time.tick(1_000);
-        await pending; // resolves: the timeout starts only once the request goes out
-        assertEquals(stub.calls, 2);
-      } finally {
-        stub.restore();
-      }
+      clock.advance(1_000);
+      await pending; // resolves: the timeout starts only once the request goes out
+      assertEquals(stub.calls, 2);
     });
 
     test("disabled by default: requests are never delayed client-side", async () => {
-      const stub = stubFetch(() => jsonResponse());
-      try {
-        const transport = new HttpTransport();
+      const stub = fakeFetch(() => jsonResponse());
+      const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch });
 
-        await transport.request("info", {});
-        await transport.request("exchange", { action: { type: "order", orders: Array.from({ length: 100 }) } });
-        assertEquals(stub.calls, 2); // both sent without ticking the clock
-      } finally {
-        stub.restore();
-      }
+      await transport.request("info", {});
+      await transport.request("exchange", { action: { type: "order", orders: Array.from({ length: 100 }) } });
+      assertEquals(stub.calls, 2); // both sent without ticking the clock
     });
 
     describe("documented weights", () => {
@@ -1316,27 +1280,27 @@ describe("HttpTransport", () => {
        * exactly one second at the 1 token/second refill.
        */
       async function assertWeight(endpoint: "info" | "exchange" | "explorer", payload: unknown, weight: number) {
-        const stub = stubFetch(() => jsonResponse());
-        try {
-          const transport = new HttpTransport({ rateLimit: { capacity: weight, refillPerMinute: 60 } });
+        const stub = fakeFetch(() => jsonResponse());
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: weight, refillPerMinute: 60 },
+        });
 
-          await transport.request(endpoint, payload); // empties the bucket exactly
-          assertEquals(stub.calls, 1);
+        await transport.request(endpoint, payload); // empties the bucket exactly
+        assertEquals(stub.calls, 1);
 
-          const pending = transport.request("exchange", { action: { type: "noop" } }); // weight 1
-          await flush();
-          assertEquals(stub.calls, 1);
+        const pending = transport.request("exchange", { action: { type: "noop" } }); // weight 1
+        await flush();
+        assertEquals(stub.calls, 1);
 
-          time.tick(999); // 1 ms short of the next token
-          await flush();
-          assertEquals(stub.calls, 1);
+        clock.advance(999); // 1 ms short of the next token
+        await flush();
+        assertEquals(stub.calls, 1);
 
-          time.tick(1);
-          await pending;
-          assertEquals(stub.calls, 2);
-        } finally {
-          stub.restore();
-        }
+        clock.advance(1);
+        await pending;
+        assertEquals(stub.calls, 2);
       }
 
       // The classes from https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
@@ -1475,32 +1439,32 @@ describe("HttpTransport", () => {
       });
 
       test("billing derives from the serialized form, never from live getters or toJSON", async () => {
-        const stub = stubFetch(() => jsonResponse());
-        try {
-          const transport = new HttpTransport({ rateLimit: { capacity: 2, refillPerMinute: 60 } });
+        const stub = fakeFetch(() => jsonResponse());
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: 2, refillPerMinute: 60 },
+        });
 
-          // The live object says "userRole" (60 weight); the serialized form says "allMids" (2).
-          const payload = {
-            get type(): string {
-              return "userRole";
-            },
-            toJSON() {
-              return { type: "allMids" };
-            },
-          };
-          await transport.request("info", payload); // billed 2 — the wire's weight: empties the bucket
-          assertEquals(stub.calls, 1);
+        // The live object says "userRole" (60 weight); the serialized form says "allMids" (2).
+        const payload = {
+          get type(): string {
+            return "userRole";
+          },
+          toJSON() {
+            return { type: "allMids" };
+          },
+        };
+        await transport.request("info", payload); // billed 2 — the wire's weight: empties the bucket
+        assertEquals(stub.calls, 1);
 
-          const pending = transport.request("exchange", { action: { type: "noop" } }); // weight 1: waits 1 s
-          await flush();
-          assertEquals(stub.calls, 1);
+        const pending = transport.request("exchange", { action: { type: "noop" } }); // weight 1: waits 1 s
+        await flush();
+        assertEquals(stub.calls, 1);
 
-          time.tick(1_000);
-          await pending;
-          assertEquals(stub.calls, 2);
-        } finally {
-          stub.restore();
-        }
+        clock.advance(1_000);
+        await pending;
+        assertEquals(stub.calls, 2);
       });
     });
 
@@ -1517,27 +1481,27 @@ describe("HttpTransport", () => {
         baseWeight: number,
         surcharge: number,
       ) {
-        const stub = stubFetch(() => jsonResponse(Array.from({ length: itemCount })));
-        try {
-          const transport = new HttpTransport({ rateLimit: { capacity: baseWeight, refillPerMinute: 60 } });
+        const stub = fakeFetch(() => jsonResponse(Array.from({ length: itemCount })));
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: baseWeight, refillPerMinute: 60 },
+        });
 
-          await transport.request(endpoint, payload); // bucket: 0 after the acquire, -surcharge after the debit
-          assertEquals(stub.calls, 1);
+        await transport.request(endpoint, payload); // bucket: 0 after the acquire, -surcharge after the debit
+        assertEquals(stub.calls, 1);
 
-          const pending = transport.request("exchange", { action: { type: "noop" } }); // deficit: surcharge + 1
-          await flush();
-          assertEquals(stub.calls, 1);
+        const pending = transport.request("exchange", { action: { type: "noop" } }); // deficit: surcharge + 1
+        await flush();
+        assertEquals(stub.calls, 1);
 
-          time.tick(surcharge * 1_000); // one token still short
-          await flush();
-          assertEquals(stub.calls, 1);
+        clock.advance(surcharge * 1_000); // one token still short
+        await flush();
+        assertEquals(stub.calls, 1);
 
-          time.tick(1_000); // debt paid off plus the one token needed
-          await pending;
-          assertEquals(stub.calls, 2);
-        } finally {
-          stub.restore();
-        }
+        clock.advance(1_000); // debt paid off plus the one token needed
+        await pending;
+        assertEquals(stub.calls, 2);
       }
 
       test("userFills: 1 extra weight per 20 returned items", async () => {
@@ -1559,76 +1523,77 @@ describe("HttpTransport", () => {
 
     describe("abort", () => {
       test("a pre-aborted signal rejects instantly without consuming weight", async () => {
-        const stub = stubFetch(() => jsonResponse());
-        try {
-          const transport = new HttpTransport({ rateLimit: { capacity: 1, refillPerMinute: 60 } });
-          const reason = new Error("cancelled before sending");
+        const stub = fakeFetch(() => jsonResponse());
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: 1, refillPerMinute: 60 },
+        });
+        const reason = new Error("cancelled before sending");
 
-          const error = await assertRejects(
-            () => transport.request("exchange", { action: { type: "noop" } }, AbortSignal.abort(reason)),
-            HttpRequestError,
-            "Request aborted",
-          );
-          assertEquals(error.cause, reason);
-          assertEquals(stub.calls, 0); // never reached fetch
+        const error = await assertRejects(
+          () => transport.request("exchange", { action: { type: "noop" } }, AbortSignal.abort(reason)),
+          HttpRequestError,
+          "Request aborted",
+        );
+        assertEquals(error.cause, reason);
+        assertEquals(stub.calls, 0); // never reached fetch
 
-          // The token was not consumed: the next request proceeds without waiting.
-          await transport.request("exchange", { action: { type: "noop" } });
-          assertEquals(stub.calls, 1);
-        } finally {
-          stub.restore();
-        }
+        // The token was not consumed: the next request proceeds without waiting.
+        await transport.request("exchange", { action: { type: "noop" } });
+        assertEquals(stub.calls, 1);
       });
 
       test("aborting during a queued wait rejects without consuming weight", async () => {
-        const stub = stubFetch(() => jsonResponse());
-        try {
-          const transport = new HttpTransport({ rateLimit: { capacity: 1, refillPerMinute: 60 } });
+        const stub = fakeFetch(() => jsonResponse());
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: 1, refillPerMinute: 60 },
+        });
 
-          await transport.request("exchange", { action: { type: "noop" } }); // consumes the only token
-          assertEquals(stub.calls, 1);
+        await transport.request("exchange", { action: { type: "noop" } }); // consumes the only token
+        assertEquals(stub.calls, 1);
 
-          const controller = new AbortController();
-          const pending = transport.request("exchange", { action: { type: "noop" } }, controller.signal);
-          await flush(); // queued in the bucket, no fetch yet
-          assertEquals(stub.calls, 1);
+        const controller = new AbortController();
+        const pending = transport.request("exchange", { action: { type: "noop" } }, controller.signal);
+        await flush(); // queued in the bucket, no fetch yet
+        assertEquals(stub.calls, 1);
 
-          controller.abort(new DOMException("user cancel", "AbortError"));
-          const error = await assertRejects(() => pending, HttpRequestError, "Request aborted");
-          assertIsError(error.cause, DOMException);
-          assertEquals(stub.calls, 1); // never reached fetch
+        controller.abort(new DOMException("user cancel", "AbortError"));
+        const error = await assertRejects(() => pending, HttpRequestError, "Request aborted");
+        assertIsError(error.cause, DOMException);
+        assertEquals(stub.calls, 1); // never reached fetch
 
-          // The aborted request consumed nothing: the survivor is served on the normal refill.
-          const followUp = transport.request("exchange", { action: { type: "noop" } });
-          await flush();
-          assertEquals(stub.calls, 1);
-          time.tick(1_000);
-          await followUp;
-          assertEquals(stub.calls, 2);
-        } finally {
-          stub.restore();
-        }
+        // The aborted request consumed nothing: the survivor is served on the normal refill.
+        const followUp = transport.request("exchange", { action: { type: "noop" } });
+        await flush();
+        assertEquals(stub.calls, 1);
+        clock.advance(1_000);
+        await followUp;
+        assertEquals(stub.calls, 2);
       });
 
       test("the timeout still fires once the request is in flight", async () => {
-        const stub = stubFetch(
+        const stub = fakeFetch(
           (_req, init) =>
             new Promise((_resolve, reject) => {
               init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
             }),
         );
-        try {
-          const transport = new HttpTransport({ timeout: 5, rateLimit: { capacity: 1, refillPerMinute: 60 } });
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          timeout: 5,
+          rateLimit: { capacity: 1, refillPerMinute: 60 },
+        });
 
-          const pending = transport.request("exchange", { action: { type: "noop" } });
-          await flush(); // bucket full: acquired and sent, now hanging in fetch
-          assertEquals(stub.calls, 1);
+        const pending = transport.request("exchange", { action: { type: "noop" } });
+        await flush(); // bucket full: acquired and sent, now hanging in fetch
+        assertEquals(stub.calls, 1);
 
-          time.tick(5); // fires the request timeout armed after the acquire
-          await assertRejects(() => pending, HttpRequestError, "Request timed out after 5 ms");
-        } finally {
-          stub.restore();
-        }
+        clock.advance(5); // fires the request timeout armed after the acquire
+        await assertRejects(() => pending, HttpRequestError, "Request timed out after 5 ms");
       });
     });
   });

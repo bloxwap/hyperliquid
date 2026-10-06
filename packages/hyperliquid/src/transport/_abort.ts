@@ -4,6 +4,7 @@
  */
 
 import { DOMException_, Promise_ } from "./_polyfills.ts";
+import { resolveRuntime, type Runtime, type TimerHandle } from "./runtime.ts";
 
 /** Shared detach function for relays that need no cleanup. */
 function noop(): void {
@@ -33,7 +34,7 @@ const DISABLED_TIMEOUT: { reason: Error; cancel: () => void } = Object.freeze({
 /** A pending timeout: one node of the {@linkcode TimeoutWheel}'s deadline-sorted queue. */
 interface TimeoutEntry {
   /**
-   * Wall-clock due time, `Date.now() + ms` stamped at schedule time. A delay beyond 2^31-1 ms is
+   * Monotonic due time, `runtime.monotonicNow() + ms` stamped at schedule time. A delay beyond 2^31-1 ms is
    * clamped to 1 ms up front, mirroring the runtime's own clamp (Bun/Node fire such timers almost
    * immediately, with a `TimeoutOverflowWarning` the wheel does not reproduce): stamping the
    * CLAMPED deadline is what keeps a covered re-arm from re-clamping into a 1 ms spin.
@@ -56,7 +57,7 @@ interface TimeoutEntry {
  * timer, in place of a per-request `setTimeout`/`clearTimeout` pair on the HTTP transport's hot
  * path.
  *
- * Per-request semantics are preserved exactly: the abort fires no earlier than `Date.now() + ms`
+ * Per-request semantics are preserved exactly: the abort fires no earlier than `runtime.monotonicNow() + ms`
  * stamped at schedule time (the callback re-checks the deadline, so an early wake-up only
  * re-arms), with the same lazily-created `TimeoutError` reason, and equal deadlines fire in
  * insertion order, the way same-delay native timers would. What changes is the amortization: a
@@ -73,11 +74,14 @@ export class TimeoutWheel {
   /** Live and spent entries, sorted by deadline ascending; equal deadlines keep insertion order. */
   private readonly _entries: TimeoutEntry[];
   /** The single armed native timer, or `undefined` when nothing is armed. */
-  private _timer: ReturnType<typeof setTimeout> | undefined;
+  private _timer: TimerHandle | undefined;
   /** The deadline {@linkcode _timer} is armed for; never later than the head entry's deadline. */
   private _timerDeadline: number;
+  /** Clock and scheduler, resolved once at construction; deadlines read its monotonic time. */
+  private readonly _runtime: Runtime;
 
-  constructor() {
+  constructor(runtime?: Partial<Runtime>) {
+    this._runtime = resolveRuntime(runtime);
     this._entries = [];
     this._timer = undefined;
     this._timerDeadline = 0;
@@ -93,7 +97,7 @@ export class TimeoutWheel {
   schedule(target: AbortController, ms: number | null): { reason: Error; cancel: () => void } {
     if (ms === null || !Number.isFinite(ms)) return DISABLED_TIMEOUT;
     const entry: TimeoutEntry = {
-      deadline: Date.now() + (ms > MAX_TIMEOUT_DELAY_MS ? 1 : ms),
+      deadline: this._runtime.monotonicNow() + (ms > MAX_TIMEOUT_DELAY_MS ? 1 : ms),
       target,
       reason: undefined,
       cancelled: false,
@@ -135,7 +139,7 @@ export class TimeoutWheel {
   /** Fires every overdue entry in deadline order and re-arms for what remains. */
   private _onTimer(): void {
     this._timer = undefined; // the timer that got us here has fired
-    const now = Date.now();
+    const now = this._runtime.monotonicNow();
     const entries = this._entries;
     for (;;) {
       const head = entries[0];
@@ -156,13 +160,13 @@ export class TimeoutWheel {
   /** (Re)arms the native timer for the current head's deadline; disarms when the queue is empty. */
   private _rearm(): void {
     if (this._timer !== undefined) {
-      clearTimeout(this._timer);
+      this._runtime.clearTimeout(this._timer);
       this._timer = undefined;
     }
     const head = this._entries[0];
     if (head === undefined) return;
     this._timerDeadline = head.deadline;
-    this._timer = setTimeout(() => this._onTimer(), head.deadline - Date.now());
+    this._timer = this._runtime.setTimeout(() => this._onTimer(), head.deadline - this._runtime.monotonicNow());
     // `unref` where the platform exposes it (Bun/Node timer objects); browser and fake timers
     // return a plain number, hence the guarded call — typed through `unknown` because the DOM
     // lib the TypeScript 7 gate compiles against types `setTimeout` as returning `number`.

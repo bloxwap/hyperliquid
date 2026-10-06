@@ -6,9 +6,9 @@
  * @module
  */
 
-import { afterEach, beforeEach, describe, test } from "bun:test";
+import { beforeEach, describe, test } from "bun:test";
 import { assert, assertEquals, assertIsError, assertStrictEquals } from "@jsr/std__assert";
-import { FakeTime } from "@jsr/std__testing/time";
+import { FakeRuntime } from "../_fakeRuntime.ts";
 import { relay, TimeoutWheel } from "../../src/transport/_abort.ts";
 
 /** A live AbortController's signal, aborted with `reason` when given. */
@@ -400,51 +400,66 @@ describe("abort.TimeoutWheel", () => {
     });
   });
 
-  describe("fake time", () => {
-    // The wheel reads Date.now() for deadlines and arms plain setTimeout/clearTimeout — the
-    // pair FakeTime patches together — so tick-driven tests behave exactly like real ones.
-    let time: FakeTime;
+  describe("injected runtime", () => {
+    // The wheel reads monotonic time for deadlines and arms its timer through the runtime, so a
+    // virtual clock drives it without patching Date.now or the global timer functions.
+    let clock: FakeRuntime;
     beforeEach(() => {
-      time = new FakeTime();
-    });
-    afterEach(() => {
-      time.restore();
+      clock = new FakeRuntime();
     });
 
-    test("deadlines track the patched clock", () => {
-      const wheel = new TimeoutWheel();
+    test("deadlines track the virtual clock", () => {
+      const wheel = new TimeoutWheel(clock);
       const controller = new AbortController();
       wheel.schedule(controller, 5);
 
-      time.tick(4);
+      clock.advance(4);
       assert(!controller.signal.aborted);
-      time.tick(1);
+      clock.advance(1);
       assert(controller.signal.aborted);
       assertEquals(controller.signal.reason.name, "TimeoutError");
+      assertEquals(clock.pendingTimers, 0);
     });
 
     test("a not-yet-due entry survives an early wake-up and is re-armed", () => {
-      const wheel = new TimeoutWheel();
+      const wheel = new TimeoutWheel(clock);
       const early = new AbortController();
       const late = new AbortController();
       wheel.schedule(early, 5);
       wheel.schedule(late, 100);
 
-      time.tick(5); // the shared timer fires for `early`; `late` is not due
+      clock.advance(5); // the shared timer fires for `early`; `late` is not due
       assert(early.signal.aborted);
       assert(!late.signal.aborted);
+      assertEquals(clock.pendingTimers, 1);
 
-      time.tick(95); // the re-armed timer serves `late` at its own deadline
+      clock.advance(95); // the re-armed timer serves `late` at its own deadline
       assert(late.signal.aborted);
+      assertEquals(clock.pendingTimers, 0);
     });
 
-    test("cancel under fake time still prevents the abort", () => {
-      const wheel = new TimeoutWheel();
+    test("cancel on the virtual clock still prevents the abort", () => {
+      const wheel = new TimeoutWheel(clock);
       const controller = new AbortController();
       wheel.schedule(controller, 5).cancel();
 
-      time.tick(1_000);
+      clock.advance(1_000);
       assert(!controller.signal.aborted);
+      assertEquals(clock.pendingTimers, 0);
+    });
+
+    test("deadlines are monotonic: a wall-clock rollback neither delays nor hastens them", () => {
+      const wheel = new TimeoutWheel(clock);
+      const controller = new AbortController();
+      wheel.schedule(controller, 5);
+
+      clock.setWallTime(clock.now() - 60_000);
+      clock.advance(4);
+      assert(!controller.signal.aborted);
+      clock.setWallTime(clock.now() + 3_600_000);
+      assert(!controller.signal.aborted);
+      clock.advance(1);
+      assert(controller.signal.aborted);
     });
   });
 });

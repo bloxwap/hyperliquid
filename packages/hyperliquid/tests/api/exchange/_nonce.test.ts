@@ -9,6 +9,7 @@ import { describe, test } from "bun:test";
 import { assert, assertEquals } from "@jsr/std__assert";
 
 import { createNonceManager, type NonceManager } from "../../../src/api/exchange/_methods/_base/_nonce.ts";
+import { FakeRuntime } from "../../_fakeRuntime.ts";
 
 // ============================================================
 // Helpers
@@ -20,24 +21,14 @@ function walletKey(i: number): string {
 }
 
 /**
- * Runs `fn` with `Date.now` replaced by a controllable clock, restoring it afterwards.
- * A deterministic clock is what lets these tests assert prune behaviour exactly, with no
- * wall-clock timing assertions (which would be flaky in CI).
+ * Runs `fn` against a virtual wall clock injected into the managers it creates. A
+ * deterministic clock is what lets these tests assert prune behaviour exactly, with no
+ * wall-clock timing assertions (which would be flaky in CI) and without patching `Date.now`.
  */
-function withMockClock(start: number, fn: (clock: { now: () => number; advance: (ms: number) => void }) => void): void {
-  let now = start;
-  const realDateNow = Date.now;
-  Date.now = () => now;
-  try {
-    fn({
-      now: () => now,
-      advance: (ms: number) => {
-        now += ms;
-      },
-    });
-  } finally {
-    Date.now = realDateNow;
-  }
+function withMockClock(start: number, fn: (clock: FakeRuntime) => void): void {
+  const clock = new FakeRuntime();
+  clock.setWallTime(start);
+  fn(clock);
 }
 
 // The prune throttle in `_nonce.ts` rescans at most once per this interval.
@@ -59,7 +50,10 @@ interface PruneCounters {
  * no other map in the process is affected. Counting scans (rather than timing them) is what
  * keeps the bounded-work assertions deterministic instead of flaky in CI.
  */
-function managerWithCounters(maxEntries: number): { manager: NonceManager; counters: PruneCounters } {
+function managerWithCounters(
+  maxEntries: number,
+  clock: FakeRuntime,
+): { manager: NonceManager; counters: PruneCounters } {
   const counters: PruneCounters = { scans: 0, deletes: 0 };
   class CountingMap<K, V> extends Map<K, V> {
     override [Symbol.iterator](): MapIterator<[K, V]> {
@@ -75,7 +69,7 @@ function managerWithCounters(maxEntries: number): { manager: NonceManager; count
   const realMap = globalThis.Map;
   globalThis.Map = CountingMap as unknown as MapConstructor;
   try {
-    return { manager: createNonceManager(maxEntries), counters };
+    return { manager: createNonceManager(maxEntries, clock), counters };
   } finally {
     globalThis.Map = realMap;
   }
@@ -88,7 +82,7 @@ function managerWithCounters(maxEntries: number): { manager: NonceManager; count
 describe("createNonceManager", () => {
   test("nonces stay strictly increasing per key beyond maxEntries, ahead of wall clock", () => {
     withMockClock(1_700_000_000_000, (clock) => {
-      const manager = createNonceManager(); // default maxEntries: 10_000
+      const manager = createNonceManager(undefined, clock); // default maxEntries: 10_000
       const keyCount = 12_000; // over capacity, so the prune path is active throughout
       const lastNonce = new Map<string, number>();
 
@@ -123,7 +117,7 @@ describe("createNonceManager", () => {
     withMockClock(1_700_000_000_000, (clock) => {
       const maxEntries = 100;
       const keyCount = 500; // 5x over capacity
-      const { manager, counters } = managerWithCounters(maxEntries);
+      const { manager, counters } = managerWithCounters(maxEntries, clock);
 
       // Fill past capacity with a frozen clock. The first over-capacity call pays for one
       // scan (which frees nothing: every entry's nonce equals `now`, none are stale);
@@ -164,7 +158,7 @@ describe("createNonceManager", () => {
     withMockClock(1_700_000_000_000, (clock) => {
       const maxEntries = 100;
       const keyCount = 500;
-      const { manager, counters } = managerWithCounters(maxEntries);
+      const { manager, counters } = managerWithCounters(maxEntries, clock);
 
       for (let i = 0; i < keyCount; i++) manager.getNonce(walletKey(i));
       assertEquals(counters.scans, 1);
@@ -172,7 +166,7 @@ describe("createNonceManager", () => {
       // An NTP correction steps wall time back an hour. A throttle comparing
       // `now - lastPruneAt >= interval` alone would now wait an hour before pruning again,
       // leaving the map to grow unchecked for the whole excursion.
-      clock.advance(-3_600_000);
+      clock.setWallTime(clock.now() - 3_600_000);
       const nonce = manager.getNonce(walletKey(0));
       assertEquals(counters.scans, 2, "a backwards clock step must re-arm the prune scan immediately");
 

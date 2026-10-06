@@ -8,6 +8,7 @@
 import type { ReconnectingWebSocket } from "./_reconnectingSocket.ts";
 import type { HyperliquidEventTarget } from "./_events.ts";
 import type { WebSocketQuota } from "./_quota.ts";
+import { resolveRuntime, type Runtime, type TimerHandle } from "../runtime.ts";
 
 /** Configuration options for the keep-alive watchdog. */
 export interface WebSocketKeepAliveOptions {
@@ -41,15 +42,19 @@ export class WebSocketKeepAlive {
    * unnoticed — so heavy ping traffic slows subscribes instead of itself.
    */
   private readonly _quota: WebSocketQuota | undefined;
-  private _pingInterval: ReturnType<typeof setInterval> | undefined;
-  private _pongTimeout: ReturnType<typeof setTimeout> | undefined;
+  private _pingInterval: TimerHandle | undefined;
+  private _pongTimeout: TimerHandle | undefined;
+  /** Scheduler for the ping interval and pong deadline, resolved once at construction. */
+  private readonly _runtime: Runtime;
 
   constructor(
     socket: ReconnectingWebSocket,
     hlEvents: HyperliquidEventTarget,
     options?: WebSocketKeepAliveOptions,
     quota?: WebSocketQuota,
+    runtime?: Partial<Runtime>,
   ) {
+    this._runtime = resolveRuntime(runtime);
     this._socket = socket;
     this._interval = options?.interval ?? 5_000;
     this._timeout = options?.timeout ?? 3_000;
@@ -63,22 +68,22 @@ export class WebSocketKeepAlive {
 
   private _start(): void {
     if (this._pingInterval) return;
-    this._pingInterval = setInterval(() => {
+    this._pingInterval = this._runtime.setInterval(() => {
       this._socket.send('{"method":"ping"}');
       this._quota?.chargeSend();
       // A half-open connection never answers: reconnect once a ping stays unanswered.
-      this._pongTimeout ??= setTimeout(() => this._socket.reconnect(), this._timeout);
+      this._pongTimeout ??= this._runtime.setTimeout(() => this._socket.reconnect(), this._timeout);
     }, this._interval);
   }
 
   private _stop(): void {
-    clearInterval(this._pingInterval);
+    this._runtime.clearInterval(this._pingInterval);
     this._pingInterval = undefined;
     this._disarm();
   }
 
   private _disarm(): void {
-    clearTimeout(this._pongTimeout);
+    this._runtime.clearTimeout(this._pongTimeout);
     this._pongTimeout = undefined;
   }
 }

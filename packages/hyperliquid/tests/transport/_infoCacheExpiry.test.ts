@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { FakeTime } from "@jsr/std__testing/time";
+import { FakeRuntime } from "../_fakeRuntime.ts";
 import { InfoCacheTransport } from "../../src/transport/_infoCache.ts";
 import type { IRequestTransport } from "../../src/transport/_base.ts";
 interface Entry {
@@ -35,29 +35,30 @@ function assertBoundedIndex(cache: InfoCacheTransport, bound: number): void {
   }
 }
 test("mixed TTL capacity misses evict expired entries before older infinite-TTL entries", async () => {
-  const time = new FakeTime();
+  const time = new FakeRuntime();
   let calls = 0;
   const inner: IRequestTransport = { isTestnet: false, request: async <T>(): Promise<T> => ++calls as T };
-  const cache = new InfoCacheTransport(inner, { maxSize: 3, ttl: Infinity, ttlByType: { marginTable: 10 } });
-  try {
-    const retained = await cache.request<number>("info", { type: "meta" });
-    await cache.request("info", { type: "marginTable", id: 1 });
-    await cache.request("info", { type: "marginTable", id: 2 });
-    time.tick(10);
-    await cache.request("info", { type: "tokenDetails", tokenId: "new" });
-    expect(await cache.request<number>("info", { type: "meta" })).toBe(retained);
-    expect(calls).toBe(4);
-    assertBoundedIndex(cache, 3);
-    await cache.request("info", { type: "tokenDetails", tokenId: "next" });
-    expect(await cache.request<number>("info", { type: "meta" })).toBe(retained);
-    await cache.request("info", { type: "tokenDetails", tokenId: "final" });
-    expect(await cache.request<number>("info", { type: "meta" })).not.toBe(retained);
-  } finally {
-    time.restore();
-  }
+  const cache = new InfoCacheTransport(inner, {
+    runtime: time,
+    maxSize: 3,
+    ttl: Infinity,
+    ttlByType: { marginTable: 10 },
+  });
+  const retained = await cache.request<number>("info", { type: "meta" });
+  await cache.request("info", { type: "marginTable", id: 1 });
+  await cache.request("info", { type: "marginTable", id: 2 });
+  time.advance(10);
+  await cache.request("info", { type: "tokenDetails", tokenId: "new" });
+  expect(await cache.request<number>("info", { type: "meta" })).toBe(retained);
+  expect(calls).toBe(4);
+  assertBoundedIndex(cache, 3);
+  await cache.request("info", { type: "tokenDetails", tokenId: "next" });
+  expect(await cache.request<number>("info", { type: "meta" })).toBe(retained);
+  await cache.request("info", { type: "tokenDetails", tokenId: "final" });
+  expect(await cache.request<number>("info", { type: "meta" })).not.toBe(retained);
 });
 test("expiry bookkeeping stays bounded through heterogeneous churn, rejection, overwrite and clear", async () => {
-  const time = new FakeTime();
+  const time = new FakeRuntime();
   let count = 0;
   const inner: IRequestTransport = {
     isTestnet: false,
@@ -67,29 +68,26 @@ test("expiry bookkeeping stays bounded through heterogeneous churn, rejection, o
     },
   };
   const cache = new InfoCacheTransport(inner, {
+    runtime: time,
     maxSize: 31,
     ttl: 100,
     ttlByType: { meta: 10, marginTable: 1000, tokenDetails: Infinity },
   });
-  try {
-    let random = 12345;
-    for (let i = 0; i < 2000; i++) {
-      random = (random * 1664525 + 1013904223) >>> 0;
-      const type = ["meta", "marginTable", "tokenDetails"][random % 3];
-      await cache.request("info", { type, id: random % 79 }).catch(() => {});
-      time.tick(random % 5);
-      if (i % 127 === 0) cache.clear();
-      if (i % 13 === 0) assertBoundedIndex(cache, 31);
-    }
-    assertBoundedIndex(cache, 31);
-    cache.clear();
-    expect(indexes(cache)._expiry).toHaveLength(0);
-  } finally {
-    time.restore();
+  let random = 12345;
+  for (let i = 0; i < 2000; i++) {
+    random = (random * 1664525 + 1013904223) >>> 0;
+    const type = ["meta", "marginTable", "tokenDetails"][random % 3];
+    await cache.request("info", { type, id: random % 79 }).catch(() => {});
+    time.advance(random % 5);
+    if (i % 127 === 0) cache.clear();
+    if (i % 13 === 0) assertBoundedIndex(cache, 31);
   }
+  assertBoundedIndex(cache, 31);
+  cache.clear();
+  expect(indexes(cache)._expiry).toHaveLength(0);
 });
 test("a stale pending rejection cannot remove the replacement entry or its expiry node", async () => {
-  const time = new FakeTime();
+  const time = new FakeRuntime();
   const pending: ReturnType<typeof Promise.withResolvers<unknown>>[] = [];
   const inner: IRequestTransport = {
     isTestnet: false,
@@ -99,22 +97,18 @@ test("a stale pending rejection cannot remove the replacement entry or its expir
       return request.promise as Promise<T>;
     },
   };
-  const cache = new InfoCacheTransport(inner, { ttl: 10, maxSize: 2 });
+  const cache = new InfoCacheTransport(inner, { runtime: time, ttl: 10, maxSize: 2 });
   const payload = { type: "meta" };
-  try {
-    const first = cache.request("info", payload);
-    const failed = first.catch((error: unknown) => error);
-    time.tick(11);
-    const second = cache.request("info", payload);
-    pending[0].reject(new Error("old failed"));
-    expect(((await failed) as Error).message).toBe("old failed");
-    expect(cache.request("info", payload)).toBe(second);
-    assertBoundedIndex(cache, 2);
-    pending[1].resolve("new value");
-    expect(await second).toBe("new value");
-    cache.clear();
-    assertBoundedIndex(cache, 2);
-  } finally {
-    time.restore();
-  }
+  const first = cache.request("info", payload);
+  const failed = first.catch((error: unknown) => error);
+  time.advance(11);
+  const second = cache.request("info", payload);
+  pending[0].reject(new Error("old failed"));
+  expect(((await failed) as Error).message).toBe("old failed");
+  expect(cache.request("info", payload)).toBe(second);
+  assertBoundedIndex(cache, 2);
+  pending[1].resolve("new value");
+  expect(await second).toBe("new value");
+  cache.clear();
+  assertBoundedIndex(cache, 2);
 });
