@@ -34,9 +34,22 @@ import * as abort from "../_abort.ts";
 import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import { TokenBucketRateLimiter } from "../_rateLimiter.ts";
 import { exchangeWireJSON } from "../_wire.ts";
+import { delay, resolveRuntime, type Runtime } from "../runtime.ts";
 
 /** Configuration options for the HTTP transport layer. */
 export interface HttpTransportOptions {
+  /**
+   * Sends this transport's requests in place of the global `fetch`, which is left untouched.
+   *
+   * Default: the global `fetch`, read at request time (so a polyfill installed later applies).
+   */
+  fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  /**
+   * Clock, timer, and jitter overrides for request timeouts, the {@linkcode rateLimit} bucket,
+   * and {@linkcode retryOnRateLimit} waits. Missing members fall back to the platform; resolved
+   * once at construction.
+   */
+  runtime?: Partial<Runtime>;
   /**
    * Indicates this transport uses testnet endpoint.
    *
@@ -331,8 +344,14 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   private readonly _timeouts: abort.TimeoutWheel;
   /** Memoized endpoint URLs, keyed by base and endpoint; mutating `apiUrl`/`rpcUrl` simply misses the cache. */
   private readonly _urlCache: Map<string, URL>;
+  /** Clock, scheduler, and jitter source, resolved once at construction. */
+  private readonly _runtime: Runtime;
+  /** The injected fetch; `undefined` calls the global `fetch` at request time (so late polyfills apply). */
+  private readonly _fetch: ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined;
 
   constructor(options?: HttpTransportOptions) {
+    this._runtime = resolveRuntime(options?.runtime);
+    this._fetch = options?.fetch;
     this.isTestnet = options?.isTestnet ?? false;
     this.timeout = options?.timeout === undefined ? 10_000 : options.timeout;
     this.exchangeTimeout = options?.exchangeTimeout;
@@ -342,9 +361,13 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
     this._rateLimit =
       options?.rateLimit === undefined
         ? null
-        : new TokenBucketRateLimiter(options.rateLimit.capacity ?? 1200, options.rateLimit.refillPerMinute ?? 1200);
+        : new TokenBucketRateLimiter(
+            options.rateLimit.capacity ?? 1200,
+            options.rateLimit.refillPerMinute ?? 1200,
+            this._runtime,
+          );
     this._retryOnRateLimit = normalizeRetryOnRateLimit(options?.retryOnRateLimit);
-    this._timeouts = new abort.TimeoutWheel();
+    this._timeouts = new abort.TimeoutWheel(this._runtime);
     this._urlCache = new Map();
   }
 
@@ -447,9 +470,12 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       // opted-in retry can never outlive the caller's timeout; the wait itself races the
       // request's signal, so caller aborts interrupt it too.
       const retry = this._retryOnRateLimit;
+      // Called through a local, never as `this._fetch(...)`: platform fetches (browsers'
+      // `window.fetch`) throw "Illegal invocation" when their receiver is not the global.
+      const fetchImpl = this._fetch;
       for (let attempt = 0; ; attempt++) {
         try {
-          const response = await fetch(url, init);
+          const response = await (fetchImpl === undefined ? fetch(url, init) : fetchImpl(url, init));
           if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) {
             const clone = response.clone();
             const text = await response.text().catch(() => undefined); // releases connection, clone stays readable
@@ -505,13 +531,19 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
           // Only a 429 is retried, and only while attempts remain; every other failure —
           // a non-429 HttpRequestError included — propagates to the outer classifier as-is.
           if (!(error instanceof HttpRateLimitError) || retry === null || attempt >= retry.maxRetries) throw error;
-          const delayMs = retryDelayMs(error.retryAfter, attempt, retry.maxDelayMs);
+          // Re-parsed against the runtime's wall clock: an HTTP-date header is relative to `now`.
+          const delayMs = retryDelayMs(
+            parseRetryAfter(error.response?.headers.get("Retry-After") ?? null, this._runtime.now()),
+            attempt,
+            retry.maxDelayMs,
+            this._runtime.random,
+          );
           if (delayMs === undefined) throw error; // the asked wait exceeds the configured bound
           // A retry is another billed attempt (the server bills attempts, not logical
           // requests): debit the bucket WITHOUT waiting, so later requests pace off the real
           // cost while this retry waits out the server's own delay rather than the refill.
           if (rateLimit !== null) rateLimit.charge(weight);
-          await abort.race(sleep(delayMs), controller?.signal);
+          await delay(delayMs, this._runtime, controller?.signal);
         }
       }
     } catch (error) {
@@ -859,7 +891,7 @@ function buildDate(
  * Callers scheduling from this value must apply their own bounds — the SDK's only internal
  * scheduler (the rate-limit bucket) slices timer waits at 2^31-1 ms for exactly that reason.
  */
-function parseRetryAfter(value: string | null): number | undefined {
+function parseRetryAfter(value: string | null, now: number = Date.now()): number | undefined {
   if (value === null) return undefined;
   const trimmed = value.trim();
   if (/^\d+$/.test(trimmed)) {
@@ -869,7 +901,7 @@ function parseRetryAfter(value: string | null): number | undefined {
   }
   const date = parseHttpDate(trimmed);
   if (date === undefined) return undefined;
-  return Math.max(0, (date - Date.now()) / 1000);
+  return Math.max(0, (date - now) / 1000);
 }
 
 /**
@@ -902,22 +934,18 @@ function normalizeRetryOnRateLimit(
  * server allowed would just burn attempts on another 429, so the error surfaces instead. A
  * near-`MAX_SAFE_INTEGER` header lands here too, its millisecond conversion dwarfing any bound.
  */
-function retryDelayMs(retryAfter: number | undefined, attempt: number, maxDelayMs: number): number | undefined {
+function retryDelayMs(
+  retryAfter: number | undefined,
+  attempt: number,
+  maxDelayMs: number,
+  random: () => number = Math.random,
+): number | undefined {
   if (retryAfter !== undefined) {
     const askedMs = retryAfter * 1000;
     if (askedMs > maxDelayMs) return undefined;
-    return askedMs + Math.random() * 1000;
+    return askedMs + random() * 1000;
   }
-  return Math.random() * Math.min(1000 * 2 ** attempt, maxDelayMs);
-}
-
-/** Resolves after `ms`; the timer is `unref`'d where supported, so an abandoned wait never holds the process open. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    // Same guarded call as the TimeoutWheel: browser and fake timers return a plain number.
-    (timer as unknown as { unref?: () => void }).unref?.();
-  });
+  return random() * Math.min(1000 * 2 ** attempt, maxDelayMs);
 }
 
 /** Resolves an endpoint against a base URL without dropping the base path or query. */

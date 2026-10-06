@@ -5,9 +5,9 @@
  * @module
  */
 
-import { afterEach, beforeEach, describe, test } from "bun:test";
+import { beforeEach, describe, test } from "bun:test";
 import { assertEquals, assertRejects, assertThrows } from "@jsr/std__assert";
-import { FakeTime } from "@jsr/std__testing/time";
+import { FakeRuntime } from "../_fakeRuntime.ts";
 import { InfoCacheTransport } from "../../src/transport/_infoCache.ts";
 import type { IRequestTransport } from "../../src/transport/_base.ts";
 
@@ -33,19 +33,15 @@ function echoHandler(_endpoint: Endpoint, payload: Record<string, unknown>): unk
 }
 
 describe("InfoCacheTransport", () => {
-  let time: FakeTime;
+  let time: FakeRuntime;
 
   beforeEach(() => {
-    time = new FakeTime();
-  });
-
-  afterEach(() => {
-    time.restore();
+    time = new FakeRuntime();
   });
 
   test("serves a repeated allowlisted request from cache without a second network call", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, { ttl: 60_000 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
 
     const first = await transport.request("info", { type: "meta" });
     const second = await transport.request("info", { type: "meta" });
@@ -56,28 +52,25 @@ describe("InfoCacheTransport", () => {
 
   test("refetches once the TTL expires", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, { ttl: 1_000 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 1_000 });
 
     await transport.request("info", { type: "spotMeta" });
-    time.tick(999);
+    time.advance(999);
     await transport.request("info", { type: "spotMeta" });
     assertEquals(mock.calls.length, 1); // one ms short of expiry: still cached
 
-    time.tick(1);
+    time.advance(1);
     await transport.request("info", { type: "spotMeta" });
     assertEquals(mock.calls.length, 2); // exactly at expiry: stale, refetched
   });
 
   test("applies the default TTL unless a per-type override exists", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, {
-      ttl: 60_000,
-      ttlByType: { marginTable: 500 },
-    });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000, ttlByType: { marginTable: 500 } });
 
     await transport.request("info", { type: "marginTable", id: 1 });
     await transport.request("info", { type: "meta" });
-    time.tick(600);
+    time.advance(600);
 
     await transport.request("info", { type: "marginTable", id: 1 }); // override expired: refetch
     await transport.request("info", { type: "meta" }); // default TTL still fresh: cache hit
@@ -86,7 +79,7 @@ describe("InfoCacheTransport", () => {
 
   test("keys entries by request params, so distinct params never collide", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, { ttl: 60_000 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
 
     await transport.request("info", { type: "marginTable", id: 1 });
     await transport.request("info", { type: "marginTable", id: 2 });
@@ -105,7 +98,7 @@ describe("InfoCacheTransport", () => {
 
   test("passes non-allowlisted info requests straight through", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, { ttl: 60_000 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
 
     await transport.request("info", { type: "allMids" });
     await transport.request("info", { type: "allMids" });
@@ -121,7 +114,7 @@ describe("InfoCacheTransport", () => {
 
   test("passes exchange and explorer requests straight through", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, { ttl: 60_000 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
 
     await transport.request("exchange", { action: { type: "order" } });
     await transport.request("exchange", { action: { type: "order" } });
@@ -139,7 +132,7 @@ describe("InfoCacheTransport", () => {
 
   test("ttl: 0 disables caching", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, { ttl: 0 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 0 });
 
     await transport.request("info", { type: "meta" });
     await transport.request("info", { type: "meta" });
@@ -150,7 +143,7 @@ describe("InfoCacheTransport", () => {
     let release: (value: unknown) => void;
     const gate = new Promise<unknown>((resolve) => (release = resolve));
     const mock = new MockTransport(() => gate);
-    const transport = new InfoCacheTransport(mock, { ttl: 60_000 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
 
     const first = transport.request("info", { type: "perpDexs" });
     const second = transport.request("info", { type: "perpDexs" });
@@ -170,7 +163,7 @@ describe("InfoCacheTransport", () => {
       }
       return { echo: payload };
     });
-    const transport = new InfoCacheTransport(mock, { ttl: 60_000 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
 
     await assertRejects(() => transport.request("info", { type: "outcomeMeta" }));
     const retried = await transport.request("info", { type: "outcomeMeta" });
@@ -183,7 +176,7 @@ describe("InfoCacheTransport", () => {
 
   test("clear() drops every cached entry", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, { ttl: 60_000 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
 
     await transport.request("info", { type: "meta" });
     await transport.request("info", { type: "tokenDetails", tokenId: "0x1" });
@@ -197,12 +190,12 @@ describe("InfoCacheTransport", () => {
 
   test("evicts the oldest entries beyond maxSize", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, { ttl: 60_000, maxSize: 2 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000, maxSize: 2 });
 
     await transport.request("info", { type: "tokenDetails", tokenId: "0x1" });
-    time.tick(1); // distinct insertion order for oldest-first eviction
+    time.advance(1); // distinct insertion order for oldest-first eviction
     await transport.request("info", { type: "tokenDetails", tokenId: "0x2" });
-    time.tick(1);
+    time.advance(1);
     await transport.request("info", { type: "tokenDetails", tokenId: "0x3" }); // evicts 0x1
 
     await transport.request("info", { type: "tokenDetails", tokenId: "0x3" }); // cached
@@ -215,7 +208,7 @@ describe("InfoCacheTransport", () => {
 
   test("caches every allowlisted type", async () => {
     const mock = new MockTransport(echoHandler);
-    const transport = new InfoCacheTransport(mock, { ttl: 60_000 });
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
     const types = [
       "meta",
       "spotMeta",
@@ -234,11 +227,11 @@ describe("InfoCacheTransport", () => {
 
   test("rejects invalid options", () => {
     const mock = new MockTransport(echoHandler);
-    assertThrows(() => new InfoCacheTransport(mock, { ttl: -1 }), RangeError);
-    assertThrows(() => new InfoCacheTransport(mock, { ttl: Number.NaN }), RangeError);
-    assertThrows(() => new InfoCacheTransport(mock, { ttlByType: { meta: -5 } }), RangeError);
-    assertThrows(() => new InfoCacheTransport(mock, { maxSize: 0 }), RangeError);
-    assertThrows(() => new InfoCacheTransport(mock, { maxSize: 1.5 }), RangeError);
+    assertThrows(() => new InfoCacheTransport(mock, { runtime: time, ttl: -1 }), RangeError);
+    assertThrows(() => new InfoCacheTransport(mock, { runtime: time, ttl: Number.NaN }), RangeError);
+    assertThrows(() => new InfoCacheTransport(mock, { runtime: time, ttlByType: { meta: -5 } }), RangeError);
+    assertThrows(() => new InfoCacheTransport(mock, { runtime: time, maxSize: 0 }), RangeError);
+    assertThrows(() => new InfoCacheTransport(mock, { runtime: time, maxSize: 1.5 }), RangeError);
   });
 
   test("mirrors the wrapped transport's isTestnet flag", () => {

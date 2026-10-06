@@ -40,6 +40,7 @@
     "./transport": "./src/transport/mod.ts",
     "./transport/http": "./src/transport/http/mod.ts",
     "./transport/websocket": "./src/transport/websocket/mod.ts",
+    "./transport/runtime": "./src/transport/runtime.ts",
     "./api/exchange": "./src/api/exchange/mod.ts",
     "./api/exchange/client": "./src/api/exchange/client.ts",
     "./api/explorer": "./src/api/explorer/mod.ts",

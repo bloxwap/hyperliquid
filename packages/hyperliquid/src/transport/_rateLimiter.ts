@@ -17,6 +17,7 @@
  */
 
 import { Promise_ } from "./_polyfills.ts";
+import { resolveRuntime, type Runtime, type TimerHandle } from "./runtime.ts";
 
 /**
  * A queued acquisition waiting for enough tokens to accumulate.
@@ -68,15 +69,19 @@ export class TokenBucketRateLimiter {
   /** Tail of the linked FIFO: the newest pending acquisition. */
   private _tail: Waiter | undefined;
   /** Wake-up timer for the head waiter; at most one is armed at a time. */
-  private _timer: ReturnType<typeof setTimeout> | undefined;
+  private _timer: TimerHandle | undefined;
+  /** Clock and scheduler, resolved once at construction; refills read its monotonic time. */
+  private readonly _runtime: Runtime;
 
   /**
    * Creates a token bucket.
    *
    * @param capacity Maximum burst size, in weight units. The bucket starts full.
    * @param refillPerMinute Steady-state refill rate, in weight units per minute.
+   * @param runtime Clock and timer overrides; missing members fall back to the platform.
    */
-  constructor(capacity: number, refillPerMinute: number) {
+  constructor(capacity: number, refillPerMinute: number, runtime?: Partial<Runtime>) {
+    this._runtime = resolveRuntime(runtime);
     // Infinity and NaN bypass or break the token arithmetic, non-positives stall the queue
     // forever, and a refillPerMinute so small that the derived per-ms rate underflows to zero
     // would leave every queued acquire with an infinite wait — all rejected up front.
@@ -89,7 +94,7 @@ export class TokenBucketRateLimiter {
     this._capacity = capacity;
     this._refillPerMs = refillPerMs;
     this._tokens = capacity;
-    this._lastRefill = Date.now();
+    this._lastRefill = this._runtime.monotonicNow();
   }
 
   /**
@@ -126,7 +131,7 @@ export class TokenBucketRateLimiter {
         // The wake-up was timed for this waiter as head; re-time it for the next in line,
         // whose weight may accumulate sooner.
         if (wasHead && this._timer !== undefined) {
-          clearTimeout(this._timer);
+          this._runtime.clearTimeout(this._timer);
           this._timer = undefined;
           if (this._head !== undefined) this._schedule();
         }
@@ -173,7 +178,7 @@ export class TokenBucketRateLimiter {
 
   /** Accrues the tokens earned since the last accounting, capped at the capacity. */
   private _refill(): void {
-    const now = Date.now();
+    const now = this._runtime.monotonicNow();
     const elapsed = now - this._lastRefill;
     if (elapsed <= 0) return;
     this._tokens = Math.min(this._capacity, this._tokens + elapsed * this._refillPerMs);
@@ -215,7 +220,7 @@ export class TokenBucketRateLimiter {
     this._refill();
     const deficit = this._needed(this._head!) - this._tokens;
     const waitMs = Math.max(0, Math.ceil(deficit / this._refillPerMs));
-    this._timer = setTimeout(
+    this._timer = this._runtime.setTimeout(
       () => {
         this._timer = undefined;
         this._drain();

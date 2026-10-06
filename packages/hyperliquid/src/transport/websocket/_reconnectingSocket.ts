@@ -10,6 +10,7 @@
  */
 
 import { DOMException_ } from "../_polyfills.ts";
+import { resolveRuntime, type Runtime, type TimerHandle } from "../runtime.ts";
 
 /** Specifies the type of binary data being received over a `WebSocket` connection. */
 export type BinaryType = "blob" | "arraybuffer";
@@ -45,6 +46,18 @@ export type ReconnectingWebSocketErrorCode =
 
 /** Configuration options for the {@linkcode ReconnectingWebSocket}. */
 export interface ReconnectingWebSocketOptions {
+  /**
+   * Creates each underlying socket in place of the global `WebSocket`, which is left untouched.
+   * Fixed at construction, unlike the other options.
+   *
+   * Default: `new WebSocket(url, protocols)`, read from the global at connection time.
+   */
+  webSocketFactory?: (url: string, protocols?: string | string[]) => WebSocket;
+  /**
+   * Timer and jitter overrides for retry delays, connection timeouts, and the stable-connection
+   * reset. Missing members fall back to the platform. Fixed at construction.
+   */
+  runtime?: Partial<Runtime>;
   /** Admission hook for shared connection budgets. Its release runs on socket close or construction failure. */
   acquireConnection?: (signal: AbortSignal) => (() => void) | Promise<() => void>;
   /**
@@ -171,9 +184,9 @@ const MAX_RECONNECTION_DELAY = 10_000;
  * at {@linkcode MAX_RECONNECTION_DELAY}, with equal jitter — half the capped
  * delay is fixed, the other half is uniform random.
  */
-function defaultReconnectionDelay(attempt: number): number {
+function defaultReconnectionDelay(attempt: number, random: () => number = Math.random): number {
   const capped = Math.min(2 ** attempt * 150, MAX_RECONNECTION_DELAY);
-  return capped / 2 + Math.random() * (capped / 2);
+  return capped / 2 + random() * (capped / 2);
 }
 
 /** Validates `close()` / `reconnect()` arguments the way the `WebSocket` spec requires. */
@@ -239,11 +252,11 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
   /** Current reconnection attempt number. */
   private _retryCount = 0;
   /** Pending retry delay; `undefined` when not sleeping between attempts. */
-  private _retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private _retryTimer: TimerHandle | undefined;
   /** Pending retry-counter reset, armed on every `open`. */
-  private _stableTimer: ReturnType<typeof setTimeout> | undefined;
+  private _stableTimer: TimerHandle | undefined;
   /** Pending connection timeout for the in-flight attempt. */
-  private _connectionTimer: ReturnType<typeof setTimeout> | undefined;
+  private _connectionTimer: TimerHandle | undefined;
   /** Bumped per connection attempt, so a superseded in-flight factory resolution is discarded. */
   private _connectGeneration = 0;
   /** Set while a `close` event is being dispatched, so `close()` treats it as the final one. */
@@ -256,10 +269,14 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
   private readonly _abortController = new AbortController();
 
   /** Reconnection configuration options. Read on every attempt, so changes apply live. */
-  reconnectOptions: Required<Omit<ReconnectingWebSocketOptions, "acquireConnection">> &
+  reconnectOptions: Required<Omit<ReconnectingWebSocketOptions, "acquireConnection" | "runtime" | "webSocketFactory">> &
     Pick<ReconnectingWebSocketOptions, "acquireConnection">;
   private _attemptController: AbortController | undefined;
   private _releaseConnection: (() => void) | undefined;
+  /** Scheduler and jitter source, resolved once at construction. */
+  private readonly _runtime: Runtime;
+  /** Creates each underlying socket; the global `WebSocket` unless one was injected. */
+  private readonly _webSocketFactory: (url: string, protocols?: string | string[]) => WebSocket;
 
   /**
    * AbortSignal that is aborted when the instance is permanently terminated.
@@ -275,7 +292,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
    * @param url URL or factory function for the WebSocket connection.
    * @param options Configuration options.
    *
-   * @throws {TypeError} If no WebSocket implementation is available.
+   * @throws {TypeError} If no `webSocketFactory` is given and no global `WebSocket` is available.
    */
   constructor(url: UrlProvider, options?: ReconnectingWebSocketOptions);
   /**
@@ -285,7 +302,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
    * @param protocols Subprotocol(s) or factory function.
    * @param options Configuration options.
    *
-   * @throws {TypeError} If no WebSocket implementation is available.
+   * @throws {TypeError} If no `webSocketFactory` is given and no global `WebSocket` is available.
    */
   constructor(url: UrlProvider, protocols?: ProtocolsProvider, options?: ReconnectingWebSocketOptions);
   constructor(
@@ -294,24 +311,32 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     options?: ReconnectingWebSocketOptions,
   ) {
     super();
-    if (typeof globalThis.WebSocket !== "function") {
-      throw new TypeError("No WebSocket implementation is available in this environment");
-    }
 
     this._urlProvider = url;
     // Distinguish the (url, options) call from (url, protocols, options): protocols is a string,
     // a string array, a function, or undefined — an options bag is the only plain object.
     const isOptions =
       typeof protocolsOrOptions === "object" && protocolsOrOptions !== null && !Array.isArray(protocolsOrOptions);
+    // Injected dependencies are fixed at construction; everything else stays a live option.
+    const { runtime, webSocketFactory, ...rest } = (isOptions ? protocolsOrOptions : options) ?? {};
+    if (webSocketFactory === undefined && typeof globalThis.WebSocket !== "function") {
+      throw new TypeError("No WebSocket implementation is available in this environment");
+    }
+    this._runtime = resolveRuntime(runtime);
+    this._webSocketFactory =
+      webSocketFactory ??
+      ((url: string, protocols?: string | string[]): WebSocket =>
+        protocols === undefined ? new WebSocket(url) : new WebSocket(url, protocols));
     this._protocolsProvider = isOptions ? undefined : protocolsOrOptions;
+    const random = this._runtime.random;
     this.reconnectOptions = {
       maxRetries: Infinity,
       maxEnqueuedMessages: Infinity,
       connectionTimeout: 10_000,
       stableTimeout: 3_000,
-      reconnectionDelay: defaultReconnectionDelay,
+      reconnectionDelay: (attempt: number): number => defaultReconnectionDelay(attempt, random),
       shouldReconnect: (): boolean => true,
-      ...(isOptions ? protocolsOrOptions : options),
+      ...rest,
     };
 
     void this._connect();
@@ -364,7 +389,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     let socket: WebSocket;
     try {
       this._url = String(url);
-      socket = protocols === undefined ? new WebSocket(this._url) : new WebSocket(this._url, protocols);
+      socket = this._webSocketFactory(this._url, protocols);
       socket.binaryType = this._binaryType;
     } catch (error) {
       release?.();
@@ -377,11 +402,11 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
 
     socket.addEventListener("open", () => {
       if (this._socket !== socket) return;
-      clearTimeout(this._connectionTimer);
+      this._runtime.clearTimeout(this._connectionTimer);
       this._connectionTimer = undefined;
       // The retry counter only resets once the connection has proven stable.
-      clearTimeout(this._stableTimer);
-      this._stableTimer = setTimeout(() => {
+      this._runtime.clearTimeout(this._stableTimer);
+      this._stableTimer = this._runtime.setTimeout(() => {
         this._retryCount = 0;
       }, this.reconnectOptions.stableTimeout);
       this._flushBuffer();
@@ -405,9 +430,9 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
       if (this._socket !== socket) return;
       this._releaseConnection = undefined;
       this._socket = undefined;
-      clearTimeout(this._connectionTimer);
+      this._runtime.clearTimeout(this._connectionTimer);
       this._connectionTimer = undefined;
-      clearTimeout(this._stableTimer);
+      this._runtime.clearTimeout(this._stableTimer);
       this._stableTimer = undefined;
       if (this._abortController.signal.aborted) return;
       // A fresh event: the incoming one is mid-dispatch on the underlying socket
@@ -420,7 +445,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     // The clock starts once the socket exists; url/protocols factories are not bounded.
     const connectionTimeout = this.reconnectOptions.connectionTimeout;
     if (connectionTimeout !== null) {
-      this._connectionTimer = setTimeout(() => {
+      this._connectionTimer = this._runtime.setTimeout(() => {
         this._connectionTimer = undefined;
         if (this._socket !== socket) return;
         this._socket = undefined;
@@ -515,7 +540,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     // reconnected it: the pending retry belongs to a superseded connection plan.
     if (this._abortController.signal.aborted) return;
     if (this._connectGeneration !== generation) return;
-    this._retryTimer = setTimeout(() => {
+    this._retryTimer = this._runtime.setTimeout(() => {
       this._retryTimer = undefined;
       void this._connect();
     }, delay);
@@ -547,11 +572,11 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     this._abortController.abort(error);
     this._attemptController?.abort(error);
 
-    clearTimeout(this._retryTimer);
+    this._runtime.clearTimeout(this._retryTimer);
     this._retryTimer = undefined;
-    clearTimeout(this._stableTimer);
+    this._runtime.clearTimeout(this._stableTimer);
     this._stableTimer = undefined;
-    clearTimeout(this._connectionTimer);
+    this._runtime.clearTimeout(this._connectionTimer);
     this._connectionTimer = undefined;
     this._connectGeneration++; // discard any in-flight factory resolution
     this._socket = undefined; // a still-open socket is closed by the caller
@@ -799,7 +824,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     assertValidCloseParams(code, reason);
     if (this._abortController.signal.aborted) return;
 
-    clearTimeout(this._retryTimer);
+    this._runtime.clearTimeout(this._retryTimer);
     this._retryTimer = undefined;
 
     const socket = this._socket;
@@ -807,9 +832,9 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
       const release = this._releaseConnection;
       this._releaseConnection = undefined;
       this._socket = undefined; // its events are ignored from here on
-      clearTimeout(this._connectionTimer);
+      this._runtime.clearTimeout(this._connectionTimer);
       this._connectionTimer = undefined;
-      clearTimeout(this._stableTimer);
+      this._runtime.clearTimeout(this._stableTimer);
       this._stableTimer = undefined;
       // Close before dispatching the synthetic close: a close listener that terminates the
       // instance (e.g. transport.close()) aborts the rest of this method, and the abandoned

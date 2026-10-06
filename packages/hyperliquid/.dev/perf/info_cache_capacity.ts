@@ -13,6 +13,9 @@ try {
     for (const mode of ["infinite", "fresh-finite", "mixed-expiry", "hit", "passthrough"]) {
       clock = 0;
       const cache = new InfoCacheTransport(inner, {
+        // Explicit elapsed time for the current SDK; the wall-clock shim above also
+        // keeps comparisons against older SDKs on the same simulated workload.
+        runtime: { now: () => clock, monotonicNow: () => clock },
         maxSize,
         ttl: mode === "fresh-finite" ? 60000 : Infinity,
         ttlByType: mode === "mixed-expiry" ? { marginTable: 10 } : {},
