@@ -34,7 +34,11 @@ jobs:
       # GHSA-5qjj-4xww-7phc. npm-named packages in these lockfiles (the vast majority, including
       # all npm transitives) are covered; JSR-aliased entries are extracted and queried but only
       # match if OSV ever learns the alias.
+      #
+      # osv-scanner.toml holds expiring, per-advisory ignores for advisories with no fixed
+      # release; patched versions are pinned through "overrides" in the root package.json.
       scan-args: |-
+        --config=osv-scanner.toml
         --lockfile=bun.lock
         --lockfile=packages/hyperliquid/.dev/ts7/bun.lock
       # Keep SARIF upload disabled; results are available as a build artifact and
