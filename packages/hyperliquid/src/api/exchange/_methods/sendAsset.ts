@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -157,4 +158,10 @@ export function sendAsset(
 ): Promise<SendAssetSuccessResponse> {
   const action = buildAction(SendAssetActionSchema, { type: "sendAsset", ...params }, opts);
   return executeUserSignedAction(config, action, SendAssetTypes, opts);
+}
+
+/** Validate and own a canonical sendAsset action without allocating a nonce or calling a wallet/transport. */
+export function buildSendAsset(params: SendAssetParameters): CanonicalAction<SendAssetSuccessResponse> {
+  const action = buildAction(SendAssetActionSchema, { type: "sendAsset", ...params });
+  return canonicalAction(action, { kind: "user", types: SendAssetTypes });
 }

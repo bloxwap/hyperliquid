@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -119,4 +120,10 @@ export function cancelByCloid(
 ): Promise<CancelByCloidSuccessResponse> {
   const action = buildAction(CancelByCloidActionSchema, { type: "cancelByCloid", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical cancelByCloid action without allocating a nonce or calling a wallet/transport. */
+export function buildCancelByCloid(params: CancelByCloidParameters): CanonicalAction<CancelByCloidSuccessResponse> {
+  const action = buildAction(CancelByCloidActionSchema, { type: "cancelByCloid", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

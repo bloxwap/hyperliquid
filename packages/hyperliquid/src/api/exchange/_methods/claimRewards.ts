@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -108,4 +109,10 @@ export type ClaimRewardsSuccessResponse = ExcludeErrorResponse<ClaimRewardsRespo
 export function claimRewards(config: ExchangeConfig, opts?: ClaimRewardsOptions): Promise<ClaimRewardsSuccessResponse> {
   const action = buildAction(ClaimRewardsActionSchema, { type: "claimRewards" }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical claimRewards action without allocating a nonce or calling a wallet/transport. */
+export function buildClaimRewards(): CanonicalAction<ClaimRewardsSuccessResponse> {
+  const action = buildAction(ClaimRewardsActionSchema, { type: "claimRewards" });
+  return canonicalAction(action, { kind: "l1" });
 }

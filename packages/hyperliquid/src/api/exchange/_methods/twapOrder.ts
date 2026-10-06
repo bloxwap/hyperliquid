@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -167,4 +168,10 @@ export function twapOrder(
 ): Promise<TwapOrderSuccessResponse> {
   const action = buildAction(TwapOrderActionSchema, { type: "twapOrder", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical twapOrder action without allocating a nonce or calling a wallet/transport. */
+export function buildTwapOrder(params: TwapOrderParameters): CanonicalAction<TwapOrderSuccessResponse> {
+  const action = buildAction(TwapOrderActionSchema, { type: "twapOrder", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

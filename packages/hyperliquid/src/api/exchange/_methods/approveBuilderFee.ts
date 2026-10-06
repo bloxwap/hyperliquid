@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -141,4 +142,12 @@ export function approveBuilderFee(
 ): Promise<ApproveBuilderFeeSuccessResponse> {
   const action = buildAction(ApproveBuilderFeeActionSchema, { type: "approveBuilderFee", ...params }, opts);
   return executeUserSignedAction(config, action, ApproveBuilderFeeTypes, opts);
+}
+
+/** Validate and own a canonical approveBuilderFee action without allocating a nonce or calling a wallet/transport. */
+export function buildApproveBuilderFee(
+  params: ApproveBuilderFeeParameters,
+): CanonicalAction<ApproveBuilderFeeSuccessResponse> {
+  const action = buildAction(ApproveBuilderFeeActionSchema, { type: "approveBuilderFee", ...params });
+  return canonicalAction(action, { kind: "user", types: ApproveBuilderFeeTypes });
 }

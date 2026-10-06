@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -128,4 +129,10 @@ export function twapCancel(
 ): Promise<TwapCancelSuccessResponse> {
   const action = buildAction(TwapCancelActionSchema, { type: "twapCancel", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical twapCancel action without allocating a nonce or calling a wallet/transport. */
+export function buildTwapCancel(params: TwapCancelParameters): CanonicalAction<TwapCancelSuccessResponse> {
+  const action = buildAction(TwapCancelActionSchema, { type: "twapCancel", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

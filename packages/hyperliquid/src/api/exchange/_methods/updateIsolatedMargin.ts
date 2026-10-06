@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -128,4 +129,12 @@ export function updateIsolatedMargin(
 ): Promise<UpdateIsolatedMarginSuccessResponse> {
   const action = buildAction(UpdateIsolatedMarginActionSchema, { type: "updateIsolatedMargin", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical updateIsolatedMargin action without allocating a nonce or calling a wallet/transport. */
+export function buildUpdateIsolatedMargin(
+  params: UpdateIsolatedMarginParameters,
+): CanonicalAction<UpdateIsolatedMarginSuccessResponse> {
+  const action = buildAction(UpdateIsolatedMarginActionSchema, { type: "updateIsolatedMargin", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

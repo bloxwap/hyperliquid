@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -122,4 +123,10 @@ export function vaultModify(
 ): Promise<VaultModifySuccessResponse> {
   const action = buildAction(VaultModifyActionSchema, { type: "vaultModify", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical vaultModify action without allocating a nonce or calling a wallet/transport. */
+export function buildVaultModify(params: VaultModifyParameters): CanonicalAction<VaultModifySuccessResponse> {
+  const action = buildAction(VaultModifyActionSchema, { type: "vaultModify", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

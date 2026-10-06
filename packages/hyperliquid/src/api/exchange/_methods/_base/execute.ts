@@ -57,6 +57,7 @@ export function executeL1Action<T>(
     /** Skip validation of `vaultAddress`/`expiresAfter`. See the `skipValidation` option in `_config.ts`. */
     skipValidation?: boolean;
   },
+  prepareOnly = false,
 ): Promise<T> {
   // Resolve options synchronously on the common path (no function-valued `defaultExpiresAfter`),
   // returning the inner promise directly instead of paying the extra async hops of an `async`
@@ -70,10 +71,10 @@ export function executeL1Action<T>(
       // Rare path: a function-valued default may resolve asynchronously. A sync throw from the
       // function itself lands in the catch below and becomes a rejection, as before.
       return Promise.resolve(expiresAfterInput()).then((resolved) =>
-        executeL1ActionResolved(config, action, vaultAddressInput, resolved, options),
+        executeL1ActionResolved(config, action, vaultAddressInput, resolved, options, prepareOnly),
       );
     }
-    return executeL1ActionResolved(config, action, vaultAddressInput, expiresAfterInput, options);
+    return executeL1ActionResolved(config, action, vaultAddressInput, expiresAfterInput, options, prepareOnly);
   } catch (error) {
     return Promise.reject(error);
   }
@@ -89,6 +90,7 @@ function executeL1ActionResolved<T>(
     signal?: AbortSignal;
     skipValidation?: boolean;
   },
+  prepareOnly = false,
 ): Promise<T> {
   const vaultAddress = options?.skipValidation
     ? (vaultAddressInput as `0x${string}` | undefined)
@@ -104,22 +106,24 @@ function executeL1ActionResolved<T>(
   return executeWithShell<T>(
     config,
     async (nonce) => {
+      const wireAction =
+        action.type === "createVault" || action.type === "agentSendAsset" ? { ...action, nonce } : action;
       if ("wallet" in config) {
         const signature = await signL1Action({
           wallet: config.wallet,
-          action,
+          action: wireAction,
           nonce,
           isTestnet: config.transport.isTestnet,
           vaultAddress,
           expiresAfter,
         });
-        return { action, signature, extras: { vaultAddress, expiresAfter } };
+        return { action: wireAction, signature, extras: { vaultAddress, expiresAfter } };
       } else {
         const { action: wrapper, signature } = await signMultiSigL1({
           signers: config.signers,
           multiSigUser: config.multiSigUser,
           signatureChainId: await resolveSignatureChainId(config),
-          action,
+          action: wireAction,
           nonce,
           isTestnet: config.transport.isTestnet,
           vaultAddress,
@@ -129,6 +133,7 @@ function executeL1ActionResolved<T>(
       }
     },
     options?.signal,
+    prepareOnly,
   );
 }
 
@@ -157,8 +162,11 @@ export function executeUserSignedAction<T>(
   options?: {
     /** Transforms the completed action into its outer multi-sig payload representation. */
     toMultiSigPayloadAction?: (action: Readonly<Record<string, unknown>>) => Record<string, unknown>;
+    /** Transform the single-wallet action after signing, for protocol-specific wire fields. */
+    toSinglePayloadAction?: (action: Readonly<Record<string, unknown>>) => Record<string, unknown>;
     signal?: AbortSignal;
   },
+  prepareOnly = false,
 ): Promise<T> {
   return executeWithShell<T>(
     config,
@@ -183,7 +191,7 @@ export function executeUserSignedAction<T>(
           action: fullAction,
           types,
         });
-        return { action: fullAction, signature };
+        return { action: options?.toSinglePayloadAction?.(fullAction) ?? fullAction, signature };
       } else {
         const payloadAction = options?.toMultiSigPayloadAction?.(fullAction) ?? fullAction;
         const { action: wrapper, signature } = await signMultiSigUserSigned({
@@ -197,6 +205,7 @@ export function executeUserSignedAction<T>(
       }
     },
     options?.signal,
+    prepareOnly,
   );
 }
 

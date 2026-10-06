@@ -236,7 +236,12 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
    */
   request<T>(endpoint: "info" | "exchange", payload: unknown, signal?: AbortSignal): Promise<T> {
     const wrapped = { type: endpoint === "exchange" ? "action" : endpoint, payload };
-    return this._dispatcher.request<T>("post", wrapped, signal);
+    return this._dispatcher.request<T>(
+      "post",
+      wrapped,
+      signal,
+      endpoint === "exchange" ? { exchangePayload: payload } : undefined,
+    );
   }
 
   /**

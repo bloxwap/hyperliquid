@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -139,4 +140,10 @@ export function withdraw3(
 ): Promise<Withdraw3SuccessResponse> {
   const action = buildAction(Withdraw3ActionSchema, { type: "withdraw3", ...params }, opts);
   return executeUserSignedAction(config, action, Withdraw3Types, opts);
+}
+
+/** Validate and own a canonical withdraw3 action without allocating a nonce or calling a wallet/transport. */
+export function buildWithdraw3(params: Withdraw3Parameters): CanonicalAction<Withdraw3SuccessResponse> {
+  const action = buildAction(Withdraw3ActionSchema, { type: "withdraw3", ...params });
+  return canonicalAction(action, { kind: "user", types: Withdraw3Types });
 }

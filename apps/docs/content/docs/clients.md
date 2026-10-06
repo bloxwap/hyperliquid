@@ -770,3 +770,41 @@ local subscribers in arrival order. Each callback receives its own mutable asset
 so changes made by one subscriber do not affect another. Unsubscribing or aborting suppresses queued deliveries;
 listeners added later do not receive previously queued frames. A corrupt frame or throwing callback does not end
 other listeners or stop subsequent updates. Separate transports keep separate decode queues.
+
+## Canonical actions and explicit execution
+
+Build an action once when its fields are stable, then choose when to sign and submit it:
+
+```ts
+import { ExchangeClient } from "@bloxwap/hyperliquid/api/exchange/client";
+import { HttpTransport } from "@bloxwap/hyperliquid/transport/http";
+import { buildOrder } from "@bloxwap/hyperliquid/actions/order";
+import { privateKeyToAccount } from "viem/accounts";
+
+const exchange = new ExchangeClient({
+  transport: new HttpTransport(),
+  wallet: privateKeyToAccount(process.env.HL_PRIVATE_KEY as `0x${string}`),
+});
+const action = buildOrder({
+  orders: [{ a: 0, b: true, p: "30000", s: "0.01", r: false, t: { limit: { tif: "Gtc" } } }],
+});
+const signed = await exchange.sign(action);
+const result = await exchange.submit(signed);
+// Or sign and submit in one coordinated call:
+await exchange.execute(action);
+```
+
+Builders validate, normalize, fill defaults, and copy/freeze nested fields. They allocate no nonce and perform no
+wallet or transport calls. The input remains owned by the caller. Reuse a built action while its fields remain valid;
+resolve coin symbols to asset IDs before building. Time-dependent constraints such as scheduled cancellation are
+checked when building, so rebuild those actions before reuse.
+An explicit `buildNoop({ nonce })` retains that nonce rather than allocating a fresh one on reuse.
+
+Signing consumes one nonce and produces an immutable signed request. Submission preserves the operation's response
+type and does not sign again. Submit promptly: expiration, the protocol timestamp range, and the signer's 100-highest
+nonce window still apply. Signed ownership and network checks are in-process; serialize for storage only if you intend
+to use the legacy `submitPrepared` wire-payload API. Reconstructed canonical actions must be rebuilt through a builder.
+
+The standalone `signAction`, `submitAction`, and `executeAction` functions in
+`@bloxwap/hyperliquid/actions/execution` accept the same exchange config. Existing client methods and
+`prepareRequest` / `submitPrepared` continue to work.

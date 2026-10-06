@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -181,4 +182,12 @@ export function convertToMultiSigUser(
 ): Promise<ConvertToMultiSigUserSuccessResponse> {
   const action = buildAction(ConvertToMultiSigUserActionSchema, { type: "convertToMultiSigUser", ...params }, opts);
   return executeUserSignedAction(config, action, ConvertToMultiSigUserTypes, opts);
+}
+
+/** Validate and own a canonical convertToMultiSigUser action without allocating a nonce or calling a wallet/transport. */
+export function buildConvertToMultiSigUser(
+  params: ConvertToMultiSigUserParameters,
+): CanonicalAction<ConvertToMultiSigUserSuccessResponse> {
+  const action = buildAction(ConvertToMultiSigUserActionSchema, { type: "convertToMultiSigUser", ...params });
+  return canonicalAction(action, { kind: "user", types: ConvertToMultiSigUserTypes });
 }

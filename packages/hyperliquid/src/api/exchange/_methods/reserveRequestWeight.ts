@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -122,4 +123,12 @@ export function reserveRequestWeight(
 ): Promise<ReserveRequestWeightSuccessResponse> {
   const action = buildAction(ReserveRequestWeightActionSchema, { type: "reserveRequestWeight", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical reserveRequestWeight action without allocating a nonce or calling a wallet/transport. */
+export function buildReserveRequestWeight(
+  params: ReserveRequestWeightParameters,
+): CanonicalAction<ReserveRequestWeightSuccessResponse> {
+  const action = buildAction(ReserveRequestWeightActionSchema, { type: "reserveRequestWeight", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

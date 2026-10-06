@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -141,4 +142,10 @@ export function spotSend(
 ): Promise<SpotSendSuccessResponse> {
   const action = buildAction(SpotSendActionSchema, { type: "spotSend", ...params }, opts);
   return executeUserSignedAction(config, action, SpotSendTypes, opts);
+}
+
+/** Validate and own a canonical spotSend action without allocating a nonce or calling a wallet/transport. */
+export function buildSpotSend(params: SpotSendParameters): CanonicalAction<SpotSendSuccessResponse> {
+  const action = buildAction(SpotSendActionSchema, { type: "spotSend", ...params });
+  return canonicalAction(action, { kind: "user", types: SpotSendTypes });
 }

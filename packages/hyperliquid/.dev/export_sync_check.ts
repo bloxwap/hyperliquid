@@ -387,6 +387,19 @@ async function main(): Promise<void> {
   for (const endpoint of API_ENDPOINTS) {
     // Get methods from _methods directory
     const methodsFromDir = await getMethodsFromDir(endpoint.methodsDir);
+    const manifest = await Bun.file(path.join(process.cwd(), "package.json")).json();
+    for (const methodName of methodsFromDir) {
+      const expected = `./${endpoint.methodsDir}/${methodName}.ts`;
+      if (manifest.exports?.[`./api/${endpoint.name}/${methodName}`] !== expected) {
+        allErrors.push({
+          scope: "exports",
+          subject: methodName,
+          errorType: "missing operation entry point",
+          details: `Expected ./api/${endpoint.name}/${methodName} to export ${expected}`,
+          filePath: "package.json",
+        });
+      }
+    }
 
     // Parse mod.ts exports
     const modExports = await parseModExports(endpoint.modPath);

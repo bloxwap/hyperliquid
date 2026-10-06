@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -145,4 +146,10 @@ export function tokenDelegate(
 ): Promise<TokenDelegateSuccessResponse> {
   const action = buildAction(TokenDelegateActionSchema, { type: "tokenDelegate", ...params }, opts);
   return executeUserSignedAction(config, action, TokenDelegateTypes, opts);
+}
+
+/** Validate and own a canonical tokenDelegate action without allocating a nonce or calling a wallet/transport. */
+export function buildTokenDelegate(params: TokenDelegateParameters): CanonicalAction<TokenDelegateSuccessResponse> {
+  const action = buildAction(TokenDelegateActionSchema, { type: "tokenDelegate", ...params });
+  return canonicalAction(action, { kind: "user", types: TokenDelegateTypes });
 }

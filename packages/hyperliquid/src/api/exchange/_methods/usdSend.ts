@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -137,4 +138,10 @@ export function usdSend(
 ): Promise<UsdSendSuccessResponse> {
   const action = buildAction(UsdSendActionSchema, { type: "usdSend", ...params }, opts);
   return executeUserSignedAction(config, action, UsdSendTypes, opts);
+}
+
+/** Validate and own a canonical usdSend action without allocating a nonce or calling a wallet/transport. */
+export function buildUsdSend(params: UsdSendParameters): CanonicalAction<UsdSendSuccessResponse> {
+  const action = buildAction(UsdSendActionSchema, { type: "usdSend", ...params });
+  return canonicalAction(action, { kind: "user", types: UsdSendTypes });
 }

@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -149,4 +150,12 @@ export function usdClassTransfer(
 ): Promise<UsdClassTransferSuccessResponse> {
   const action = buildAction(UsdClassTransferActionSchema, { type: "usdClassTransfer", ...params }, opts);
   return executeUserSignedAction(config, action, UsdClassTransferTypes, opts);
+}
+
+/** Validate and own a canonical usdClassTransfer action without allocating a nonce or calling a wallet/transport. */
+export function buildUsdClassTransfer(
+  params: UsdClassTransferParameters,
+): CanonicalAction<UsdClassTransferSuccessResponse> {
+  const action = buildAction(UsdClassTransferActionSchema, { type: "usdClassTransfer", ...params });
+  return canonicalAction(action, { kind: "user", types: UsdClassTransferTypes });
 }

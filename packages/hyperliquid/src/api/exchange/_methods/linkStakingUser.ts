@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -149,4 +150,12 @@ export function linkStakingUser(
 ): Promise<LinkStakingUserSuccessResponse> {
   const action = buildAction(LinkStakingUserActionSchema, { type: "linkStakingUser", ...params }, opts);
   return executeUserSignedAction(config, action, LinkStakingUserTypes, opts);
+}
+
+/** Validate and own a canonical linkStakingUser action without allocating a nonce or calling a wallet/transport. */
+export function buildLinkStakingUser(
+  params: LinkStakingUserParameters,
+): CanonicalAction<LinkStakingUserSuccessResponse> {
+  const action = buildAction(LinkStakingUserActionSchema, { type: "linkStakingUser", ...params });
+  return canonicalAction(action, { kind: "user", types: LinkStakingUserTypes });
 }

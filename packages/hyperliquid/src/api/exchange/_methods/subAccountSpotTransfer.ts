@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -125,4 +126,12 @@ export function subAccountSpotTransfer(
 ): Promise<SubAccountSpotTransferSuccessResponse> {
   const action = buildAction(SubAccountSpotTransferActionSchema, { type: "subAccountSpotTransfer", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical subAccountSpotTransfer action without allocating a nonce or calling a wallet/transport. */
+export function buildSubAccountSpotTransfer(
+  params: SubAccountSpotTransferParameters,
+): CanonicalAction<SubAccountSpotTransferSuccessResponse> {
+  const action = buildAction(SubAccountSpotTransferActionSchema, { type: "subAccountSpotTransfer", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

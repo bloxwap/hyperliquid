@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -128,4 +129,12 @@ export function topUpIsolatedOnlyMargin(
 ): Promise<TopUpIsolatedOnlyMarginSuccessResponse> {
   const action = buildAction(TopUpIsolatedOnlyMarginActionSchema, { type: "topUpIsolatedOnlyMargin", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical topUpIsolatedOnlyMargin action without allocating a nonce or calling a wallet/transport. */
+export function buildTopUpIsolatedOnlyMargin(
+  params: TopUpIsolatedOnlyMarginParameters,
+): CanonicalAction<TopUpIsolatedOnlyMarginSuccessResponse> {
+  const action = buildAction(TopUpIsolatedOnlyMarginActionSchema, { type: "topUpIsolatedOnlyMargin", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

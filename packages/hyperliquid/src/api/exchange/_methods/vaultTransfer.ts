@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -126,4 +127,10 @@ export function vaultTransfer(
 ): Promise<VaultTransferSuccessResponse> {
   const action = buildAction(VaultTransferActionSchema, { type: "vaultTransfer", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical vaultTransfer action without allocating a nonce or calling a wallet/transport. */
+export function buildVaultTransfer(params: VaultTransferParameters): CanonicalAction<VaultTransferSuccessResponse> {
+  const action = buildAction(VaultTransferActionSchema, { type: "vaultTransfer", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

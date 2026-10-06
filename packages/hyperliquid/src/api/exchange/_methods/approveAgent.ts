@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -243,4 +244,20 @@ function omitUnnamedAgentName(transport: IRequestTransport): IRequestTransport {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+/** Validate and own a canonical approveAgent action without allocating a nonce or calling a wallet/transport. */
+export function buildApproveAgent(params: ApproveAgentParameters): CanonicalAction<ApproveAgentSuccessResponse> {
+  // Docs: an agent's `valid_until` expiration can be at most 180 days in the future. Guarded only
+  // when a timestamp is present — a name without `valid_until` (or an unnamed agent) carries no
+  // expiration. Cheap deterministic guard; runs even when `skipValidation` is set.
+  const validUntil = typeof params.agentName === "string" ? VALID_UNTIL_PATTERN.exec(params.agentName)?.[1] : undefined;
+  if (validUntil !== undefined) parse(AgentExpirationSchema, validUntil);
+  const action = buildAction(ApproveAgentActionSchema, { type: "approveAgent", ...params });
+  return canonicalAction(action, {
+    kind: "user",
+    types: ApproveAgentTypes,
+    toMultiSigPayloadAction: action.agentName === "" ? omitAgentName : undefined,
+    toSinglePayloadAction: action.agentName === "" ? omitAgentName : undefined,
+  });
 }

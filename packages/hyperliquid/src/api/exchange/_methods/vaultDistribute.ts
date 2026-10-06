@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -122,4 +123,12 @@ export function vaultDistribute(
 ): Promise<VaultDistributeSuccessResponse> {
   const action = buildAction(VaultDistributeActionSchema, { type: "vaultDistribute", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical vaultDistribute action without allocating a nonce or calling a wallet/transport. */
+export function buildVaultDistribute(
+  params: VaultDistributeParameters,
+): CanonicalAction<VaultDistributeSuccessResponse> {
+  const action = buildAction(VaultDistributeActionSchema, { type: "vaultDistribute", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

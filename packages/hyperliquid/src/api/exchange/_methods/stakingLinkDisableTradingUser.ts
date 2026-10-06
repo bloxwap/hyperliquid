@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -150,4 +151,15 @@ export function stakingLinkDisableTradingUser(
     opts,
   );
   return executeUserSignedAction(config, action, StakingLinkDisableTradingUserTypes, opts);
+}
+
+/** Validate and own a canonical stakingLinkDisableTradingUser action without allocating a nonce or calling a wallet/transport. */
+export function buildStakingLinkDisableTradingUser(
+  params: StakingLinkDisableTradingUserParameters,
+): CanonicalAction<StakingLinkDisableTradingUserSuccessResponse> {
+  const action = buildAction(StakingLinkDisableTradingUserActionSchema, {
+    type: "stakingLinkDisableTradingUser",
+    ...params,
+  });
+  return canonicalAction(action, { kind: "user", types: StakingLinkDisableTradingUserTypes });
 }

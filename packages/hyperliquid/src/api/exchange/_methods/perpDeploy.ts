@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -484,4 +485,10 @@ export function perpDeploy(
 ): Promise<PerpDeploySuccessResponse> {
   const action = buildAction(PerpDeployActionSchema, { type: "perpDeploy", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical perpDeploy action without allocating a nonce or calling a wallet/transport. */
+export function buildPerpDeploy(params: PerpDeployParameters): CanonicalAction<PerpDeploySuccessResponse> {
+  const action = buildAction(PerpDeployActionSchema, { type: "perpDeploy", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

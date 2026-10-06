@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -188,4 +189,12 @@ export function cValidatorAction(
 ): Promise<CValidatorActionSuccessResponse> {
   const action = buildAction(CValidatorActionActionSchema, { type: "CValidatorAction", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical cValidatorAction action without allocating a nonce or calling a wallet/transport. */
+export function buildCValidatorAction(
+  params: CValidatorActionParameters,
+): CanonicalAction<CValidatorActionSuccessResponse> {
+  const action = buildAction(CValidatorActionActionSchema, { type: "CValidatorAction", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

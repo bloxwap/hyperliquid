@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -123,4 +124,12 @@ export function authorizeAqav2Role(
 ): Promise<AuthorizeAqav2RoleSuccessResponse> {
   const action = buildAction(AuthorizeAqav2RoleActionSchema, { type: "authorizeAqav2Role", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical authorizeAqav2Role action without allocating a nonce or calling a wallet/transport. */
+export function buildAuthorizeAqav2Role(
+  params: AuthorizeAqav2RoleParameters,
+): CanonicalAction<AuthorizeAqav2RoleSuccessResponse> {
+  const action = buildAction(AuthorizeAqav2RoleActionSchema, { type: "authorizeAqav2Role", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

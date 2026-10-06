@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -115,4 +116,10 @@ export function agentEnableDexAbstraction(
 ): Promise<AgentEnableDexAbstractionSuccessResponse> {
   const action = buildAction(AgentEnableDexAbstractionActionSchema, { type: "agentEnableDexAbstraction" }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical agentEnableDexAbstraction action without allocating a nonce or calling a wallet/transport. */
+export function buildAgentEnableDexAbstraction(): CanonicalAction<AgentEnableDexAbstractionSuccessResponse> {
+  const action = buildAction(AgentEnableDexAbstractionActionSchema, { type: "agentEnableDexAbstraction" });
+  return canonicalAction(action, { kind: "l1" });
 }

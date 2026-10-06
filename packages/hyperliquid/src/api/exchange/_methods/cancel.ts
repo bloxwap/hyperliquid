@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -142,4 +143,10 @@ export function cancel(
 ): Promise<CancelSuccessResponse> {
   const action = buildAction(CancelActionSchema, { type: "cancel", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/** Validate and own a canonical cancel action without allocating a nonce or calling a wallet/transport. */
+export function buildCancel(params: CancelParameters): CanonicalAction<CancelSuccessResponse> {
+  const action = buildAction(CancelActionSchema, { type: "cancel", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }
