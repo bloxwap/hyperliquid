@@ -1,11 +1,3 @@
-import {
-  executeAction,
-  signAction,
-  submitAction,
-  type CanonicalAction,
-  type SignedAction,
-  type ActionOptions,
-} from "../../actions/execution.ts";
 /**
  * Client for the Hyperliquid Exchange API endpoint.
  * @module
@@ -18,6 +10,14 @@ import {
   type OutcomeDeployOptions,
 } from "./_methods/outcomeDeploy.ts";
 import { HyperliquidError } from "../../_base.ts";
+import {
+  executeAction,
+  signAction,
+  submitAction,
+  type CanonicalAction,
+  type SignedAction,
+  type ActionOptions,
+} from "../../actions/execution.ts";
 import { preloadWasmKeccak } from "../../signing/mod.ts";
 import { SymbolConverter } from "../../utils/mod.ts";
 import type { ExchangeConfig, ExchangeSingleWalletConfig } from "./_methods/_base/mod.ts";

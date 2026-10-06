@@ -179,7 +179,16 @@ export function scheduleCancel(
   return executeL1Action(config, action, opts);
 }
 
-/** Validate and own a canonical scheduleCancel action without allocating a nonce or calling a wallet/transport. */
+/**
+ * Build a canonical {@linkcode scheduleCancel} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link ScheduleCancelSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
 export function buildScheduleCancel(params?: ScheduleCancelParameters): CanonicalAction<ScheduleCancelSuccessResponse> {
   const actionInput: Record<string, unknown> = { type: "scheduleCancel", ...params };
   if (actionInput.time === null) delete actionInput.time;

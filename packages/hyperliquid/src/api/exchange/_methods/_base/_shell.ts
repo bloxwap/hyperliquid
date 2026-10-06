@@ -1,11 +1,11 @@
-import { race } from "../../../../transport/_abort.ts";
-import { registerExchangeWireRequest } from "../../../../transport/_wire.ts";
 /**
  * Common execution shell shared by L1 and user-signed Exchange API actions.
  * @module
  */
 
 import { getWalletAddress, type Signature } from "../../../../signing/mod.ts";
+import { race } from "../../../../transport/_abort.ts";
+import { registerExchangeWireRequest } from "../../../../transport/_wire.ts";
 import type { ExchangeConfig } from "./_config.ts";
 import { assertSuccessResponse } from "./errors.ts";
 import { globalNonceManager } from "./_nonce.ts";
@@ -142,7 +142,9 @@ const dispatchChains = new Map<string, Promise<void>>();
  * @param config Exchange API configuration.
  * @param build Callback that, given the nonce, returns the action, signature, and any extras.
  * @param signal Optional {@link AbortSignal} to cancel the request.
- * @return The validated API response.
+ * @param prepareOnly Return the signed request after nonce allocation and signing, without claiming a
+ * dispatch slot or calling the transport. Used by `signAction`; the nonce is consumed either way.
+ * @return The validated API response, or the signed request when `prepareOnly` is set.
  *
  * @throws {ApiRequestError} If the API returns an error response.
  */

@@ -122,7 +122,16 @@ export function noop(config: ExchangeConfig, params: NoopParameters, opts?: Noop
   return executeL1Action({ ...config, nonceManager: () => params.nonce }, action, opts);
 }
 
-/** Validate and own a canonical noop action without allocating a nonce or calling a wallet/transport. */
+/**
+ * Build a canonical {@linkcode noop} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link NoopSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
 export function buildNoop(params: NoopParameters): CanonicalAction<NoopSuccessResponse> {
   const action = buildAction(NoopActionSchema, { type: "noop" });
   return canonicalAction(action, { kind: "l1", nonce: parse(UnsignedInteger, params.nonce) });

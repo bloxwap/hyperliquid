@@ -10,6 +10,7 @@ import { buildCreateVault, createVault } from "@bloxwap/hyperliquid/api/exchange
 import { buildAgentSendAsset, agentSendAsset } from "@bloxwap/hyperliquid/api/exchange/agentSendAsset";
 import { buildUserSetAbstraction, userSetAbstraction } from "@bloxwap/hyperliquid/api/exchange/userSetAbstraction";
 import { executeAction, signAction, submitAction, type CanonicalAction } from "@bloxwap/hyperliquid/actions/execution";
+import { immutableCopy } from "../../../src/actions/_canonical.ts";
 
 const wallet = privateKeyToAccount(`0x${"11".repeat(32)}`);
 const secondWallet = privateKeyToAccount(`0x${"22".repeat(32)}`);
@@ -44,6 +45,16 @@ describe("canonical actions", () => {
       (built.payload.orders as typeof params.orders)[0].p = "1";
     }).toThrow();
     expect(() => buildOrder({ orders: [] })).toThrow();
+  });
+
+  test("immutable copies keep key order and own `__proto__` keys without changing the prototype", () => {
+    const source = JSON.parse('{"z":1,"__proto__":{"polluted":true},"a":[{"y":2,"b":3}]}');
+    const copy = immutableCopy(source);
+    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype);
+    expect(Object.keys(copy)).toEqual(["z", "__proto__", "a"]);
+    expect(JSON.stringify(copy)).toBe(JSON.stringify(source));
+    expect(Object.isFrozen(copy.a[0])).toBe(true);
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
   });
 
   test("sign consumes one nonce without posting; submit retains the inferred response", async () => {
@@ -130,6 +141,59 @@ describe("canonical actions", () => {
         expect(wire[2]).toBe(wire[0]);
       });
     }
+
+  test("cancellation: before signing frees the nonce, during signing burns it, submit forwards the signal", async () => {
+    const { config, calls } = harness();
+    let issued = 0;
+    config.nonceManager = () => 1_700_000_000_000 + issued++;
+    const action = buildOrder(input);
+
+    const aborted = AbortSignal.abort(new Error("early"));
+    await expect(signAction(config, action, { signal: aborted })).rejects.toThrow("early");
+    await expect(executeAction(config, action, { signal: aborted })).rejects.toThrow("early");
+    expect(issued).toBe(0);
+
+    const controller = new AbortController();
+    let release!: () => void;
+    const pendingSign = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const slowConfig: ExchangeConfig = {
+      ...config,
+      wallet: {
+        address: wallet.address,
+        signTypedData: async (args) => {
+          await pendingSign;
+          return wallet.signTypedData(args);
+        },
+      },
+    };
+    const executing = executeAction(slowConfig, action, { signal: controller.signal });
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    controller.abort(new Error("late"));
+    await expect(executing).rejects.toThrow("late");
+    release();
+    expect(issued).toBe(1);
+    expect(calls).toHaveLength(0);
+
+    const signals: (AbortSignal | undefined)[] = [];
+    const signed = await signAction(config, action);
+    const submitSignal = new AbortController().signal;
+    const forwarding: ExchangeConfig = {
+      ...config,
+      transport: {
+        isTestnet: true,
+        request: (endpoint, body, signal) => {
+          signals.push(signal);
+          return config.transport.request(endpoint, body, signal);
+        },
+      },
+    };
+    await submitAction(forwarding, signed, { signal: submitSignal });
+    expect(signals).toEqual([submitSignal]);
+    expect(issued).toBe(2);
+  });
 
   test("unknown/reconstructed actions and cross-network signed submissions are rejected", async () => {
     const { config, calls } = harness();
