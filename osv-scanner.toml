@@ -1,0 +1,16 @@
+# OSV-Scanner configuration, passed explicitly by .github/workflows/security.yml.
+#
+# Keep every entry narrowly scoped to one advisory, with an expiry so the weekly scan
+# re-raises it. Prefer bumping or overriding to a patched version (see "overrides" in
+# package.json); an ignore belongs here only when no fixed release exists.
+
+[[IgnoredVulns]]
+# braces <= 3.0.3: stack exhaustion on deeply nested brace patterns. No patched release
+# exists. It is reachable only through the docs app's markdownlint-cli2 dev dependency
+# (markdownlint-cli2 -> globby -> fast-glob/micromatch -> braces), which expands the
+# repository's own fixed globs in `check:content`; it is not part of the SDK or the docs
+# site runtime. PR #163 drops markdownlint-cli2 and removes braces from bun.lock; delete
+# this entry once that lands.
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-12-31T00:00:00Z
+reason = "No patched braces release; dev-only via markdownlint-cli2 on repo-controlled globs; removed by #163."
