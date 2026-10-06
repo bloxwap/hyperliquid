@@ -160,7 +160,16 @@ export function sendAsset(
   return executeUserSignedAction(config, action, SendAssetTypes, opts);
 }
 
-/** Validate and own a canonical sendAsset action without allocating a nonce or calling a wallet/transport. */
+/**
+ * Build a canonical {@linkcode sendAsset} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link SendAssetSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
 export function buildSendAsset(params: SendAssetParameters): CanonicalAction<SendAssetSuccessResponse> {
   const action = buildAction(SendAssetActionSchema, { type: "sendAsset", ...params });
   return canonicalAction(action, { kind: "user", types: SendAssetTypes });

@@ -127,7 +127,16 @@ export function borrowLend(
   return executeL1Action(config, action, opts);
 }
 
-/** Validate and own a canonical borrowLend action without allocating a nonce or calling a wallet/transport. */
+/**
+ * Build a canonical {@linkcode borrowLend} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link BorrowLendSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
 export function buildBorrowLend(params: BorrowLendParameters): CanonicalAction<BorrowLendSuccessResponse> {
   const action = buildAction(BorrowLendActionSchema, { type: "borrowLend", ...params });
   return canonicalAction(action, { kind: "l1" });

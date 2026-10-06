@@ -111,7 +111,13 @@ export function claimRewards(config: ExchangeConfig, opts?: ClaimRewardsOptions)
   return executeL1Action(config, action, opts);
 }
 
-/** Validate and own a canonical claimRewards action without allocating a nonce or calling a wallet/transport. */
+/**
+ * Build a canonical {@linkcode claimRewards} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @return Immutable action typed with {@link ClaimRewardsSuccessResponse}.
+ */
 export function buildClaimRewards(): CanonicalAction<ClaimRewardsSuccessResponse> {
   const action = buildAction(ClaimRewardsActionSchema, { type: "claimRewards" });
   return canonicalAction(action, { kind: "l1" });

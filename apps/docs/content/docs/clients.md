@@ -799,11 +799,21 @@ wallet or transport calls. The input remains owned by the caller. Reuse a built 
 resolve coin symbols to asset IDs before building. Time-dependent constraints such as scheduled cancellation are
 checked when building, so rebuild those actions before reuse.
 An explicit `buildNoop({ nonce })` retains that nonce rather than allocating a fresh one on reuse.
+Reuse is where the speedup comes from: a reused L1 action skips validation, copying, and MessagePack encoding on every
+signature. Building a fresh action for each call costs slightly more than the raw method, because the builder also
+copies and freezes its input, so keep using raw methods for one-off actions.
 
 Signing consumes one nonce and produces an immutable signed request. Submission preserves the operation's response
 type and does not sign again. Submit promptly: expiration, the protocol timestamp range, and the signer's 100-highest
 nonce window still apply. Signed ownership and network checks are in-process; serialize for storage only if you intend
 to use the legacy `submitPrepared` wire-payload API. Reconstructed canonical actions must be rebuilt through a builder.
+
+Each stage accepts a `signal`. Aborting before signing starts consumes no nonce. Aborting while the wallet signs
+rejects the call without posting anything; the allocated nonce is skipped, which the exchange tolerates as a gap. A
+signed request does not hold on to the signal it was signed with: to cancel it, drop it and let its nonce go stale.
+Aborting `submit` (or `execute` after signing) stops waiting for the response, but it cannot recall a request that has
+already been sent, so the exchange may still apply it. Resubmitting the same signed request is safe, because the
+exchange rejects a nonce it has already seen and the action cannot be applied twice.
 
 The standalone `signAction`, `submitAction`, and `executeAction` functions in
 `@bloxwap/hyperliquid/actions/execution` accept the same exchange config. Existing client methods and

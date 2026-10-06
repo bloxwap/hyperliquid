@@ -152,7 +152,16 @@ export function usdClassTransfer(
   return executeUserSignedAction(config, action, UsdClassTransferTypes, opts);
 }
 
-/** Validate and own a canonical usdClassTransfer action without allocating a nonce or calling a wallet/transport. */
+/**
+ * Build a canonical {@linkcode usdClassTransfer} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link UsdClassTransferSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
 export function buildUsdClassTransfer(
   params: UsdClassTransferParameters,
 ): CanonicalAction<UsdClassTransferSuccessResponse> {

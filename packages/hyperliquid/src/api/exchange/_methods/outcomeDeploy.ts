@@ -195,7 +195,16 @@ export function outcomeDeploy(
   );
 }
 
-/** Validate and own a canonical outcomeDeploy action without allocating a nonce or calling a wallet/transport. */
+/**
+ * Build a canonical {@linkcode outcomeDeploy} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link OutcomeDeploySuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
 export function buildOutcomeDeploy(params: OutcomeDeployParameters): CanonicalAction<OutcomeDeploySuccessResponse> {
   const action = buildAction(OutcomeDeployActionSchema, { type: "outcomeDeploy", ...params });
   return canonicalAction(action, { kind: "l1" });

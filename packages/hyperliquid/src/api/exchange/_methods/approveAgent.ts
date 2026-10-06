@@ -246,7 +246,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-/** Validate and own a canonical approveAgent action without allocating a nonce or calling a wallet/transport. */
+/**
+ * Build a canonical {@linkcode approveAgent} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link ApproveAgentSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
 export function buildApproveAgent(params: ApproveAgentParameters): CanonicalAction<ApproveAgentSuccessResponse> {
   // Docs: an agent's `valid_until` expiration can be at most 180 days in the future. Guarded only
   // when a timestamp is present — a name without `valid_until` (or an unnamed agent) carries no

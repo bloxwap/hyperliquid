@@ -27,7 +27,9 @@ export function immutableCopy<T>(value: T): T {
   if (value !== null && typeof value === "object") {
     const copy: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value)) {
-      Object.defineProperty(copy, key, { value: immutableCopy(child), enumerable: true });
+      // Assignment is cheaper than defining each key; only `__proto__` needs an explicit own property.
+      if (key === "__proto__") Object.defineProperty(copy, key, { value: immutableCopy(child), enumerable: true });
+      else copy[key] = immutableCopy(child);
     }
     return Object.freeze(copy) as T;
   }
