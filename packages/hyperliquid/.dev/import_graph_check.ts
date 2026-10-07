@@ -22,7 +22,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 import ts from "typescript";
@@ -41,7 +41,7 @@ const ROOT_DIR: string = resolve(fileURLToPath(import.meta.url), "../..");
  * trip it. `why` explains what the budget protects, and is printed on failure — a budget whose
  * rationale is not obvious gets raised by the next person who trips it.
  */
-const BUDGETS: readonly { entry: string; limit: number; why: string }[] = [
+const BUDGETS: readonly { entry: string; limit: number; why: string; forbid?: RegExp }[] = [
   {
     entry: "src/utils/mod.ts",
     limit: 20,
@@ -66,17 +66,50 @@ const BUDGETS: readonly { entry: string; limit: number; why: string }[] = [
     entry: "src/api/info/_methods/allMids.ts",
     limit: 12,
     why: "A single Info operation must not load sibling operations or signing.",
+    forbid: /\/(?:signing|api\/(?:exchange|subscription)|transport\/websocket)\//,
+  },
+  {
+    entry: "src/api/exchange/_methods/order.ts",
+    limit: 35,
+    why: "A single Exchange operation needs the signing and nonce core, but not sibling actions or the Info and Subscription graphs.",
+    forbid: /\/api\/(?:info|subscription|explorer)\//,
+  },
+  {
+    entry: "src/api/subscription/_methods/allMids.ts",
+    limit: 8,
+    why: "A single Subscription operation must not load sibling channels, the WebSocket transport or signing.",
+    forbid: /\/(?:signing|api\/(?:exchange|info)|transport\/websocket)\//,
   },
   {
     entry: "src/api/explorer/_methods/explorerBlock.ts",
     limit: 12,
     why: "A single Explorer operation must remain independent of the other API families.",
+    forbid: /\/(?:signing|api\/(?:exchange|info|subscription))\//,
   },
   {
     entry: "src/actions/order.ts",
     limit: 35,
     why: "An individual builder must not load the ExchangeClient or sibling action schemas.",
   },
+];
+
+/**
+ * Operation entry points that must load strictly fewer modules than the client and barrel they
+ * belong to. Budgets bound absolute growth; this pins the reason the entry points exist, so a
+ * change that makes one operation as heavy as its whole family fails even inside its budget.
+ */
+const NARROWER_THAN: readonly { entry: string; wider: readonly string[] }[] = [
+  { entry: "src/api/info/_methods/allMids.ts", wider: ["src/api/info/client.ts", "src/api/info/mod.ts"] },
+  { entry: "src/api/exchange/_methods/order.ts", wider: ["src/api/exchange/client.ts", "src/api/exchange/mod.ts"] },
+  {
+    entry: "src/api/subscription/_methods/allMids.ts",
+    wider: ["src/api/subscription/client.ts", "src/api/subscription/mod.ts"],
+  },
+  {
+    entry: "src/api/explorer/_methods/explorerBlock.ts",
+    wider: ["src/api/explorer/client.ts", "src/api/explorer/mod.ts"],
+  },
+  { entry: "src/actions/order.ts", wider: ["src/actions/mod.ts"] },
 ];
 
 // =============================================================================
@@ -129,11 +162,24 @@ function closure(entry: string): Set<string> {
 // MAIN
 // =============================================================================
 
+const sizes = new Map<string, number>();
+/** Runtime closure size of `entry`, memoized across the budget and comparison passes. */
+function sizeOf(entry: string): number {
+  let size = sizes.get(entry);
+  if (size === undefined) sizes.set(entry, (size = closure(resolve(ROOT_DIR, entry)).size));
+  return size;
+}
+
 let failed = false;
-for (const { entry, limit, why } of BUDGETS) {
-  const size = closure(resolve(ROOT_DIR, entry)).size;
-  const status = size <= limit ? "ok" : "OVER";
-  console.log(`${status.padEnd(5)} ${entry.padEnd(28)} ${String(size).padStart(4)} / ${limit}`);
+for (const { entry, limit, why, forbid } of BUDGETS) {
+  const modules = closure(resolve(ROOT_DIR, entry));
+  const size = modules.size;
+  sizes.set(entry, size);
+  const leaked = forbid
+    ? [...modules].map((file) => relative(ROOT_DIR, file)).filter((file) => forbid.test(`/${file}`))
+    : [];
+  const status = size <= limit && leaked.length === 0 ? "ok" : "OVER";
+  console.log(`${status.padEnd(5)} ${entry.padEnd(44)} ${String(size).padStart(4)} / ${limit}`);
   if (size > limit) {
     failed = true;
     console.error(`\n  ${entry} now loads ${size} modules at runtime, over its budget of ${limit}.`);
@@ -142,10 +188,27 @@ for (const { entry, limit, why } of BUDGETS) {
       "  Import the specific modules you need rather than a `mod.ts` barrel, or raise the budget deliberately.\n",
     );
   }
+  if (leaked.length > 0) {
+    failed = true;
+    console.error(`\n  ${entry} reaches modules outside its family: ${leaked.join(", ")}.`);
+    console.error(`  ${why}\n`);
+  }
+}
+
+for (const { entry, wider } of NARROWER_THAN) {
+  for (const other of wider) {
+    const [narrow, broad] = [sizeOf(entry), sizeOf(other)];
+    if (narrow < broad) continue;
+    failed = true;
+    console.error(`\n  ${entry} loads ${narrow} modules, no fewer than ${other} (${broad}).`);
+    console.error("  A one-operation entry point that is as heavy as its client or barrel has no reason to exist.\n");
+  }
 }
 
 if (failed) {
   console.error("Import graph budgets exceeded.");
   process.exit(1);
 }
-console.log(`All ${BUDGETS.length} import graph budgets are within limits.`);
+console.log(
+  `All ${BUDGETS.length} import graph budgets are within limits, and ${NARROWER_THAN.length} operation entry points are narrower than their clients and barrels.`,
+);

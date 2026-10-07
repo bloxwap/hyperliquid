@@ -27,6 +27,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative as pathRelative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
+import ts from "typescript";
 
 // --- Layout ------------------------------------------------------------------
 
@@ -139,8 +140,10 @@ async function bundleSources(root: RootManifest): Promise<number> {
     "signing/mod.ts",
     "signing/_canonicalize.ts",
     "transport/_base.ts",
+    "transport/runtime.ts",
     "api/exchange/_methods/_base/_shell.ts",
     "api/exchange/_methods/_base/_nonce.ts",
+    "api/exchange/_methods/_base/_dispatch.ts",
     "api/exchange/_methods/_base/execute.ts",
     "actions/_canonical.ts",
     "actions/execution.ts",
@@ -150,7 +153,7 @@ async function bundleSources(root: RootManifest): Promise<number> {
   const aggregators = new Map<string, string>();
   for (const [index, name] of core.entries()) {
     const file = join(ROOT_DIR, "src", name);
-    const group = ["_base.ts", "api/_errors.ts", "transport/_base.ts"].includes(name)
+    const group = ["_base.ts", "api/_errors.ts", "transport/_base.ts", "transport/runtime.ts"].includes(name)
       ? "runtime"
       : name === "signing/mod.ts"
         ? "signing"
@@ -257,6 +260,7 @@ async function bundleSources(root: RootManifest): Promise<number> {
     await esbuild({ ...common, entryPoints: narrow, outdir: DIST_DIR, splitting: false, plugins: [externalCore] }),
   ];
   let count = core.filter((name) => Object.values(root.exports).includes(`./src/${name}`)).length;
+  const stripped = new Set<string>();
   for (const output of outputs)
     for (const file of Object.keys(output.metafile.outputs)) {
       const absolute = resolve(ROOT_DIR, file);
@@ -274,13 +278,72 @@ async function bundleSources(root: RootManifest): Promise<number> {
       // Bundled consumers drop these already; unbundled Node/Bun consumers need the same
       // behavior to prevent an Info-only import from evaluating exchange/signing chunks.
       const isolated = portable.replace(/\bimport\s*"(\.{1,2}\/[^"\n]+)"\s*;/g, (match, specifier: string) => {
-        return resolve(dirname(absolute), specifier).startsWith(join(DIST_DIR, "_chunks")) ? "" : match;
+        const chunk = resolve(dirname(absolute), specifier);
+        if (!chunk.startsWith(join(DIST_DIR, "_chunks"))) return match;
+        stripped.add(chunk);
+        return "";
       });
       if (isolated.includes(DIST_DIR)) throw new Error(`Non-portable SDK path in ${file}`);
       if (isolated !== code) await writeFile(absolute, isolated);
       count++;
     }
+  for (const chunk of stripped) await assertDeferrable(chunk);
   return count;
+}
+
+/**
+ * Fails the build if a chunk whose bare import {@linkcode bundleSources} removed could do observable work when it
+ * evaluates.
+ *
+ * Removing `import "./_chunks/x.js"` defers that chunk until something imports one of its bindings, which is only
+ * sound while evaluating it touches nothing but its own top-level bindings. Declarations pass; so do writes to, and
+ * method calls on, a binding the chunk itself declares (`TABLE[0] = 25`, `seen.add(value)`), which is how esbuild
+ * lowers module-local setup. Anything else at the top level — a bare call, a write to an imported or global binding,
+ * a class static block — could register or patch state another module relies on, so it stops the build instead of
+ * silently changing evaluation order. Variable initializers are not inspected: the sources keep them to value
+ * construction, and a side effect hidden there would equally break the `sideEffects: false` promise for bundlers.
+ *
+ * @param chunk - Absolute path of an emitted chunk.
+ * @throws If a top-level statement is not a declaration or a chunk-local write.
+ */
+async function assertDeferrable(chunk: string): Promise<void> {
+  const source = ts.createSourceFile(chunk, await Bun.file(chunk).text(), ts.ScriptTarget.ESNext);
+  const locals = new Set<string>();
+  for (const statement of source.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const { name } of statement.declarationList.declarations) if (ts.isIdentifier(name)) locals.add(name.text);
+    } else if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) {
+      locals.add(statement.name.text);
+    }
+  }
+  for (const statement of source.statements) {
+    if (
+      ts.isImportDeclaration(statement) ||
+      ts.isExportDeclaration(statement) ||
+      ts.isFunctionDeclaration(statement) ||
+      ts.isVariableStatement(statement) ||
+      (ts.isClassDeclaration(statement) && !statement.members.some(ts.isClassStaticBlockDeclaration))
+    ) {
+      continue;
+    }
+    if (ts.isExpressionStatement(statement)) {
+      const { expression } = statement;
+      let target: ts.Expression | undefined;
+      if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        target = expression.left;
+      } else if (ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)) {
+        target = expression.expression;
+      }
+      let owner = target;
+      while (owner && (ts.isPropertyAccessExpression(owner) || ts.isElementAccessExpression(owner))) {
+        owner = owner.expression;
+      }
+      if (owner !== target && owner && ts.isIdentifier(owner) && locals.has(owner.text)) continue;
+    }
+    throw new Error(
+      `${pathRelative(DIST_DIR, chunk)} has a top-level side effect, so its bare import cannot be dropped: ${statement.getText(source).slice(0, 120)}`,
+    );
+  }
 }
 
 /**
@@ -290,11 +353,22 @@ async function bundleSources(root: RootManifest): Promise<number> {
  * this script once produced passed every in-repo check and only broke under Node's linker. Running the check as part
  * of the build makes a broken bundle a failed build instead of a broken release.
  *
+ * First, it walks the emitted import closure of the read-only entry points (the Info client, single Info, Subscription
+ * and Explorer operations, the HTTP transport) and fails if any file in it defines signing or client code from another
+ * family — the published counterpart of the source-level budgets in `.dev/import_graph_check.ts`.
+ *
  * @param root - The parsed root manifest.
- * @throws If Node cannot load an entry, or an entry's export names differ from its source's.
+ * @throws If a read-only closure reaches signing or client code, Node cannot load an entry, or an entry's export names
+ *   differ from its source's.
  */
 async function verifyBundle(root: RootManifest): Promise<void> {
-  for (const entry of ["api/info/client.js", "api/info/_methods/allMids.js", "transport/http/mod.js"]) {
+  for (const entry of [
+    "api/info/client.js",
+    "api/info/_methods/allMids.js",
+    "api/subscription/_methods/allMids.js",
+    "api/explorer/_methods/explorerBlock.js",
+    "transport/http/mod.js",
+  ]) {
     const pending = [join(DIST_DIR, entry)];
     const seen = new Set<string>();
     while (pending.length) {
@@ -437,26 +511,30 @@ async function verifyConsumer(root: RootManifest): Promise<void> {
     for (const name of ["consumer.ts", "consumer.mjs"]) {
       await copyFile(join(ROOT_DIR, ".dev/build", name), join(consumer, name));
     }
+    const tsc = (...resolution: string[]): string[] => [
+      process.execPath,
+      join(ROOT_DIR, "node_modules/typescript/bin/tsc"),
+      "consumer.ts",
+      "--noEmit",
+      "--strict",
+      "--skipLibCheck",
+      "--target",
+      "es2024",
+      ...resolution,
+    ];
+    // Every resolution mode that honours `exports`: Node's two ESM modes, and the bundler mode that
+    // Vite, esbuild, webpack and Bun projects use.
     const commands = [
       ["node", "consumer.mjs"],
       [process.execPath, "consumer.mjs"],
-      [
-        process.execPath,
-        join(ROOT_DIR, "node_modules/typescript/bin/tsc"),
-        "consumer.ts",
-        "--noEmit",
-        "--strict",
-        "--skipLibCheck",
-        "--module",
-        "nodenext",
-        "--target",
-        "es2024",
-      ],
+      tsc("--module", "nodenext"),
+      tsc("--module", "node16"),
+      tsc("--module", "esnext", "--moduleResolution", "bundler"),
     ];
     for (const command of commands) {
       const child = Bun.spawn(command, { cwd: consumer, stdio: ["inherit", "inherit", "inherit"] });
       const code = await child.exited;
-      if (code !== 0) throw new Error(`Published consumer failed: ${command[0]} (exit ${code})`);
+      if (code !== 0) throw new Error(`Published consumer failed: ${command.join(" ")} (exit ${code})`);
     }
   } finally {
     await rm(consumer, { recursive: true, force: true });

@@ -4,6 +4,7 @@ import * as root from "@bloxwap/hyperliquid";
 import { ExchangeClient } from "@bloxwap/hyperliquid/api/exchange/client";
 import { ApiRequestError } from "@bloxwap/hyperliquid/api/exchange";
 import { HttpTransport } from "@bloxwap/hyperliquid/transport/http";
+import { systemRuntime } from "@bloxwap/hyperliquid/transport/runtime";
 import { allMids } from "@bloxwap/hyperliquid/api/info/allMids";
 import { buildOrder } from "@bloxwap/hyperliquid/actions/order";
 import { order } from "@bloxwap/hyperliquid/api/exchange/order";
@@ -14,6 +15,7 @@ import { fastAssetCtxs as individualFastAssetCtxs } from "@bloxwap/hyperliquid/a
 assert.equal(root.ExchangeClient, ExchangeClient);
 assert.equal(root.HttpTransport, HttpTransport);
 assert.equal(root.ApiRequestError, ApiRequestError);
+assert.equal(root.systemRuntime, systemRuntime);
 assert.equal(barrelFastAssetCtxs, individualFastAssetCtxs);
 const expectedEntries = JSON.parse(readFileSync(new URL("./entries.json", import.meta.url), "utf8"));
 for (const [specifier, expected] of Object.entries(expectedEntries)) {

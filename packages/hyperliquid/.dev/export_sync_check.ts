@@ -1,11 +1,13 @@
 /**
  * Export Sync Checker
  *
- * Two gates over the public surface of the package:
+ * Three gates over the public surface of the package:
  *
  * 1. Method sync — every `_methods/<name>.ts` file in an API module is re-exported from that module's `mod.ts` and
  *    `client.ts`, and neither file re-exports a method that no longer exists.
- * 2. Reachability — every module under `src/` is reachable by walking relative imports from the entry points declared
+ * 2. Entry points — every `_methods/<name>.ts` file has its `./api/<family>/<name>` export, and every public
+ *    `actions/<name>.ts` builder its `./actions/<name>` export, so consumers never need private paths.
+ * 3. Reachability — every module under `src/` is reachable by walking relative imports from the entry points declared
  *    in `package.json`'s `exports` map. An unreachable module is dead code that still ships in the repo; an
  *    unresolvable relative specifier is a broken edge in that same graph.
  *
@@ -410,6 +412,23 @@ async function main(): Promise<void> {
     // Compare and collect errors
     allErrors.push(...compareModExports(methodsFromDir, modExports, endpoint));
     allErrors.push(...compareClientExports(methodsFromDir, clientExports, endpoint));
+  }
+
+  // Builders get the same one-file, one-entry-point contract as API operations, so a new action
+  // cannot ship reachable only through the `./actions` barrel. `mod.ts` is that barrel itself.
+  const manifest = await Bun.file(path.join(process.cwd(), "package.json")).json();
+  for (const actionName of await getMethodsFromDir("src/actions")) {
+    if (actionName === "mod") continue;
+    const expected = `./src/actions/${actionName}.ts`;
+    if (manifest.exports?.[`./actions/${actionName}`] !== expected) {
+      allErrors.push({
+        scope: "exports",
+        subject: actionName,
+        errorType: "missing action entry point",
+        details: `Expected ./actions/${actionName} to export ${expected}`,
+        filePath: "package.json",
+      });
+    }
   }
 
   allErrors.push(...(await checkReachability()));
