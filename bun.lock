@@ -11,7 +11,7 @@
     "apps/docs": {
       "name": "@bloxwap/hyperliquid-docs",
       "dependencies": {
-        "@bloxwap/font": "0.1.1",
+        "@bloxwap/font": "0.1.2",
         "@bloxwap/hyperliquid": "workspace:*",
         "animejs": "4.4.0",
         "fumadocs-core": "16.15.14",
@@ -91,7 +91,7 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.5", "", { "os": "win32", "cpu": "x64" }, "sha512-bIBFo+n6MIxdNcVFy5CrurbKiZQiUciK3bt8+O9I4wjFZNTfXLpi+giq47522eXqW5NBc9ulx7dR1SlZKi2J5g=="],
 
-    "@bloxwap/font": ["@bloxwap/font@0.1.1", "", { "peerDependencies": { "next": ">=13.2.0" }, "optionalPeers": ["next"] }, "sha512-T3ma3itwbdi9aDgtCOY1ktDr3XW7V/oBwf/ihop5UfXcL8/nmI9teqO3bPe5hb7zQZv2MV1wrZM2waCEGDvbaw=="],
+    "@bloxwap/font": ["@bloxwap/font@0.1.2", "", { "peerDependencies": { "next": ">=15.0.0" }, "optionalPeers": ["next"] }, "sha512-3aWepyHUKhbRtpIZxYYN4ixY703YsKXcfgsRQR1BjiH8hkvahm/xfCkzFhb8fKoN6g1y6vTSb9FA5HCxJ9O0uQ=="],
 
     "@bloxwap/hyperliquid": ["@bloxwap/hyperliquid@workspace:packages/hyperliquid"],
 
