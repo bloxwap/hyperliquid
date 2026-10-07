@@ -5,7 +5,9 @@
 
 import type { AbstractWallet } from "../../../../signing/mod.ts";
 import type { IRequestTransport } from "../../../../transport/mod.ts";
+import type { Runtime } from "../../../../transport/runtime.ts";
 import type { SymbolConverter } from "../../../../utils/mod.ts";
+import type { DispatchPolicy } from "./_dispatch.ts";
 
 // ============================================================
 // Type Utilities
@@ -26,6 +28,20 @@ type Prettify<T> = { [K in keyof T]: T[K] } & {};
 interface BaseConfig<T extends IRequestTransport = IRequestTransport> {
   /** The transport used to connect to the Hyperliquid Exchange API. */
   transport: T;
+
+  /**
+   * How signed requests for this signer/network reach the transport. Default: `"ordered"`, which
+   * dispatches in nonce issuance order. `{ mode: "bounded" }` lets a ready signature overtake a
+   * slower earlier one within the exchange's nonce window; it supports managed execution only and
+   * assumes this process is the signer's only nonce producer.
+   */
+  dispatchPolicy?: DispatchPolicy;
+
+  /**
+   * Wall clock used by bounded dispatch to re-check the nonce timestamp window and `expiresAfter`
+   * immediately before sending. Only `now` is read. Default: the platform clock.
+   */
+  runtime?: Partial<Runtime>;
 
   /** Signature chain ID for EIP-712 signing, defaults to wallet's chain ID. */
   signatureChainId?: `0x${string}` | (() => MaybePromise<`0x${string}`>);

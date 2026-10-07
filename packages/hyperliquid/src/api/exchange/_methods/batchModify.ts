@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -180,4 +181,19 @@ export function batchModify(
 ): Promise<BatchModifySuccessResponse> {
   const action = buildAction(BatchModifyActionSchema, { type: "batchModify", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/**
+ * Build a canonical {@linkcode batchModify} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link BatchModifySuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildBatchModify(params: BatchModifyParameters): CanonicalAction<BatchModifySuccessResponse> {
+  const action = buildAction(BatchModifyActionSchema, { type: "batchModify", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

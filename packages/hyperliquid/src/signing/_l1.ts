@@ -7,7 +7,8 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { type AbstractWallet, type Signature, signRawDigestBytes, signTypedData } from "./_abstractWallet.ts";
 import { createL1AgentDigestBytes } from "./_fastDigest.ts";
 import { keccak256 } from "./_keccak.ts";
-import { Adjusted, type L1Value, type MsgpackValue, MsgpackWriter } from "./_msgpack.ts";
+import { writeL1Action } from "./_l1Cache.ts";
+import { Adjusted, type MsgpackValue, MsgpackWriter } from "./_msgpack.ts";
 import { trimSignature } from "./_multiSig.ts";
 
 /**
@@ -154,7 +155,7 @@ export function createL1ActionHashBytes(args: {
   try {
     // Layout: actionBytes ‖ nonce(u64) ‖ vaultMarker ‖ vault(20) ‖ expiresMarker ‖ expires(u64)
     writer.reset();
-    writer.valueL1(action as L1Value);
+    const hashTail = writeL1Action(writer, action);
     writer.uint64(nonce);
 
     if (vaultAddress) {
@@ -171,7 +172,7 @@ export function createL1ActionHashBytes(args: {
     }
 
     // `view()` aliases the writer's buffer; nothing writes to it again before `keccak256` consumes it.
-    return keccak256(writer.view());
+    return hashTail !== undefined ? hashTail(writer.view()) : keccak256(writer.view());
   } finally {
     ACTION_WRITER_BUSY = nested;
   }

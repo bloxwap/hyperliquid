@@ -473,6 +473,9 @@ of any CPU saving.
 Separate actions are genuinely required only when the orders differ in a field the action carries once rather than
 per order — `vaultAddress`, `expiresAfter`, `builder`, or `grouping` itself.
 
+When the orders come from independent callers rather than one place in your code, the
+[order batcher](#optional-order-batching) collects them into shared actions for you.
+
 ### Orders over WebSocket (low latency)
 
 Every `ExchangeClient` method also works over [`WebSocketTransport`](transports.md#websocket) — the server accepts
@@ -770,3 +773,182 @@ local subscribers in arrival order. Each callback receives its own mutable asset
 so changes made by one subscriber do not affect another. Unsubscribing or aborting suppresses queued deliveries;
 listeners added later do not receive previously queued frames. A corrupt frame or throwing callback does not end
 other listeners or stop subsequent updates. Separate transports keep separate decode queues.
+
+## Canonical actions and explicit execution
+
+Build an action once when its fields are stable, then choose when to sign and submit it:
+
+```ts
+import { ExchangeClient } from "@bloxwap/hyperliquid/api/exchange/client";
+import { HttpTransport } from "@bloxwap/hyperliquid/transport/http";
+import { buildOrder } from "@bloxwap/hyperliquid/actions/order";
+import { privateKeyToAccount } from "viem/accounts";
+
+const exchange = new ExchangeClient({
+  transport: new HttpTransport(),
+  wallet: privateKeyToAccount(process.env.HL_PRIVATE_KEY as `0x${string}`),
+});
+const action = buildOrder({
+  orders: [{ a: 0, b: true, p: "30000", s: "0.01", r: false, t: { limit: { tif: "Gtc" } } }],
+});
+const signed = await exchange.sign(action);
+const result = await exchange.submit(signed);
+// Or sign and submit in one coordinated call:
+await exchange.execute(action);
+```
+
+Builders validate, normalize, fill defaults, and copy/freeze nested fields. They allocate no nonce and perform no
+wallet or transport calls. The input remains owned by the caller. Reuse a built action while its fields remain valid;
+resolve coin symbols to asset IDs before building. Time-dependent constraints such as scheduled cancellation are
+checked when building, so rebuild those actions before reuse.
+An explicit `buildNoop({ nonce })` retains that nonce rather than allocating a fresh one on reuse.
+Reuse is where the speedup comes from: a reused L1 action skips validation, copying, and MessagePack encoding on every
+signature. Building a fresh action for each call costs slightly more than the raw method, because the builder also
+copies and freezes its input, so keep using raw methods for one-off actions.
+
+Signing consumes one nonce and produces an immutable signed request. Submission preserves the operation's response
+type and does not sign again. Submit promptly: expiration, the protocol timestamp range, and the signer's 100-highest
+nonce window still apply. Signed ownership and network checks are in-process; serialize for storage only if you intend
+to use the legacy `submitPrepared` wire-payload API. Reconstructed canonical actions must be rebuilt through a builder.
+
+Each stage accepts a `signal`. Aborting before signing starts consumes no nonce. Aborting while the wallet signs
+rejects the call without posting anything; the allocated nonce is skipped, which the exchange tolerates as a gap. A
+signed request does not hold on to the signal it was signed with: to cancel it, drop it and let its nonce go stale.
+Aborting `submit` (or `execute` after signing) stops waiting for the response, but it cannot recall a request that has
+already been sent, so the exchange may still apply it. Resubmitting the same signed request is safe, because the
+exchange rejects a nonce it has already seen and the action cannot be applied twice.
+
+The standalone `signAction`, `submitAction`, and `executeAction` functions in
+`@bloxwap/hyperliquid/actions/execution` accept the same exchange config. Existing client methods and
+`prepareRequest` / `submitPrepared` continue to work.
+
+## Optional order batching
+
+Independent callers that each place one order can share signatures and requests through an opt-in batcher. Each
+caller still gets its own result:
+
+```ts
+import { createOrderBatcher } from "@bloxwap/hyperliquid/actions/orderBatcher";
+
+const batcher = createOrderBatcher(exchange.config, {
+  maxQueueSize: 1000, // queued plus in-flight orders
+  maxBatchSize: 100, // orders per request
+  flushIntervalMs: 1, // longest wait for a partial batch
+});
+const outcome = await batcher.enqueue({
+  a: 0, b: true, p: "30000", s: "0.01", r: false, t: { limit: { tif: "Gtc" } },
+});
+if (typeof outcome === "object" && "error" in outcome) console.error(outcome.error);
+await batcher.close();
+```
+
+Queued orders are sent when a batch reaches `maxBatchSize` (which flushes the whole queue), when `flushIntervalMs`
+elapses, or when you call `flush()`. Each request carries one action, one signature, and one nonce, through the same
+signing path as `exchange.execute`, so nonce management, the dispatch policy, and the transport's rate limiting
+apply unchanged. `exchange.order()` and the other existing methods still dispatch immediately and keep their error
+behavior.
+
+Only orders that agree on everything the action or request carries once share a batch: `grouping`, `builder`,
+`vaultAddress`, and `expiresAfter`. ALO orders are also kept apart from IOC and GTC orders so they keep their
+prioritization, and under priority grouping (`{ p }`), where the exchange requires every order in the action to be IOC
+or every order to be a non-reduce-only ALO, orders are further split by time-in-force and reduce-only flag. The batcher
+is bound to one config, so signer and network never mix.
+
+`grouping` accepts `"na"` (the default) or `{ p }`. The TP/SL groupings (`normalTpsl`, `positionTpsl`) link the orders
+of one action, so a stop-loss from one caller could become the child of another caller's entry order. `enqueue`
+rejects them; send a TP/SL group as one `exchange.order()` call instead.
+
+Results:
+
+- `enqueue` resolves with the server's status for that order, in the order it was submitted: `resting`, `filled`,
+  `waitingForFill`, `waitingForTrigger`, or `{ error }`. An error status for one order does not affect the others in
+  its batch; unlike `exchange.order()`, mixed responses are never turned into a rejection.
+- A whole-batch failure rejects every caller in that batch: a top-level `status: "err"`, a response whose statuses do
+  not match the submitted orders one to one, or a transport failure.
+- An invalid order rejects only its own `enqueue`, before it is queued.
+- A full queue rejects `enqueue` immediately with `Order batcher queue is full`.
+- An order whose `expiresAfter` has passed before its batch is sent rejects without being sent.
+
+Cancellation and shutdown:
+
+- Aborting an `enqueue` signal before its batch is sent removes the order; nothing is sent for it.
+- Aborting after the batch is sent only stops that caller waiting. It does not cancel the order, which the exchange may
+  already have accepted, and its slot counts against `maxQueueSize` until the batch settles.
+- `flush()` sends everything queued and waits for every batch in flight.
+- `close()` stops new enqueues and drains: queued orders are sent and their callers settle normally.
+- `close({ drain: false })` rejects every waiting caller and stops waiting for in-flight batches. Orders already sent
+  may still be accepted; the rejection does not mean they were cancelled.
+- The batcher never retries a batch. A failure after sending is ambiguous (the exchange may have applied the action),
+  so reconcile with open orders or fills before placing the orders again.
+
+Rate limits: each request costs `1 + floor(orders / 40)` of the per-IP REST weight, so 100 orders in one batch cost 3
+instead of 100. Address-based limits still count every order individually; batching does not raise them.
+
+Batching trades latency for throughput. It helps when many orders arrive together, and costs a timer hop when they
+arrive one at a time. Measured with 300 single-order callers, real secp256k1 signing, and a 5 ms mock transport
+(`bun .dev/perf/order_batching.ts`, Bun 1.4.0, Apple M3 Max, median of 5 rounds):
+
+| Callers arrive      | Mode                  | Orders/s | p50 / p99 latency | Signatures and requests | Weight |
+| ------------------- | --------------------- | -------- | ----------------- | ----------------------- | ------ |
+| All at once         | `order()` per caller  | ~3,800   | 74 / 76 ms        | 300                     | 300    |
+| All at once         | batch 5, flush 1 ms   | ~16,000  | 13 / 18 ms        | 60                      | 60     |
+| All at once         | batch 100, flush 0 ms | ~43,000  | 6 / 7 ms          | 3                       | 9      |
+| One per millisecond | `order()` per caller  | ~900     | 5.1 / 6.5 ms      | 300                     | 300    |
+| One per millisecond | batch 100, flush 1 ms | ~680     | 6.5 / 9.2 ms      | 300                     | 300    |
+| One per millisecond | batch 100, flush 5 ms | ~680     | 9.1 / 12.3 ms     | 75                      | 75     |
+
+With steady arrivals, a flush interval shorter than the gap between orders sends batches of one and only adds delay;
+a longer one batches more but makes every caller wait for it. Measure with your own traffic before choosing values.
+
+## Bounded dispatch for remote signing
+
+By default the SDK signs concurrently but sends a signer's requests in nonce-issuance order, so one slow remote
+signature delays every later request for that signer and network. The exchange does not require that order: it accepts
+any unused nonce above the smallest of the signer's 100 highest nonces. A dedicated signer can opt into bounded
+dispatch, which sends ready signatures ahead of a slower earlier one:
+
+```ts
+const exchange = new ExchangeClient({
+  transport,
+  wallet,
+  dispatchPolicy: { mode: "bounded", maxOvertakes: 99, maxPending: 1000 },
+});
+```
+
+- `maxOvertakes` (0–99, default 99) caps how many newer requests may be sent while an earlier one is still
+  outstanding. The count is cumulative until the earlier request's response settles, so newer requests that finish
+  quickly cannot keep overtaking it and push its nonce out of the exchange's window, even if requests arrive in a
+  different order than they were sent. Among signed requests waiting for the window, the oldest goes first. `0`
+  reproduces ordered dispatch.
+- `maxPending` (default 1000) caps signing, waiting, and in-flight requests. A call beyond it rejects with
+  `Bounded dispatch queue is full` without consuming a nonce.
+- Before sending, a request that waited is checked again against the protocol timestamp window (its nonce must be
+  within two days before and one day after the current time) and its `expiresAfter`. A failed check rejects the call
+  without sending it.
+- A wallet rejection, an abort, an expiry, or a transport failure (including a closed WebSocket) settles the call and
+  frees its slot; the skipped nonce is a gap the exchange tolerates. A signature that completes after its call was
+  aborted is never sent. A signature that never completes holds back further overtaking until it is aborted, so pass a
+  `signal` with a deadline when the signer can stall.
+- WebSocket and HTTP transport limits are unchanged and apply separately from the nonce bound: `post` frames are
+  still charged to the shared WebSocket message budget without waiting for it.
+
+Bounded dispatch pays off when requests arrive steadily and some signatures are much slower than others: ready
+requests no longer queue behind a slow one. It is not a throughput setting. A burst much larger than `maxOvertakes`
+can finish later than under ordered dispatch, because ordered dispatch assumes requests arrive in the order they were
+sent and keeps all of them in flight, while bounded dispatch counts each in-flight request against the window until
+its response returns. Measure with your own signer and traffic before switching.
+
+The coordinator is shared per signer address and network across every `ExchangeClient` and standalone function in
+the process, HTTP and WebSocket alike, and so is the default nonce source. Multi-sig requests are coordinated by the
+leader signer, the same key their nonces are issued under; vault and sub-account requests share their signer's lane.
+
+Bounded mode supports managed calls only: ordinary exchange methods, `exchange.execute`, and `executeAction`.
+`exchange.sign` / `exchange.submit`, `signAction` / `submitAction`, `prepareRequest`, and `submitPrepared` reject in
+bounded mode, and also reject while bounded calls for that signer and network are outstanding, because a detached
+submission's nonce would escape the bound. Ordered and bounded calls, or bounded calls with different limits, cannot be
+active for the same signer and network at the same time.
+
+The coordinator only sees requests made through this process. Other processes, other SDK instances bundled separately,
+direct `transport.request` calls, and anything that submits for the same signer elsewhere also consume nonces in its
+100-highest window, and the bound cannot account for them. Use bounded dispatch only with a signer (typically an API
+wallet) dedicated to this process.

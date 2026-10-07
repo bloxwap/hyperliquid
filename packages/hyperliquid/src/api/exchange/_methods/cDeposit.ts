@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -135,4 +136,19 @@ export function cDeposit(
 ): Promise<CDepositSuccessResponse> {
   const action = buildAction(CDepositActionSchema, { type: "cDeposit", ...params }, opts);
   return executeUserSignedAction(config, action, CDepositTypes, opts);
+}
+
+/**
+ * Build a canonical {@linkcode cDeposit} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link CDepositSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildCDeposit(params: CDepositParameters): CanonicalAction<CDepositSuccessResponse> {
+  const action = buildAction(CDepositActionSchema, { type: "cDeposit", ...params });
+  return canonicalAction(action, { kind: "user", types: CDepositTypes });
 }

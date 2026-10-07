@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -137,4 +138,19 @@ export function usdSend(
 ): Promise<UsdSendSuccessResponse> {
   const action = buildAction(UsdSendActionSchema, { type: "usdSend", ...params }, opts);
   return executeUserSignedAction(config, action, UsdSendTypes, opts);
+}
+
+/**
+ * Build a canonical {@linkcode usdSend} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link UsdSendSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildUsdSend(params: UsdSendParameters): CanonicalAction<UsdSendSuccessResponse> {
+  const action = buildAction(UsdSendActionSchema, { type: "usdSend", ...params });
+  return canonicalAction(action, { kind: "user", types: UsdSendTypes });
 }

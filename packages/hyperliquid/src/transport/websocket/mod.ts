@@ -34,6 +34,7 @@ import {
   type WebSocketRateLimitOptions,
 } from "./_quota.ts";
 import { WebSocketSubscriptionManager } from "./_subscriptionManager.ts";
+import { resolveRuntime, type Runtime } from "../runtime.ts";
 
 export { WebSocketQuota, type WebSocketQuotaOptions, type WebSocketRateLimitOptions, WebSocketRequestError };
 export {
@@ -44,6 +45,20 @@ export {
 
 /** Configuration options for the WebSocket transport layer. */
 export interface WebSocketTransportOptions {
+  /**
+   * Clock, timer, and jitter overrides for this transport's reconnects, request timeouts, and
+   * keep-alive. Missing members fall back to the platform; resolved once at construction.
+   *
+   * The default shared {@linkcode WebSocketQuota} keeps the platform clock: pass a
+   * {@linkcode quota} built with the same runtime to drive connection and message budgets too.
+   */
+  runtime?: Partial<Runtime>;
+  /**
+   * Creates the underlying sockets in place of the global `WebSocket`, which is left untouched.
+   *
+   * Default: `new WebSocket(url, protocols)`, read from the global at connection time.
+   */
+  webSocketFactory?: (url: string, protocols?: string | string[]) => WebSocket;
   /**
    * Indicates this transport uses testnet endpoint.
    *
@@ -184,11 +199,15 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
   constructor(options?: WebSocketTransportOptions) {
     this.isTestnet = options?.isTestnet ?? false;
     this.quota = options?.quota ?? sharedWebSocketQuota(this.isTestnet);
+    // Resolved once and shared by the socket, dispatcher, and keep-alive.
+    const runtime = resolveRuntime(options?.runtime ?? options?.reconnect?.runtime);
 
     this.socket = new ReconnectingWebSocket(
       options?.url ?? (this.isTestnet ? TESTNET_API_WS_URL : MAINNET_API_WS_URL),
       {
         ...options?.reconnect,
+        runtime,
+        webSocketFactory: options?.webSocketFactory ?? options?.reconnect?.webSocketFactory,
         acquireConnection: (signal: AbortSignal): (() => void) | Promise<() => void> =>
           this.quota.acquireConnection(signal),
       },
@@ -201,10 +220,11 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
       this._hlEvents,
       options?.timeout === undefined ? 10_000 : options.timeout,
       this.quota,
+      runtime,
     );
     // The keep-alive watchdog is fully self-contained: it exposes no API and drives itself from the
     // socket's own "open"/"close"/"error" events, which keep it reachable. Nothing to hold on to.
-    new WebSocketKeepAlive(this.socket, this._hlEvents, options?.keepAlive, this.quota);
+    new WebSocketKeepAlive(this.socket, this._hlEvents, options?.keepAlive, this.quota, runtime);
     this._subscriptionManager = new WebSocketSubscriptionManager(
       this.socket,
       this._dispatcher,
@@ -236,7 +256,12 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
    */
   request<T>(endpoint: "info" | "exchange", payload: unknown, signal?: AbortSignal): Promise<T> {
     const wrapped = { type: endpoint === "exchange" ? "action" : endpoint, payload };
-    return this._dispatcher.request<T>("post", wrapped, signal);
+    return this._dispatcher.request<T>(
+      "post",
+      wrapped,
+      signal,
+      endpoint === "exchange" ? { exchangePayload: payload } : undefined,
+    );
   }
 
   /**

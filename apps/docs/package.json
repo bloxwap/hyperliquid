@@ -11,7 +11,7 @@
     "check:content": "bun run scripts/check-content.ts && bun run scripts/lint-markdown.ts"
   },
   "dependencies": {
-    "@bloxwap/font": "0.1.1",
+    "@bloxwap/font": "0.1.2",
     "@bloxwap/hyperliquid": "workspace:*",
     "animejs": "4.4.0",
     "fumadocs-core": "16.15.14",

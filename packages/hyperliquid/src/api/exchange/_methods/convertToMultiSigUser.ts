@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -181,4 +182,21 @@ export function convertToMultiSigUser(
 ): Promise<ConvertToMultiSigUserSuccessResponse> {
   const action = buildAction(ConvertToMultiSigUserActionSchema, { type: "convertToMultiSigUser", ...params }, opts);
   return executeUserSignedAction(config, action, ConvertToMultiSigUserTypes, opts);
+}
+
+/**
+ * Build a canonical {@linkcode convertToMultiSigUser} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link ConvertToMultiSigUserSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildConvertToMultiSigUser(
+  params: ConvertToMultiSigUserParameters,
+): CanonicalAction<ConvertToMultiSigUserSuccessResponse> {
+  const action = buildAction(ConvertToMultiSigUserActionSchema, { type: "convertToMultiSigUser", ...params });
+  return canonicalAction(action, { kind: "user", types: ConvertToMultiSigUserTypes });
 }

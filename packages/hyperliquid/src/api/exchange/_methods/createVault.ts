@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -140,4 +141,19 @@ export function createVault(
     action,
     opts,
   );
+}
+
+/**
+ * Build a canonical {@linkcode createVault} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link CreateVaultSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildCreateVault(params: CreateVaultParameters): CanonicalAction<CreateVaultSuccessResponse> {
+  const action = buildAction(CreateVaultActionSchema, { type: "createVault", ...params, nonce: 0 });
+  return canonicalAction(action, { kind: "l1" });
 }

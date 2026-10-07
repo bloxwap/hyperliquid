@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -145,4 +146,19 @@ export function tokenDelegate(
 ): Promise<TokenDelegateSuccessResponse> {
   const action = buildAction(TokenDelegateActionSchema, { type: "tokenDelegate", ...params }, opts);
   return executeUserSignedAction(config, action, TokenDelegateTypes, opts);
+}
+
+/**
+ * Build a canonical {@linkcode tokenDelegate} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link TokenDelegateSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildTokenDelegate(params: TokenDelegateParameters): CanonicalAction<TokenDelegateSuccessResponse> {
+  const action = buildAction(TokenDelegateActionSchema, { type: "tokenDelegate", ...params });
+  return canonicalAction(action, { kind: "user", types: TokenDelegateTypes });
 }

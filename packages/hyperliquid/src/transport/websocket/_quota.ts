@@ -31,6 +31,7 @@
  */
 
 import { TokenBucketRateLimiter } from "../_rateLimiter.ts";
+import { resolveRuntime, type Runtime, type TimerHandle } from "../runtime.ts";
 
 // =============================================================================
 // Documented limits
@@ -97,6 +98,11 @@ export interface WebSocketRateLimitOptions {
 
 /** Configuration options for a {@linkcode WebSocketQuota}. */
 export interface WebSocketQuotaOptions {
+  /**
+   * Clock and timer overrides for the rolling connection-attempt window and the message pacer.
+   * Missing members fall back to the platform; resolved once at construction.
+   */
+  runtime?: Partial<Runtime>;
   /** Maximum connecting/open/closing sockets sharing this quota; null disables. Default: 10. */
   maxConnections?: number | null;
   /** Maximum new socket attempts in any rolling minute; null disables. Default: 30. */
@@ -158,7 +164,7 @@ export class WebSocketQuota {
     signal?: AbortSignal;
     abort: () => void;
   }[] = [];
-  private _connectionTimer: ReturnType<typeof setTimeout> | undefined;
+  private _connectionTimer: TimerHandle | undefined;
   /** Maximum concurrent subscriptions, or `null` when the guard is disabled. */
   readonly maxSubscriptions: number | null;
   /** Maximum unique users across user-specific subscriptions, or `null` when the guard is disabled. */
@@ -176,8 +182,11 @@ export class WebSocketQuota {
   private readonly _users: Map<string, number> = new Map();
   /** Outbound message pacer, or `null` when pacing is off and only accounting runs. */
   private readonly _limiter: TokenBucketRateLimiter | null;
+  /** Clock and scheduler, resolved once at construction; attempt windows read its monotonic time. */
+  private readonly _runtime: Runtime;
 
   constructor(options?: WebSocketQuotaOptions) {
+    this._runtime = resolveRuntime(options?.runtime);
     this.maxConnections = options?.maxConnections === undefined ? 10 : options.maxConnections;
     this.maxConnectionAttemptsPerMinute =
       options?.maxConnectionAttemptsPerMinute === undefined ? 30 : options.maxConnectionAttemptsPerMinute;
@@ -193,6 +202,7 @@ export class WebSocketQuota {
         : new TokenBucketRateLimiter(
             options.rateLimit.capacity ?? MAX_MESSAGES_PER_MINUTE,
             options.rateLimit.refillPerMinute ?? MAX_MESSAGES_PER_MINUTE,
+            this._runtime,
           );
   }
 
@@ -232,7 +242,7 @@ export class WebSocketQuota {
   }
 
   private _pruneAttempts(): void {
-    const cutoff = Date.now() - 60_000;
+    const cutoff = this._runtime.monotonicNow() - 60_000;
     while (this._attempts.length && this._attempts[0] <= cutoff) this._attempts.shift();
   }
 
@@ -245,7 +255,7 @@ export class WebSocketQuota {
 
   private _takeConnection(): () => void {
     this._connections++;
-    if (this.maxConnectionAttemptsPerMinute !== null) this._attempts.push(Date.now());
+    if (this.maxConnectionAttemptsPerMinute !== null) this._attempts.push(this._runtime.monotonicNow());
     let released = false;
     return (): void => {
       if (released) return;
@@ -256,7 +266,7 @@ export class WebSocketQuota {
   }
 
   private _drainConnections(): void {
-    clearTimeout(this._connectionTimer);
+    this._runtime.clearTimeout(this._connectionTimer);
     this._connectionTimer = undefined;
     this._pruneAttempts();
     while (this._connectionWaiters.length && this._canConnect()) {
@@ -269,9 +279,9 @@ export class WebSocketQuota {
       (this.maxConnections === null || this._connections < this.maxConnections) &&
       this._attempts.length
     ) {
-      this._connectionTimer = setTimeout(
+      this._connectionTimer = this._runtime.setTimeout(
         () => this._drainConnections(),
-        Math.max(1, this._attempts[0] + 60_000 - Date.now()),
+        Math.max(1, this._attempts[0] + 60_000 - this._runtime.monotonicNow()),
       );
     }
   }

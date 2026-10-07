@@ -537,11 +537,19 @@ export class MsgpackWriter {
    * `adjust`'s number rule, inline: safe integers too wide for the int32/uint32 forms widen to `bigint`
    * so they take the 9-byte int64/uint64 form; everything else — including integral doubles beyond the
    * safe-integer range, which python's msgpack emits as float64 — goes through the strict
-   * {@linkcode MsgpackWriter.number} selection unchanged.
+   * {@linkcode MsgpackWriter.number} selection unchanged. The wide arm writes the exact bytes
+   * `bigint(BigInt(value))` would, without the allocation; `tests/signing/msgpackWideInt.test.ts` pins that.
    */
   private numberL1(value: number): void {
     if (Number.isSafeInteger(value) && (value >= 0x100000000 || value < -0x80000000)) {
-      this.bigint(BigInt(value));
+      // A safe integer splits exactly at 2^32. The unsigned writes wrap negative
+      // halves to two's complement, preserving the int64/uint64 bytes without
+      // allocating a BigInt for every wide order ID in a cancellation batch.
+      this.ensure(9);
+      this.buffer[this.offset] = value < 0 ? 0xd3 : 0xcf;
+      this.dataView.setUint32(this.offset + 1, Math.floor(value / 2 ** 32));
+      this.dataView.setUint32(this.offset + 5, value % 2 ** 32);
+      this.offset += 9;
       return;
     }
     this.number(value);

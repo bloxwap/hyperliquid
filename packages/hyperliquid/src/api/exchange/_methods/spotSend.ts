@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -141,4 +142,19 @@ export function spotSend(
 ): Promise<SpotSendSuccessResponse> {
   const action = buildAction(SpotSendActionSchema, { type: "spotSend", ...params }, opts);
   return executeUserSignedAction(config, action, SpotSendTypes, opts);
+}
+
+/**
+ * Build a canonical {@linkcode spotSend} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link SpotSendSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildSpotSend(params: SpotSendParameters): CanonicalAction<SpotSendSuccessResponse> {
+  const action = buildAction(SpotSendActionSchema, { type: "spotSend", ...params });
+  return canonicalAction(action, { kind: "user", types: SpotSendTypes });
 }

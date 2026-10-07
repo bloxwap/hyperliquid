@@ -1,0 +1,2709 @@
+{
+  "baseline": "Initial working tree at fcc3aca8d561a10167c3433f618f0b6b4740a270, including preexisting uncommitted optimizations; production comparisons use a snapshot restored to the files read before these edits.",
+  "units": "Microseconds per complete action/hash, never per order; these are local CPU measurements.",
+  "decisions": [
+    {
+      "idea": "Nonce-only Keccak checkpoints",
+      "decision": "implemented",
+      "policy": "Only reused SDK-owned immutable prefixes >=272 bytes; lazy noble clone or independently validated WASM save/load; provider-instance changes rebuild state. Nonce/vault/expiry and signatures stay fresh."
+    },
+    {
+      "idea": "Immutable action JSON templates",
+      "decision": "implemented",
+      "policy": "Only SDK-owned bulk arrays >=8 entries in shell-owned envelopes; descriptor and identity checks preserve fallback behavior. WeakMap ownership. Signature/metadata serialized fresh. Synthetic fragment candidates preencode a fixed signature; use productionExecutionComparisons for actual SDK claims. Separate sign/submit preserves owned payload identity, freezes fresh signature metadata, and registers the signed envelope."
+    },
+    {
+      "idea": "MessagePack atoms",
+      "decision": "rejected",
+      "policy": "Single-character ASCII and a bounded encoded-key dictionary both slowed the existing writer on both runtimes; no production MessagePack changes."
+    }
+  ],
+  "validation": {
+    "offlineTests": {
+      "runtime": "Bun 1.4.0-canary.1",
+      "passed": 2030,
+      "skipped": 242,
+      "failed": 0,
+      "assertions": 33395
+    },
+    "typescript5": "passed",
+    "typescript7": "passed with installed Bun 1.4.0 for frozen-lockfile check",
+    "jsdoc": "passed",
+    "exports": "passed",
+    "importGraph": "all 7 budgets passed",
+    "formatAndLint": "passed for changed TypeScript files",
+    "build": "passed; relocated published consumers validated on Bun and Node",
+    "originalPerformanceSuite": {
+      "compared": 57,
+      "faster": 1,
+      "regressed": 0,
+      "unchanged": 56,
+      "suiteFingerprint": "e8136f5304a22d9f",
+      "beforeReport": "/tmp/hyperliquid-perf-before.json",
+      "afterReport": "/tmp/hyperliquid-perf-after.json"
+    },
+    "finalTargetedConformance": {
+      "passed": 40,
+      "failed": 0,
+      "assertions": 1427
+    }
+  },
+  "sources": {
+    "src/signing/_keccak.ts": "078eb357ebe3bc511a137d094dc4e9abb6985b9730a2b2d47ac1f849991c5b95",
+    "src/signing/_l1.ts": "89af7fca9ef8e3783964852691a213d359b4935a5acce545640274ccbface0d5",
+    "src/signing/_l1Cache.ts": "7bc92c87189805db32a2c2be9c2220878dded8ebe05927fce3f707086e276a03",
+    "src/transport/_wire.ts": "0b4d48e0c2ba49e260a6a8454be988c769527594453c5ead5aa10e653c6925f1",
+    "src/transport/http/mod.ts": "2fbc5ca13e446335a5faa8803894dc0dbc4993509f27d1a20515818519ab8f79",
+    "src/transport/websocket/mod.ts": "e4de10c91d8c257a04a08ea22919a92d9ca5316d6ebb96f651ebfc5a7e6665d4",
+    "src/transport/websocket/_dispatcher.ts": "2da747f422f3938f08c0b64abe7b55ea12270de520d21af152cc6c75229100be",
+    "src/actions/_canonical.ts": "b511a9c5e368ec5a84c5c3f86d3b18be96be912f66e77aff2c6c60d6ca662a1f",
+    "src/api/exchange/_methods/_base/_shell.ts": "bdbf8b79284b70b7ead38ae8213cb3d8ccc60dcb8a754156f0b3b82e9585c8e5",
+    "src/actions/execution.ts": "0b57c7cf9e3f09fe896be89724687cb9faef2149323ee08656a105fd6666d287"
+  },
+  "protocolReferences": [
+    "https://github.com/paulmillr/noble-hashes/blob/main/src/sha3.ts",
+    "https://github.com/Daninet/hash-wasm/blob/master/lib/WASMInterface.ts",
+    "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/optimizing-latency"
+  ],
+  "runtimes": {
+    "bun": {
+      "runtime": "Bun 1.2.20",
+      "cpu": "Apple M3 Max",
+      "date": "2026-10-06T21:36:18.641Z",
+      "samples": 11,
+      "method": "Rotating paired variants; three warmup samples discarded; medians/p90 per complete action; fresh nonces and signatures; mock transports materialize outgoing UTF-8; no network latency.",
+      "candidateSearch": [
+        {
+          "scenario": "checkpoint_1/noble_full",
+          "medianUs": 2.2386083333333393,
+          "p90Us": 2.2761208333333345
+        },
+        {
+          "scenario": "checkpoint_1/noble_resume",
+          "medianUs": 2.148234733333341,
+          "p90Us": 2.228222199999997
+        },
+        {
+          "scenario": "checkpoint_1/noble_cold",
+          "medianUs": 2.3855277666666703,
+          "p90Us": 2.420422233333329
+        },
+        {
+          "scenario": "checkpoint_1/wasm_full",
+          "medianUs": 0.44530556666666904,
+          "p90Us": 0.5133124999999988
+        },
+        {
+          "scenario": "checkpoint_1/wasm_resume",
+          "medianUs": 0.5404027666666631,
+          "p90Us": 0.5977611000000024
+        },
+        {
+          "scenario": "checkpoint_1/wasm_cold",
+          "medianUs": 0.9553791666666711,
+          "p90Us": 0.9764277999999952
+        },
+        {
+          "scenario": "atoms_1/current",
+          "medianUs": 0.22955556666665872,
+          "p90Us": 0.25668333333333065
+        },
+        {
+          "scenario": "atoms_1/single_ascii",
+          "medianUs": 0.2792583333333217,
+          "p90Us": 0.30656666666664023
+        },
+        {
+          "scenario": "atoms_1/cached_keys",
+          "medianUs": 0.35929719999999177,
+          "p90Us": 0.36786109999999705
+        },
+        {
+          "scenario": "wire_1/full_json",
+          "medianUs": 1.0989652666666492,
+          "p90Us": 1.1070875000000038
+        },
+        {
+          "scenario": "wire_1/action_fragment",
+          "medianUs": 0.05808333333331272,
+          "p90Us": 0.06150556666668005
+        },
+        {
+          "scenario": "wire_1/full_json_utf8",
+          "medianUs": 1.2626208333333429,
+          "p90Us": 1.2885916666666768
+        },
+        {
+          "scenario": "wire_1/action_fragment_utf8",
+          "medianUs": 0.17196110000001377,
+          "p90Us": 0.19699999999999515
+        },
+        {
+          "scenario": "checkpoint_10/noble_full",
+          "medianUs": 7.712916666666691,
+          "p90Us": 8.094041666666877
+        },
+        {
+          "scenario": "checkpoint_10/noble_resume",
+          "medianUs": 2.1857776666665814,
+          "p90Us": 2.710652666666647
+        },
+        {
+          "scenario": "checkpoint_10/noble_cold",
+          "medianUs": 8.08809733333328,
+          "p90Us": 8.487013999999968
+        },
+        {
+          "scenario": "checkpoint_10/wasm_full",
+          "medianUs": 1.1284026666668676,
+          "p90Us": 1.1769583333331564
+        },
+        {
+          "scenario": "checkpoint_10/wasm_resume",
+          "medianUs": 0.5621943333335366,
+          "p90Us": 0.5786943333335633
+        },
+        {
+          "scenario": "checkpoint_10/wasm_cold",
+          "medianUs": 1.5319860000002639,
+          "p90Us": 1.6088890000000902
+        },
+        {
+          "scenario": "atoms_10/current",
+          "medianUs": 1.4662083333335734,
+          "p90Us": 1.5163886666665956
+        },
+        {
+          "scenario": "atoms_10/single_ascii",
+          "medianUs": 1.6990693333330757,
+          "p90Us": 1.8679166666667395
+        },
+        {
+          "scenario": "atoms_10/cached_keys",
+          "medianUs": 2.414208333333287,
+          "p90Us": 2.448958333333394
+        },
+        {
+          "scenario": "wire_10/full_json",
+          "medianUs": 4.897611000000022,
+          "p90Us": 5.047027999999955
+        },
+        {
+          "scenario": "wire_10/action_fragment",
+          "medianUs": 0.06127766666668322,
+          "p90Us": 0.07013900000007804
+        },
+        {
+          "scenario": "wire_10/full_json_utf8",
+          "medianUs": 5.406458333333528,
+          "p90Us": 5.420346999999917
+        },
+        {
+          "scenario": "wire_10/action_fragment_utf8",
+          "medianUs": 0.3852083333331393,
+          "p90Us": 0.4682223333332634
+        },
+        {
+          "scenario": "checkpoint_100/noble_full",
+          "medianUs": 58.665970000001835,
+          "p90Us": 59.44014000000001
+        },
+        {
+          "scenario": "checkpoint_100/noble_resume",
+          "medianUs": 2.2509700000015678,
+          "p90Us": 2.3111100000005536
+        },
+        {
+          "scenario": "checkpoint_100/noble_cold",
+          "medianUs": 59.78319333333578,
+          "p90Us": 60.63610999999886
+        },
+        {
+          "scenario": "checkpoint_100/wasm_full",
+          "medianUs": 7.373056666668465,
+          "p90Us": 7.38805666666849
+        },
+        {
+          "scenario": "checkpoint_100/wasm_resume",
+          "medianUs": 0.6340266666666139,
+          "p90Us": 0.652776666668918
+        },
+        {
+          "scenario": "checkpoint_100/wasm_cold",
+          "medianUs": 7.830140000002454,
+          "p90Us": 7.871666666666594
+        },
+        {
+          "scenario": "atoms_100/current",
+          "medianUs": 14.944720000000112,
+          "p90Us": 15.225556666664488
+        },
+        {
+          "scenario": "atoms_100/single_ascii",
+          "medianUs": 16.639029999999668,
+          "p90Us": 16.875696666669075
+        },
+        {
+          "scenario": "atoms_100/cached_keys",
+          "medianUs": 23.057916666666642,
+          "p90Us": 23.31361000000167
+        },
+        {
+          "scenario": "wire_100/full_json",
+          "medianUs": 41.963609999999484,
+          "p90Us": 42.59069333333476
+        },
+        {
+          "scenario": "wire_100/action_fragment",
+          "medianUs": 0.07235999999769167,
+          "p90Us": 0.1631966666658021
+        },
+        {
+          "scenario": "wire_100/full_json_utf8",
+          "medianUs": 43.40583333333294,
+          "p90Us": 45.297360000001085
+        },
+        {
+          "scenario": "wire_100/action_fragment_utf8",
+          "medianUs": 0.8501399999992524,
+          "p90Us": 1.1011133333340695
+        },
+        {
+          "scenario": "checkpoint_1000/noble_full",
+          "medianUs": 547.4424999999974,
+          "p90Us": 560.3016600000046
+        },
+        {
+          "scenario": "checkpoint_1000/noble_resume",
+          "medianUs": 2.4400000000059663,
+          "p90Us": 2.5883299999986775
+        },
+        {
+          "scenario": "checkpoint_1000/noble_cold",
+          "medianUs": 542.8612500000054,
+          "p90Us": 560.4349999999977
+        },
+        {
+          "scenario": "checkpoint_1000/wasm_full",
+          "medianUs": 68.93500000000131,
+          "p90Us": 70.02166999998735
+        },
+        {
+          "scenario": "checkpoint_1000/wasm_resume",
+          "medianUs": 0.8374999999978172,
+          "p90Us": 0.8895800000027521
+        },
+        {
+          "scenario": "checkpoint_1000/wasm_cold",
+          "medianUs": 69.17999999999665,
+          "p90Us": 70.08583000000726
+        },
+        {
+          "scenario": "atoms_1000/current",
+          "medianUs": 145.96332999999504,
+          "p90Us": 150.54125000000568
+        },
+        {
+          "scenario": "atoms_1000/single_ascii",
+          "medianUs": 153.43208000000232,
+          "p90Us": 155.9166699999878
+        },
+        {
+          "scenario": "atoms_1000/cached_keys",
+          "medianUs": 240.21124999999302,
+          "p90Us": 243.96042000000307
+        },
+        {
+          "scenario": "wire_1000/full_json",
+          "medianUs": 399.04082999999446,
+          "p90Us": 403.82792000000336
+        },
+        {
+          "scenario": "wire_1000/action_fragment",
+          "medianUs": 0.09915999999066116,
+          "p90Us": 0.12416999999913969
+        },
+        {
+          "scenario": "wire_1000/full_json_utf8",
+          "medianUs": 406.7933300000004,
+          "p90Us": 420.17667000000074
+        },
+        {
+          "scenario": "wire_1000/action_fragment_utf8",
+          "medianUs": 2.8162499999962165,
+          "p90Us": 7.3458299999947485
+        }
+      ],
+      "productionHashComparisons": [
+        {
+          "scenario": "hash_wasm_1",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 0.4354,
+            "p90Us": 0.4562
+          },
+          "after": {
+            "medianUs": 0.4424,
+            "p90Us": 0.4835
+          },
+          "speedup": 0.984
+        },
+        {
+          "scenario": "hash_wasm_1",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 0.6146,
+            "p90Us": 0.6471
+          },
+          "after": {
+            "medianUs": 0.6259,
+            "p90Us": 0.6856
+          },
+          "speedup": 0.982
+        },
+        {
+          "scenario": "hash_wasm_4",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 0.6656,
+            "p90Us": 0.6778
+          },
+          "after": {
+            "medianUs": 0.6634,
+            "p90Us": 0.6838
+          },
+          "speedup": 1.003
+        },
+        {
+          "scenario": "hash_wasm_4",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 1.1692,
+            "p90Us": 1.467
+          },
+          "after": {
+            "medianUs": 1.1935,
+            "p90Us": 1.2361
+          },
+          "speedup": 0.98
+        },
+        {
+          "scenario": "hash_wasm_8",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 0.8883,
+            "p90Us": 0.9005
+          },
+          "after": {
+            "medianUs": 0.6022,
+            "p90Us": 0.6441
+          },
+          "speedup": 1.475
+        },
+        {
+          "scenario": "hash_wasm_8",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 1.8027,
+            "p90Us": 1.8362
+          },
+          "after": {
+            "medianUs": 1.8833,
+            "p90Us": 1.9057
+          },
+          "speedup": 0.957
+        },
+        {
+          "scenario": "hash_wasm_10",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 1.1037,
+            "p90Us": 1.1302
+          },
+          "after": {
+            "medianUs": 0.6051,
+            "p90Us": 0.6409
+          },
+          "speedup": 1.824
+        },
+        {
+          "scenario": "hash_wasm_10",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 2.2673,
+            "p90Us": 2.3469
+          },
+          "after": {
+            "medianUs": 2.302,
+            "p90Us": 2.3483
+          },
+          "speedup": 0.985
+        },
+        {
+          "scenario": "hash_wasm_100",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 7.135,
+            "p90Us": 7.195
+          },
+          "after": {
+            "medianUs": 0.6083,
+            "p90Us": 0.7033
+          },
+          "speedup": 11.729
+        },
+        {
+          "scenario": "hash_wasm_100",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 21.6492,
+            "p90Us": 24.3933
+          },
+          "after": {
+            "medianUs": 21.2842,
+            "p90Us": 22.9792
+          },
+          "speedup": 1.017
+        },
+        {
+          "scenario": "hash_wasm_1000",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 67.5383,
+            "p90Us": 68.0242
+          },
+          "after": {
+            "medianUs": 0.6892,
+            "p90Us": 1.1
+          },
+          "speedup": 98.001
+        },
+        {
+          "scenario": "hash_wasm_1000",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 210.5967,
+            "p90Us": 212.7625
+          },
+          "after": {
+            "medianUs": 210.9417,
+            "p90Us": 214.9408
+          },
+          "speedup": 0.998
+        },
+        {
+          "scenario": "hash_noble_1",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 2.0876,
+            "p90Us": 2.1334
+          },
+          "after": {
+            "medianUs": 2.1073,
+            "p90Us": 2.4395
+          },
+          "speedup": 0.991
+        },
+        {
+          "scenario": "hash_noble_1",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 2.3055,
+            "p90Us": 2.7234
+          },
+          "after": {
+            "medianUs": 2.3473,
+            "p90Us": 2.7263
+          },
+          "speedup": 0.982
+        },
+        {
+          "scenario": "hash_noble_4",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 3.7622,
+            "p90Us": 5.0181
+          },
+          "after": {
+            "medianUs": 3.7631,
+            "p90Us": 3.8652
+          },
+          "speedup": 1.0
+        },
+        {
+          "scenario": "hash_noble_4",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 4.471,
+            "p90Us": 4.5523
+          },
+          "after": {
+            "medianUs": 4.4493,
+            "p90Us": 4.5526
+          },
+          "speedup": 1.005
+        },
+        {
+          "scenario": "hash_noble_8",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 5.5952,
+            "p90Us": 5.6519
+          },
+          "after": {
+            "medianUs": 2.0431,
+            "p90Us": 2.0907
+          },
+          "speedup": 2.739
+        },
+        {
+          "scenario": "hash_noble_8",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 6.8495,
+            "p90Us": 6.9027
+          },
+          "after": {
+            "medianUs": 6.8787,
+            "p90Us": 7.0149
+          },
+          "speedup": 0.996
+        },
+        {
+          "scenario": "hash_noble_10",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 7.2071,
+            "p90Us": 7.3027
+          },
+          "after": {
+            "medianUs": 2.0269,
+            "p90Us": 2.0712
+          },
+          "speedup": 3.556
+        },
+        {
+          "scenario": "hash_noble_10",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 8.7763,
+            "p90Us": 9.0312
+          },
+          "after": {
+            "medianUs": 8.7602,
+            "p90Us": 11.8284
+          },
+          "speedup": 1.002
+        },
+        {
+          "scenario": "hash_noble_100",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 57.39,
+            "p90Us": 58.1458
+          },
+          "after": {
+            "medianUs": 2.2392,
+            "p90Us": 2.3683
+          },
+          "speedup": 25.63
+        },
+        {
+          "scenario": "hash_noble_100",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 71.88,
+            "p90Us": 73.13
+          },
+          "after": {
+            "medianUs": 72.3925,
+            "p90Us": 73.1442
+          },
+          "speedup": 0.993
+        },
+        {
+          "scenario": "hash_noble_1000",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 538.7533,
+            "p90Us": 543.6025
+          },
+          "after": {
+            "medianUs": 2.2333,
+            "p90Us": 2.3892
+          },
+          "speedup": 241.232
+        },
+        {
+          "scenario": "hash_noble_1000",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 680.7383,
+            "p90Us": 691.2425
+          },
+          "after": {
+            "medianUs": 678.0025,
+            "p90Us": 683.4158
+          },
+          "speedup": 1.004
+        }
+      ],
+      "productionExecutionComparisons": [
+        {
+          "scenario": "execute_stub_memory_1",
+          "before": {
+            "medianUs": 3.7439,
+            "p90Us": 4.5464
+          },
+          "after": {
+            "medianUs": 3.7244,
+            "p90Us": 4.4314
+          },
+          "speedup": 1.005,
+          "timeReductionPercent": 0.52
+        },
+        {
+          "scenario": "execute_stub_http_1",
+          "before": {
+            "medianUs": 6.5611,
+            "p90Us": 7.7542
+          },
+          "after": {
+            "medianUs": 6.6781,
+            "p90Us": 6.9764
+          },
+          "speedup": 0.982,
+          "timeReductionPercent": -1.78
+        },
+        {
+          "scenario": "execute_stub_ws_1",
+          "before": {
+            "medianUs": 8.7831,
+            "p90Us": 9.6336
+          },
+          "after": {
+            "medianUs": 8.7233,
+            "p90Us": 10.37
+          },
+          "speedup": 1.007,
+          "timeReductionPercent": 0.68
+        },
+        {
+          "scenario": "execute_stub_memory_8",
+          "before": {
+            "medianUs": 3.7197,
+            "p90Us": 4.1242
+          },
+          "after": {
+            "medianUs": 3.5983,
+            "p90Us": 4.0567
+          },
+          "speedup": 1.034,
+          "timeReductionPercent": 3.26
+        },
+        {
+          "scenario": "execute_stub_http_8",
+          "before": {
+            "medianUs": 10.285,
+            "p90Us": 10.4861
+          },
+          "after": {
+            "medianUs": 6.7531,
+            "p90Us": 7.0911
+          },
+          "speedup": 1.523,
+          "timeReductionPercent": 34.34
+        },
+        {
+          "scenario": "execute_stub_ws_8",
+          "before": {
+            "medianUs": 12.4622,
+            "p90Us": 13.0478
+          },
+          "after": {
+            "medianUs": 9.0711,
+            "p90Us": 9.8781
+          },
+          "speedup": 1.374,
+          "timeReductionPercent": 27.21
+        },
+        {
+          "scenario": "execute_stub_memory_100",
+          "before": {
+            "medianUs": 10.0811,
+            "p90Us": 10.2964
+          },
+          "after": {
+            "medianUs": 3.5181,
+            "p90Us": 3.7547
+          },
+          "speedup": 2.866,
+          "timeReductionPercent": 65.1
+        },
+        {
+          "scenario": "execute_stub_http_100",
+          "before": {
+            "medianUs": 54.3936,
+            "p90Us": 55.3336
+          },
+          "after": {
+            "medianUs": 7.7103,
+            "p90Us": 8.6725
+          },
+          "speedup": 7.055,
+          "timeReductionPercent": 85.83
+        },
+        {
+          "scenario": "execute_stub_ws_100",
+          "before": {
+            "medianUs": 56.2775,
+            "p90Us": 58.4644
+          },
+          "after": {
+            "medianUs": 9.9756,
+            "p90Us": 14.6647
+          },
+          "speedup": 5.642,
+          "timeReductionPercent": 82.27
+        },
+        {
+          "scenario": "execute_stub_memory_1000",
+          "before": {
+            "medianUs": 73.5925,
+            "p90Us": 74.8733
+          },
+          "after": {
+            "medianUs": 4.08,
+            "p90Us": 4.2817
+          },
+          "speedup": 18.037,
+          "timeReductionPercent": 94.46
+        },
+        {
+          "scenario": "execute_stub_http_1000",
+          "before": {
+            "medianUs": 489.7942,
+            "p90Us": 509.6767
+          },
+          "after": {
+            "medianUs": 13.0308,
+            "p90Us": 16.12
+          },
+          "speedup": 37.587,
+          "timeReductionPercent": 97.34
+        },
+        {
+          "scenario": "execute_stub_ws_1000",
+          "before": {
+            "medianUs": 500.8717,
+            "p90Us": 526.8683
+          },
+          "after": {
+            "medianUs": 16.5933,
+            "p90Us": 27.2225
+          },
+          "speedup": 30.185,
+          "timeReductionPercent": 96.69
+        },
+        {
+          "scenario": "execute_wasm_memory_1",
+          "before": {
+            "medianUs": 50.3997,
+            "p90Us": 51.0703
+          },
+          "after": {
+            "medianUs": 50.3286,
+            "p90Us": 51.6042
+          },
+          "speedup": 1.001,
+          "timeReductionPercent": 0.14
+        },
+        {
+          "scenario": "execute_wasm_http_1",
+          "before": {
+            "medianUs": 51.8708,
+            "p90Us": 52.9619
+          },
+          "after": {
+            "medianUs": 52.3889,
+            "p90Us": 52.7367
+          },
+          "speedup": 0.99,
+          "timeReductionPercent": -1.0
+        },
+        {
+          "scenario": "execute_wasm_ws_1",
+          "before": {
+            "medianUs": 53.4614,
+            "p90Us": 54.7819
+          },
+          "after": {
+            "medianUs": 53.8222,
+            "p90Us": 54.7956
+          },
+          "speedup": 0.993,
+          "timeReductionPercent": -0.67
+        },
+        {
+          "scenario": "execute_wasm_memory_8",
+          "before": {
+            "medianUs": 48.6211,
+            "p90Us": 49.8147
+          },
+          "after": {
+            "medianUs": 48.6931,
+            "p90Us": 49.0947
+          },
+          "speedup": 0.999,
+          "timeReductionPercent": -0.15
+        },
+        {
+          "scenario": "execute_wasm_http_8",
+          "before": {
+            "medianUs": 58.3069,
+            "p90Us": 59.47
+          },
+          "after": {
+            "medianUs": 55.3103,
+            "p90Us": 56.885
+          },
+          "speedup": 1.054,
+          "timeReductionPercent": 5.14
+        },
+        {
+          "scenario": "execute_wasm_ws_8",
+          "before": {
+            "medianUs": 59.2583,
+            "p90Us": 60.6456
+          },
+          "after": {
+            "medianUs": 56.8856,
+            "p90Us": 60.6072
+          },
+          "speedup": 1.042,
+          "timeReductionPercent": 4.0
+        },
+        {
+          "scenario": "execute_wasm_memory_100",
+          "before": {
+            "medianUs": 56.7739,
+            "p90Us": 56.955
+          },
+          "after": {
+            "medianUs": 50.415,
+            "p90Us": 50.6928
+          },
+          "speedup": 1.126,
+          "timeReductionPercent": 11.2
+        },
+        {
+          "scenario": "execute_wasm_http_100",
+          "before": {
+            "medianUs": 102.6536,
+            "p90Us": 103.6725
+          },
+          "after": {
+            "medianUs": 54.8719,
+            "p90Us": 56.0986
+          },
+          "speedup": 1.871,
+          "timeReductionPercent": 46.55
+        },
+        {
+          "scenario": "execute_wasm_ws_100",
+          "before": {
+            "medianUs": 101.5644,
+            "p90Us": 104.8986
+          },
+          "after": {
+            "medianUs": 55.8478,
+            "p90Us": 59.2833
+          },
+          "speedup": 1.819,
+          "timeReductionPercent": 45.01
+        },
+        {
+          "scenario": "execute_wasm_memory_1000",
+          "before": {
+            "medianUs": 119.0958,
+            "p90Us": 121.9
+          },
+          "after": {
+            "medianUs": 50.4233,
+            "p90Us": 52.6642
+          },
+          "speedup": 2.362,
+          "timeReductionPercent": 57.66
+        },
+        {
+          "scenario": "execute_wasm_http_1000",
+          "before": {
+            "medianUs": 516.5667,
+            "p90Us": 536.9292
+          },
+          "after": {
+            "medianUs": 58.055,
+            "p90Us": 59.6242
+          },
+          "speedup": 8.898,
+          "timeReductionPercent": 88.76
+        },
+        {
+          "scenario": "execute_wasm_ws_1000",
+          "before": {
+            "medianUs": 519.5267,
+            "p90Us": 522.9892
+          },
+          "after": {
+            "medianUs": 61.7208,
+            "p90Us": 70.1175
+          },
+          "speedup": 8.417,
+          "timeReductionPercent": 88.12
+        }
+      ],
+      "rawReports": ["/tmp/hyperliquid-search-bun.json", "/tmp/hyperliquid-verify-bun.json"],
+      "stagedSigningComparisons": {
+        "date": "2026-10-06T21:55:09.864Z",
+        "samples": 11,
+        "method": "Sign a fresh request, then submit it; reuse the builder payload; rotating paired variants; real outgoing UTF-8 materialization; no network latency. Original unoptimized working tree is the baseline.",
+        "results": [
+          {
+            "scenario": "staged_stub_memory_1",
+            "before": {
+              "medianUs": 6.4506,
+              "p90Us": 8.3281
+            },
+            "after": {
+              "medianUs": 4.7469,
+              "p90Us": 5.7225
+            },
+            "speedup": 1.359,
+            "timeReductionPercent": 26.41
+          },
+          {
+            "scenario": "staged_stub_http_1",
+            "before": {
+              "medianUs": 9.0614,
+              "p90Us": 9.5189
+            },
+            "after": {
+              "medianUs": 7.52,
+              "p90Us": 8.5431
+            },
+            "speedup": 1.205,
+            "timeReductionPercent": 17.01
+          },
+          {
+            "scenario": "staged_stub_ws_1",
+            "before": {
+              "medianUs": 11.3547,
+              "p90Us": 11.9297
+            },
+            "after": {
+              "medianUs": 9.2819,
+              "p90Us": 10.2428
+            },
+            "speedup": 1.223,
+            "timeReductionPercent": 18.25
+          },
+          {
+            "scenario": "staged_stub_memory_8",
+            "before": {
+              "medianUs": 11.7397,
+              "p90Us": 13.0317
+            },
+            "after": {
+              "medianUs": 4.3336,
+              "p90Us": 4.4572
+            },
+            "speedup": 2.709,
+            "timeReductionPercent": 63.09
+          },
+          {
+            "scenario": "staged_stub_http_8",
+            "before": {
+              "medianUs": 19.1964,
+              "p90Us": 20.6039
+            },
+            "after": {
+              "medianUs": 8.7025,
+              "p90Us": 9.3464
+            },
+            "speedup": 2.206,
+            "timeReductionPercent": 54.67
+          },
+          {
+            "scenario": "staged_stub_ws_8",
+            "before": {
+              "medianUs": 20.7625,
+              "p90Us": 23.2972
+            },
+            "after": {
+              "medianUs": 10.4092,
+              "p90Us": 11.5014
+            },
+            "speedup": 1.995,
+            "timeReductionPercent": 49.87
+          },
+          {
+            "scenario": "staged_stub_memory_100",
+            "before": {
+              "medianUs": 89.8944,
+              "p90Us": 90.9842
+            },
+            "after": {
+              "medianUs": 4.13,
+              "p90Us": 4.5386
+            },
+            "speedup": 21.766,
+            "timeReductionPercent": 95.41
+          },
+          {
+            "scenario": "staged_stub_http_100",
+            "before": {
+              "medianUs": 134.9839,
+              "p90Us": 140.1947
+            },
+            "after": {
+              "medianUs": 9.2444,
+              "p90Us": 11.9636
+            },
+            "speedup": 14.602,
+            "timeReductionPercent": 93.15
+          },
+          {
+            "scenario": "staged_stub_ws_100",
+            "before": {
+              "medianUs": 137.1147,
+              "p90Us": 142.7456
+            },
+            "after": {
+              "medianUs": 12.3319,
+              "p90Us": 15.4314
+            },
+            "speedup": 11.119,
+            "timeReductionPercent": 91.01
+          },
+          {
+            "scenario": "staged_stub_memory_1000",
+            "before": {
+              "medianUs": 913.0175,
+              "p90Us": 942.6717
+            },
+            "after": {
+              "medianUs": 4.9092,
+              "p90Us": 5.42
+            },
+            "speedup": 185.982,
+            "timeReductionPercent": 99.46
+          },
+          {
+            "scenario": "staged_stub_http_1000",
+            "before": {
+              "medianUs": 1333.67,
+              "p90Us": 1347.4033
+            },
+            "after": {
+              "medianUs": 17.0083,
+              "p90Us": 23.5575
+            },
+            "speedup": 78.413,
+            "timeReductionPercent": 98.72
+          },
+          {
+            "scenario": "staged_stub_ws_1000",
+            "before": {
+              "medianUs": 1330.1608,
+              "p90Us": 1369.6117
+            },
+            "after": {
+              "medianUs": 25.7483,
+              "p90Us": 32.6875
+            },
+            "speedup": 51.66,
+            "timeReductionPercent": 98.06
+          },
+          {
+            "scenario": "staged_wasm_memory_1",
+            "before": {
+              "medianUs": 54.2108,
+              "p90Us": 55.1022
+            },
+            "after": {
+              "medianUs": 51.535,
+              "p90Us": 52.9103
+            },
+            "speedup": 1.052,
+            "timeReductionPercent": 4.94
+          },
+          {
+            "scenario": "staged_wasm_http_1",
+            "before": {
+              "medianUs": 58.3411,
+              "p90Us": 63.0842
+            },
+            "after": {
+              "medianUs": 55.9958,
+              "p90Us": 57.0656
+            },
+            "speedup": 1.042,
+            "timeReductionPercent": 4.02
+          },
+          {
+            "scenario": "staged_wasm_ws_1",
+            "before": {
+              "medianUs": 59.8867,
+              "p90Us": 60.8197
+            },
+            "after": {
+              "medianUs": 57.6611,
+              "p90Us": 58.7986
+            },
+            "speedup": 1.039,
+            "timeReductionPercent": 3.72
+          },
+          {
+            "scenario": "staged_wasm_memory_8",
+            "before": {
+              "medianUs": 59.4769,
+              "p90Us": 62.4075
+            },
+            "after": {
+              "medianUs": 50.7186,
+              "p90Us": 52.2786
+            },
+            "speedup": 1.173,
+            "timeReductionPercent": 14.73
+          },
+          {
+            "scenario": "staged_wasm_http_8",
+            "before": {
+              "medianUs": 64.2831,
+              "p90Us": 67.1614
+            },
+            "after": {
+              "medianUs": 53.9028,
+              "p90Us": 55.5419
+            },
+            "speedup": 1.193,
+            "timeReductionPercent": 16.15
+          },
+          {
+            "scenario": "staged_wasm_ws_8",
+            "before": {
+              "medianUs": 65.0286,
+              "p90Us": 69.4744
+            },
+            "after": {
+              "medianUs": 55.7831,
+              "p90Us": 56.5511
+            },
+            "speedup": 1.166,
+            "timeReductionPercent": 14.22
+          },
+          {
+            "scenario": "staged_wasm_memory_100",
+            "before": {
+              "medianUs": 134.9061,
+              "p90Us": 135.5664
+            },
+            "after": {
+              "medianUs": 49.4981,
+              "p90Us": 49.8525
+            },
+            "speedup": 2.725,
+            "timeReductionPercent": 63.31
+          },
+          {
+            "scenario": "staged_wasm_http_100",
+            "before": {
+              "medianUs": 189.6217,
+              "p90Us": 200.0178
+            },
+            "after": {
+              "medianUs": 58.2206,
+              "p90Us": 59.4475
+            },
+            "speedup": 3.257,
+            "timeReductionPercent": 69.3
+          },
+          {
+            "scenario": "staged_wasm_ws_100",
+            "before": {
+              "medianUs": 189.6358,
+              "p90Us": 195.3831
+            },
+            "after": {
+              "medianUs": 58.9644,
+              "p90Us": 60.6108
+            },
+            "speedup": 3.216,
+            "timeReductionPercent": 68.91
+          },
+          {
+            "scenario": "staged_wasm_memory_1000",
+            "before": {
+              "medianUs": 903.5967,
+              "p90Us": 923.6542
+            },
+            "after": {
+              "medianUs": 50.4,
+              "p90Us": 52.1917
+            },
+            "speedup": 17.929,
+            "timeReductionPercent": 94.42
+          },
+          {
+            "scenario": "staged_wasm_http_1000",
+            "before": {
+              "medianUs": 1292.575,
+              "p90Us": 1311.515
+            },
+            "after": {
+              "medianUs": 60.0917,
+              "p90Us": 67.6442
+            },
+            "speedup": 21.51,
+            "timeReductionPercent": 95.35
+          },
+          {
+            "scenario": "staged_wasm_ws_1000",
+            "before": {
+              "medianUs": 1304.8483,
+              "p90Us": 1322.6308
+            },
+            "after": {
+              "medianUs": 65.445,
+              "p90Us": 74.0758
+            },
+            "speedup": 19.938,
+            "timeReductionPercent": 94.98
+          }
+        ],
+        "rawReport": "/tmp/hyperliquid-staged-bun.json"
+      }
+    },
+    "node": {
+      "runtime": "Node 24.6.0",
+      "cpu": "Apple M3 Max",
+      "date": "2026-10-06T21:36:53.129Z",
+      "samples": 11,
+      "method": "Rotating paired variants; three warmup samples discarded; medians/p90 per complete action; fresh nonces and signatures; mock transports materialize outgoing UTF-8; no network latency.",
+      "candidateSearch": [
+        {
+          "scenario": "checkpoint_1/noble_full",
+          "medianUs": 13.973148599999998,
+          "p90Us": 15.427334733333373
+        },
+        {
+          "scenario": "checkpoint_1/noble_resume",
+          "medianUs": 11.28019859999998,
+          "p90Us": 13.59813609999995
+        },
+        {
+          "scenario": "checkpoint_1/noble_cold",
+          "medianUs": 15.670872233333283,
+          "p90Us": 17.688083333333328
+        },
+        {
+          "scenario": "checkpoint_1/wasm_full",
+          "medianUs": 1.368675000000015,
+          "p90Us": 2.734965266666647
+        },
+        {
+          "scenario": "checkpoint_1/wasm_resume",
+          "medianUs": 2.2263847333333007,
+          "p90Us": 5.17202640000008
+        },
+        {
+          "scenario": "checkpoint_1/wasm_cold",
+          "medianUs": 3.7143291666666602,
+          "p90Us": 6.70214723333332
+        },
+        {
+          "scenario": "atoms_1/current",
+          "medianUs": 1.3976486333333014,
+          "p90Us": 1.7572874999999233
+        },
+        {
+          "scenario": "atoms_1/single_ascii",
+          "medianUs": 1.3220527999999225,
+          "p90Us": 2.086415266666639
+        },
+        {
+          "scenario": "atoms_1/cached_keys",
+          "medianUs": 1.1582500000000437,
+          "p90Us": 3.273988899999919
+        },
+        {
+          "scenario": "wire_1/full_json",
+          "medianUs": 2.326594433333351,
+          "p90Us": 2.9467916666667104
+        },
+        {
+          "scenario": "wire_1/action_fragment",
+          "medianUs": 0.09217223333337946,
+          "p90Us": 1.0998597333332631
+        },
+        {
+          "scenario": "wire_1/full_json_utf8",
+          "medianUs": 4.190205533333331,
+          "p90Us": 8.018609733333262
+        },
+        {
+          "scenario": "wire_1/action_fragment_utf8",
+          "medianUs": 2.6955416666666374,
+          "p90Us": 4.3128694666667196
+        },
+        {
+          "scenario": "checkpoint_10/noble_full",
+          "medianUs": 50.47587500000009,
+          "p90Us": 67.4527776666667
+        },
+        {
+          "scenario": "checkpoint_10/noble_resume",
+          "medianUs": 8.86595833333437,
+          "p90Us": 29.069097333333048
+        },
+        {
+          "scenario": "checkpoint_10/noble_cold",
+          "medianUs": 52.95334733333342,
+          "p90Us": 67.94052766666694
+        },
+        {
+          "scenario": "checkpoint_10/wasm_full",
+          "medianUs": 1.4490969999994074,
+          "p90Us": 4.195403000000321
+        },
+        {
+          "scenario": "checkpoint_10/wasm_resume",
+          "medianUs": 0.8492499999993015,
+          "p90Us": 2.591763666667248
+        },
+        {
+          "scenario": "checkpoint_10/wasm_cold",
+          "medianUs": 2.3631803333325174,
+          "p90Us": 20.399666666666842
+        },
+        {
+          "scenario": "atoms_10/current",
+          "medianUs": 3.015208333334158,
+          "p90Us": 14.330111333333965
+        },
+        {
+          "scenario": "atoms_10/single_ascii",
+          "medianUs": 3.3705973333332317,
+          "p90Us": 18.14669433333256
+        },
+        {
+          "scenario": "atoms_10/cached_keys",
+          "medianUs": 12.688361000000441,
+          "p90Us": 28.442485999999917
+        },
+        {
+          "scenario": "wire_10/full_json",
+          "medianUs": 4.002597333332233,
+          "p90Us": 28.71595833333413
+        },
+        {
+          "scenario": "wire_10/action_fragment",
+          "medianUs": 0.1050416666669965,
+          "p90Us": 0.11454166666711292
+        },
+        {
+          "scenario": "wire_10/full_json_utf8",
+          "medianUs": 6.2987083333331,
+          "p90Us": 22.020972000000864
+        },
+        {
+          "scenario": "wire_10/action_fragment_utf8",
+          "medianUs": 1.6436529999991762,
+          "p90Us": 16.903944333333737
+        },
+        {
+          "scenario": "checkpoint_100/noble_full",
+          "medianUs": 373.62930666667427,
+          "p90Us": 471.823473333352
+        },
+        {
+          "scenario": "checkpoint_100/noble_resume",
+          "medianUs": 4.436113333334409,
+          "p90Us": 4.474166666671711
+        },
+        {
+          "scenario": "checkpoint_100/noble_cold",
+          "medianUs": 301.4861100000174,
+          "p90Us": 536.4808333333349
+        },
+        {
+          "scenario": "checkpoint_100/wasm_full",
+          "medianUs": 9.334030000003017,
+          "p90Us": 81.12722333333902
+        },
+        {
+          "scenario": "checkpoint_100/wasm_resume",
+          "medianUs": 0.8504166666534729,
+          "p90Us": 0.8937500000077611
+        },
+        {
+          "scenario": "checkpoint_100/wasm_cold",
+          "medianUs": 9.659723333340176,
+          "p90Us": 17.381806666671764
+        },
+        {
+          "scenario": "atoms_100/current",
+          "medianUs": 28.584719999998924,
+          "p90Us": 135.98403000001176
+        },
+        {
+          "scenario": "atoms_100/single_ascii",
+          "medianUs": 29.147083333349048,
+          "p90Us": 39.63083333333392
+        },
+        {
+          "scenario": "atoms_100/cached_keys",
+          "medianUs": 38.62791666668878,
+          "p90Us": 39.431806666664976
+        },
+        {
+          "scenario": "wire_100/full_json",
+          "medianUs": 20.549723333339596,
+          "p90Us": 23.30680333332566
+        },
+        {
+          "scenario": "wire_100/action_fragment",
+          "medianUs": 0.0995833333339154,
+          "p90Us": 0.1070833333506016
+        },
+        {
+          "scenario": "wire_100/full_json_utf8",
+          "medianUs": 29.13527666666293,
+          "p90Us": 33.31166666665619
+        },
+        {
+          "scenario": "wire_100/action_fragment_utf8",
+          "medianUs": 8.555970000015805,
+          "p90Us": 9.694166666668025
+        },
+        {
+          "scenario": "checkpoint_1000/noble_full",
+          "medianUs": 1012.6825000000099,
+          "p90Us": 1037.5624999999854
+        },
+        {
+          "scenario": "checkpoint_1000/noble_resume",
+          "medianUs": 3.589590000046883,
+          "p90Us": 4.607909999976982
+        },
+        {
+          "scenario": "checkpoint_1000/noble_cold",
+          "medianUs": 1019.8366700000042,
+          "p90Us": 1058.7741700000333
+        },
+        {
+          "scenario": "checkpoint_1000/wasm_full",
+          "medianUs": 68.46083000004,
+          "p90Us": 71.07250000000931
+        },
+        {
+          "scenario": "checkpoint_1000/wasm_resume",
+          "medianUs": 0.7837499999732245,
+          "p90Us": 0.9333400000468828
+        },
+        {
+          "scenario": "checkpoint_1000/wasm_cold",
+          "medianUs": 67.08333000002312,
+          "p90Us": 71.57874999997148
+        },
+        {
+          "scenario": "atoms_1000/current",
+          "medianUs": 209.36666000001424,
+          "p90Us": 216.192499999961
+        },
+        {
+          "scenario": "atoms_1000/single_ascii",
+          "medianUs": 216.57083999998576,
+          "p90Us": 224.20208999996248
+        },
+        {
+          "scenario": "atoms_1000/cached_keys",
+          "medianUs": 284.96791999998095,
+          "p90Us": 287.76208999996015
+        },
+        {
+          "scenario": "wire_1000/full_json",
+          "medianUs": 164.30082999999286,
+          "p90Us": 170.9883300000365
+        },
+        {
+          "scenario": "wire_1000/action_fragment",
+          "medianUs": 0.08541000002878718,
+          "p90Us": 0.14750000002095476
+        },
+        {
+          "scenario": "wire_1000/full_json_utf8",
+          "medianUs": 229.84666000003926,
+          "p90Us": 235.11749999997846
+        },
+        {
+          "scenario": "wire_1000/action_fragment_utf8",
+          "medianUs": 65.33708000002662,
+          "p90Us": 66.83124999995925
+        }
+      ],
+      "productionHashComparisons": [
+        {
+          "scenario": "hash_wasm_1",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 0.4506,
+            "p90Us": 0.4542
+          },
+          "after": {
+            "medianUs": 0.4518,
+            "p90Us": 0.4671
+          },
+          "speedup": 0.997
+        },
+        {
+          "scenario": "hash_wasm_1",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 0.7828,
+            "p90Us": 0.805
+          },
+          "after": {
+            "medianUs": 0.7794,
+            "p90Us": 0.7847
+          },
+          "speedup": 1.004
+        },
+        {
+          "scenario": "hash_wasm_4",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 0.6514,
+            "p90Us": 0.6624
+          },
+          "after": {
+            "medianUs": 0.6467,
+            "p90Us": 0.7032
+          },
+          "speedup": 1.007
+        },
+        {
+          "scenario": "hash_wasm_4",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 1.7139,
+            "p90Us": 1.7358
+          },
+          "after": {
+            "medianUs": 1.6879,
+            "p90Us": 1.765
+          },
+          "speedup": 1.015
+        },
+        {
+          "scenario": "hash_wasm_8",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 0.8429,
+            "p90Us": 0.8645
+          },
+          "after": {
+            "medianUs": 0.6602,
+            "p90Us": 0.684
+          },
+          "speedup": 1.277
+        },
+        {
+          "scenario": "hash_wasm_8",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 2.7801,
+            "p90Us": 2.9402
+          },
+          "after": {
+            "medianUs": 2.7752,
+            "p90Us": 2.8694
+          },
+          "speedup": 1.002
+        },
+        {
+          "scenario": "hash_wasm_10",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 1.0228,
+            "p90Us": 1.034
+          },
+          "after": {
+            "medianUs": 0.6862,
+            "p90Us": 0.7307
+          },
+          "speedup": 1.49
+        },
+        {
+          "scenario": "hash_wasm_10",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 3.4212,
+            "p90Us": 3.4568
+          },
+          "after": {
+            "medianUs": 3.4368,
+            "p90Us": 3.5802
+          },
+          "speedup": 0.995
+        },
+        {
+          "scenario": "hash_wasm_100",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 6.3742,
+            "p90Us": 6.4875
+          },
+          "after": {
+            "medianUs": 0.69,
+            "p90Us": 0.7892
+          },
+          "speedup": 9.238
+        },
+        {
+          "scenario": "hash_wasm_100",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 27.9475,
+            "p90Us": 29.31
+          },
+          "after": {
+            "medianUs": 27.8042,
+            "p90Us": 28.0733
+          },
+          "speedup": 1.005
+        },
+        {
+          "scenario": "hash_wasm_1000",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 60.5883,
+            "p90Us": 62.535
+          },
+          "after": {
+            "medianUs": 0.8483,
+            "p90Us": 0.885
+          },
+          "speedup": 71.422
+        },
+        {
+          "scenario": "hash_wasm_1000",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 273.1475,
+            "p90Us": 276.6092
+          },
+          "after": {
+            "medianUs": 275.7167,
+            "p90Us": 279.7683
+          },
+          "speedup": 0.991
+        },
+        {
+          "scenario": "hash_noble_1",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 3.4079,
+            "p90Us": 3.4299
+          },
+          "after": {
+            "medianUs": 3.3834,
+            "p90Us": 3.4077
+          },
+          "speedup": 1.007
+        },
+        {
+          "scenario": "hash_noble_1",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 3.7164,
+            "p90Us": 3.7777
+          },
+          "after": {
+            "medianUs": 3.7055,
+            "p90Us": 3.7588
+          },
+          "speedup": 1.003
+        },
+        {
+          "scenario": "hash_noble_4",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 6.5393,
+            "p90Us": 6.6536
+          },
+          "after": {
+            "medianUs": 6.5554,
+            "p90Us": 6.5971
+          },
+          "speedup": 0.998
+        },
+        {
+          "scenario": "hash_noble_4",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 7.5906,
+            "p90Us": 7.6769
+          },
+          "after": {
+            "medianUs": 7.4818,
+            "p90Us": 7.6436
+          },
+          "speedup": 1.015
+        },
+        {
+          "scenario": "hash_noble_8",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 9.6166,
+            "p90Us": 9.7459
+          },
+          "after": {
+            "medianUs": 3.3198,
+            "p90Us": 3.352
+          },
+          "speedup": 2.897
+        },
+        {
+          "scenario": "hash_noble_8",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 11.583,
+            "p90Us": 11.8203
+          },
+          "after": {
+            "medianUs": 11.6551,
+            "p90Us": 11.7175
+          },
+          "speedup": 0.994
+        },
+        {
+          "scenario": "hash_noble_10",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 12.5977,
+            "p90Us": 12.7781
+          },
+          "after": {
+            "medianUs": 3.343,
+            "p90Us": 3.4458
+          },
+          "speedup": 3.768
+        },
+        {
+          "scenario": "hash_noble_10",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 14.9426,
+            "p90Us": 15.3175
+          },
+          "after": {
+            "medianUs": 14.9974,
+            "p90Us": 15.2309
+          },
+          "speedup": 0.996
+        },
+        {
+          "scenario": "hash_noble_100",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 98.3675,
+            "p90Us": 99.3808
+          },
+          "after": {
+            "medianUs": 3.3392,
+            "p90Us": 3.485
+          },
+          "speedup": 29.459
+        },
+        {
+          "scenario": "hash_noble_100",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 120.4383,
+            "p90Us": 123.7667
+          },
+          "after": {
+            "medianUs": 121.6317,
+            "p90Us": 124.2517
+          },
+          "speedup": 0.99
+        },
+        {
+          "scenario": "hash_noble_1000",
+          "ownership": "owned",
+          "before": {
+            "medianUs": 946.5692,
+            "p90Us": 956.9925
+          },
+          "after": {
+            "medianUs": 3.4758,
+            "p90Us": 3.585
+          },
+          "speedup": 272.328
+        },
+        {
+          "scenario": "hash_noble_1000",
+          "ownership": "mutable",
+          "before": {
+            "medianUs": 1167.56,
+            "p90Us": 1176.91
+          },
+          "after": {
+            "medianUs": 1170.0267,
+            "p90Us": 1174.7358
+          },
+          "speedup": 0.998
+        }
+      ],
+      "productionExecutionComparisons": [
+        {
+          "scenario": "execute_stub_memory_1",
+          "before": {
+            "medianUs": 3.2169,
+            "p90Us": 4.2608
+          },
+          "after": {
+            "medianUs": 3.1439,
+            "p90Us": 3.6494
+          },
+          "speedup": 1.023,
+          "timeReductionPercent": 2.27
+        },
+        {
+          "scenario": "execute_stub_http_1",
+          "before": {
+            "medianUs": 11.9778,
+            "p90Us": 12.7106
+          },
+          "after": {
+            "medianUs": 11.7222,
+            "p90Us": 13.6722
+          },
+          "speedup": 1.022,
+          "timeReductionPercent": 2.13
+        },
+        {
+          "scenario": "execute_stub_ws_1",
+          "before": {
+            "medianUs": 8.7083,
+            "p90Us": 9.8486
+          },
+          "after": {
+            "medianUs": 9.0817,
+            "p90Us": 9.6453
+          },
+          "speedup": 0.959,
+          "timeReductionPercent": -4.29
+        },
+        {
+          "scenario": "execute_stub_memory_8",
+          "before": {
+            "medianUs": 3.1967,
+            "p90Us": 3.2853
+          },
+          "after": {
+            "medianUs": 3.3786,
+            "p90Us": 3.6758
+          },
+          "speedup": 0.946,
+          "timeReductionPercent": -5.69
+        },
+        {
+          "scenario": "execute_stub_http_8",
+          "before": {
+            "medianUs": 14.3017,
+            "p90Us": 16.7283
+          },
+          "after": {
+            "medianUs": 13.6794,
+            "p90Us": 15.215
+          },
+          "speedup": 1.045,
+          "timeReductionPercent": 4.35
+        },
+        {
+          "scenario": "execute_stub_ws_8",
+          "before": {
+            "medianUs": 10.5775,
+            "p90Us": 11.1358
+          },
+          "after": {
+            "medianUs": 10.2244,
+            "p90Us": 11.8258
+          },
+          "speedup": 1.035,
+          "timeReductionPercent": 3.34
+        },
+        {
+          "scenario": "execute_stub_memory_100",
+          "before": {
+            "medianUs": 8.6267,
+            "p90Us": 8.7886
+          },
+          "after": {
+            "medianUs": 3.1067,
+            "p90Us": 4.3208
+          },
+          "speedup": 2.777,
+          "timeReductionPercent": 63.99
+        },
+        {
+          "scenario": "execute_stub_http_100",
+          "before": {
+            "medianUs": 42.7258,
+            "p90Us": 44.5881
+          },
+          "after": {
+            "medianUs": 19.6847,
+            "p90Us": 21.8075
+          },
+          "speedup": 2.171,
+          "timeReductionPercent": 53.93
+        },
+        {
+          "scenario": "execute_stub_ws_100",
+          "before": {
+            "medianUs": 41.1075,
+            "p90Us": 41.7275
+          },
+          "after": {
+            "medianUs": 17.2547,
+            "p90Us": 19.0131
+          },
+          "speedup": 2.382,
+          "timeReductionPercent": 58.03
+        },
+        {
+          "scenario": "execute_stub_memory_1000",
+          "before": {
+            "medianUs": 62.1642,
+            "p90Us": 62.9683
+          },
+          "after": {
+            "medianUs": 3.0817,
+            "p90Us": 3.1575
+          },
+          "speedup": 20.172,
+          "timeReductionPercent": 95.04
+        },
+        {
+          "scenario": "execute_stub_http_1000",
+          "before": {
+            "medianUs": 311.565,
+            "p90Us": 314.4308
+          },
+          "after": {
+            "medianUs": 76.695,
+            "p90Us": 78.6283
+          },
+          "speedup": 4.062,
+          "timeReductionPercent": 75.38
+        },
+        {
+          "scenario": "execute_stub_ws_1000",
+          "before": {
+            "medianUs": 322.3167,
+            "p90Us": 340.5683
+          },
+          "after": {
+            "medianUs": 78.5233,
+            "p90Us": 97.4408
+          },
+          "speedup": 4.105,
+          "timeReductionPercent": 75.64
+        },
+        {
+          "scenario": "execute_wasm_memory_1",
+          "before": {
+            "medianUs": 71.3797,
+            "p90Us": 72.3153
+          },
+          "after": {
+            "medianUs": 71.3558,
+            "p90Us": 72.5094
+          },
+          "speedup": 1.0,
+          "timeReductionPercent": 0.03
+        },
+        {
+          "scenario": "execute_wasm_http_1",
+          "before": {
+            "medianUs": 78.7544,
+            "p90Us": 79.7353
+          },
+          "after": {
+            "medianUs": 79.2786,
+            "p90Us": 81.3428
+          },
+          "speedup": 0.993,
+          "timeReductionPercent": -0.67
+        },
+        {
+          "scenario": "execute_wasm_ws_1",
+          "before": {
+            "medianUs": 76.9472,
+            "p90Us": 78.1272
+          },
+          "after": {
+            "medianUs": 77.0756,
+            "p90Us": 77.96
+          },
+          "speedup": 0.998,
+          "timeReductionPercent": -0.17
+        },
+        {
+          "scenario": "execute_wasm_memory_8",
+          "before": {
+            "medianUs": 70.6175,
+            "p90Us": 72.3569
+          },
+          "after": {
+            "medianUs": 71.3425,
+            "p90Us": 72.9958
+          },
+          "speedup": 0.99,
+          "timeReductionPercent": -1.03
+        },
+        {
+          "scenario": "execute_wasm_http_8",
+          "before": {
+            "medianUs": 80.5681,
+            "p90Us": 81.9
+          },
+          "after": {
+            "medianUs": 79.6781,
+            "p90Us": 81.0333
+          },
+          "speedup": 1.011,
+          "timeReductionPercent": 1.1
+        },
+        {
+          "scenario": "execute_wasm_ws_8",
+          "before": {
+            "medianUs": 78.3947,
+            "p90Us": 79.4036
+          },
+          "after": {
+            "medianUs": 77.8917,
+            "p90Us": 80.1064
+          },
+          "speedup": 1.006,
+          "timeReductionPercent": 0.64
+        },
+        {
+          "scenario": "execute_wasm_memory_100",
+          "before": {
+            "medianUs": 76.2331,
+            "p90Us": 76.8069
+          },
+          "after": {
+            "medianUs": 71.1697,
+            "p90Us": 73.6728
+          },
+          "speedup": 1.071,
+          "timeReductionPercent": 6.64
+        },
+        {
+          "scenario": "execute_wasm_http_100",
+          "before": {
+            "medianUs": 108.7017,
+            "p90Us": 110.3989
+          },
+          "after": {
+            "medianUs": 85.0764,
+            "p90Us": 87.5678
+          },
+          "speedup": 1.278,
+          "timeReductionPercent": 21.73
+        },
+        {
+          "scenario": "execute_wasm_ws_100",
+          "before": {
+            "medianUs": 108.2933,
+            "p90Us": 109.3769
+          },
+          "after": {
+            "medianUs": 84.2344,
+            "p90Us": 85.0275
+          },
+          "speedup": 1.286,
+          "timeReductionPercent": 22.22
+        },
+        {
+          "scenario": "execute_wasm_memory_1000",
+          "before": {
+            "medianUs": 129.2858,
+            "p90Us": 130.1842
+          },
+          "after": {
+            "medianUs": 70.8375,
+            "p90Us": 71.2242
+          },
+          "speedup": 1.825,
+          "timeReductionPercent": 45.21
+        },
+        {
+          "scenario": "execute_wasm_http_1000",
+          "before": {
+            "medianUs": 390.6983,
+            "p90Us": 395.9058
+          },
+          "after": {
+            "medianUs": 145.795,
+            "p90Us": 147.3475
+          },
+          "speedup": 2.68,
+          "timeReductionPercent": 62.68
+        },
+        {
+          "scenario": "execute_wasm_ws_1000",
+          "before": {
+            "medianUs": 391.8258,
+            "p90Us": 395.8867
+          },
+          "after": {
+            "medianUs": 145.125,
+            "p90Us": 150.2767
+          },
+          "speedup": 2.7,
+          "timeReductionPercent": 62.96
+        }
+      ],
+      "rawReports": ["/tmp/hyperliquid-search-node.json", "/tmp/hyperliquid-verify-node.json"],
+      "stagedSigningComparisons": {
+        "date": "2026-10-06T21:56:25.699Z",
+        "samples": 11,
+        "method": "Sign a fresh request, then submit it; reuse the builder payload; rotating paired variants; real outgoing UTF-8 materialization; no network latency. Original unoptimized working tree is the baseline.",
+        "results": [
+          {
+            "scenario": "staged_stub_memory_1",
+            "before": {
+              "medianUs": 7.2647,
+              "p90Us": 10.0869
+            },
+            "after": {
+              "medianUs": 4.3086,
+              "p90Us": 5.6539
+            },
+            "speedup": 1.686,
+            "timeReductionPercent": 40.69
+          },
+          {
+            "scenario": "staged_stub_http_1",
+            "before": {
+              "medianUs": 16.3903,
+              "p90Us": 17.5689
+            },
+            "after": {
+              "medianUs": 14.4931,
+              "p90Us": 15.8936
+            },
+            "speedup": 1.131,
+            "timeReductionPercent": 11.58
+          },
+          {
+            "scenario": "staged_stub_ws_1",
+            "before": {
+              "medianUs": 13.1636,
+              "p90Us": 15.2833
+            },
+            "after": {
+              "medianUs": 10.2,
+              "p90Us": 12.2883
+            },
+            "speedup": 1.291,
+            "timeReductionPercent": 22.51
+          },
+          {
+            "scenario": "staged_stub_memory_8",
+            "before": {
+              "medianUs": 13.6633,
+              "p90Us": 15.7967
+            },
+            "after": {
+              "medianUs": 4.5425,
+              "p90Us": 5.1619
+            },
+            "speedup": 3.008,
+            "timeReductionPercent": 66.75
+          },
+          {
+            "scenario": "staged_stub_http_8",
+            "before": {
+              "medianUs": 24.5725,
+              "p90Us": 26.1675
+            },
+            "after": {
+              "medianUs": 15.2139,
+              "p90Us": 18.0889
+            },
+            "speedup": 1.615,
+            "timeReductionPercent": 38.09
+          },
+          {
+            "scenario": "staged_stub_ws_8",
+            "before": {
+              "medianUs": 21.655,
+              "p90Us": 24.0839
+            },
+            "after": {
+              "medianUs": 11.7967,
+              "p90Us": 14.335
+            },
+            "speedup": 1.836,
+            "timeReductionPercent": 45.52
+          },
+          {
+            "scenario": "staged_stub_memory_100",
+            "before": {
+              "medianUs": 107.1153,
+              "p90Us": 108.7819
+            },
+            "after": {
+              "medianUs": 4.25,
+              "p90Us": 4.7747
+            },
+            "speedup": 25.204,
+            "timeReductionPercent": 96.03
+          },
+          {
+            "scenario": "staged_stub_http_100",
+            "before": {
+              "medianUs": 139.625,
+              "p90Us": 142.4089
+            },
+            "after": {
+              "medianUs": 20.0256,
+              "p90Us": 20.9486
+            },
+            "speedup": 6.972,
+            "timeReductionPercent": 85.66
+          },
+          {
+            "scenario": "staged_stub_ws_100",
+            "before": {
+              "medianUs": 146.0861,
+              "p90Us": 146.6808
+            },
+            "after": {
+              "medianUs": 18.8897,
+              "p90Us": 20.0478
+            },
+            "speedup": 7.734,
+            "timeReductionPercent": 87.07
+          },
+          {
+            "scenario": "staged_stub_memory_1000",
+            "before": {
+              "medianUs": 1053.0133,
+              "p90Us": 1069.6883
+            },
+            "after": {
+              "medianUs": 4.9092,
+              "p90Us": 5.905
+            },
+            "speedup": 214.499,
+            "timeReductionPercent": 99.53
+          },
+          {
+            "scenario": "staged_stub_http_1000",
+            "before": {
+              "medianUs": 1309.6975,
+              "p90Us": 1328.5192
+            },
+            "after": {
+              "medianUs": 82.5575,
+              "p90Us": 84.1933
+            },
+            "speedup": 15.864,
+            "timeReductionPercent": 93.7
+          },
+          {
+            "scenario": "staged_stub_ws_1000",
+            "before": {
+              "medianUs": 1306.2175,
+              "p90Us": 1341.24
+            },
+            "after": {
+              "medianUs": 80.5183,
+              "p90Us": 83.0858
+            },
+            "speedup": 16.223,
+            "timeReductionPercent": 93.84
+          },
+          {
+            "scenario": "staged_wasm_memory_1",
+            "before": {
+              "medianUs": 71.6661,
+              "p90Us": 73.0675
+            },
+            "after": {
+              "medianUs": 68.7231,
+              "p90Us": 70.1119
+            },
+            "speedup": 1.043,
+            "timeReductionPercent": 4.11
+          },
+          {
+            "scenario": "staged_wasm_http_1",
+            "before": {
+              "medianUs": 78.0769,
+              "p90Us": 80.6208
+            },
+            "after": {
+              "medianUs": 76.6072,
+              "p90Us": 78.3836
+            },
+            "speedup": 1.019,
+            "timeReductionPercent": 1.88
+          },
+          {
+            "scenario": "staged_wasm_ws_1",
+            "before": {
+              "medianUs": 77.4156,
+              "p90Us": 78.5544
+            },
+            "after": {
+              "medianUs": 75.0081,
+              "p90Us": 77.1406
+            },
+            "speedup": 1.032,
+            "timeReductionPercent": 3.11
+          },
+          {
+            "scenario": "staged_wasm_memory_8",
+            "before": {
+              "medianUs": 78.9239,
+              "p90Us": 81.4881
+            },
+            "after": {
+              "medianUs": 69.7219,
+              "p90Us": 70.9256
+            },
+            "speedup": 1.132,
+            "timeReductionPercent": 11.66
+          },
+          {
+            "scenario": "staged_wasm_http_8",
+            "before": {
+              "medianUs": 89.3347,
+              "p90Us": 91.2247
+            },
+            "after": {
+              "medianUs": 78.9444,
+              "p90Us": 83.0719
+            },
+            "speedup": 1.132,
+            "timeReductionPercent": 11.63
+          },
+          {
+            "scenario": "staged_wasm_ws_8",
+            "before": {
+              "medianUs": 87.6647,
+              "p90Us": 88.8961
+            },
+            "after": {
+              "medianUs": 76.1028,
+              "p90Us": 80.7844
+            },
+            "speedup": 1.152,
+            "timeReductionPercent": 13.19
+          },
+          {
+            "scenario": "staged_wasm_memory_100",
+            "before": {
+              "medianUs": 176.2431,
+              "p90Us": 180.6103
+            },
+            "after": {
+              "medianUs": 71.2017,
+              "p90Us": 73.0481
+            },
+            "speedup": 2.475,
+            "timeReductionPercent": 59.6
+          },
+          {
+            "scenario": "staged_wasm_http_100",
+            "before": {
+              "medianUs": 207.3394,
+              "p90Us": 208.9092
+            },
+            "after": {
+              "medianUs": 86.3897,
+              "p90Us": 89.9731
+            },
+            "speedup": 2.4,
+            "timeReductionPercent": 58.33
+          },
+          {
+            "scenario": "staged_wasm_ws_100",
+            "before": {
+              "medianUs": 206.2717,
+              "p90Us": 285.8078
+            },
+            "after": {
+              "medianUs": 83.8286,
+              "p90Us": 85.9128
+            },
+            "speedup": 2.461,
+            "timeReductionPercent": 59.36
+          },
+          {
+            "scenario": "staged_wasm_memory_1000",
+            "before": {
+              "medianUs": 1106.7675,
+              "p90Us": 1120.255
+            },
+            "after": {
+              "medianUs": 73.6008,
+              "p90Us": 74.6458
+            },
+            "speedup": 15.037,
+            "timeReductionPercent": 93.35
+          },
+          {
+            "scenario": "staged_wasm_http_1000",
+            "before": {
+              "medianUs": 1372.3117,
+              "p90Us": 1375.9967
+            },
+            "after": {
+              "medianUs": 150.5333,
+              "p90Us": 155.3767
+            },
+            "speedup": 9.116,
+            "timeReductionPercent": 89.03
+          },
+          {
+            "scenario": "staged_wasm_ws_1000",
+            "before": {
+              "medianUs": 1336.76,
+              "p90Us": 1374.89
+            },
+            "after": {
+              "medianUs": 144.6658,
+              "p90Us": 148.3067
+            },
+            "speedup": 9.24,
+            "timeReductionPercent": 89.18
+          }
+        ],
+        "rawReport": "/tmp/hyperliquid-staged-node.json"
+      }
+    }
+  },
+  "sourceFingerprintNote": "measuredSources identify the original measured working tree. sources identify the isolated PR implementation, including required reusable action support and excluding separately pending runtime, bounded dispatch, and batching work. Historical measurements retain their original context; isolatedPRVerification records fresh checks after scoping.",
+  "measuredSources": {
+    "src/signing/_keccak.ts": "078eb357ebe3bc511a137d094dc4e9abb6985b9730a2b2d47ac1f849991c5b95",
+    "src/signing/_l1.ts": "89af7fca9ef8e3783964852691a213d359b4935a5acce545640274ccbface0d5",
+    "src/signing/_l1Cache.ts": "7bc92c87189805db32a2c2be9c2220878dded8ebe05927fce3f707086e276a03",
+    "src/transport/_wire.ts": "0b4d48e0c2ba49e260a6a8454be988c769527594453c5ead5aa10e653c6925f1",
+    "src/transport/http/mod.ts": "707257031764e67249e221194fefbb717ace6300493e51b206efdf2a43b67455",
+    "src/transport/websocket/mod.ts": "78e45f6533862a8b64084863de0b597ecf612be9436dce7b6a128de950496924",
+    "src/transport/websocket/_dispatcher.ts": "e38bf835ac6a2ed3f5d4909723d41c458dc32d56dc6b89d873d0df69a5cb5d05",
+    "src/actions/_canonical.ts": "b511a9c5e368ec5a84c5c3f86d3b18be96be912f66e77aff2c6c60d6ca662a1f",
+    "src/api/exchange/_methods/_base/_shell.ts": "a7e7521c27466b482323a84e4e31f8e11cfce620028217d65be92796875f77df",
+    "src/actions/execution.ts": "8b72a509cbd765f5a71e6ccd745c35acd53fe639929ba7f4792311818cc8f678"
+  },
+  "isolatedPRVerification": {
+    "offlineTests": {
+      "passed": 2008,
+      "skipped": 242,
+      "failed": 0,
+      "assertions": 33016
+    },
+    "build": "passed, relocated package checked on Bun and Node",
+    "benchmarks": {
+      "bunHTTP": {
+        "runtime": {
+          "node": "26.3.0",
+          "bun": "1.4.0",
+          "boringssl": "1a41b9025c2c0a37edd07ff10f6944f03e028522",
+          "openssl": "1.1.0",
+          "llhttp": "9.3.0",
+          "libarchive": "ded82291ab41d5e355831b96b0e1ff49e24d8939",
+          "mimalloc": "1803341d6241d8fa4b3f65fa68cb13a32ad92f04",
+          "picohttpparser": "066d2b1e9ab820703db0837a7255d92d30f0c9f5",
+          "uwebsockets": "97e21e5405f7bc548e2568d2095ca909b9ee9f8e",
+          "webkit": "447082ab6897278727b44e1ba3c326ae6e1504c3",
+          "zig": "04e7f6ac1e009525bc00934f20199c68f04e0a24",
+          "zlib": "12731092979c6d07f42da27da673a9f6c7b13586",
+          "tinycc": "05f0fafaa3be31e31d7b4b5c17dc60f62c991171",
+          "lolhtml": "725ce499aa9b71e38b7a2d0a9fbb6d7294a4079e",
+          "ares": "c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab",
+          "libdeflate": "c8c56a20f8f621e6a966b716b31f1dedab6a41e3",
+          "usockets": "97e21e5405f7bc548e2568d2095ca909b9ee9f8e",
+          "lshpack": "8905c024b6d052f083a3d11d0a169b3c2735c8a1",
+          "zstd": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+          "v8": "14.6.202.34-node.20",
+          "uv": "1.48.0",
+          "napi": "10",
+          "icu": "78.1",
+          "unicode": "17.0",
+          "sqlite": "3.54.0",
+          "modules": "147"
+        },
+        "cpu": "Apple M3 Max",
+        "date": "2026-10-06T23:23:28.192Z",
+        "compareDir": "/tmp/hyperliquid-ocean-baseline",
+        "filter": "staged_wasm_http_1000",
+        "sampleCount": 11,
+        "sink": 0,
+        "results": [
+          {
+            "scenario": "staged_wasm_http_1000",
+            "variant": "before",
+            "medianUs": 1008.6124999999998,
+            "p90Us": 1084.7649999999999,
+            "roundsUs": [
+              1008.6124999999998, 1008.6891800000001, 1025.1308199999994, 1001.7116599999997, 983.2841800000007,
+              1008.2024999999987, 1010.7408400000008, 1088.8741600000003, 983.5741600000006, 999.865000000002,
+              1084.7649999999999
+            ]
+          },
+          {
+            "scenario": "staged_wasm_http_1000",
+            "variant": "after",
+            "medianUs": 72.80250000000024,
+            "p90Us": 75.43081999999913,
+            "roundsUs": [
+              75.43081999999913, 74.64500000000044, 73.49500000000035, 71.24915999999985, 72.80250000000024,
+              71.1583399999995, 73.63665999999967, 72.23915999999917, 88.11083999999937, 70.20833999999923,
+              71.2758400000007
+            ]
+          }
+        ]
+      },
+      "bunWS": {
+        "runtime": {
+          "node": "26.3.0",
+          "bun": "1.4.0",
+          "boringssl": "1a41b9025c2c0a37edd07ff10f6944f03e028522",
+          "openssl": "1.1.0",
+          "llhttp": "9.3.0",
+          "libarchive": "ded82291ab41d5e355831b96b0e1ff49e24d8939",
+          "mimalloc": "1803341d6241d8fa4b3f65fa68cb13a32ad92f04",
+          "picohttpparser": "066d2b1e9ab820703db0837a7255d92d30f0c9f5",
+          "uwebsockets": "97e21e5405f7bc548e2568d2095ca909b9ee9f8e",
+          "webkit": "447082ab6897278727b44e1ba3c326ae6e1504c3",
+          "zig": "04e7f6ac1e009525bc00934f20199c68f04e0a24",
+          "zlib": "12731092979c6d07f42da27da673a9f6c7b13586",
+          "tinycc": "05f0fafaa3be31e31d7b4b5c17dc60f62c991171",
+          "lolhtml": "725ce499aa9b71e38b7a2d0a9fbb6d7294a4079e",
+          "ares": "c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab",
+          "libdeflate": "c8c56a20f8f621e6a966b716b31f1dedab6a41e3",
+          "usockets": "97e21e5405f7bc548e2568d2095ca909b9ee9f8e",
+          "lshpack": "8905c024b6d052f083a3d11d0a169b3c2735c8a1",
+          "zstd": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+          "v8": "14.6.202.34-node.20",
+          "uv": "1.48.0",
+          "napi": "10",
+          "icu": "78.1",
+          "unicode": "17.0",
+          "sqlite": "3.54.0",
+          "modules": "147"
+        },
+        "cpu": "Apple M3 Max",
+        "date": "2026-10-06T23:23:49.576Z",
+        "compareDir": "/tmp/hyperliquid-ocean-baseline",
+        "filter": "staged_wasm_ws_1000",
+        "sampleCount": 11,
+        "sink": 0,
+        "results": [
+          {
+            "scenario": "staged_wasm_ws_1000",
+            "variant": "before",
+            "medianUs": 988.83916,
+            "p90Us": 1008.3441599999992,
+            "roundsUs": [
+              984.8433400000005, 976.1966600000005, 996.0500000000002, 988.83916, 986.2724999999988, 1042.834999999999,
+              992.43334, 1008.3441599999992, 986.0924999999997, 989.3325000000004, 983.8883399999986
+            ]
+          },
+          {
+            "scenario": "staged_wasm_ws_1000",
+            "variant": "after",
+            "medianUs": 82.52418000000034,
+            "p90Us": 94.15415999999935,
+            "roundsUs": [
+              93.88665999999942, 79.43832000000043, 72.86749999999984, 83.99499999999989, 71.73084000000017,
+              94.15415999999935, 75.68418000000065, 82.52418000000034, 96.0349999999994, 76.44084000000021,
+              87.62165999999979
+            ]
+          }
+        ]
+      },
+      "nodeHTTP": {
+        "runtime": {
+          "node": "24.6.0",
+          "acorn": "8.15.0",
+          "ada": "3.2.7",
+          "amaro": "1.1.1",
+          "ares": "1.34.5",
+          "brotli": "1.2.0",
+          "cjs_module_lexer": "2.1.0",
+          "cldr": "47.0",
+          "icu": "77.1",
+          "llhttp": "9.3.0",
+          "modules": "137",
+          "napi": "10",
+          "nbytes": "0.1.1",
+          "ncrypto": "0.0.1",
+          "nghttp2": "1.66.0",
+          "openssl": "3.6.5",
+          "simdjson": "3.13.0",
+          "simdutf": "6.4.0",
+          "sqlite": "3.50.4",
+          "tz": "2025a",
+          "undici": "7.13.0",
+          "unicode": "16.0",
+          "uv": "1.51.0",
+          "uvwasi": "0.0.21",
+          "v8": "13.6.233.10-node.24",
+          "zlib": "1.2.12",
+          "zstd": "1.5.7"
+        },
+        "cpu": "Apple M3 Max",
+        "date": "2026-10-06T23:24:04.009Z",
+        "compareDir": "/tmp/hyperliquid-ocean-baseline",
+        "filter": "staged_wasm_http_1000",
+        "sampleCount": 11,
+        "sink": 0,
+        "results": [
+          {
+            "scenario": "staged_wasm_http_1000",
+            "variant": "before",
+            "medianUs": 1406.34,
+            "p90Us": 1438.7800000000016,
+            "roundsUs": [
+              1422.0191599999996, 1466.4858400000003, 1438.7800000000016, 1424.64334, 1417.2800000000007,
+              1390.9583199999997, 1379.44166, 1390.7441800000015, 1406.34, 1383.2258199999978, 1363.6974999999982
+            ]
+          },
+          {
+            "scenario": "staged_wasm_http_1000",
+            "variant": "after",
+            "medianUs": 157.7341800000022,
+            "p90Us": 161.58832000000075,
+            "roundsUs": [
+              159.47084000000018, 163.29165999999987, 161.58832000000075, 158.7808199999995, 154.81666000000132,
+              156.56499999999824, 153.3366799999999, 160.195819999999, 154.72083999999995, 148.31834000000072,
+              157.7341800000022
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

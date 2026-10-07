@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -143,4 +144,21 @@ export function userDexAbstraction(
 ): Promise<UserDexAbstractionSuccessResponse> {
   const action = buildAction(UserDexAbstractionActionSchema, { type: "userDexAbstraction", ...params }, opts);
   return executeUserSignedAction(config, action, UserDexAbstractionTypes, opts);
+}
+
+/**
+ * Build a canonical {@linkcode userDexAbstraction} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link UserDexAbstractionSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildUserDexAbstraction(
+  params: UserDexAbstractionParameters,
+): CanonicalAction<UserDexAbstractionSuccessResponse> {
+  const action = buildAction(UserDexAbstractionActionSchema, { type: "userDexAbstraction", ...params });
+  return canonicalAction(action, { kind: "user", types: UserDexAbstractionTypes });
 }

@@ -3,8 +3,12 @@
  * @module
  */
 
+import { HyperliquidError } from "../../../../_base.ts";
 import { getWalletAddress, type Signature } from "../../../../signing/mod.ts";
+import { race } from "../../../../transport/_abort.ts";
+import { registerExchangeWireRequest } from "../../../../transport/_wire.ts";
 import type { ExchangeConfig } from "./_config.ts";
+import { admitBounded, assertDetachedAllowed, assertOrderedAllowed, reserveDispatch } from "./_dispatch.ts";
 import { assertSuccessResponse } from "./errors.ts";
 import { globalNonceManager } from "./_nonce.ts";
 import { withLock } from "./_semaphore.ts";
@@ -48,6 +52,18 @@ export interface PreparedExchangeRequest<T = unknown> {
   readonly __responseType?: T;
 }
 
+const signingContexts = new WeakMap<object, { key: string; isTestnet: boolean }>();
+
+/** Internal ownership context of a directly prepared request, outside the wire body. */
+export function getSigningContext(request: object): { key: string; isTestnet: boolean } | undefined {
+  return signingContexts.get(request);
+}
+
+/** Preserve known signer ownership when a directly prepared request is copied and frozen. */
+export function linkSigningContext(request: object, context: { key: string; isTestnet: boolean }): void {
+  signingContexts.set(request, context);
+}
+
 // ============================================================
 // Prepared-payload poison state (internal)
 // ============================================================
@@ -86,6 +102,10 @@ export function getPreparedRequestState(prepared: PreparedExchangeRequest<unknow
   return preparedRequestStates.get(prepared);
 }
 
+/** Protocol nonce window: a nonce must lie within `(now - 2 days, now + 1 day)` when it arrives. */
+const NONCE_MAX_AGE_MS = 2 * 86_400_000;
+const NONCE_MAX_LEAD_MS = 86_400_000;
+
 /**
  * Cache of the nonce-lock key per (leader wallet × transport), keyed by object identity so a wallet
  * object is dropped from the cache when the caller drops it. The cached entry is only reused while
@@ -102,9 +122,12 @@ const nonceKeyCache = new WeakMap<
  * nonce has been handed to the transport.
  *
  * The nonce lock guarantees the order nonces are ISSUED in; this guarantees the order they reach
- * the WIRE in, which is what the server actually requires. Keeping the two separate is what lets
- * signing — a network round trip for any remote wallet — run outside the lock and overlap across
- * callers, while a later nonce still cannot overtake an earlier one.
+ * the WIRE in. The exchange itself accepts any unused nonce above the smallest of the signer's 100
+ * highest, so this ordering is the SDK's default compatibility policy rather than a protocol
+ * requirement; `dispatchPolicy: { mode: "bounded" }` replaces it with the overtaking bound in
+ * `_dispatch.ts`. Keeping issuance and dispatch separate is what lets signing — a network round
+ * trip for any remote wallet — run outside the lock and overlap across callers, while a later
+ * nonce still cannot overtake an earlier one under the default policy.
  *
  * Entries are dropped as soon as the chain goes idle, so a long-lived process that touches many
  * wallets does not accumulate one per key forever.
@@ -121,26 +144,33 @@ const dispatchChains = new Map<string, Promise<void>>();
  * time; for a remote wallet, where signing is an `eth_signTypedData_v4` round trip, that is the
  * difference between one order in flight per wallet and all of them.
  *
- * Wire order is preserved by {@linkcode dispatchChains} rather than by the lock: a request waits
- * for its predecessor to reach `transport.request` before making its own call, so the server still
- * sees strictly increasing nonces per wallet. Network responses resolve concurrently.
+ * Under the default ordered policy, wire order is preserved by {@linkcode dispatchChains} rather
+ * than by the lock: a request waits for its predecessor to reach `transport.request` before making
+ * its own call, so requests are dispatched in nonce issuance order. Under the bounded policy a ready
+ * request may be dispatched before a slower earlier one, within the lane's overtaking bound, after
+ * re-checking the protocol timestamp window and `expiresAfter`. Network responses resolve
+ * concurrently.
  *
  * @param config Exchange API configuration.
  * @param build Callback that, given the nonce, returns the action, signature, and any extras.
  * @param signal Optional {@link AbortSignal} to cancel the request.
- * @return The validated API response.
+ * @param prepareOnly Return the signed request after nonce allocation and signing, without claiming a
+ * dispatch slot or calling the transport. Used by `signAction`; the nonce is consumed either way.
+ * @return The validated API response, or the signed request when `prepareOnly` is set.
  *
  * @throws {ApiRequestError} If the API returns an error response.
+ * @throws {HyperliquidError} If the dispatch policy rejects the call (see `_dispatch.ts`).
  */
 export async function executeWithShell<T>(
   config: ExchangeConfig,
   build: (nonce: number) => Promise<BuildResult>,
   signal?: AbortSignal,
+  prepareOnly = false,
 ): Promise<T> {
   const leader = "wallet" in config ? config.wallet : config.signers[0];
   const walletAddress = await getWalletAddress(leader);
 
-  // Lock per (wallet × testnet) ensures requests are dispatched to the server in nonce order.
+  // Serialize nonce allocation per (wallet × testnet); the dispatch policy controls delivery order.
   // The key string is cached per (wallet × transport); it is rebuilt only when the wallet's
   // address or the transport's testnet flag no longer matches the cached entry.
   const isTestnet = config.transport.isTestnet;
@@ -157,7 +187,24 @@ export async function executeWithShell<T>(
     }
     perTransport.set(config.transport, { walletAddress, isTestnet, key });
   }
+  if (signal?.aborted) throw signal.reason;
+  const policy = config.dispatchPolicy;
   const box = await withLock(key, async () => {
+    // --- Check the dispatch policy -----------------------------
+    // Before nonce allocation, so a rejected call consumes no nonce. Under the lock, so the checks
+    // and the slot claimed below see the same lane and chain state.
+    let limits: ReturnType<typeof admitBounded> | undefined;
+    if (prepareOnly) {
+      assertDetachedAllowed(key, policy);
+    } else if (typeof policy === "object") {
+      if (dispatchChains.has(key)) {
+        throw new HyperliquidError("Cannot mix ordered and bounded calls for an active signer/network");
+      }
+      limits = admitBounded(key, policy);
+    } else {
+      assertOrderedAllowed(key);
+    }
+
     // --- Generate nonce --------------------------------------
     // `globalNonceManager.getNonce` returns a plain number: skip the await (and its async hop)
     // unless a custom `nonceManager` actually handed back a promise.
@@ -166,12 +213,14 @@ export async function executeWithShell<T>(
 
     // --- Claim this nonce's slot in the dispatch order --------
     // Taken under the lock, so slots are claimed in the same order nonces are issued.
-    const predecessor = dispatchChains.get(key);
+    const bounded = limits === undefined ? undefined : reserveDispatch(key, nonce, limits);
+    const ordered = !prepareOnly && bounded === undefined;
+    const predecessor = ordered ? dispatchChains.get(key) : undefined;
     let openGate!: () => void;
     const dispatched = new Promise<void>((resolve) => {
       openGate = resolve;
     });
-    dispatchChains.set(key, dispatched);
+    if (ordered) dispatchChains.set(key, dispatched);
 
     // --- Sign and dispatch, outside the lock ------------------
     // Signing is a network round trip for a remote wallet; running it here rather than inside the
@@ -180,17 +229,42 @@ export async function executeWithShell<T>(
     const pending = (async (): Promise<T> => {
       let response: Promise<T> | undefined;
       try {
-        const { action, signature, extras } = await build(nonce);
-        if (predecessor !== undefined) await predecessor;
+        const { action, signature, extras } = await race(build(nonce), signal);
+        if (signal?.aborted) throw signal.reason;
+        if (prepareOnly) {
+          const request = { action, signature, nonce, ...extras };
+          registerExchangeWireRequest(request, action);
+          signingContexts.set(request, { key, isTestnet });
+          return request as T;
+        }
+        if (predecessor !== undefined) await race(predecessor, signal);
+        if (bounded !== undefined) {
+          await bounded.wait(signal);
+          // Re-checked at dispatch: a request may have waited behind a stalled signature.
+          const now = config.runtime?.now ? config.runtime.now() : Date.now();
+          if (nonce <= now - NONCE_MAX_AGE_MS || nonce >= now + NONCE_MAX_LEAD_MS) {
+            throw new HyperliquidError("Nonce is outside the protocol timestamp window");
+          }
+          const expiresAfter = extras?.expiresAfter;
+          if (typeof expiresAfter === "number" && expiresAfter <= now) {
+            throw new HyperliquidError("Action expired before dispatch");
+          }
+        }
         // `transport.request` runs synchronously up to its first await, so wire order is fixed
         // here. It is assigned rather than awaited so the gate below opens on dispatch, not on
         // the response.
-        response = config.transport.request<T>("exchange", { action, signature, nonce, ...extras }, signal);
+        const request = { action, signature, nonce, ...extras };
+        registerExchangeWireRequest(request, action);
+        response = config.transport.request<T>("exchange", request, signal);
+        // A bounded slot stays reserved until the response settles: until then the request may
+        // still arrive after newer ones.
+        if (bounded !== undefined) return await response;
       } finally {
         // Wait for our turn even when this request never reached the wire. A rejected signature
         // or an abort burns its nonce, which the server tolerates as a gap — but opening the gate
         // early would let a later nonce overtake an earlier one that is still being signed.
         if (predecessor !== undefined) await predecessor;
+        bounded?.release();
         openGate();
         // Idle chain: drop the entry so the map does not grow one slot per key forever. Compared
         // by identity, so a successor that has already claimed the slot is left alone.
@@ -206,6 +280,6 @@ export async function executeWithShell<T>(
 
   // --- Await response (concurrently across calls) and validate
   const response = await box.pending;
-  assertSuccessResponse(response);
+  if (!prepareOnly) assertSuccessResponse(response);
   return response;
 }

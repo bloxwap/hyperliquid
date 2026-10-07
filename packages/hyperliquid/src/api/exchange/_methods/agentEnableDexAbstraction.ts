@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -115,4 +116,16 @@ export function agentEnableDexAbstraction(
 ): Promise<AgentEnableDexAbstractionSuccessResponse> {
   const action = buildAction(AgentEnableDexAbstractionActionSchema, { type: "agentEnableDexAbstraction" }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/**
+ * Build a canonical {@linkcode agentEnableDexAbstraction} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @return Immutable action typed with {@link AgentEnableDexAbstractionSuccessResponse}.
+ */
+export function buildAgentEnableDexAbstraction(): CanonicalAction<AgentEnableDexAbstractionSuccessResponse> {
+  const action = buildAction(AgentEnableDexAbstractionActionSchema, { type: "agentEnableDexAbstraction" });
+  return canonicalAction(action, { kind: "l1" });
 }

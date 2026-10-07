@@ -365,9 +365,11 @@ Outbound messages are **paced by default**: the shared quota runs a token bucket
 re-subscribes every held subscription at once, so 1000 subscriptions spend half the minute's budget instantly, and a
 flapping socket repeats the burst until the server refuses.
 
-Pacing only ever delays `subscribe` and `unsubscribe` frames. **`post` requests and keep-alive pings never wait**: an
-exchange action's wire order — and therefore per-wallet nonce ordering — depends on reaching the socket synchronously,
-and delaying the keep-alive watchdog is how a half-open connection goes unnoticed. Both still *debit* the budget, so a
+Pacing only ever delays `subscribe` and `unsubscribe` frames. **`post` requests and keep-alive pings never wait**: the
+SDK's default ordered dispatch policy fixes an exchange action's wire order by reaching the socket synchronously (the
+exchange itself only requires each nonce to be unused and within the signer's 100-highest window; see
+[bounded dispatch](clients.md#bounded-dispatch-for-remote-signing)), and delaying the keep-alive watchdog is how a
+half-open connection goes unnoticed. Both still *debit* the budget, so a
 burst of orders correctly slows subscription traffic rather than silently overrunning the shared limit.
 
 To opt out of pacing — or to resize the bucket — pass your own `quota`; constructed without `rateLimit`, it keeps the
@@ -400,3 +402,84 @@ These settings apply independently of message pacing. Configure `maxConnections`
 Each quota coordinates only transports in the current process. Separate processes and other hosts behind the same IP
 must coordinate externally or choose lower limits to leave room for one another. Connected order/post dispatch is
 unchanged; the connection gate only delays creation of sockets.
+
+## Injectable runtimes
+
+Both transports run on the platform by default: the global `fetch` and `WebSocket`, `Date.now`, `performance.now`,
+`setTimeout`, and `Math.random`. Each of these can be replaced per transport, without touching the globals, which is
+how tests exercise timeouts, retries, and reconnects deterministically and in isolation from one another.
+
+- `HttpTransport` accepts `fetch`.
+- `WebSocketTransport` (and `ReconnectingWebSocket`) accept `webSocketFactory`.
+- Both, plus `WebSocketQuota` and `InfoCacheTransport`, accept `runtime`: any subset of `now`, `monotonicNow`,
+  `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, and `random`. Omitted members fall back to the
+  platform, and the result is resolved once at construction, not per request.
+
+The `Runtime` and `TimerHandle` types and `systemRuntime` are exported from `@bloxwap/hyperliquid/transport/runtime`
+(and the `@bloxwap/hyperliquid/transport` barrel). Runtime methods keep their receiver, so a stateful fake clock can be
+passed directly. A minimal one is enough to drive a 429 retry without sleeping:
+
+```ts
+import { expect, test } from "bun:test";
+import { HttpTransport } from "@bloxwap/hyperliquid";
+import type { Runtime, TimerHandle } from "@bloxwap/hyperliquid/transport/runtime";
+
+/** Timers fire only when the test advances the clock. */
+class FakeClock implements Runtime {
+  elapsed = 0;
+  private timers = new Map<number, { due: number; callback: () => void }>();
+  private nextId = 0;
+  now = () => 1_700_000_000_000 + this.elapsed;
+  monotonicNow = () => this.elapsed;
+  random = () => 0; // no jitter
+  setTimeout = (callback: () => void, ms: number): TimerHandle => {
+    this.timers.set(++this.nextId, { due: this.elapsed + ms, callback });
+    return this.nextId;
+  };
+  clearTimeout = (handle: TimerHandle | undefined) => void this.timers.delete(handle as number);
+  setInterval = this.setTimeout; // not needed by HttpTransport
+  clearInterval = this.clearTimeout;
+  advance(ms: number) {
+    this.elapsed += ms;
+    for (const [id, timer] of [...this.timers].sort((a, b) => a[1].due - b[1].due)) {
+      if (timer.due > this.elapsed) break;
+      this.timers.delete(id);
+      timer.callback();
+    }
+  }
+}
+
+test("retries a 429 after Retry-After", async () => {
+  const clock = new FakeClock();
+  let calls = 0;
+  const transport = new HttpTransport({
+    runtime: clock,
+    retryOnRateLimit: true,
+    fetch: async () =>
+      ++calls === 1
+        ? new Response("", { status: 429, headers: { "Retry-After": "2" } })
+        : Response.json({ BTC: "30000" }),
+  });
+
+  const pending = transport.request("info", { type: "allMids" });
+  await new Promise((resolve) => setImmediate(resolve)); // let the first attempt settle
+  clock.advance(1_999);
+  expect(calls).toBe(1); // still waiting out the server's 2 s
+  clock.advance(1);
+  expect(await pending).toEqual({ BTC: "30000" });
+  expect(calls).toBe(2);
+});
+```
+
+Wall time (`now`) is used only for protocol timestamps: exchange nonces and HTTP-date `Retry-After` headers. Every
+elapsed-time decision (request deadlines, rate-limit refills, cache TTLs, connection-attempt windows) reads
+`monotonicNow`, so a wall-clock correction neither fires nor stalls them.
+
+Injecting a runtime or factory never forks state that must stay shared:
+
+- A `WebSocketTransport` without an explicit `quota` still uses the per-network shared `WebSocketQuota`, which keeps
+  the platform clock. To drive connection and message budgets on a fake clock too, pass
+  `quota: new WebSocketQuota({ runtime })`.
+- Exchange nonces still come from the process-wide manager keyed by signer and network, on the platform wall clock, so
+  HTTP and WebSocket clients for the same signer never collide. To control nonces in a test, pass a `nonceManager`
+  function to the `ExchangeClient`.

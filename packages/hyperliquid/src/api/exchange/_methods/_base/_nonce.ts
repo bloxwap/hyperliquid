@@ -3,6 +3,8 @@
  * @module
  */
 
+import { resolveRuntime, type Runtime } from "../../../../transport/runtime.ts";
+
 /** Default upper bound on map size before stale entries are pruned. */
 const DEFAULT_MAX_ENTRIES = 10_000;
 
@@ -24,24 +26,28 @@ export interface NonceManager {
 /**
  * Creates a nonce manager that issues unique, monotonically increasing nonces per key.
  *
- * Uses `Date.now()` in ms; if the previous nonce for the key is greater than or equal to
- * `Date.now()`, increments by 1 to maintain monotonicity.
+ * Uses the runtime's wall clock (`Date.now()` by default) in ms; if the previous nonce for the
+ * key is greater than or equal to it, increments by 1 to maintain monotonicity.
  *
  * To bound memory under high-cardinality workloads (e.g., a server proxying many wallets),
  * stale entries are pruned when the internal map grows beyond `maxEntries`. An entry is
- * considered stale if `Date.now()` has advanced past its last issued nonce. The prune scan is
+ * considered stale if the wall clock has advanced past its last issued nonce. The prune scan is
  * throttled to at most one full pass per {@linkcode PRUNE_INTERVAL_MS}, so an over-capacity map
  * does not turn every call into an O(n) sweep.
  *
  * @param maxEntries Upper bound on map size before stale entries are pruned. Default: `10000`.
+ * @param runtime Clock overrides; only `now` (wall time) is read, since nonces are timestamps.
  * @return A {@linkcode NonceManager}.
  */
-export function createNonceManager(maxEntries: number = DEFAULT_MAX_ENTRIES): NonceManager {
+export function createNonceManager(maxEntries: number = DEFAULT_MAX_ENTRIES, runtime?: Partial<Runtime>): NonceManager {
+  // `undefined` keeps the default (process-wide) manager on a direct `Date.now()` call: this runs
+  // once per signed action, and the global manager is created before any test could inject one.
+  const clock = runtime === undefined ? undefined : resolveRuntime(runtime);
   const map = new Map<string, number>();
   let lastPruneAt = 0;
   return {
     getNonce(key: string): number {
-      const now = Date.now();
+      const now = clock === undefined ? Date.now() : clock.now();
       // --- Bounded pruning: throttle the scan, never evict -----------------
       // gh issue #7: under burst load nonces run AHEAD of the wall clock
       // (`nonce = last + 1`), so once the map exceeds `maxEntries` the old
@@ -51,11 +57,12 @@ export function createNonceManager(maxEntries: number = DEFAULT_MAX_ENTRIES): No
       // A throttled scan is chosen over evicting the oldest entry because
       // eviction is unsafe here: dropping a live wallet's entry resets its
       // nonce derivation to wall-clock time, which can go BACKWARDS relative
-      // to a nonce already sent, and the exchange rejects non-increasing
-      // nonces. Throttling only *delays* deletions that were already safe —
-      // an entry is still deleted only when `now > last`, i.e. when the next
-      // nonce for that key (at least `now`) is guaranteed to exceed the
-      // deleted value — so per-key monotonicity is preserved by construction.
+      // to a nonce already sent, risking a reused nonce or one already
+      // below the signer's 100-highest window. Throttling only *delays*
+      // deletions that were already safe — an entry is still deleted only
+      // when `now > last`, i.e. when the next nonce for that key (at least
+      // `now`) is guaranteed to exceed the deleted value — so per-key
+      // monotonicity is preserved by construction.
       //
       // The trade-off is memory, never correctness: stale entries may linger
       // up to `PRUNE_INTERVAL_MS` longer than before, and between scans the

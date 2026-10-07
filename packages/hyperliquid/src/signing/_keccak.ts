@@ -28,7 +28,12 @@ interface WasmKeccak {
   init(): void;
   update(data: Uint8Array): void;
   digest(outputType: "binary"): Uint8Array;
+  save?(): Uint8Array;
+  load?(state: Uint8Array): void;
 }
+
+/** State resumption is optional and independently checked before it is used. */
+type CheckpointHasher = WasmKeccak & Required<Pick<WasmKeccak, "save" | "load">>;
 
 /** keccak-256 of the empty input — the known-answer check a WASM build must pass before it is trusted. */
 const KECCAK256_EMPTY = "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
@@ -88,12 +93,42 @@ let loadPromise: Promise<void> | undefined;
  */
 let wasmHasher: WasmKeccak | undefined;
 
+/** The loaded provider only when its save/load round trip also passed conformance. */
+let checkpointHasher: CheckpointHasher | undefined;
+
+/** Check a partial block, a crossed block boundary, and repeated loads of the same snapshot. */
+function validateCheckpointHasher(hasher: WasmKeccak): hasher is CheckpointHasher {
+  if (typeof hasher.save !== "function" || typeof hasher.load !== "function") return false;
+  try {
+    const prefix = Uint8Array.from({ length: 137 }, (_, i) => i);
+    const tail = new Uint8Array(29).fill(0xa5);
+    const expected = keccak_256.create().update(prefix).update(tail).digest();
+    hasher.init();
+    hasher.update(prefix);
+    const saved = hasher.save();
+    for (let i = 0; i < 2; i++) {
+      hasher.init();
+      hasher.update(tail);
+      hasher.digest("binary");
+      hasher.load(saved);
+      hasher.update(tail);
+      if (bytesToHex(hasher.digest("binary")) !== bytesToHex(expected)) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Starts the one-time background load (no-op once started); the dispatch keeps using noble until it settles. */
 function kickWasmLoad(): void {
   if (loadPromise !== undefined) return;
   loadPromise = keccakLoader().then(
     (hasher) => {
-      if (validateWasmKeccak(hasher)) wasmHasher = hasher;
+      if (validateWasmKeccak(hasher)) {
+        wasmHasher = hasher;
+        if (validateCheckpointHasher(hasher)) checkpointHasher = hasher;
+      }
     },
     () => {
       // A rejected loader leaves the dispatch on noble for the life of the process.
@@ -121,6 +156,43 @@ export function keccak256(data: Uint8Array): Uint8Array {
   }
   kickWasmLoad();
   return keccak_256(data);
+}
+
+/**
+ * Checkpoint an SDK-owned immutable prefix; hash a fresh tail on every invocation.
+ * The prefix must remain unchanged for the closure's lifetime. Only the immutable L1 action
+ * cache uses this; mutable public signing inputs always take the complete hash path.
+ *
+ * Initialization is lazy. A noble checkpoint upgrades to WASM when it becomes ready, and a
+ * WASM snapshot is tied to its exact provider instance so a loader reset cannot reuse it on
+ * another build. Each invocation clones/loads the unfinalized state before adding the tail.
+ * No finalized hash, nonce, metadata, or signature is cached.
+ *
+ * @param prefix The immutable preimage prefix, retained by the returned closure.
+ * @return A synchronous hasher for prefix followed by its supplied tail.
+ */
+export function createKeccakPrefix(prefix: Uint8Array): (tail: Uint8Array) => Uint8Array {
+  let nobleState: ReturnType<typeof keccak_256.create> | undefined;
+  let provider: CheckpointHasher | undefined;
+  let saved: Uint8Array | undefined;
+  return (tail: Uint8Array): Uint8Array => {
+    const hasher = checkpointHasher;
+    if (hasher !== undefined) {
+      if (provider !== hasher) {
+        hasher.init();
+        hasher.update(prefix);
+        saved = hasher.save();
+        provider = hasher;
+        nobleState = undefined;
+      }
+      hasher.load(saved!);
+      hasher.update(tail);
+      return hasher.digest("binary");
+    }
+    kickWasmLoad();
+    nobleState ??= keccak_256.create().update(prefix);
+    return nobleState.clone().update(tail).digest();
+  };
 }
 
 /**
@@ -160,4 +232,5 @@ export function _setKeccakLoaderForTests(loader: (() => Promise<WasmKeccak | und
   keccakLoader = loader ?? loadWasmKeccak;
   loadPromise = undefined;
   wasmHasher = undefined;
+  checkpointHasher = undefined;
 }

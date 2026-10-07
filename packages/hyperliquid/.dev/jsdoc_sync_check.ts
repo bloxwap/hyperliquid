@@ -472,7 +472,13 @@ function main(): void {
 
     // Compare each method with its corresponding function
     for (const [methodName, methodJSDoc] of methodsJSDoc) {
-      const funcFilePath = path.join(methodsDir, `${methodName}.ts`);
+      // Explicit action stages live in a shared module, rather than endpoint method files.
+      const stages: Record<string, string> =
+        endpoint.name === "exchange" ? { sign: "signAction", submit: "submitAction", execute: "executeAction" } : {};
+      const functionName = stages[methodName] ?? methodName;
+      const funcFilePath = stages[methodName]
+        ? path.join(projectRoot, "src/actions/execution.ts")
+        : path.join(methodsDir, `${methodName}.ts`);
 
       // An undocumented method cannot be "in sync" with anything, so report it without reading the function side.
       if (methodJSDoc === null) {
@@ -499,7 +505,7 @@ function main(): void {
 
       // Parse function JSDoc from _methods/*.ts
       const funcJSDocMap = parseFunctionJSDoc(funcFilePath);
-      const funcJSDoc = funcJSDocMap.get(methodName);
+      const funcJSDoc = funcJSDocMap.get(functionName);
 
       // Check if function exists and has JSDoc
       if (!funcJSDoc) {

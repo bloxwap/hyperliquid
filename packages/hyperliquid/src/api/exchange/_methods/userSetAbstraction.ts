@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -156,4 +157,21 @@ export function userSetAbstraction(
 ): Promise<UserSetAbstractionSuccessResponse> {
   const action = buildAction(UserSetAbstractionActionSchema, { type: "userSetAbstraction", ...params }, opts);
   return executeUserSignedAction(config, action, UserSetAbstractionTypes, { ...opts, toMultiSigPayloadAction });
+}
+
+/**
+ * Build a canonical {@linkcode userSetAbstraction} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link UserSetAbstractionSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildUserSetAbstraction(
+  params: UserSetAbstractionParameters,
+): CanonicalAction<UserSetAbstractionSuccessResponse> {
+  const action = buildAction(UserSetAbstractionActionSchema, { type: "userSetAbstraction", ...params });
+  return canonicalAction(action, { kind: "user", types: UserSetAbstractionTypes, toMultiSigPayloadAction });
 }

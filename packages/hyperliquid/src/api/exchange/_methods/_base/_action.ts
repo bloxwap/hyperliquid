@@ -5,7 +5,7 @@
 
 import type * as v from "valibot";
 import { parse } from "../../../../_base.ts";
-import { canonicalize } from "../../../../signing/mod.ts";
+import { canonicalize } from "../../../../signing/_canonicalize.ts";
 
 /**
  * Builds the canonical wire action for an Exchange API method.

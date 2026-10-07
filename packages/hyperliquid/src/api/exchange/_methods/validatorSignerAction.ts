@@ -69,3 +69,5 @@ export function validatorSignerAction(
 ): Promise<ValidatorSignerActionSuccessResponse> {
   return cSignerAction(config, params, opts);
 }
+
+export { buildCSignerAction as buildValidatorSignerAction } from "./cSignerAction.ts";

@@ -13,7 +13,7 @@ The design follows the Bloxwap monorepo's documentation site at commit `15201923
 - `app/brand-tokens.css` is a verbatim snapshot of `packages/ui/src/styles/tokens.generated.css`.
 - Fumadocs colors, typography, navigation, and forced dark mode follow `workers/docs/src/app/global.css` and its layouts.
 - The app icon and favicon in `public/logos/` preserve the original Bloxwap artwork and metadata.
-- Bloxwap Sans body text and Bloxwap Mono code use the self-hosted Next.js exports from `@bloxwap/font@0.1.1`.
+- Bloxwap Sans body text and Bloxwap Mono code use the self-hosted Next.js exports from `@bloxwap/font@0.1.2`.
 - Space Grotesk Bold headings retain the local asset and OFL notice in `public/fonts/`.
 - Static Open Graph font instances and their license/provenance are documented in `public/fonts/README.md`.
 
@@ -95,7 +95,7 @@ always point to the published GitHub Pages site, including when previewing local
 - `app/og/[...slug]/route.tsx` generates `/og/home.png`, `/og/docs.png`, and `/og/docs/<slug>.png` during the static build.
 
 Cards use Bloxwap Sans Black for titles and Bloxwap Sans Bold for the owner, description, and stats. The static Bloxwap Sans
-faces are instantiated from the published `@bloxwap/font@0.1.1` variable WOFF2;
+faces are instantiated from the published `@bloxwap/font@0.1.2` variable WOFF2;
 their license is included as `public/fonts/Bloxwap-OFL.txt`.
 The renderer uses bundled fonts and brand geometry locally; it needs no font CDN, API credentials, or image server after
 deployment. Generated PNGs live in `out/` and are included in the GitHub Pages artifact.

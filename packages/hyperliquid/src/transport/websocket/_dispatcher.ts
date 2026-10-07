@@ -13,6 +13,8 @@ import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import type { HyperliquidEventTarget, PostResponse, SubscribeUnsubscribeResponse } from "./_events.ts";
 import { isSubset, normalize, requestToId, specificity } from "./_id.ts";
 import type { WebSocketQuota } from "./_quota.ts";
+import { exchangeWireJSON } from "../_wire.ts";
+import type { Runtime } from "../runtime.ts";
 
 // =============================================================================
 // Errors
@@ -96,7 +98,9 @@ export interface RequestHint {
    * snapshot): the dispatcher then skips its own normalize of the subscription subtree and
    * builds the envelope id by concatenation. Ignored for `post` requests.
    */
-  subscriptionId: string;
+  subscriptionId?: string;
+  /** The original exchange payload in the transport-owned {type: "action", payload} envelope. */
+  exchangePayload?: unknown;
 }
 
 /** A queued request awaiting its response. */
@@ -199,10 +203,11 @@ export class WebSocketDispatcher {
     hlEvents: HyperliquidEventTarget,
     timeout: number | null,
     quota?: WebSocketQuota,
+    runtime?: Partial<Runtime>,
   ) {
     this.timeout = timeout;
     this._socket = socket;
-    this._timeouts = new abort.TimeoutWheel();
+    this._timeouts = new abort.TimeoutWheel(runtime);
     this._quota = quota;
 
     // --- Hyperliquid event handlers ------------------------------------------
@@ -358,6 +363,12 @@ export class WebSocketDispatcher {
       let echo: PendingRequest["echo"];
       if ("id" in request) {
         id = request.id;
+        if (hint?.exchangePayload !== undefined) {
+          const json = exchangeWireJSON(hint.exchangePayload);
+          if (json !== undefined) {
+            frame = `{"method":"post","id":${id},"request":{"type":"action","payload":${json}}}`;
+          }
+        }
       } else if (hint?.subscriptionId !== undefined) {
         // The subscription manager hands over the id it already computed; per the hint contract
         // `payload` is its normalized snapshot, so the normalized envelope is one shallow object

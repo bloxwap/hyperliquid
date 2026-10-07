@@ -63,3 +63,5 @@ export function validatorAction(
 ): Promise<ValidatorActionSuccessResponse> {
   return cValidatorAction(config, params, opts);
 }
+
+export { buildCValidatorAction as buildValidatorAction } from "./cValidatorAction.ts";

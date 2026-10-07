@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -141,4 +142,21 @@ export function approveBuilderFee(
 ): Promise<ApproveBuilderFeeSuccessResponse> {
   const action = buildAction(ApproveBuilderFeeActionSchema, { type: "approveBuilderFee", ...params }, opts);
   return executeUserSignedAction(config, action, ApproveBuilderFeeTypes, opts);
+}
+
+/**
+ * Build a canonical {@linkcode approveBuilderFee} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link ApproveBuilderFeeSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildApproveBuilderFee(
+  params: ApproveBuilderFeeParameters,
+): CanonicalAction<ApproveBuilderFeeSuccessResponse> {
+  const action = buildAction(ApproveBuilderFeeActionSchema, { type: "approveBuilderFee", ...params });
+  return canonicalAction(action, { kind: "user", types: ApproveBuilderFeeTypes });
 }

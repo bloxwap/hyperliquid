@@ -58,3 +58,5 @@ export function withdraw(
 ): Promise<WithdrawSuccessResponse> {
   return withdraw3(config, params, opts);
 }
+
+export { buildWithdraw3 as buildWithdraw } from "./withdraw3.ts";

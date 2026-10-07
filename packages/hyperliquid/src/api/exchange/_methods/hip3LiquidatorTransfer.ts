@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -126,4 +127,21 @@ export function hip3LiquidatorTransfer(
 ): Promise<Hip3LiquidatorTransferSuccessResponse> {
   const action = buildAction(Hip3LiquidatorTransferActionSchema, { type: "hip3LiquidatorTransfer", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/**
+ * Build a canonical {@linkcode hip3LiquidatorTransfer} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link Hip3LiquidatorTransferSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildHip3LiquidatorTransfer(
+  params: Hip3LiquidatorTransferParameters,
+): CanonicalAction<Hip3LiquidatorTransferSuccessResponse> {
+  const action = buildAction(Hip3LiquidatorTransferActionSchema, { type: "hip3LiquidatorTransfer", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }

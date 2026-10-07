@@ -21,3 +21,4 @@ export {
 } from "./errors.ts";
 export { executeL1Action, executeUserSignedAction } from "./execute.ts";
 export type { PreparedExchangeRequest } from "./_shell.ts";
+export type { DispatchPolicy } from "./_dispatch.ts";

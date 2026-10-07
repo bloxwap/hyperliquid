@@ -165,3 +165,77 @@ the process-wide paced quota, so a post benchmark cannot delay a later subscript
 Message pacing itself is verified with controlled clocks in `tests/transport/websocket/_quota.test.ts`;
 it is excluded from CPU timings. Changing this setup changes the suite fingerprint intentionally, so
 review the suite migration and record a fresh matching-machine baseline.
+
+## Optimization search: reusable actions
+
+Three experiments were paired on the initial working tree, including its existing uncommitted optimizations,
+and measured on both Bun and Node. The search rotates variant order over 11 samples, varies nonces,
+checks byte equality, and measures checkpoint setup separately. It lives outside this suite so the
+regression workload and its fingerprint remain unchanged.
+
+1. **Checkpoint Keccak before the nonce.** An SDK-owned immutable action can retain its unfinalized hash state,
+   then hash only fresh nonce/vault/expiry bytes. Implemented for reused prefixes of at least 272 bytes:
+   noble clones its state, and the optional WASM provider saves/loads its state after an independent conformance
+   check. A provider change recreates the checkpoint. Single-order actions retain full hashing.
+2. **Reuse the immutable action's wire JSON.** Implemented for SDK-owned actions with a bulk array of at least
+   eight items. The execution shell registers its envelopes; HTTP and WebSocket reuse the action fragment while
+   serializing each signature and metadata afresh. Unknown inputs, altered descriptors, replacement actions or
+   signatures, and custom `toJSON` behavior fall back to native serialization. Caches are weakly owned.
+3. **Turn MessagePack field names into atoms.** Rejected: a single-character ASCII shortcut and a bounded
+   encoded-key dictionary both slowed the existing writer on both engines. Those candidates remain in the
+   experiment script, with no production encoder changes.
+
+Warm execution of a reused action, with a real WASM local signer and mock transports that materialize the
+outgoing UTF-8 bytes, measured on Apple M3 Max:
+
+| Runtime | Orders per action | HTTP before → after | WebSocket before → after |
+| --- | ---: | ---: | ---: |
+| Bun 1.2.20 | 100 | 102.7 → 54.9 µs | 101.6 → 55.8 µs |
+| Bun 1.2.20 | 1,000 | 516.6 → 58.1 µs | 519.5 → 61.7 µs |
+| Node 24.6.0 | 100 | 108.7 → 85.1 µs | 108.3 → 84.2 µs |
+| Node 24.6.0 | 1,000 | 390.7 → 145.8 µs | 391.8 → 145.1 µs |
+
+These are microseconds per **complete action**, not per order. They exclude network/server latency and assume
+the same builder payload is reused; constructing a new action for every call pays serialization and prefix
+hashing again. The original 57-scenario suite also passed its before/after regression comparison. The full
+offline test suite passed on Bun 1.4.0; older Bun 1.2.20 lacks the compression streams that its tests require.
+
+```ts
+import { buildOrder } from "@bloxwap/hyperliquid/actions/order";
+import { executeAction } from "@bloxwap/hyperliquid/actions/execution";
+
+const action = buildOrder({ orders });
+await executeAction(config, action); // cold serialization/signing
+await executeAction(config, action); // reused payload, fresh nonce/signature
+```
+
+For changed prices or sizes, build a new action. The SDK owns and freezes the copied payload; ordinary or
+shallow-frozen caller objects never gain the hash cache. Repeated execution is deliberate submission of another
+action, and must match the application's intent; it is not a retry of a previously signed nonce.
+
+The separate `signAction` / `submitAction` path also preserves the owned payload and its caches. Each sign
+allocates a fresh nonce and freezes a fresh signature, while submission uses that signed request. Transformed
+user actions and multi-sig wrappers retain their full immutable copy.
+
+For the separate sign/submit path with a real WASM signer, a reused 1,000-order action over mocked HTTP
+measured 1,292.6 → 60.1 µs on Bun and 1,372.3 → 150.5 µs on Node. These timings include signing, immutable
+request preparation, transport overhead, and outgoing UTF-8 materialization; network latency is excluded.
+
+Run the candidate search from the SDK directory with either engine:
+
+```sh
+bun .dev/perf/optimization_search.ts --out /tmp/search-bun.json
+node .dev/perf/optimization_search.ts --out /tmp/search-node.json
+
+# Pair actual implementations with an original package snapshot containing src/, package.json,
+# and access to the same dependencies. Both optional accelerators should be installed.
+bun .dev/perf/optimization_verify.ts --compare-dir /path/to/original-sdk --out /tmp/verify-bun.json
+node .dev/perf/optimization_verify.ts --compare-dir /path/to/original-sdk --out /tmp/verify-node.json
+
+# Measure the separate sign/submit path alone.
+bun .dev/perf/optimization_verify.ts --compare-dir /path/to/original-sdk --filter staged --out /tmp/staged-bun.json
+node .dev/perf/optimization_verify.ts --compare-dir /path/to/original-sdk --filter staged --out /tmp/staged-node.json
+```
+
+The recorded medians, p90s, environment, decisions, and validation are in
+[`optimization_summary.json`](../../.dev/perf/results/optimization_summary.json).

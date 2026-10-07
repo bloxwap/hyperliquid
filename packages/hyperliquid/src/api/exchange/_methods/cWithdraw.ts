@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -135,4 +136,19 @@ export function cWithdraw(
 ): Promise<CWithdrawSuccessResponse> {
   const action = buildAction(CWithdrawActionSchema, { type: "cWithdraw", ...params }, opts);
   return executeUserSignedAction(config, action, CWithdrawTypes, opts);
+}
+
+/**
+ * Build a canonical {@linkcode cWithdraw} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link CWithdrawSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildCWithdraw(params: CWithdrawParameters): CanonicalAction<CWithdrawSuccessResponse> {
+  const action = buildAction(CWithdrawActionSchema, { type: "cWithdraw", ...params });
+  return canonicalAction(action, { kind: "user", types: CWithdrawTypes });
 }

@@ -1,3 +1,4 @@
+import { canonicalAction, type CanonicalAction } from "../../../actions/_canonical.ts";
 import * as v from "valibot";
 
 // ============================================================
@@ -128,4 +129,19 @@ export function updateLeverage(
 ): Promise<UpdateLeverageSuccessResponse> {
   const action = buildAction(UpdateLeverageActionSchema, { type: "updateLeverage", ...params }, opts);
   return executeL1Action(config, action, opts);
+}
+
+/**
+ * Build a canonical {@linkcode updateLeverage} action: validate, normalize, fill defaults, and copy and freeze
+ * the result. Allocates no nonce and makes no wallet or transport call, so the action can be signed
+ * and submitted later, or reused while its fields stay valid.
+ *
+ * @param params Parameters specific to the API request.
+ * @return Immutable action typed with {@link UpdateLeverageSuccessResponse}.
+ *
+ * @throws {ValidationError} When the request parameters fail validation.
+ */
+export function buildUpdateLeverage(params: UpdateLeverageParameters): CanonicalAction<UpdateLeverageSuccessResponse> {
+  const action = buildAction(UpdateLeverageActionSchema, { type: "updateLeverage", ...params });
+  return canonicalAction(action, { kind: "l1" });
 }
