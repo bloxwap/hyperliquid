@@ -304,6 +304,7 @@
     "./actions/vaultModify": "./src/actions/vaultModify.ts",
     "./actions/vaultTransfer": "./src/actions/vaultTransfer.ts",
     "./actions/withdraw3": "./src/actions/withdraw3.ts",
+    "./actions/orderBatcher": "./src/actions/orderBatcher.ts",
     "./actions/stakingDeposit": "./src/actions/stakingDeposit.ts",
     "./actions/stakingWithdraw": "./src/actions/stakingWithdraw.ts",
     "./actions/validatorAction": "./src/actions/validatorAction.ts",

@@ -61,6 +61,7 @@ export * from "./vaultModify.ts";
 export * from "./vaultTransfer.ts";
 export * from "./withdraw3.ts";
 
+export * from "./orderBatcher.ts";
 export * from "./stakingDeposit.ts";
 export * from "./stakingWithdraw.ts";
 export * from "./validatorAction.ts";
