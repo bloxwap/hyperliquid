@@ -3,9 +3,11 @@
 // ============================================================
 
 import { HyperliquidError } from "../../../_base.ts";
+import { getWalletAddress } from "../../../signing/mod.ts";
 import type { ExchangeConfig, PreparedExchangeRequest } from "./_base/mod.ts";
 import { assertSuccessResponse } from "./_base/errors.ts";
-import { getPreparedRequestState } from "./_base/_shell.ts";
+import { assertDetachedAllowed, needsDetachedCheck } from "./_base/_dispatch.ts";
+import { getPreparedRequestState, getSigningContext } from "./_base/_shell.ts";
 
 /** Request options for the {@linkcode submitPrepared} function. */
 export interface SubmitPreparedOptions {
@@ -31,6 +33,7 @@ export interface SubmitPreparedOptions {
  * @return The API response.
  *
  * @throws {HyperliquidError} When the payload was poisoned by a request attempted after it was produced.
+ * @throws {HyperliquidError} In bounded dispatch mode, or while bounded calls for the signer are outstanding.
  * @throws {TransportError} When the transport layer throws an error.
  * @throws {ApiRequestError} When the API returns an unsuccessful response (e.g. a stale nonce).
  *
@@ -53,6 +56,17 @@ export async function submitPrepared<T>(
   prepared: PreparedExchangeRequest<T>,
   opts?: SubmitPreparedOptions,
 ): Promise<T> {
+  // Prepared payloads bypass the dispatch coordinator. Check the signer the payload was signed by
+  // when known, so routing it through another client's config cannot bypass its active bounded lane.
+  if (needsDetachedCheck(config.dispatchPolicy)) {
+    const context = getSigningContext(prepared);
+    const leader = "wallet" in config ? config.wallet : config.signers[0];
+    assertDetachedAllowed(
+      context?.key ?? `${await getWalletAddress(leader)}:${config.transport.isTestnet}`,
+      config.dispatchPolicy,
+    );
+  }
+
   // Re-check the poison state synchronously, immediately before posting: a request attempted
   // (via the capture transport) after the payload was produced invalidates it, even though the
   // payload itself looks fine. This is a point-in-time check, not a happens-before guarantee:

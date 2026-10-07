@@ -592,7 +592,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @param action Action produced by an SDK builder.
    * @param options Signing options and cancellation signal.
    * @return An immutable signed request with the action's response type.
-   * @throws {HyperliquidError} When action ownership is invalid.
+   * @throws {HyperliquidError} When action ownership or dispatch policy is invalid.
    */
   sign<T>(action: CanonicalAction<T>, options?: ActionOptions): Promise<SignedAction<T>> {
     return signAction(this.config, action, options);
@@ -603,7 +603,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @param signed Signed request produced by signAction.
    * @param options Cancellation signal for submission.
    * @return The action's response.
-   * @throws {HyperliquidError} When request ownership, network, is invalid.
+   * @throws {HyperliquidError} When request ownership, network, or dispatch policy is invalid.
    */
   submit<T>(signed: SignedAction<T>, options?: { signal?: AbortSignal }): Promise<T> {
     return submitAction(this.config, signed, options);
@@ -614,7 +614,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @param action Action produced by an SDK builder.
    * @param options Signing options and cancellation signal.
    * @return The action's response.
-   * @throws {HyperliquidError} When action ownership is invalid.
+   * @throws {HyperliquidError} When action ownership or dispatch policy is invalid.
    */
   execute<T>(action: CanonicalAction<T>, options?: ActionOptions): Promise<T> {
     return executeAction(this.config, action, options);
@@ -1784,6 +1784,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    *
    * @throws {ValidationError} When the request parameters fail validation (before signing).
    * @throws {HyperliquidError} When the callback issues zero or more than one request, targets a non-`exchange` endpoint, or issues a malformed request.
+   * @throws {HyperliquidError} In bounded dispatch mode, or while bounded calls for the signer are outstanding.
    *
    * @example
    * ```ts
@@ -2391,6 +2392,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @return The API response.
    *
    * @throws {HyperliquidError} When the payload was poisoned by a request attempted after it was produced.
+   * @throws {HyperliquidError} In bounded dispatch mode, or while bounded calls for the signer are outstanding.
    * @throws {TransportError} When the transport layer throws an error.
    * @throws {ApiRequestError} When the API returns an unsuccessful response (e.g. a stale nonce).
    *

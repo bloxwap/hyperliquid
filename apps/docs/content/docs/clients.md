@@ -818,3 +818,56 @@ exchange rejects a nonce it has already seen and the action cannot be applied tw
 The standalone `signAction`, `submitAction`, and `executeAction` functions in
 `@bloxwap/hyperliquid/actions/execution` accept the same exchange config. Existing client methods and
 `prepareRequest` / `submitPrepared` continue to work.
+
+## Bounded dispatch for remote signing
+
+By default the SDK signs concurrently but sends a signer's requests in nonce-issuance order, so one slow remote
+signature delays every later request for that signer and network. The exchange does not require that order: it accepts
+any unused nonce above the smallest of the signer's 100 highest nonces. A dedicated signer can opt into bounded
+dispatch, which sends ready signatures ahead of a slower earlier one:
+
+```ts
+const exchange = new ExchangeClient({
+  transport,
+  wallet,
+  dispatchPolicy: { mode: "bounded", maxOvertakes: 99, maxPending: 1000 },
+});
+```
+
+- `maxOvertakes` (0–99, default 99) caps how many newer requests may be sent while an earlier one is still
+  outstanding. The count is cumulative until the earlier request's response settles, so newer requests that finish
+  quickly cannot keep overtaking it and push its nonce out of the exchange's window, even if requests arrive in a
+  different order than they were sent. Among signed requests waiting for the window, the oldest goes first. `0`
+  reproduces ordered dispatch.
+- `maxPending` (default 1000) caps signing, waiting, and in-flight requests. A call beyond it rejects with
+  `Bounded dispatch queue is full` without consuming a nonce.
+- Before sending, a request that waited is checked again against the protocol timestamp window (its nonce must be
+  within two days before and one day after the current time) and its `expiresAfter`. A failed check rejects the call
+  without sending it.
+- A wallet rejection, an abort, an expiry, or a transport failure (including a closed WebSocket) settles the call and
+  frees its slot; the skipped nonce is a gap the exchange tolerates. A signature that completes after its call was
+  aborted is never sent. A signature that never completes holds back further overtaking until it is aborted, so pass a
+  `signal` with a deadline when the signer can stall.
+- WebSocket and HTTP transport limits are unchanged and apply separately from the nonce bound: `post` frames are
+  still charged to the shared WebSocket message budget without waiting for it.
+
+Bounded dispatch pays off when requests arrive steadily and some signatures are much slower than others: ready
+requests no longer queue behind a slow one. It is not a throughput setting. A burst much larger than `maxOvertakes`
+can finish later than under ordered dispatch, because ordered dispatch assumes requests arrive in the order they were
+sent and keeps all of them in flight, while bounded dispatch counts each in-flight request against the window until
+its response returns. Measure with your own signer and traffic before switching.
+
+The coordinator is shared per signer address and network across every `ExchangeClient` and standalone function in
+the process, HTTP and WebSocket alike, and so is the default nonce source. Multi-sig requests are coordinated by the
+leader signer, the same key their nonces are issued under; vault and sub-account requests share their signer's lane.
+
+Bounded mode supports managed calls only: ordinary exchange methods, `exchange.execute`, and `executeAction`.
+`exchange.sign` / `exchange.submit`, `signAction` / `submitAction`, `prepareRequest`, and `submitPrepared` reject in
+bounded mode, and also reject while bounded calls for that signer and network are outstanding, because a detached
+submission's nonce would escape the bound. Ordered and bounded calls, or bounded calls with different limits, cannot be
+active for the same signer and network at the same time.
+
+The coordinator only sees requests made through this process. Other processes, other SDK instances bundled separately,
+direct `transport.request` calls, and anything that submits for the same signer elsewhere also consume nonces in its
+100-highest window, and the bound cannot account for them. Use bounded dispatch only with a signer (typically an API
+wallet) dedicated to this process.

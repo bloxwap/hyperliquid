@@ -365,9 +365,11 @@ Outbound messages are **paced by default**: the shared quota runs a token bucket
 re-subscribes every held subscription at once, so 1000 subscriptions spend half the minute's budget instantly, and a
 flapping socket repeats the burst until the server refuses.
 
-Pacing only ever delays `subscribe` and `unsubscribe` frames. **`post` requests and keep-alive pings never wait**: an
-exchange action's wire order — and therefore per-wallet nonce ordering — depends on reaching the socket synchronously,
-and delaying the keep-alive watchdog is how a half-open connection goes unnoticed. Both still *debit* the budget, so a
+Pacing only ever delays `subscribe` and `unsubscribe` frames. **`post` requests and keep-alive pings never wait**: the
+SDK's default ordered dispatch policy fixes an exchange action's wire order by reaching the socket synchronously (the
+exchange itself only requires each nonce to be unused and within the signer's 100-highest window; see
+[bounded dispatch](clients.md#bounded-dispatch-for-remote-signing)), and delaying the keep-alive watchdog is how a
+half-open connection goes unnoticed. Both still *debit* the budget, so a
 burst of orders correctly slows subscription traffic rather than silently overrunning the shared limit.
 
 To opt out of pacing — or to resize the bucket — pass your own `quota`; constructed without `rateLimit`, it keeps the
