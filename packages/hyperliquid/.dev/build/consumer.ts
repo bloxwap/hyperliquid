@@ -3,6 +3,7 @@ import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { allMids } from "@bloxwap/hyperliquid/api/info/allMids";
 import { buildOrder } from "@bloxwap/hyperliquid/actions/order";
 import { executeAction, signAction, submitAction } from "@bloxwap/hyperliquid/actions/execution";
+import { createOrderBatcher, type OrderOutcome } from "@bloxwap/hyperliquid/actions/orderBatcher";
 import type { OrderSuccessResponse } from "@bloxwap/hyperliquid/api/exchange/order";
 import type { ExchangeConfig } from "@bloxwap/hyperliquid/api/exchange";
 // @ts-expect-error Private declaration paths remain closed by the published export map.
@@ -21,7 +22,8 @@ const submitted: OrderSuccessResponse = await client.submit(signed);
 const executed: OrderSuccessResponse = await client.execute(action);
 const staged: OrderSuccessResponse = await submitAction(config, await signAction(config, action));
 const direct: OrderSuccessResponse = await executeAction(config, action);
-void [submitted, executed, staged, direct];
+const outcome: OrderOutcome = await createOrderBatcher(config).enqueue(input);
+void [submitted, executed, staged, direct, outcome];
 // @ts-expect-error The published type exposes an immutable signature.
 signed.signature.v = 28;
 // @ts-expect-error Signed action fields are immutable as well.

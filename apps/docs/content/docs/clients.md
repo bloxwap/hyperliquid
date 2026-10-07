@@ -473,6 +473,9 @@ of any CPU saving.
 Separate actions are genuinely required only when the orders differ in a field the action carries once rather than
 per order — `vaultAddress`, `expiresAfter`, `builder`, or `grouping` itself.
 
+When the orders come from independent callers rather than one place in your code, the
+[order batcher](#optional-order-batching) collects them into shared actions for you.
+
 ### Orders over WebSocket (low latency)
 
 Every `ExchangeClient` method also works over [`WebSocketTransport`](transports.md#websocket) — the server accepts
@@ -818,6 +821,84 @@ exchange rejects a nonce it has already seen and the action cannot be applied tw
 The standalone `signAction`, `submitAction`, and `executeAction` functions in
 `@bloxwap/hyperliquid/actions/execution` accept the same exchange config. Existing client methods and
 `prepareRequest` / `submitPrepared` continue to work.
+
+## Optional order batching
+
+Independent callers that each place one order can share signatures and requests through an opt-in batcher. Each
+caller still gets its own result:
+
+```ts
+import { createOrderBatcher } from "@bloxwap/hyperliquid/actions/orderBatcher";
+
+const batcher = createOrderBatcher(exchange.config, {
+  maxQueueSize: 1000, // queued plus in-flight orders
+  maxBatchSize: 100, // orders per request
+  flushIntervalMs: 1, // longest wait for a partial batch
+});
+const outcome = await batcher.enqueue({
+  a: 0, b: true, p: "30000", s: "0.01", r: false, t: { limit: { tif: "Gtc" } },
+});
+if (typeof outcome === "object" && "error" in outcome) console.error(outcome.error);
+await batcher.close();
+```
+
+Queued orders are sent when a batch reaches `maxBatchSize` (which flushes the whole queue), when `flushIntervalMs`
+elapses, or when you call `flush()`. Each request carries one action, one signature, and one nonce, through the same
+signing path as `exchange.execute`, so nonce management, the dispatch policy, and the transport's rate limiting
+apply unchanged. `exchange.order()` and the other existing methods still dispatch immediately and keep their error
+behavior.
+
+Only orders that agree on everything the action or request carries once share a batch: `grouping`, `builder`,
+`vaultAddress`, and `expiresAfter`. ALO orders are also kept apart from IOC and GTC orders so they keep their
+prioritization, and under priority grouping (`{ p }`), where the exchange requires every order in the action to be IOC
+or every order to be a non-reduce-only ALO, orders are further split by time-in-force and reduce-only flag. The batcher
+is bound to one config, so signer and network never mix.
+
+`grouping` accepts `"na"` (the default) or `{ p }`. The TP/SL groupings (`normalTpsl`, `positionTpsl`) link the orders
+of one action, so a stop-loss from one caller could become the child of another caller's entry order. `enqueue`
+rejects them; send a TP/SL group as one `exchange.order()` call instead.
+
+Results:
+
+- `enqueue` resolves with the server's status for that order, in the order it was submitted: `resting`, `filled`,
+  `waitingForFill`, `waitingForTrigger`, or `{ error }`. An error status for one order does not affect the others in
+  its batch; unlike `exchange.order()`, mixed responses are never turned into a rejection.
+- A whole-batch failure rejects every caller in that batch: a top-level `status: "err"`, a response whose statuses do
+  not match the submitted orders one to one, or a transport failure.
+- An invalid order rejects only its own `enqueue`, before it is queued.
+- A full queue rejects `enqueue` immediately with `Order batcher queue is full`.
+- An order whose `expiresAfter` has passed before its batch is sent rejects without being sent.
+
+Cancellation and shutdown:
+
+- Aborting an `enqueue` signal before its batch is sent removes the order; nothing is sent for it.
+- Aborting after the batch is sent only stops that caller waiting. It does not cancel the order, which the exchange may
+  already have accepted, and its slot counts against `maxQueueSize` until the batch settles.
+- `flush()` sends everything queued and waits for every batch in flight.
+- `close()` stops new enqueues and drains: queued orders are sent and their callers settle normally.
+- `close({ drain: false })` rejects every waiting caller and stops waiting for in-flight batches. Orders already sent
+  may still be accepted; the rejection does not mean they were cancelled.
+- The batcher never retries a batch. A failure after sending is ambiguous (the exchange may have applied the action),
+  so reconcile with open orders or fills before placing the orders again.
+
+Rate limits: each request costs `1 + floor(orders / 40)` of the per-IP REST weight, so 100 orders in one batch cost 3
+instead of 100. Address-based limits still count every order individually; batching does not raise them.
+
+Batching trades latency for throughput. It helps when many orders arrive together, and costs a timer hop when they
+arrive one at a time. Measured with 300 single-order callers, real secp256k1 signing, and a 5 ms mock transport
+(`bun .dev/perf/order_batching.ts`, Bun 1.4.0, Apple M3 Max, median of 5 rounds):
+
+| Callers arrive      | Mode                  | Orders/s | p50 / p99 latency | Signatures and requests | Weight |
+| ------------------- | --------------------- | -------- | ----------------- | ----------------------- | ------ |
+| All at once         | `order()` per caller  | ~3,800   | 74 / 76 ms        | 300                     | 300    |
+| All at once         | batch 5, flush 1 ms   | ~16,000  | 13 / 18 ms        | 60                      | 60     |
+| All at once         | batch 100, flush 0 ms | ~43,000  | 6 / 7 ms          | 3                       | 9      |
+| One per millisecond | `order()` per caller  | ~900     | 5.1 / 6.5 ms      | 300                     | 300    |
+| One per millisecond | batch 100, flush 1 ms | ~680     | 6.5 / 9.2 ms      | 300                     | 300    |
+| One per millisecond | batch 100, flush 5 ms | ~680     | 9.1 / 12.3 ms     | 75                      | 75     |
+
+With steady arrivals, a flush interval shorter than the gap between orders sends batches of one and only adds delay;
+a longer one batches more but makes every caller wait for it. Measure with your own traffic before choosing values.
 
 ## Bounded dispatch for remote signing
 
