@@ -1,7 +1,9 @@
 /**
  * Tests for the per-wallet dispatch order guaranteed by `executeWithShell`.
  *
- * The server requires a wallet's exchange requests to reach it in strictly increasing nonce order.
+ * The SDK's default `"ordered"` dispatch policy sends a wallet's exchange requests in nonce-issuance
+ * order. The exchange does not require this — it accepts any unused nonce above the smallest of the
+ * wallet's 100 highest — but it is the compatibility default (see `_boundedDispatch.test.ts`).
  * The nonce lock only fixes the order nonces are ISSUED in; signing happens outside it so that
  * concurrent callers on one wallet — where signing is a network round trip for any remote wallet —
  * can sign at the same time. A per-wallet dispatch chain is what restores wire order afterwards.
@@ -92,7 +94,7 @@ describe("executeWithShell dispatch order", () => {
   test("holds when signatures complete in reverse order", async () => {
     const harness = createHarness();
     // The first nonce signs slowest and the last signs fastest, so completion order is the exact
-    // reverse of issue order — the case a naive "dispatch when signed" implementation gets wrong.
+    // reverse of issue order — the case that distinguishes the default ordered policy from bounded dispatch.
     await runConcurrent(harness, 10, (i) => (10 - i) * 10);
 
     assertEquals(harness.dispatched.length, 10);

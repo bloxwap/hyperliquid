@@ -1,6 +1,7 @@
 /** Explicit signing and execution of canonical actions. @module */
 import { HyperliquidError } from "../_base.ts";
 import type { ExchangeConfig } from "../api/exchange/_methods/_base/_config.ts";
+import { assertDetachedAllowed } from "../api/exchange/_methods/_base/_dispatch.ts";
 import { executeL1Action, executeUserSignedAction } from "../api/exchange/_methods/_base/execute.ts";
 import {
   getSigningContext,
@@ -56,7 +57,7 @@ function run<T>(
  * @param action Action produced by an SDK builder.
  * @param options Signing options and cancellation signal.
  * @return An immutable signed request with the action's response type.
- * @throws {HyperliquidError} When action ownership is invalid.
+ * @throws {HyperliquidError} When action ownership or dispatch policy is invalid.
  */
 export async function signAction<T>(
   config: ExchangeConfig,
@@ -84,7 +85,7 @@ export async function signAction<T>(
  * @param signed Signed request produced by signAction.
  * @param options Cancellation signal for submission.
  * @return The action's response.
- * @throws {HyperliquidError} When request ownership, network, is invalid.
+ * @throws {HyperliquidError} When request ownership, network, or dispatch policy is invalid.
  */
 export async function submitAction<T>(
   config: ExchangeConfig,
@@ -95,6 +96,7 @@ export async function submitAction<T>(
   if (!owner || owner.isTestnet !== config.transport.isTestnet) {
     throw new HyperliquidError("Signed request ownership or network mismatch; rebuild and sign for this network");
   }
+  assertDetachedAllowed(owner.key, config.dispatchPolicy);
   const response = await config.transport.request<T>("exchange", signed, options?.signal);
   assertSuccessResponse(response);
   return response;
@@ -106,7 +108,7 @@ export async function submitAction<T>(
  * @param action Action produced by an SDK builder.
  * @param options Signing options and cancellation signal.
  * @return The action's response.
- * @throws {HyperliquidError} When action ownership is invalid.
+ * @throws {HyperliquidError} When action ownership or dispatch policy is invalid.
  */
 export function executeAction<T>(
   config: ExchangeConfig,
@@ -121,3 +123,4 @@ export function executeAction<T>(
 }
 
 export { createNonceManager, type NonceManager } from "../api/exchange/_methods/_base/_nonce.ts";
+export type { DispatchPolicy } from "../api/exchange/_methods/_base/_dispatch.ts";

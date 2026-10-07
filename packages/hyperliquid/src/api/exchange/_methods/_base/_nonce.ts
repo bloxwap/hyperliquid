@@ -57,11 +57,12 @@ export function createNonceManager(maxEntries: number = DEFAULT_MAX_ENTRIES, run
       // A throttled scan is chosen over evicting the oldest entry because
       // eviction is unsafe here: dropping a live wallet's entry resets its
       // nonce derivation to wall-clock time, which can go BACKWARDS relative
-      // to a nonce already sent, and the exchange rejects non-increasing
-      // nonces. Throttling only *delays* deletions that were already safe —
-      // an entry is still deleted only when `now > last`, i.e. when the next
-      // nonce for that key (at least `now`) is guaranteed to exceed the
-      // deleted value — so per-key monotonicity is preserved by construction.
+      // to a nonce already sent, risking a reused nonce or one already
+      // below the signer's 100-highest window. Throttling only *delays*
+      // deletions that were already safe — an entry is still deleted only
+      // when `now > last`, i.e. when the next nonce for that key (at least
+      // `now`) is guaranteed to exceed the deleted value — so per-key
+      // monotonicity is preserved by construction.
       //
       // The trade-off is memory, never correctness: stale entries may linger
       // up to `PRUNE_INTERVAL_MS` longer than before, and between scans the

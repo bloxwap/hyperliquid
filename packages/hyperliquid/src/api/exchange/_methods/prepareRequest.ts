@@ -3,8 +3,10 @@
 // ============================================================
 
 import { HyperliquidError } from "../../../_base.ts";
+import { getWalletAddress } from "../../../signing/mod.ts";
 import type { IRequestTransport } from "../../../transport/mod.ts";
 import type { ExchangeConfig, PreparedExchangeRequest } from "./_base/mod.ts";
+import { assertDetachedAllowed, needsDetachedCheck } from "./_base/_dispatch.ts";
 import { linkPreparedRequestState, type PreparedRequestState } from "./_base/_shell.ts";
 
 export type { PreparedExchangeRequest } from "./_base/mod.ts";
@@ -102,6 +104,7 @@ function toPlainSignedRequest(payload: unknown): PreparedExchangeRequest<unknown
  *
  * @throws {ValidationError} When the request parameters fail validation (before signing).
  * @throws {HyperliquidError} When the callback issues zero or more than one request, targets a non-`exchange` endpoint, or issues a malformed request.
+ * @throws {HyperliquidError} In bounded dispatch mode, or while bounded calls for the signer are outstanding.
  *
  * @example
  * ```ts
@@ -126,6 +129,13 @@ export async function prepareRequest<T>(
   config: ExchangeConfig,
   run: (config: ExchangeConfig) => Promise<T>,
 ): Promise<PreparedExchangeRequest<T>> {
+  // Prepared payloads bypass the dispatch coordinator, so they are unavailable in bounded mode or
+  // while bounded calls for this signer/network are outstanding.
+  if (needsDetachedCheck(config.dispatchPolicy)) {
+    const leader = "wallet" in config ? config.wallet : config.signers[0];
+    assertDetachedAllowed(`${await getWalletAddress(leader)}:${config.transport.isTestnet}`, config.dispatchPolicy);
+  }
+
   // Shared with the returned payload (see `linkPreparedRequestState`): invalid attempts recorded
   // after finalization — possible only for leaked callback work — poison the payload so
   // `submitPrepared` rejects it (best-effort).
