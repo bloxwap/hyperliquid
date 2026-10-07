@@ -854,6 +854,10 @@ prioritization, and under priority grouping (`{ p }`), where the exchange requir
 or every order to be a non-reduce-only ALO, orders are further split by time-in-force and reduce-only flag. The batcher
 is bound to one config, so signer and network never mix.
 
+`grouping` accepts `"na"` (the default) or `{ p }`. The TP/SL groupings (`normalTpsl`, `positionTpsl`) link the orders
+of one action, so a stop-loss from one caller could become the child of another caller's entry order. `enqueue`
+rejects them; send a TP/SL group as one `exchange.order()` call instead.
+
 Results:
 
 - `enqueue` resolves with the server's status for that order, in the order it was submitted: `resting`, `filled`,

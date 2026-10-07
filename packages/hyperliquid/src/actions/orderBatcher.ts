@@ -62,8 +62,15 @@ export interface OrderBatcherOptions {
   /** Isolated scheduler and wall clock. */
   runtime?: Partial<Runtime>;
 }
-/** Grouping and signing options must match for orders to share a batch. */
-export type EnqueueOrderOptions = Pick<OrderParameters, "grouping" | "builder"> & Omit<OrderOptions, "skipValidation">;
+/**
+ * Grouping and signing options must match for orders to share a batch. TP/SL groupings link the
+ * orders of one action, so independent callers cannot share them: use `exchange.order` with the full group.
+ */
+export type EnqueueOrderOptions = Pick<OrderParameters, "builder"> &
+  Omit<OrderOptions, "skipValidation"> & {
+    /** `"na"` (default) or priority grouping `{ p }`. */
+    grouping?: Exclude<OrderParameters["grouping"], "normalTpsl" | "positionTpsl">;
+  };
 interface Entry {
   key: string;
   params: OrderParameters;
@@ -125,6 +132,11 @@ export class OrderBatcher {
       // Validated per caller, so one malformed order cannot fail its batch.
       const params = buildOrder({ orders: [input], grouping: options?.grouping, builder: options?.builder })
         .payload as OrderParameters;
+      if (params.grouping === "normalTpsl" || params.grouping === "positionTpsl") {
+        throw new HyperliquidError(
+          "TP/SL groupings link orders within one action; use exchange.order with the full group",
+        );
+      }
       const vaultAddress = options?.vaultAddress ?? this._config.defaultVaultAddress;
       const expiresAfter = options?.expiresAfter ?? this._config.defaultExpiresAfter;
       // Dynamic defaults are resolved per actual batch by the execution core.

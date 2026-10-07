@@ -79,7 +79,7 @@ test("virtual flush deadline, size threshold, and compatible option partitioning
   await drain();
   await Promise.all([second, third]);
   expect(calls).toHaveLength(2);
-  const grouped = batcher.enqueue(input, { grouping: "normalTpsl" });
+  const grouped = batcher.enqueue(input, { grouping: { p: 1 } });
   const alo = batcher.enqueue({ ...input, t: { limit: { tif: "Alo" } } });
   const normal = batcher.enqueue(input);
   await batcher.flush();
@@ -224,13 +224,29 @@ test("a batch carries the same canonical wire action as one order() call for its
       t: { trigger: { isMarket: true, triggerPx: "2.0", tpsl: "sl" as const } },
     },
   ];
-  const results = orders.map((order) => batcher.enqueue(order, { grouping: "normalTpsl", builder }));
+  const results = orders.map((order) => batcher.enqueue(order, { grouping: "na", builder }));
   await batcher.flush();
   await Promise.all(results);
   expect(calls).toHaveLength(1);
-  expect(JSON.stringify(calls[0].action)).toBe(
-    JSON.stringify(buildOrder({ orders, grouping: "normalTpsl", builder }).payload),
-  );
+  expect(JSON.stringify(calls[0].action)).toBe(JSON.stringify(buildOrder({ orders, grouping: "na", builder }).payload));
+});
+
+test("TP/SL groupings are rejected so independent orders are never linked", async () => {
+  const { config, clock, calls } = harness();
+  const batcher = createOrderBatcher(config, { runtime: clock });
+  for (const grouping of ["normalTpsl", "positionTpsl"] as const) {
+    const results = [
+      // @ts-expect-error TP/SL groupings are excluded from the batcher's options.
+      batcher.enqueue(input, { grouping }),
+      // @ts-expect-error TP/SL groupings are excluded from the batcher's options.
+      batcher.enqueue(input, { grouping }),
+    ];
+    for (const result of results) await expect(result).rejects.toThrow("TP/SL groupings link orders");
+  }
+  await batcher.flush();
+  expect(calls).toHaveLength(0);
+  expect(batcher.pending).toBe(0);
+  await batcher.close();
 });
 
 test("ExchangeClient.order keeps immediate dispatch and whole-call errors next to an active batcher", async () => {

@@ -34,7 +34,7 @@ test("cancelled groups and flushed generations cannot inflate subsequent batch t
 
   const abort = new AbortController();
   const cancelled = batcher.enqueue(input, { signal: abort.signal }).catch((reason: unknown) => reason);
-  const sibling = batcher.enqueue(input, { grouping: "normalTpsl" });
+  const sibling = batcher.enqueue(input, { grouping: { p: 1 } });
   abort.abort(new Error("cancel queued"));
   expect(await cancelled).toBe(abort.signal.reason);
   const first = batcher.enqueue(input);
