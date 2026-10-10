@@ -4,6 +4,10 @@ linker = "isolated"
 # Match the SDK's supply-chain protection for every workspace installation.
 minimumReleaseAge = 259200
 
+[install.scopes]
+# JSR mirrors the SDK's `@std/*` test dependencies under the npm-compatible `@jsr/*` scope.
+jsr = "https://npm.jsr.io"
+
 [test]
 # Keep direct `bun test` at the workspace root consistent with the SDK's test setup.
 preload = ["./packages/hyperliquid/tests/_noCloseEvent.ts"]
