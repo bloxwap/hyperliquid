@@ -45,6 +45,7 @@ export * from "./subAccountSpotTransfer.ts";
 export * from "./subAccountTransfer.ts";
 export * from "./tokenDelegate.ts";
 export * from "./topUpIsolatedOnlyMargin.ts";
+export * from "./trailingStop.ts";
 export * from "./twapCancel.ts";
 export * from "./twapOrder.ts";
 export * from "./updateIsolatedMargin.ts";

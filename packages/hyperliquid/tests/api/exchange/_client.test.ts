@@ -501,6 +501,27 @@ const METHOD_CASES: Record<string, MethodCase> = {
     action: { type: "topUpIsolatedOnlyMargin", asset: 0, leverage: "0.5" },
     invalid: (c) => c.topUpIsolatedOnlyMargin({} as never),
   },
+  trailingStop: {
+    run: (c) =>
+      c.trailingStop({
+        asset: 0,
+        isBuy: true,
+        sz: "0.1",
+        reduceOnly: false,
+        retracement: { pct: "1.234%" },
+        activationPx: "30000",
+      }),
+    action: {
+      type: "trailingStop",
+      asset: 0,
+      isBuy: true,
+      sz: "0.1",
+      reduceOnly: false,
+      retracement: { pct: "1.234%" },
+      activationPx: "30000",
+    },
+    invalid: (c) => c.trailingStop({} as never),
+  },
   twapCancel: {
     run: (c) => c.twapCancel({ a: 0, t: 1 }),
     action: { type: "twapCancel", a: 0, t: 1 },

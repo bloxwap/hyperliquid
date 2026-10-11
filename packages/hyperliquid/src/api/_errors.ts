@@ -43,6 +43,15 @@ export interface ApiSingleErrorResponse {
   };
 }
 
+/** Data-level error response where `response.data` itself carries the error (e.g. `trailingStop`). */
+export interface ApiDataErrorResponse {
+  /** Response details. */
+  response: {
+    /** Specific data carrying the error message. */
+    data: { error: string };
+  };
+}
+
 /** Explorer endpoint error envelope (`{ type: "error", message }`). */
 export interface ApiExplorerErrorResponse {
   /** Envelope type. */
@@ -62,6 +71,7 @@ export type ApiErrorResponse =
   | ApiTopLevelErrorResponse
   | ApiBulkErrorResponse
   | ApiSingleErrorResponse
+  | ApiDataErrorResponse
   | ApiExplorerErrorResponse;
 
 // ============================================================

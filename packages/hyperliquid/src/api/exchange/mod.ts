@@ -43,6 +43,7 @@
 
 export {
   type ApiBulkErrorResponse,
+  type ApiDataErrorResponse,
   type ApiErrorResponse,
   type ApiExplorerErrorResponse,
   ApiRequestError,
@@ -103,6 +104,7 @@ export * from "./_methods/subAccountTransfer.ts";
 export * from "./_methods/submitPrepared.ts";
 export * from "./_methods/tokenDelegate.ts";
 export * from "./_methods/topUpIsolatedOnlyMargin.ts";
+export * from "./_methods/trailingStop.ts";
 export * from "./_methods/twapCancel.ts";
 export * from "./_methods/twapOrder.ts";
 export * from "./_methods/updateIsolatedMargin.ts";

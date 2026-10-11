@@ -8,7 +8,7 @@
 import { describe, test } from "bun:test";
 import { assertEquals, assertRejects } from "@jsr/std__assert";
 import type { IRequestTransport } from "@bloxwap/hyperliquid";
-import { ApiRequestError, order } from "@bloxwap/hyperliquid/api/exchange";
+import { ApiRequestError, order, trailingStop } from "@bloxwap/hyperliquid/api/exchange";
 import { privateKeyToAccount } from "viem/accounts";
 
 const wallet = privateKeyToAccount("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
@@ -24,6 +24,15 @@ function transportWith(response: unknown): IRequestTransport {
 }
 
 const LIMIT_ORDER = { a: 0, b: true, p: "30000", s: "0.1", r: false, t: { limit: { tif: "Gtc" } } } as const;
+
+const TRAILING_STOP = {
+  asset: 0,
+  isBuy: true,
+  sz: "0.1",
+  reduceOnly: false,
+  retracement: { pct: "1.234%" },
+  activationPx: "30000",
+} as const;
 
 describe("exchange error responses", () => {
   test("nested per-order error throws ApiRequestError", async () => {
@@ -58,6 +67,26 @@ describe("exchange error responses", () => {
     };
 
     assertEquals(await order({ transport: transportWith(response), wallet }, { orders: [LIMIT_ORDER] }), response);
+  });
+
+  test("data-level error (response.data.error) throws ApiRequestError with the server message", async () => {
+    const response = { status: "ok", response: { type: "trailingStop", data: { error: "Unknown asset" } } };
+
+    const error = await assertRejects(
+      () => trailingStop({ transport: transportWith(response), wallet }, TRAILING_STOP),
+      ApiRequestError,
+      "Unknown asset",
+    );
+    assertEquals(error.response, response);
+  });
+
+  test("data-level success payload (response.data.oid) is returned as data", async () => {
+    const response: Awaited<ReturnType<typeof trailingStop>> = {
+      status: "ok",
+      response: { type: "trailingStop", data: { oid: 77738308 } },
+    };
+
+    assertEquals(await trailingStop({ transport: transportWith(response), wallet }, TRAILING_STOP), response);
   });
 
   test("the typed response narrows to the top-level error shape", async () => {

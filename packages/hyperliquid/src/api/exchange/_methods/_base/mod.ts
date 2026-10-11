@@ -12,6 +12,7 @@ export type {
 export { buildAction } from "./_action.ts";
 export {
   type ApiBulkErrorResponse,
+  type ApiDataErrorResponse,
   type ApiErrorResponse,
   type ApiExplorerErrorResponse,
   ApiRequestError,

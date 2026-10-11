@@ -126,6 +126,19 @@ const REQUESTS: [name: string, schema: v.GenericSchema, input: unknown][] = [
     { twap: { t: false, r: false, m: 30, s: "1", b: true, a: 0 }, type: "twapOrder" },
   ],
   [
+    "trailingStop (union retracement, nullable activationPx)",
+    exchange.TrailingStopRequest.entries.action as v.GenericSchema,
+    {
+      activationPx: null,
+      retracement: { pct: "1.234%" },
+      reduceOnly: false,
+      sz: "0.1",
+      isBuy: true,
+      asset: 0,
+      type: "trailingStop",
+    },
+  ],
+  [
     "cSignerAction (variant whose options share the `type` literal)",
     exchange.CSignerActionRequest.entries.action as v.GenericSchema,
     { unjailSelf: null, type: "CSignerAction" },
