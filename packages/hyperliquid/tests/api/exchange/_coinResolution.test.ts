@@ -225,6 +225,27 @@ describe("ExchangeClient coin resolution (offline)", () => {
       run: (c) => c.topUpIsolatedOnlyMargin({ coin: "BTC", leverage: "0.5" }),
       action: { type: "topUpIsolatedOnlyMargin", asset: 0, leverage: "0.5" },
     },
+    {
+      name: "trailingStop",
+      run: (c) =>
+        c.trailingStop({
+          coin: "BTC",
+          isBuy: true,
+          sz: "0.1",
+          reduceOnly: false,
+          retracement: { pct: "1.234%" },
+          activationPx: null,
+        }),
+      action: {
+        type: "trailingStop",
+        asset: 0,
+        isBuy: true,
+        sz: "0.1",
+        reduceOnly: false,
+        retracement: { pct: "1.234%" },
+        activationPx: null,
+      },
+    },
   ];
 
   for (const { name, run, action } of COIN_CASES) {

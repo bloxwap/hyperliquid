@@ -5,6 +5,7 @@
 
 import {
   type ApiBulkErrorResponse,
+  type ApiDataErrorResponse,
   ApiRequestError,
   type ApiSingleErrorResponse,
   type ApiTopLevelErrorResponse,
@@ -13,6 +14,7 @@ import {
 export { ApiRequestError };
 export type {
   ApiBulkErrorResponse,
+  ApiDataErrorResponse,
   ApiErrorResponse,
   ApiExplorerErrorResponse,
   ApiSingleErrorResponse,
@@ -49,11 +51,18 @@ function isSingleError(r: unknown): r is ApiSingleErrorResponse {
   return hasErrorField(status);
 }
 
-/** True if `r` matches any of the three Hyperliquid error response shapes. */
+/** True if `r` matches `{ response: { data: { error } } }` (e.g. `trailingStop`). */
+function isDataError(r: unknown): r is ApiDataErrorResponse {
+  if (typeof r !== "object" || r === null) return false;
+  const data = (r as { response?: { data?: unknown } }).response?.data;
+  return hasErrorField(data);
+}
+
+/** True if `r` matches any of the four Hyperliquid error response shapes. */
 export function isErrorResponse(
   r: unknown,
-): r is ApiTopLevelErrorResponse | ApiBulkErrorResponse | ApiSingleErrorResponse {
-  return isTopLevelError(r) || isBulkError(r) || isSingleError(r);
+): r is ApiTopLevelErrorResponse | ApiBulkErrorResponse | ApiSingleErrorResponse | ApiDataErrorResponse {
+  return isTopLevelError(r) || isBulkError(r) || isSingleError(r) || isDataError(r);
 }
 
 // ============================================================
@@ -72,6 +81,9 @@ function getErrorMessage(r: unknown): string | undefined {
   }
   if (isSingleError(r)) {
     return r.response.data.status.error;
+  }
+  if (isDataError(r)) {
+    return r.response.data.error;
   }
   return undefined;
 }
@@ -128,5 +140,16 @@ type ExcludeSingleError<T> = T extends { response: { data: { status: infer S } }
       >
   : T;
 
-/** Exclude all three Hyperliquid error response shapes from `T`. */
-export type ExcludeErrorResponse<T> = ExcludeTopLevelError<ExcludeBulkError<ExcludeSingleError<T>>>;
+/** Filter out error variant from `response.data` itself (e.g. `trailingStop`). */
+type ExcludeDataError<T> = T extends { response: { data: infer D } }
+  ? Exclude<D, { error: unknown }> extends never
+    ? never
+    : Prettify<
+        Omit<T, "response"> & {
+          response: Prettify<Omit<T["response"], "data"> & { data: Exclude<D, { error: unknown }> }>;
+        }
+      >
+  : T;
+
+/** Exclude all four Hyperliquid error response shapes from `T`. */
+export type ExcludeErrorResponse<T> = ExcludeTopLevelError<ExcludeBulkError<ExcludeSingleError<ExcludeDataError<T>>>>;

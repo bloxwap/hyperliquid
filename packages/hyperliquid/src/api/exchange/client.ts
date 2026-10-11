@@ -279,6 +279,12 @@ import {
   type TopUpIsolatedOnlyMarginSuccessResponse,
 } from "./_methods/topUpIsolatedOnlyMargin.ts";
 import {
+  trailingStop,
+  type TrailingStopOptions,
+  type TrailingStopParameters,
+  type TrailingStopSuccessResponse,
+} from "./_methods/trailingStop.ts";
+import {
   twapCancel,
   type TwapCancelOptions,
   type TwapCancelParameters,
@@ -462,6 +468,9 @@ export type CoinUpdateIsolatedMarginParameters = CoinResolvable<UpdateIsolatedMa
 
 /** {@linkcode TopUpIsolatedOnlyMarginParameters} with a `coin` symbol alternative to the raw asset ID `asset`. */
 export type CoinTopUpIsolatedOnlyMarginParameters = CoinResolvable<TopUpIsolatedOnlyMarginParameters, "asset">;
+
+/** {@linkcode TrailingStopParameters} with a `coin` symbol alternative to the raw asset ID `asset`. */
+export type CoinTrailingStopParameters = CoinResolvable<TrailingStopParameters, "asset">;
 
 // ============================================================
 // Symbol Resolution
@@ -2489,6 +2498,49 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
   }
 
   /**
+   * Place a trailing stop order.
+   *
+   * Signing: L1 Action.
+   *
+   * @param params Parameters specific to the API request.
+   * @param opts Request execution options.
+   * @return Successful variant of {@link TrailingStopResponse} without error status.
+   *
+   * @throws {ValidationError} When the request parameters fail validation (before sending).
+   * @throws {TransportError} When the transport layer throws an error.
+   * @throws {ApiRequestError} When the API returns an unsuccessful response.
+   *
+   * @example
+   * ```ts
+   * import * as hl from "@bloxwap/hyperliquid";
+   * import { privateKeyToAccount } from "viem/accounts";
+   *
+   * const wallet = privateKeyToAccount("0x...");
+   * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
+   * const client = new hl.ExchangeClient({ transport, wallet });
+   *
+   * const data = await client.trailingStop({
+   *   asset: 0,
+   *   isBuy: true,
+   *   sz: "0.1",
+   *   reduceOnly: false,
+   *   retracement: { pct: "1.234%" },
+   *   activationPx: "30000",
+   * });
+   * ```
+   *
+   * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#place-a-trailing-stop-order
+   */
+  trailingStop(params: CoinTrailingStopParameters, opts?: TrailingStopOptions): Promise<TrailingStopSuccessResponse> {
+    if (params.coin === undefined) {
+      return trailingStop(this.config, params as TrailingStopParameters, opts);
+    }
+    return resolveCoinRefs(this.config, [params], "asset").then(([resolved]) =>
+      trailingStop(this.config, resolved as TrailingStopParameters, opts),
+    );
+  }
+
+  /**
    * Cancel a TWAP order.
    *
    * Signing: L1 Action.
@@ -3169,6 +3221,7 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
 
 export {
   type ApiBulkErrorResponse,
+  type ApiDataErrorResponse,
   type ApiErrorResponse,
   type ApiExplorerErrorResponse,
   ApiRequestError,
@@ -3346,6 +3399,11 @@ export type {
   TopUpIsolatedOnlyMarginParameters,
   TopUpIsolatedOnlyMarginSuccessResponse,
 } from "./_methods/topUpIsolatedOnlyMargin.ts";
+export type {
+  TrailingStopOptions,
+  TrailingStopParameters,
+  TrailingStopSuccessResponse,
+} from "./_methods/trailingStop.ts";
 export type { TwapCancelOptions, TwapCancelParameters, TwapCancelSuccessResponse } from "./_methods/twapCancel.ts";
 export type { TwapOrderOptions, TwapOrderParameters, TwapOrderSuccessResponse } from "./_methods/twapOrder.ts";
 export type {

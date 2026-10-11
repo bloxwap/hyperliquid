@@ -341,12 +341,20 @@ await client.order({
 });
 
 await client.cancel({ cancels: [{ coin: "BTC", o: 12345 }] });
+await client.trailingStop({
+  coin: "BTC",
+  isBuy: false,
+  sz: "0.1",
+  reduceOnly: true,
+  retracement: { pct: "1.5%" }, // or { px: "30000" } for an absolute retracement
+  activationPx: null,
+});
 await client.updateLeverage({ coin: "BTC", isCross: true, leverage: 5 });
 ```
 
 This works on `order`, `modify`, `batchModify`, `cancel`, `cancelByCloid`, `twapOrder`, `twapCancel`,
-`updateLeverage`, `updateIsolatedMargin`, and `topUpIsolatedOnlyMargin`. Entries without a `coin` are dispatched
-unchanged — no metadata is fetched unless a call actually uses a symbol.
+`trailingStop`, `updateLeverage`, `updateIsolatedMargin`, and `topUpIsolatedOnlyMargin`. Entries without a `coin`
+are dispatched unchanged — no metadata is fetched unless a call actually uses a symbol.
 
 The symbol metadata comes from the client's `symbolConverter` config. When omitted, the client lazily creates and
 loads a `SymbolConverter` over the same transport on the first symbol-based call; pass a preloaded instance to enable
