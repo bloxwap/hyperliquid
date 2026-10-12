@@ -4,8 +4,7 @@
     <img alt="Hyperliquid" src="./.github/hyperliquid-dark.svg" height="50">
   </picture>
   <br>
-  <strong>Blazing fast typescript
-    <a href="https://bloxwap.github.io/hyperliquid/docs/">Hyperliquid SDK</a></strong>
+  <strong>Blazing fast TypeScript SDK for <a href="https://hyperliquid.xyz/">Hyperliquid</a>. Try the <a href="https://bloxwap.github.io/hyperliquid/docs/">documentation</a>.</strong>
 </p>
 
 <p align="center">
@@ -17,44 +16,11 @@
 
 ## Features
 
-- **Typed**: Source code is 100% TypeScript.
-- **Tested**: Good code coverage and type relevance.
-- **Minimal dependencies**: A few small trusted dependencies.
-- **Cross-Environment Support**: Compatible with all major JS runtimes.
-- **Integratable**: Easy to use with [viem](https://github.com/wevm/viem) accounts — local (private key) or JSON-RPC
-  (browser wallet).
-
-## Documentation
-
-Browse the [SDK documentation](https://bloxwap.github.io/hyperliquid/docs/) for installation, clients, transports, signing,
-utilities, and guides.
-
-The documentation uses [Fumadocs](https://www.fumadocs.dev/) and is hosted on GitHub Pages. Its Markdown source lives in
-[`apps/docs/content/docs/`](apps/docs/content/docs/README.md).
-
-## Workspace
-
-This repository is a Bun workspace with one install and one root `bun.lock`:
-
-| Workspace | Purpose |
-| --- | --- |
-| [`packages/hyperliquid`](packages/hyperliquid/README.md) | Published `@bloxwap/hyperliquid` SDK, source, tests, and package tooling |
-| [`apps/docs`](apps/docs/README.md) | Fumadocs application, Markdown content, and GitHub Pages export |
-
-The root package is private and coordinates development. The SDK builds to `packages/hyperliquid/dist`; the docs app
-exports static files to `apps/docs/out`. Only the SDK's generated package is published to npm.
-
-Run these commands from the repository root:
-
-```sh
-bun install --frozen-lockfile
-bun run check
-bun run test:offline
-bun run build
-```
-
-To develop the documentation, run `bun run docs:dev` and open `http://localhost:3901`. See the
-[documentation app guide](apps/docs/README.md) for content checks, production builds, and GitHub Pages deployment.
+- **Typed.** Source code is 100% TypeScript with comprehensive type safety.
+- **Tested.** Extensive test coverage with both offline and online test suites.
+- **Minimal dependencies.** A few small, trusted dependencies keep the bundle lean.
+- **Cross-environment support.** Compatible with Bun, Node.js, React Native, and all major JavaScript runtimes.
+- **Easy integration.** Works seamlessly with [viem](https://github.com/wevm/viem) accounts (local private keys or JSON-RPC browser wallets).
 
 ## Installation
 
@@ -85,7 +51,11 @@ yarn add @bloxwap/hyperliquid
 > React Native needs polyfills for the `fastAssetCtxs` subscription and for versions below 0.86 — see the
 > [documentation](https://bloxwap.github.io/hyperliquid/docs/).
 
-## Quick Example
+## Release status
+
+`0.6.0` is an early developer preview; expect breaking changes before `1.0`.
+
+## Usage
 
 ### Read
 
@@ -178,10 +148,48 @@ await subs.l2Book({ coin: "ETH" }, (data) => {
 });
 ```
 
-> [!WARNING]
->
-> - **Never hardcode private keys** in source or commit them to git. Load them from environment variables or a secret
->   store (Bun auto-loads a local `.env`, which is gitignored in this repo).
-> - For trading bots, prefer a Hyperliquid **agent wallet** (API wallet) over the master account key: an agent key can
->   trade but cannot withdraw, and it can be revoked without rotating the master key.
-> - See [Signing](https://bloxwap.github.io/hyperliquid/docs/signing/) for how wallets, signatures, and nonces work.
+## Documentation
+
+Browse the [SDK documentation](https://bloxwap.github.io/hyperliquid/docs/) for installation, clients, transports, signing,
+utilities, and guides.
+
+The documentation uses [Fumadocs](https://www.fumadocs.dev/) and is hosted on GitHub Pages. Its Markdown source lives in
+[`apps/docs/content/docs/`](apps/docs/content/docs/README.md).
+
+## Development
+
+This repository is a Bun workspace with one install and one root `bun.lock`:
+
+| Workspace | Purpose |
+| --- | --- |
+| [`packages/hyperliquid`](packages/hyperliquid/README.md) | Published `@bloxwap/hyperliquid` SDK, source, tests, and package tooling |
+| [`apps/docs`](apps/docs/README.md) | Fumadocs application, Markdown content, and GitHub Pages export |
+
+The root package is private and coordinates development. The SDK builds to `packages/hyperliquid/dist`; the docs app
+exports static files to `apps/docs/out`. Only the SDK's generated package is published to npm.
+
+Run these commands from the repository root:
+
+```sh
+bun install --frozen-lockfile
+bun run check
+bun run test:offline
+bun run build
+```
+
+To develop the documentation, run `bun run docs:dev` and open `http://localhost:3901`. See the
+[documentation app guide](apps/docs/README.md) for content checks, production builds, and GitHub Pages deployment.
+
+Coverage target is 100% line, branch, and function coverage.
+
+## Security
+
+**This SDK handles private keys and wallet operations.** Never hardcode private keys in source or commit them to git. Load them from environment variables or a secret store (Bun auto-loads a local `.env`, which is gitignored in this repo).
+
+For trading bots, prefer a Hyperliquid agent wallet (API wallet) over the master account key: an agent key can trade but cannot withdraw, and it can be revoked without rotating the master key.
+
+See [Signing](https://bloxwap.github.io/hyperliquid/docs/signing/) for how wallets, signatures, and nonces work.
+
+## License
+
+[MIT](LICENSE)
