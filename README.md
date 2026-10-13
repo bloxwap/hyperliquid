@@ -1,4 +1,4 @@
-# @bloxwap/hyperliquid
+<h1 align="center">Hyperliquid SDK</h1>
 
 <p align="center"><strong>Blazing fast TypeScript SDK for Hyperliquid. <a href="https://bloxwap.github.io/hyperliquid/docs/">Try the docs</a>.</strong></p>
 
