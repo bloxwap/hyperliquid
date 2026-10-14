@@ -29,3 +29,6 @@ apps/docs/tsconfig.tsbuildinfo
 # a funded key must never be committable.
 .env
 .env.*
+
+apps/docs/test-results/
+apps/docs/playwright-report/

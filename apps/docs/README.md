@@ -8,17 +8,18 @@ from the SDK package published from `packages/hyperliquid/dist`.
 
 ## Design system
 
-The design follows the Bloxwap monorepo's documentation site at commit `15201923b`:
+The shared presentation uses HIG 0.1.0 candidate at commit
+`1a776b9326c6ba03702894943b3edbfd178c4b40` via the approved plain CSS distribution.
 
-- `app/brand-tokens.css` is a verbatim snapshot of `packages/ui/src/styles/tokens.generated.css`.
-- Fumadocs colors, typography, navigation, and forced dark mode follow `workers/docs/src/app/global.css` and its layouts.
+- `@bloxwap/hig-docs-css` is a private local package; `vendor/hig/README.md` records provenance, hashes and update instructions.
+- HIG tokens/CSS supply colors, controls, geometry and states; `app/global.css` adapts them to Fumadocs and the market playground.
+- Fumadocs owns routing, navigation, search and MDX adapters; dark mode remains forced.
 - The app icon and favicon in `public/logos/` preserve the original Bloxwap artwork and metadata.
-- Bloxwap Sans body text and Bloxwap Mono code use the self-hosted Next.js exports from `@bloxwap/font@0.1.2`.
-- Space Grotesk Bold headings retain the local asset and OFL notice in `public/fonts/`.
-- Static Open Graph font instances and their license/provenance are documented in `public/fonts/README.md`.
+- Headings/body use Bloxwap Sans and code uses Bloxwap Mono from self-hosted `@bloxwap/font@0.1.2` Next.js exports.
+- Static Open Graph font instances retain the license/provenance documented in `public/fonts/README.md`.
 
-Update these snapshots from the monorepo when its design changes. Keep the artwork and font notices intact.
-Building this site does not require a checkout of the monorepo or a request to a font CDN.
+Read the [HIG migration evidence](design-review/hig/README.md) for validation, measurements,
+exceptions and rollback. No monorepo checkout, font CDN or npm publication is required.
 
 The [historical design review](design-review/README.md) preserves the original findings and screenshots from 2026-09-26.
 
@@ -54,6 +55,9 @@ The repository's `bun run check` also formats and lints app source.
 NEXT_PUBLIC_BASE_PATH=/hyperliquid bun run docs:build
 NEXT_PUBLIC_BASE_PATH=/hyperliquid bun run docs:preview
 ```
+
+Run `bun run --cwd apps/docs test:browser` after the production build to test the static shell
+and market playground interactions. Install Chromium with `bunx --cwd apps/docs playwright install chromium`.
 
 Open `http://localhost:4173/hyperliquid/`. The preview serves only the static files in `apps/docs/out`.
 The build verifies every documentation page, internal link, asset, and anchor, plus the static JSON search index and

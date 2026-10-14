@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-13T23:48:31.331Z",
+  "mocked": false,
+  "live": true,
+  "status": "Live",
+  "payload": "{\n  \"coin\": \"BTC\",\n  \"midPx\": \"83203.5\"\n}"
+}
