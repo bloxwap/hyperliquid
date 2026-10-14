@@ -76,10 +76,16 @@ export default function DocsSearchDialog(props: SharedProps) {
           <SearchDialogInput />
           <SearchDialogClose />
         </SearchDialogHeader>
-        <SearchDialogList
-          items={items}
-          Empty={() => (pending ? <SearchSkeleton /> : <SearchEmpty onNavigate={() => props.onOpenChange(false)} />)}
-        />
+        {query.error ? (
+          <p className="search-error" role="alert">
+            Search unavailable. Reload to retry, or use the navigation.
+          </p>
+        ) : (
+          <SearchDialogList
+            items={items}
+            Empty={() => (pending ? <SearchSkeleton /> : <SearchEmpty onNavigate={() => props.onOpenChange(false)} />)}
+          />
+        )}
       </SearchDialogContent>
     </SearchDialog>
   );

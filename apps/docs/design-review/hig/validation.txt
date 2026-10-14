@@ -1,0 +1,69 @@
+Local Linux validation (Bun 1.4.2; Node 20.19.2 for the Playwright capture runner).
+No physical-device certification is claimed.
+
+$ bun run check
+ok    src/signing/mod.ts                             13 / 20
+ok    src/api/info/client.ts                         98 / 110
+ok    src/api/info/_methods/allMids.ts                6 / 12
+ok    src/api/exchange/_methods/order.ts             29 / 35
+ok    src/api/subscription/_methods/allMids.ts        2 / 8
+ok    src/api/explorer/_methods/explorerBlock.ts      2 / 12
+ok    src/actions/order.ts                           30 / 35
+All 9 import graph budgets are within limits, and 5 operation entry points are narrower than their clients and barrels.
+
+$ bun run docs:check
+$ bun run check:content && fumadocs-mdx && next typegen && tsc --noEmit
+$ bun run scripts/check-content.ts && bun run scripts/lint-markdown.ts
+Fumadocs navigation covers all 13 pages; page metadata and local Markdown links are valid.
+markdownlint: 18 files, no errors
+[MDX] generated files in 33.61029500000018ms
+[MDX] generated files in 13.30009199999995ms
+Generating route types...
+✓ Types generated successfully
+
+$ NEXT_PUBLIC_BASE_PATH=/hyperliquid bun run docs:build
+└ ○ /sitemap.xml
+
+
+○  (Static)  prerendered as static content
+●  (SSG)     prerendered as static HTML (uses generateStaticParams)
+
+Exported 13 Markdown mirrors.
+Verified 13 docs pages, 20 HTML files, 1168 internal links/assets, 355 anchors, 14 unique social cards, static search, 22 agent-readiness artifacts, and .nojekyll (base path: /hyperliquid).
+
+$ bun run build
+$ cd packages/hyperliquid && bun run build
+$ bun run .dev/build/build.ts
+Published consumer imports, identities, nonce sharing, signing ownership, and error types passed.
+Published consumer imports, identities, nonce sharing, signing ownership, and error types passed.
+Built @bloxwap/hyperliquid@0.6.0 into dist/ (313 JavaScript files, 314 declaration files rewritten).
+
+$ bun run test:offline --timeout 30000
+(skip) userTwapSliceFills
+(skip) webData3
+
+ 2087 pass
+ 244 skip
+ 0 fail
+ 76722 expect() calls
+Ran 2331 tests across 255 files. [113.53s]
+
+$ bun run --cwd apps/docs test
+(pass) homeStructuredData > describes the SDK as free, MIT-licensed software published by the organization [0.10ms]
+(pass) homeStructuredData > gives the organization a contact point and shares its @id with the root site [0.03ms]
+(pass) homeStructuredData > serializes safely inside a script element [0.16ms]
+
+ 10 pass
+ 0 fail
+ 30 expect() calls
+Ran 10 tests across 1 file. [20.00ms]
+
+$ bun run --cwd apps/docs test:browser
+  ✓  1 e2e/shell.spec.ts:3:1 › static shell, keyboard install and copy success/failure (902ms)
+  ✓  2 e2e/shell.spec.ts:44:1 › search keyboard, results, empty state and deep link (2.6s)
+  ✓  3 e2e/shell.spec.ts:57:1 › market SDK subscription, payload, asset change and off (1.3s)
+  ✓  4 e2e/shell.spec.ts:85:1 › mobile navigation, large text and RTL reflow (1.3s)
+  ✓  5 e2e/shell.spec.ts:99:1 › market loading, server rejection and retry (936ms)
+  ✓  6 e2e/shell.spec.ts:128:1 › search offline error is visible (1.1s)
+
+  6 passed (10.4s)

@@ -3,7 +3,7 @@
 Web body text uses Bloxwap Sans and code uses Bloxwap Mono from the exact
 `@bloxwap/font@0.1.2` dependency. The Next.js exports self-host variable weights
 100–900, italics, and script companions without requests to Google Fonts.
-Space Grotesk Bold remains the heading face, with its adjacent OFL notice.
+Headings use Bloxwap Sans, following HIG typography roles.
 
 `BloxwapSans-Bold.ttf` (700) and `BloxwapSans-Black.ttf` (900) are static
 instances of `fonts/BloxwapSans/BloxwapSans-Variable.woff2` from the published
