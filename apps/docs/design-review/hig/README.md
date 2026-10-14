@@ -55,7 +55,7 @@ Local commands: `bun run check`, `bun run docs:check`, `bun run docs:build`,
 
 | Repository | Version / owning evidence | Status / remaining validation |
 | --- | --- | --- |
-| Hyperliquid | HIG 0.1.0 candidate; this PR and committed evidence | Shared shell adoption; physical-device validation pending |
+| Hyperliquid | HIG 0.1.0 candidate; [PR #179](https://github.com/bloxwap/hyperliquid/pull/179) and committed evidence | Shared shell adoption; physical-device validation pending |
 | Chart | Not changed by this PR | Owning PR/build/demo evidence required |
 | Font | Not changed by this PR | Owning PR/build/tester evidence required |
 | SFX | Not changed by this PR | Owning PR/build/sound-board evidence required |
