@@ -1,11 +1,13 @@
 "use client";
 
+import { Button } from "@bloxwap/hig-react/button";
+import { Alert } from "@bloxwap/hig-react/status";
 import { SubscriptionClient } from "@bloxwap/hyperliquid/api/subscription/client";
 import { WebSocketTransport } from "@bloxwap/hyperliquid/transport/websocket";
 import { animate } from "animejs/animation";
 import { scrambleText } from "animejs/text";
 import { Radio, RotateCcw } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CopyButton } from "@/components/copy-button";
 
 const assets = [
@@ -273,6 +275,15 @@ const statusLabels: Record<Status, string> = {
   error: "Connection unavailable",
 };
 
+/** A single-choice option: HIG button geometry with the pressed state exposed to assistive technology. */
+function Option({ pressed, onPress, children }: { pressed: boolean; onPress: () => void; children: ReactNode }) {
+  return (
+    <Button intent={pressed ? "primary" : "secondary"} aria-pressed={pressed} onClick={onPress}>
+      {children}
+    </Button>
+  );
+}
+
 export function MarketPlayground() {
   const [coin, setCoin] = useState<Coin>("BTC");
   const [feed, setFeed] = useState<Feed | null>(null);
@@ -297,33 +308,28 @@ export function MarketPlayground() {
       <div className="playground-body">
         <div className="playground-editor">
           <div className="playground-controls">
-            <fieldset>
+            <fieldset className="hig-group">
               <legend>Asset</legend>
               <div className="playground-options">
                 {assets.map((asset) => (
-                  <button
-                    key={asset.coin}
-                    type="button"
-                    aria-pressed={coin === asset.coin}
-                    onClick={() => setCoin(asset.coin)}
-                  >
+                  <Option key={asset.coin} pressed={coin === asset.coin} onPress={() => setCoin(asset.coin)}>
                     {asset.label}
-                  </button>
+                  </Option>
                 ))}
               </div>
             </fieldset>
-            <fieldset>
+            <fieldset className="hig-group">
               <legend>
                 Data feed <span>Select to start streaming</span>
               </legend>
               <div className="playground-options playground-feeds">
-                <button type="button" aria-pressed={feed === null} onClick={() => setFeed(null)}>
+                <Option pressed={feed === null} onPress={() => setFeed(null)}>
                   Off
-                </button>
+                </Option>
                 {feeds.map((item) => (
-                  <button key={item.id} type="button" aria-pressed={feed === item.id} onClick={() => setFeed(item.id)}>
+                  <Option key={item.id} pressed={feed === item.id} onPress={() => setFeed(item.id)}>
                     {item.label}
-                  </button>
+                  </Option>
                 ))}
               </div>
             </fieldset>
@@ -342,26 +348,31 @@ export function MarketPlayground() {
               </span>
             )}
             {stream.status === "off" && <span className="playground-network">Mainnet</span>}
-            {stream.status === "error" && (
-              <button type="button" className="playground-retry" onClick={() => setRetry((value) => value + 1)}>
-                <RotateCcw size={12} aria-hidden /> Retry
-              </button>
-            )}
           </div>
           {stream.payload ? (
             /* biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll the live JSON. */
             <pre className="playground-json" tabIndex={0}>
               <code>{stream.payload}</code>
             </pre>
+          ) : stream.status === "error" ? (
+            <div className="playground-empty playground-error">
+              <Alert
+                severity="error"
+                title="Couldn't connect"
+                action={
+                  <Button intent="secondary" onClick={() => setRetry((value) => value + 1)}>
+                    <RotateCcw size={14} aria-hidden /> Retry
+                  </Button>
+                }
+              >
+                <p>Retry or choose another feed. {coin} · Hyperliquid mainnet</p>
+              </Alert>
+            </div>
           ) : (
             <div className="playground-empty">
               <Radio size={20} aria-hidden />
               <p>
-                {stream.status === "off"
-                  ? "Pick a feed. Watch the market move."
-                  : stream.status === "error"
-                    ? "Couldn't connect. Retry or choose another feed."
-                    : "Listening for the first update…"}
+                {stream.status === "off" ? "Pick a feed. Watch the market move." : "Listening for the first update…"}
               </p>
               <span>
                 {stream.status === "off" ? "Real data. Your code. No API key needed." : `${coin} · Hyperliquid mainnet`}

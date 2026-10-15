@@ -34,5 +34,3 @@ export const BRAND_WORDMARK = {
   capHeight: 141,
   descender: 38,
 } as const;
-
-export const BRAND_GREEN = "#00ff3f";

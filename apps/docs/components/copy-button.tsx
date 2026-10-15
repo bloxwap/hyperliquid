@@ -1,9 +1,10 @@
 "use client";
 
+import { IconButton } from "@bloxwap/hig-react/button";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-/** Clipboard failure is visible; timers cannot update an unmounted control. */
+/** HIG icon button. Clipboard failure is visible; timers cannot update an unmounted control. */
 export function CopyButton({ text, label, className }: { text: string; label: string; className?: string }) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
   const resetTimer = useRef<ReturnType<typeof setTimeout>>(null);
@@ -29,15 +30,14 @@ export function CopyButton({ text, label, className }: { text: string; label: st
 
   return (
     <>
-      <button
-        type="button"
-        className={`hig-button ${className ?? ""}`}
-        data-intent="ghost"
+      <IconButton
+        intent="ghost"
+        className={`copy-button ${className ?? ""}`}
+        label={status === "copied" ? "Copied to clipboard" : label}
         onClick={copy}
-        aria-label={status === "copied" ? "Copied to clipboard" : label}
       >
-        {status === "copied" ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
-      </button>
+        {status === "copied" ? <Check size={14} /> : <Copy size={14} />}
+      </IconButton>
       <span className="copy-feedback" role="status" data-error={status === "error"}>
         {status === "copied" ? "Copied" : status === "error" ? "Copy failed. Select and copy manually." : ""}
       </span>

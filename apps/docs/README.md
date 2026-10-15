@@ -8,18 +8,23 @@ from the SDK package published from `packages/hyperliquid/dist`.
 
 ## Design system
 
-The shared presentation uses HIG 0.1.0 candidate at commit
-`1a776b9326c6ba03702894943b3edbfd178c4b40` via the approved plain CSS distribution.
+The shared presentation uses the HIG 0.1.0 candidate packages packed from `bloxwap/hig` commit
+`7c67a07` (`0.1.0-candidate.sha7c67a07c`). HIG has no npm release yet, so the packed tarballs are checked in under
+[`vendor/bloxwap-hig`](../../vendor/bloxwap-hig/README.md) and installed with `file:` dependencies.
 
-- `@bloxwap/hig-docs-css` is a private local package; `vendor/hig/README.md` records provenance, hashes and update instructions.
-- HIG tokens/CSS supply colors, controls, geometry and states; `app/global.css` adapts them to Fumadocs and the market playground.
-- Fumadocs owns routing, navigation, search and MDX adapters; dark mode remains forced.
+- `@bloxwap/hig-tokens/css` supplies every color, spacing and control-size variable (`--hig-*`); `@bloxwap/hig-react/css`
+  supplies the button, field, surface, skeleton and alert recipes. There is no copied palette in this app.
+- HIG React components render shared controls and states: copy/install buttons, playground options and retry,
+  search loading/empty/error, and callouts (GitHub `> [!NOTE]` alerts map to `Callout` via `lib/remark-callouts.ts`).
+- `app/global.css` maps HIG tokens onto Fumadocs and keeps only host layout, the landing page and the market playground.
+- Fumadocs owns routing, navigation, search and MDX adapters; dark mode remains forced. `HIGProvider` sets comfortable
+  density and follows reduced motion; no feedback sink is configured, so controls are silent.
 - The app icon and favicon in `public/logos/` preserve the original Bloxwap artwork and metadata.
 - Headings/body use Bloxwap Sans and code uses Bloxwap Mono from self-hosted `@bloxwap/font@0.1.2` Next.js exports.
-- Static Open Graph font instances retain the license/provenance documented in `public/fonts/README.md`.
 
-Read the [HIG migration evidence](design-review/hig/README.md) for validation, measurements,
-exceptions and rollback. No monorepo checkout, font CDN or npm publication is required.
+Read the [HIG package migration evidence](design-review/hig-packages/README.md) for validation, measurements,
+screenshots, exceptions and rollback, and the [first HIG migration](design-review/hig/README.md) for its history.
+No monorepo checkout, font CDN or npm publication is required.
 
 The [historical design review](design-review/README.md) preserves the original findings and screenshots from 2026-09-26.
 
@@ -99,8 +104,8 @@ always point to the published GitHub Pages site, including when previewing local
 - `app/og/[...slug]/route.tsx` generates `/og/home.png`, `/og/docs.png`, and `/og/docs/<slug>.png` during the static build.
 
 Cards use Bloxwap Sans Black for titles and Bloxwap Sans Bold for the owner, description, and stats. The static Bloxwap Sans
-faces are instantiated from the published `@bloxwap/font@0.1.2` variable WOFF2;
-their license is included as `public/fonts/Bloxwap-OFL.txt`.
+faces and the card colors come from `@bloxwap/hig-tokens` (`assets/fonts/*.ttf`, OFL license included in the package;
+`tokens.colors.*.srgb`). The remaining bar colors are the Bloxwap brand palette.
 The renderer uses bundled fonts and brand geometry locally; it needs no font CDN, API credentials, or image server after
 deployment. Generated PNGs live in `out/` and are included in the GitHub Pages artifact.
 

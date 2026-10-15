@@ -12,7 +12,8 @@
       "name": "@bloxwap/hyperliquid-docs",
       "dependencies": {
         "@bloxwap/font": "0.1.2",
-        "@bloxwap/hig-docs-css": "file:vendor/hig",
+        "@bloxwap/hig-react": "file:../../vendor/bloxwap-hig/bloxwap-hig-react-0.1.0-candidate.sha7c67a07c.tgz",
+        "@bloxwap/hig-tokens": "file:../../vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha7c67a07c.tgz",
         "@bloxwap/hyperliquid": "workspace:*",
         "animejs": "4.4.0",
         "fumadocs-core": "16.15.14",
@@ -65,6 +66,8 @@
     },
   },
   "overrides": {
+    "@bloxwap/hig-contracts": "file:./vendor/bloxwap-hig/bloxwap-hig-contracts-0.1.0-candidate.sha7c67a07c.tgz",
+    "@bloxwap/hig-tokens": "file:./vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha7c67a07c.tgz",
     "katex": "0.18.11",
     "sharp": "0.35.5",
     "source-map-js": "1.2.2",
@@ -93,6 +96,12 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.5", "", { "os": "win32", "cpu": "x64" }, "sha512-bIBFo+n6MIxdNcVFy5CrurbKiZQiUciK3bt8+O9I4wjFZNTfXLpi+giq47522eXqW5NBc9ulx7dR1SlZKi2J5g=="],
 
     "@bloxwap/font": ["@bloxwap/font@0.1.2", "", { "peerDependencies": { "next": ">=15.0.0" }, "optionalPeers": ["next"] }, "sha512-3aWepyHUKhbRtpIZxYYN4ixY703YsKXcfgsRQR1BjiH8hkvahm/xfCkzFhb8fKoN6g1y6vTSb9FA5HCxJ9O0uQ=="],
+
+    "@bloxwap/hig-contracts": ["@bloxwap/hig-contracts@./vendor/bloxwap-hig/bloxwap-hig-contracts-0.1.0-candidate.sha7c67a07c.tgz", {}, "sha512-QJ2gdBNpzzDM8pmGM3Vtw0nPPSdCFGXFtZvAaRhGZmGRw4asG4MIcIhfceXJaa3StuweZsxD/DSwzKNl71MwmA=="],
+
+    "@bloxwap/hig-react": ["@bloxwap/hig-react@../../vendor/bloxwap-hig/bloxwap-hig-react-0.1.0-candidate.sha7c67a07c.tgz", { "dependencies": { "@bloxwap/hig-contracts": "0.1.0-candidate.sha7c67a07c", "@bloxwap/hig-tokens": "0.1.0-candidate.sha7c67a07c" }, "peerDependencies": { "@bloxwap/chart": "^0.3.0", "@radix-ui/react-dialog": "1.1.15", "@radix-ui/react-dropdown-menu": "2.1.16", "@radix-ui/react-popover": "1.1.15", "@radix-ui/react-tooltip": "1.2.8", "react": "^19.1.0", "react-dom": "^19.1.0" }, "optionalPeers": ["@bloxwap/chart", "@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-popover", "@radix-ui/react-tooltip"] }, "sha512-muTFRY9Co49PO9ZmmMeZDNscjtpnLamaa/zSOOazoQjjoBIQVpqa13jJw9x1qguPNAGaV9AN4v/UlBfIPEwiQA=="],
+
+    "@bloxwap/hig-tokens": ["@bloxwap/hig-tokens@../../vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha7c67a07c.tgz", {}, "sha512-GEgLcN1IQgqJfMvfmK88tn0B8y5ixGbzjnj7WO+oN9IHXJ7GC1TM7FQwDssanOaxrpDJisBLURR99WwE+rEHGw=="],
 
     "@bloxwap/hyperliquid": ["@bloxwap/hyperliquid@workspace:packages/hyperliquid"],
 
@@ -966,7 +975,7 @@
 
     "zwitch": ["zwitch@2.0.4", "", {}, "sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A=="],
 
-    "@bloxwap/hyperliquid-docs/@bloxwap/hig-docs-css": ["@bloxwap/hig-docs-css@file:apps/docs/vendor/hig", {}],
+    "@bloxwap/hig-react/@bloxwap/hig-tokens": ["@bloxwap/hig-tokens@./vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha7c67a07c.tgz", {}, "sha512-GEgLcN1IQgqJfMvfmK88tn0B8y5ixGbzjnj7WO+oN9IHXJ7GC1TM7FQwDssanOaxrpDJisBLURR99WwE+rEHGw=="],
 
     "@noble/curves/@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
 
