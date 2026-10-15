@@ -32,16 +32,16 @@ From `node apps/docs/scripts/measure-hig.mjs <repo> <label>` after
 
 | Metric | Before | After | Delta |
 | --- | ---: | ---: | ---: |
-| Static export, total | 25,342,127 B (203 files) | 24,453,774 B (199 files) | −888,353 B (−4 files) |
+| Static export, total | 25,342,127 B (203 files) | 24,453,768 B (199 files) | −888,359 B (−4 files) |
 | Exported CSS (all on the home page) | 158,685 B / 24,933 B gzip | 157,626 B / 24,896 B gzip | −1,059 B / −37 B gzip |
-| Exported JS | 1,356,112 B / 435,819 B gzip | 1,361,104 B / 437,475 B gzip | +4,992 B / +1,656 B gzip |
-| Home page initial JS | 1,229,869 B / 393,278 B gzip | 1,234,861 B / 394,934 B gzip | +4,992 B / +1,656 B gzip |
+| Exported JS | 1,356,112 B / 435,819 B gzip | 1,361,098 B / 437,472 B gzip | +4,986 B / +1,653 B gzip |
+| Home page initial JS | 1,229,869 B / 393,278 B gzip | 1,234,855 B / 394,931 B gzip | +4,986 B / +1,653 B gzip |
 | Font files in the export | 13,858,592 B (24) | 12,965,628 B (22) | −892,964 B (−2 TTFs) |
 | `app/global.css` | 1,062 lines / 26,568 B | 988 lines / 24,404 B | −74 lines / −2,164 B |
 | Copied CSS/font/license files in the docs app | 9 | 0 | −9 |
 | Tracked docs app source (excl. content, public, evidence) | 52 files / 157,962 B | 50 files / 164,055 B | −2 files / +6,093 B |
 | Docs direct dependencies | 12 | 13 | +1 (`hig-docs-css` → `hig-tokens` + `hig-react`) |
-| `bun.lock` packages | 489 | 491 | +2 (`hig-react`, `hig-contracts`) |
+| `bun.lock` packages | 489 | 492 | +3 (`hig-react`, `hig-contracts`, and a second `hig-tokens` entry for hig-react, from the same tarball) |
 
 Removed files: `apps/docs/vendor/hig/{tokens.css,styles.css,package.json,README.md,LICENSE}` and
 `apps/docs/public/fonts/{BloxwapSans-Bold.ttf,BloxwapSans-Black.ttf,Bloxwap-OFL.txt,README.md}`.

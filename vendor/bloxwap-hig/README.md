@@ -16,8 +16,10 @@ dependencies. Nothing here is published, tagged or released.
 | `bloxwap-hig-contracts-0.1.0-candidate.sha7c67a07c.tgz` | `4519befc8d35c787b2f91302cf46801c82295f6dd33cbf84331be11308d71ef7` | Runtime dependency of `hig-react` only |
 
 `hig-react` pins its HIG dependencies to the candidate version, which is not on the registry. The root
-`package.json` `overrides` point those transitive names at these files. Bun resolves an override's `file:` path from
-the dependent workspace (`apps/docs`), so both specifiers read `file:../../vendor/bloxwap-hig/…`.
+`package.json` `overrides` point those transitive names at these files (`file:./vendor/bloxwap-hig/…`, relative to
+the repository root), while `apps/docs` depends on them as `file:../../vendor/bloxwap-hig/…`. Bun therefore records
+two `hig-tokens` lockfile entries for the same tarball (same integrity hash). Bun 1.4.4 canary, which CI uses, resolves
+overrides from the root; Bun 1.4.0 resolved them from the dependent workspace and cannot install this lockfile.
 
 ## Update
 
