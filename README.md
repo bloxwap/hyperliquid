@@ -1,11 +1,6 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./.github/hyperliquid-light.svg">
-    <img alt="Hyperliquid" src="./.github/hyperliquid-dark.svg" height="50">
-  </picture>
-  <br>
-  <strong>Blazing fast TypeScript SDK for <a href="https://hyperliquid.xyz/">Hyperliquid</a>. Try the <a href="https://bloxwap.github.io/hyperliquid/docs/">documentation</a>.</strong>
-</p>
+<h1 align="center">Hyperliquid SDK</h1>
+
+<p align="center"><strong>Blazing fast TypeScript SDK for Hyperliquid. <a href="https://bloxwap.github.io/hyperliquid/docs/">Try the docs</a>.</strong></p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue&style=flat-square"></a>
@@ -17,10 +12,10 @@
 ## Features
 
 - **Typed.** Source code is 100% TypeScript with comprehensive type safety.
-- **Tested.** Extensive test coverage with both offline and online test suites.
 - **Minimal dependencies.** A few small, trusted dependencies keep the bundle lean.
 - **Cross-environment support.** Compatible with Bun, Node.js, React Native, and all major JavaScript runtimes.
-- **Easy integration.** Works seamlessly with [viem](https://github.com/wevm/viem) accounts (local private keys or JSON-RPC browser wallets).
+- **Easy integration.** Works seamlessly with [viem](https://github.com/wevm/viem) accounts, local private keys or JSON-RPC browser wallets.
+- **Tested.** Offline and online test suites run in CI.
 
 ## Installation
 
@@ -48,7 +43,7 @@ pnpm add @bloxwap/hyperliquid
 yarn add @bloxwap/hyperliquid
 ```
 
-> React Native needs polyfills for the `fastAssetCtxs` subscription and for versions below 0.86 — see the
+> React Native needs polyfills for the `fastAssetCtxs` subscription and for versions below 0.86. See the
 > [documentation](https://bloxwap.github.io/hyperliquid/docs/).
 
 ## Release status
@@ -60,14 +55,14 @@ yarn add @bloxwap/hyperliquid
 ### Read
 
 ```ts
-// 1. Import module
+// Import module
 import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
 
-// 2. Set up client with transport
+// Set up client with transport
 const transport = new HttpTransport();
 const info = new InfoClient({ transport });
 
-// 3. Query data
+// Query data
 
 // Retrieve mids for all coins
 const mids = await info.allMids();
@@ -82,17 +77,17 @@ const book = await info.l2Book({ coin: "BTC" });
 ### Trade
 
 ```ts
-// 1. Import modules
+// Import modules
 import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
 
-// 2. Set up client with wallet and transport
+// Set up client with wallet and transport
 const wallet = privateKeyToAccount("0x...");
 
 const transport = new HttpTransport();
 const exchange = new ExchangeClient({ transport, wallet });
 
-// 3. Execute an action
+// Execute an action
 
 // Place an order
 const result = await exchange.order({
@@ -117,20 +112,20 @@ await exchange.withdraw3({ destination: "0x...", amount: "1" });
 For low-latency bots, prefer
 [`createFastLocalWallet`](https://bloxwap.github.io/hyperliquid/docs/signing/#fast-local-wallet-wasm-secp256k1) (WASM
 secp256k1) and install the optional `hash-wasm` package for ambient keccak acceleration. Trusted callers can also pass
-`{ skipValidation: true }` — see the
+`{ skipValidation: true }`. See the
 [low-latency recipe](https://bloxwap.github.io/hyperliquid/docs/signing/#low-latency-recipe-bots--hft).
 
 ### Subscribe
 
 ```ts
-// 1. Import module
+// Import module
 import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
 
-// 2. Set up client with transport
+// Set up client with transport
 const transport = new WebSocketTransport();
 const subs = new SubscriptionClient({ transport });
 
-// 3. Subscribe to events
+// Subscribe to events
 
 // Subscribe to mids for all coins
 await subs.allMids((data) => {
