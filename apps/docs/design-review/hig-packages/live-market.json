@@ -1,0 +1,12 @@
+{
+  "observedAt": "2026-10-15T02:09:44.042Z",
+  "environment": "automated Chromium (Playwright, headless), 390x844, unmocked wss://api.hyperliquid.xyz/ws, production static export",
+  "feed": "allMids",
+  "payload": {
+    "coin": "BTC",
+    "midPx": "81587.5"
+  },
+  "eventCountLabel": "1 events · 7:09:43 PM",
+  "stoppedWithOff": true,
+  "pageErrors": []
+}

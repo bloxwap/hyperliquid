@@ -14,7 +14,11 @@ test("static shell, keyboard install and copy success/failure", async ({ page })
     });
   });
   await page.goto("/hyperliquid/");
-  await expect(page.locator(".hig-shell")).toHaveAttribute("data-hig-density", "comfortable");
+  await expect(page.locator("[data-hig-motion]")).toHaveAttribute("data-hig-density", "comfortable");
+  // HIG package CSS is applied: the hero actions and controls use the HIG button recipe and 48px targets.
+  const primary = page.locator(".hero-action[data-intent=primary]");
+  await expect(primary).toHaveClass(/hig-button/);
+  expect(await primary.evaluate((element) => getComputedStyle(element).minHeight)).toBe("48px");
   const npm = page.getByRole("button", { name: "npm", exact: true });
   await npm.focus();
   await page.keyboard.press("Enter");
@@ -48,7 +52,8 @@ test("search keyboard, results, empty state and deep link", async ({ page }) => 
   await input.fill("transport");
   await expect(page.getByRole("dialog").getByRole("option").first()).toBeVisible();
   await input.fill("zzzzdoesnotexistzzzz");
-  await expect(page.getByText("No matches. Try a method name", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No matches" })).toBeVisible();
+  await expect(page.getByText("Try a method name", { exact: false })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator("h1")).toContainText("Clients");
@@ -131,4 +136,44 @@ test("search offline error is visible", async ({ page }) => {
   await page.keyboard.press("Control+k");
   await page.getByRole("dialog").locator("input").fill("transport");
   await expect(page.getByRole("alert")).toContainText("Search unavailable");
+});
+
+test("GitHub alerts render as HIG callouts", async ({ page }) => {
+  await page.goto("/hyperliquid/docs/utilities/");
+  const callouts = page.locator(".docs-callout .hig-surface");
+  await expect(callouts.first()).toBeVisible();
+  expect(await callouts.count()).toBeGreaterThanOrEqual(4);
+  await expect(page.locator('.docs-callout[data-type="warning"] [data-severity="warning"]').first()).toContainText(
+    "Warning",
+  );
+  // Static callouts are not live regions, and the GitHub marker text never leaks into the page.
+  expect(await page.locator(".docs-callout [role]").count()).toBe(0);
+  await expect(page.locator("#nd-page")).not.toContainText("[!NOTE]");
+});
+
+test("playground controls are keyboard operable and its code copies", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: {
+        writeText: async (text: string) => {
+          (window as unknown as { copied: string }).copied = text;
+        },
+      },
+      configurable: true,
+    });
+  });
+  await page.goto("/hyperliquid/");
+  const ethereum = page.getByRole("button", { name: "Ethereum", exact: true });
+  await ethereum.focus();
+  await page.keyboard.press("Space");
+  await expect(ethereum).toHaveAttribute("aria-pressed", "true");
+  await expect(ethereum).toHaveAttribute("data-intent", "primary");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Off", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(ethereum).toBeFocused();
+  await page.getByRole("button", { name: "Copy playground code" }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { copied?: string }).copied ?? ""))
+    .toContain("Explore live Hyperliquid market data");
 });

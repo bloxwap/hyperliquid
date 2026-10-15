@@ -1,5 +1,8 @@
 # HIG adoption evidence · 2026-10-13
 
+> Superseded by the [HIG package migration](../hig-packages/README.md), which replaces the plain-CSS copy and
+> `vendor/hig` described below with the packed HIG candidate packages.
+
 Hyperliquid adopts the approved plain CSS path from
 [bloxwap/hig #34](https://github.com/bloxwap/hig/issues/34) and the
 [SDK migration kit](https://github.com/bloxwap/hig/blob/1a776b9326c6ba03702894943b3edbfd178c4b40/docs/migration/sdk-docs.md).

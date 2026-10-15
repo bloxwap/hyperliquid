@@ -1,8 +1,8 @@
 @import "tailwindcss";
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
-@import "@bloxwap/hig-docs-css/tokens";
-@import "@bloxwap/hig-docs-css/styles";
+@import "@bloxwap/hig-tokens/css";
+@import "@bloxwap/hig-react/css";
 
 @source "../node_modules/fumadocs-ui/dist/**/*.js";
 
@@ -11,28 +11,14 @@
   --font-mono: var(--font-bloxwap-mono), ui-monospace, monospace;
 }
 
-/* Host aliases adapt Fumadocs and the SDK demo to the pinned HIG distribution. */
+/* HIG geometry and motion (tokens.radius / tokens.motion in @bloxwap/hig-tokens) that tokens.css does not emit as
+   variables. Colors, spacing and control sizes come straight from the package's --hig-* variables. */
 :root {
-  --color-surface: var(--hig-background);
-  --color-surface-raised: var(--hig-surface);
-  --color-text: var(--hig-text);
-  --color-text-muted: var(--hig-muted);
-  --color-text-quiet: var(--hig-faint);
-  --color-line: var(--hig-border);
-  --color-fill-subtle: var(--hig-nested);
-  --color-accent: var(--hig-action);
-  --color-accent-on: var(--hig-onAction);
-  --color-code-keyword: var(--hig-warning);
-  --color-code-string: var(--hig-action);
-  --color-code-type: var(--hig-info);
-  --popover: var(--hig-surface);
-  --popover-foreground: var(--hig-text);
-  --muted: var(--hig-nested);
-  --radius: 10px;
-  --radius-md: 10px;
-  --radius-xl: 14px;
+  --radius: 10px; /* radius.lg */
+  --radius-md: 8px; /* radius.md */
+  --radius-xl: 14px; /* radius.xl */
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
-  --duration-interactive: 160ms;
+  --duration-interactive: 180ms; /* motion.fast */
 }
 @theme {
   --text-3xs: 0.625rem;
@@ -42,34 +28,38 @@
 }
 
 #nd-sidebar {
-  border-color: var(--color-line);
+  border-color: var(--hig-border);
 }
 
 /* Fumadocs mappings from monorepo/workers/docs/src/app/global.css. */
 :root,
 .dark,
 .dark #nd-sidebar {
-  --color-fd-background: var(--color-surface);
-  --color-fd-foreground: var(--color-text);
-  --color-fd-card: var(--color-surface);
-  --color-fd-card-foreground: var(--color-text);
-  --color-fd-popover: var(--popover);
-  --color-fd-popover-foreground: var(--popover-foreground);
-  --color-fd-muted: var(--muted);
-  --color-fd-muted-foreground: var(--color-text-muted);
-  --color-fd-secondary: var(--color-surface-raised);
-  --color-fd-secondary-foreground: var(--color-text);
-  --color-fd-border: var(--color-line);
-  --color-fd-primary: var(--color-accent);
-  --color-fd-primary-foreground: var(--color-accent-on);
-  --color-fd-accent: var(--color-surface-raised);
-  --color-fd-accent-foreground: var(--color-text);
-  --color-fd-ring: var(--color-accent);
+  --color-fd-background: var(--hig-background);
+  --color-fd-foreground: var(--hig-text);
+  --color-fd-card: var(--hig-background);
+  --color-fd-card-foreground: var(--hig-text);
+  --color-fd-popover: var(--hig-surface);
+  --color-fd-popover-foreground: var(--hig-text);
+  --color-fd-muted: var(--hig-nested);
+  --color-fd-muted-foreground: var(--hig-muted);
+  --color-fd-secondary: var(--hig-surface);
+  --color-fd-secondary-foreground: var(--hig-text);
+  --color-fd-border: var(--hig-border);
+  --color-fd-primary: var(--hig-action);
+  --color-fd-primary-foreground: var(--hig-onAction);
+  --color-fd-accent: var(--hig-surface);
+  --color-fd-accent-foreground: var(--hig-text);
+  --color-fd-ring: var(--hig-action);
 }
 html {
   scrollbar-gutter: stable;
 }
 body {
+  font-family: var(--font-sans);
+}
+/* HIG recipes use the host's next/font families (the package CSS names 'Bloxwap Sans' literally). */
+.hig-button {
   font-family: var(--font-sans);
 }
 html > body[data-scroll-locked] {
@@ -79,14 +69,14 @@ html > body[data-scroll-locked] {
   --removed-body-scroll-bar-size: 0px !important;
 }
 ::selection {
-  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
-  color: var(--color-text);
+  background: color-mix(in srgb, var(--hig-action) 25%, transparent);
+  color: var(--hig-text);
 }
 
 /* Keyboard focus ring for links and buttons. Text fields get their own focus treatment instead
    of a ring drawn around them (see .search-header). */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--hig-action);
   outline-offset: 2px;
 }
 input:focus-visible,
@@ -95,8 +85,6 @@ textarea:focus-visible {
 }
 
 /* One interaction recipe for every custom interactive element. */
-.button-primary,
-.button-secondary,
 .feature-card h2,
 .feature-card h2 > svg,
 .footer-col a,
@@ -122,7 +110,7 @@ textarea:focus-visible {
 }
 /* With the symbol standing in for the Bloxwap name, the product name is the title. */
 .brand-product {
-  color: var(--color-text);
+  color: var(--hig-text);
   font-size: var(--text-base);
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -154,14 +142,14 @@ textarea:focus-visible {
   font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.1em;
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .eyebrow > span,
 .code-status > span {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-accent);
+  background: var(--hig-action);
 }
 .hero h1 {
   margin: --spacing(7) 0 --spacing(5);
@@ -175,7 +163,7 @@ textarea:focus-visible {
   max-width: 430px;
   font-size: var(--text-lg);
   line-height: 1.7;
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .hero-actions {
   display: flex;
@@ -186,36 +174,15 @@ textarea:focus-visible {
   font-size: var(--text-base);
   font-weight: 600;
 }
-/* Primary (filled accent) and secondary (neutral fill) share size, icon gap and min width. */
-.button-primary,
-.button-secondary {
+/* Hero calls to action use the HIG button recipe (.hig-button + data-intent); the host adds icon layout and a
+   shared minimum width only. */
+.hero-action {
   display: inline-flex;
   gap: --spacing(3);
   align-items: center;
   justify-content: center;
   min-width: 176px;
-  min-height: 48px;
-  padding: 0 --spacing(6);
-  border-radius: 9999px;
-}
-.button-primary {
-  background: var(--color-accent);
-  color: var(--color-accent-on);
-}
-/* Brighten without shifting hue: mixing the green toward white would drift it to mint. */
-.button-primary:hover {
-  filter: brightness(1.1);
-}
-.button-secondary {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-}
-.button-secondary:hover {
-  background: color-mix(in oklab, var(--color-surface-raised) 80%, var(--color-text));
-}
-.button-primary:active,
-.button-secondary:active {
-  transform: scale(0.98);
+  padding-inline: --spacing(6);
 }
 .install-picker {
   display: inline-flex;
@@ -223,39 +190,27 @@ textarea:focus-visible {
   align-items: flex-start;
   gap: --spacing(2);
 }
-/* Package-manager switch: a pill track like the hero buttons, with one thumb that slides to the
-   active tab. Tabs share equal columns so the thumb's offset is just its index times its width. */
+/* Package-manager switch: HIG buttons on a pill track. The pressed option takes the secondary fill; the others
+   stay transparent so the track reads as one control. */
 .install-tabs {
-  position: relative;
-  display: inline-grid;
-  grid-auto-columns: 1fr;
-  grid-auto-flow: column;
+  display: inline-flex;
+  gap: --spacing(1);
   padding: --spacing(1);
   border-radius: 9999px;
-  background: var(--color-surface-raised);
+  background: var(--hig-surface);
 }
-.install-tabs-thumb {
-  position: absolute;
-  inset-block: --spacing(1);
-  left: --spacing(1);
-  width: calc((100% - --spacing(2)) / var(--count));
-  border-radius: 9999px;
-  background: var(--color-fill-subtle);
-  transform: translateX(calc(var(--active) * 100%));
-  transition: transform 240ms var(--ease-out);
-}
-.install-tabs > button {
-  position: relative;
-  padding: --spacing(1) --spacing(4);
-  border-radius: 9999px;
+.install-tabs > .hig-button {
+  padding: 0 --spacing(4);
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  color: var(--color-text-muted);
-  transition: color var(--duration-interactive) var(--ease-out);
+  font-size: var(--text-xs);
+  font-weight: 500;
 }
-.install-tabs > button:hover,
-.install-tabs > button.active {
-  color: var(--color-text);
+.install-tabs > .hig-button[aria-pressed="false"] {
+  background: transparent;
+  color: var(--hig-muted);
+}
+.install-tabs > .hig-button[aria-pressed="false"]:hover {
+  color: var(--hig-text);
 }
 .install-command {
   display: inline-flex;
@@ -263,37 +218,24 @@ textarea:focus-visible {
   gap: --spacing(4);
   padding: --spacing(3) --spacing(4);
   border-radius: var(--radius);
-  background: var(--color-surface-raised);
+  background: var(--hig-surface);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
 .install-command > span {
-  color: var(--color-text-muted);
-}
-.install-copy {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: --spacing(1);
-  margin: calc(--spacing(1) * -1);
-  border-radius: calc(var(--radius) - 2px);
-  color: var(--color-text-muted);
-  transition: color var(--duration-interactive) var(--ease-out);
-}
-.install-copy:hover {
-  color: var(--color-text);
+  color: var(--hig-muted);
 }
 .runtime-note {
   margin-top: --spacing(3);
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 /* Cards are fill-only: a raised surface and a radius, never a stroke. */
 .code-window {
   overflow: hidden;
   border-radius: var(--radius-xl);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  background: var(--hig-surface);
+  color: var(--hig-text);
   transform: translateY(12px);
 }
 .code-toolbar {
@@ -303,7 +245,7 @@ textarea:focus-visible {
   padding: --spacing(4) --spacing(6) 0;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .window-dots {
   display: flex;
@@ -313,29 +255,16 @@ textarea:focus-visible {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--muted);
+  background: var(--hig-nested);
 }
 .code-actions {
   display: flex;
   align-items: center;
   gap: --spacing(3);
 }
-.code-copy {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: --spacing(1);
-  margin: calc(--spacing(1) * -1);
-  border-radius: calc(var(--radius) - 2px);
-  color: var(--color-text-muted);
-  transition: color var(--duration-interactive) var(--ease-out);
-}
-.code-copy:hover {
-  color: var(--color-text);
-}
 .code-language {
   font-size: var(--text-2xs);
-  color: var(--color-code-type);
+  color: var(--hig-info);
 }
 .code-window pre {
   overflow-x: auto;
@@ -346,16 +275,16 @@ textarea:focus-visible {
   tab-size: 2;
 }
 .syntax-purple {
-  color: var(--color-code-keyword);
+  color: var(--hig-warning);
 }
 .syntax-green {
-  color: var(--color-code-string);
+  color: var(--hig-action);
 }
 .syntax-blue {
-  color: var(--color-code-type);
+  color: var(--hig-info);
 }
 .syntax-muted {
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .code-status {
   display: flex;
@@ -364,7 +293,7 @@ textarea:focus-visible {
   padding: 0 --spacing(6) --spacing(4);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 
 /* Live market data playground: its own section below the hero, like the chart and sfx sites. */
@@ -397,7 +326,7 @@ textarea:focus-visible {
   max-width: 440px;
   font-size: var(--text-sm);
   line-height: 1.7;
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .playground {
   min-width: 0;
@@ -424,34 +353,20 @@ textarea:focus-visible {
   gap: --spacing(3);
   margin-bottom: --spacing(2);
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .playground-controls legend > span {
-  color: var(--color-text-quiet);
+  color: var(--hig-faint);
 }
 .playground-options {
   display: flex;
   flex-wrap: wrap;
   gap: --spacing(1);
 }
-.playground-options button {
-  min-height: 32px;
-  padding: --spacing(1) --spacing(3);
-  border-radius: calc(var(--radius) - 2px);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  background: var(--color-surface);
-  transition:
-    color var(--duration-interactive) var(--ease-out),
-    background var(--duration-interactive) var(--ease-out);
-}
-.playground-options button:hover {
-  color: var(--color-text);
-  background: var(--color-fill-subtle);
-}
-.playground-options button[aria-pressed="true"] {
-  color: var(--color-accent-on);
-  background: var(--color-accent);
+/* Asset and feed options are HIG buttons: primary when pressed, secondary otherwise, in the label type role. */
+.playground-options > .hig-button {
+  padding: 0 --spacing(4);
+  font-size: 0.875rem;
 }
 .playground-code {
   position: relative;
@@ -478,7 +393,7 @@ textarea:focus-visible {
   margin: --spacing(4) --spacing(4) --spacing(4) 0;
   padding: --spacing(4);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--hig-background);
 }
 .playground-output-toolbar {
   display: flex;
@@ -489,7 +404,7 @@ textarea:focus-visible {
   min-height: 20px;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .playground-status {
   display: inline-flex;
@@ -500,13 +415,13 @@ textarea:focus-visible {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-text-quiet);
+  background: var(--hig-faint);
 }
 .playground-status[data-status="live"] {
-  color: var(--color-accent);
+  color: var(--hig-action);
 }
 .playground-status[data-status="live"] i {
-  background: var(--color-accent);
+  background: var(--hig-action);
   animation: playground-pulse 2s ease-in-out infinite;
 }
 .playground-status[data-status="connecting"] i,
@@ -525,7 +440,7 @@ textarea:focus-visible {
   text-align: center;
 }
 .playground .playground-empty > svg {
-  color: var(--color-text-quiet);
+  color: var(--hig-faint);
   margin-bottom: --spacing(1);
 }
 .playground-empty p {
@@ -533,20 +448,23 @@ textarea:focus-visible {
 }
 .playground-empty > span {
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .playground .playground-json {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding: --spacing(3) 0 0;
-  color: var(--color-code-string);
+  color: var(--hig-action);
 }
-.playground-retry {
-  display: inline-flex;
-  align-items: center;
-  gap: --spacing(1);
-  color: var(--color-text);
+.playground-error .hig-surface {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: --spacing(2);
+  width: 100%;
+  text-align: start;
+  background: var(--hig-surface);
 }
 @keyframes playground-pulse {
   50% {
@@ -557,9 +475,7 @@ textarea:focus-visible {
   .playground-status i {
     animation: none;
   }
-  .playground-options button,
-  .install-tabs-thumb,
-  .install-tabs > button {
+  .install-tabs > .hig-button {
     transition: none;
   }
 }
@@ -575,16 +491,16 @@ textarea:focus-visible {
   display: block;
   padding: --spacing(6);
   border-radius: var(--radius-xl);
-  background: var(--color-surface-raised);
+  background: var(--hig-surface);
   transition: background-color var(--duration-interactive) var(--ease-out);
 }
 .feature-card:hover {
-  background: color-mix(in oklab, var(--color-surface-raised) 88%, var(--color-text));
+  background: color-mix(in oklab, var(--hig-surface) 88%, var(--hig-text));
 }
 .feature-number {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .feature-card h2 {
   display: flex;
@@ -597,18 +513,18 @@ textarea:focus-visible {
   letter-spacing: -0.02em;
 }
 .feature-card h2 > svg {
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .feature-card:hover h2 {
-  color: var(--color-accent);
+  color: var(--hig-action);
 }
 .feature-card:hover h2 > svg {
-  color: var(--color-accent);
+  color: var(--hig-action);
   transform: translateX(2px);
 }
 .feature-card p {
   max-width: 290px;
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
   font-size: var(--text-sm);
   line-height: 1.7;
 }
@@ -618,7 +534,7 @@ textarea:focus-visible {
   position: static;
   width: 100%;
   padding: --spacing(8) max(--spacing(4), calc((100% - var(--fd-layout-width, 1400px)) / 2 + --spacing(4)));
-  background: var(--color-surface);
+  background: var(--hig-background);
 }
 /* Logo block and the three link columns share the width evenly. */
 .footer-grid {
@@ -649,15 +565,15 @@ textarea:focus-visible {
   overflow: visible;
 }
 .wordmark-letters {
-  fill: var(--color-text);
+  fill: var(--hig-text);
 }
 .wordmark-x {
-  stroke: var(--color-accent);
+  stroke: var(--hig-action);
 }
 .footer-brand p {
   margin: 0;
   font-size: 13px;
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .footer-col h2 {
   margin: 0 0 --spacing(3);
@@ -665,17 +581,17 @@ textarea:focus-visible {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
 .footer-col a {
   display: block;
   padding: --spacing(1) 0;
   font-size: 13px;
-  color: color-mix(in oklab, var(--color-text) 80%, transparent);
+  color: color-mix(in oklab, var(--hig-text) 80%, transparent);
 }
 .footer-col a:hover,
 .footer-base a:hover {
-  color: var(--color-accent);
+  color: var(--hig-action);
 }
 .footer-base {
   display: flex;
@@ -684,7 +600,7 @@ textarea:focus-visible {
   gap: --spacing(2);
   margin-top: --spacing(9);
   font-size: 11px;
-  color: var(--color-text-quiet);
+  color: var(--hig-faint);
 }
 .footer-legal {
   display: inline-flex;
@@ -720,11 +636,11 @@ textarea:focus-visible {
   align-items: center;
   width: fit-content;
   margin-top: --spacing(6);
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
   font-size: var(--text-sm);
 }
 .edit-link:hover {
-  color: var(--color-accent);
+  color: var(--hig-action);
 }
 #nd-page {
   max-width: 52rem;
@@ -766,18 +682,18 @@ textarea:focus-visible {
   text-underline-offset: 0.2em;
 }
 .prose a:not([data-card]):hover {
-  color: var(--color-accent);
+  color: var(--hig-action);
 }
 .prose details {
   padding: --spacing(3) --spacing(4);
   border-radius: var(--radius);
-  background: var(--color-surface-raised);
+  background: var(--hig-surface);
 }
 /* Fumadocs code blocks: its card fill is the page black, so swap the stroke for a raised fill. */
 .prose figure.shiki:not(.bg-fd-secondary) {
   border: 0;
   box-shadow: none;
-  background: var(--color-surface-raised);
+  background: var(--hig-surface);
 }
 .prose figure.shiki > .border-b {
   border-bottom: 0;
@@ -790,8 +706,8 @@ textarea:focus-visible {
   box-shadow: none;
 }
 #nd-sidebar a[data-active="true"] {
-  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
-  color: var(--color-accent);
+  background: color-mix(in srgb, var(--hig-action) 8%, transparent);
+  color: var(--hig-action);
 }
 /* Fumadocs' sidebar icon-link bar ships as a stroked box; with GitHub its only link, drop the box
    and leave the icon. */
@@ -804,12 +720,12 @@ textarea:focus-visible {
   padding: --spacing(5) --spacing(6);
   border: 0;
   border-radius: var(--radius-xl);
-  background: var(--color-surface-raised);
+  background: var(--hig-surface);
   transition: background-color var(--duration-interactive) var(--ease-out);
 }
 .page-nav > a:hover {
-  background: color-mix(in oklab, var(--color-surface-raised) 88%, var(--color-text));
-  color: var(--color-accent);
+  background: color-mix(in oklab, var(--hig-surface) 88%, var(--hig-text));
+  color: var(--hig-action);
 }
 .docs-sidebar-footer {
   padding-top: --spacing(2);
@@ -825,8 +741,8 @@ textarea:focus-visible {
   font-weight: 700;
 }
 .docs-app-link:hover {
-  background: var(--color-surface-raised);
-  color: var(--color-accent);
+  background: var(--hig-surface);
+  color: var(--hig-action);
 }
 
 /* Search box (Fumadocs' full search trigger, in the header and the docs sidebar): a fill-only
@@ -837,16 +753,16 @@ textarea:focus-visible {
   padding: 0 --spacing(1.5) 0 --spacing(3);
   border: 0;
   border-radius: 9999px;
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
+  background: var(--hig-surface);
+  color: var(--hig-muted);
   font-size: var(--text-sm);
   transition:
     background-color var(--duration-interactive) var(--ease-out),
     color var(--duration-interactive) var(--ease-out);
 }
 [data-search-full]:hover {
-  background: color-mix(in oklab, var(--color-surface-raised) 88%, var(--color-text));
-  color: var(--color-text);
+  background: color-mix(in oklab, var(--hig-surface) 88%, var(--hig-text));
+  color: var(--hig-text);
 }
 [data-search-full] kbd {
   display: inline-flex;
@@ -857,8 +773,8 @@ textarea:focus-visible {
   padding: 0 --spacing(1.5);
   border: 0;
   border-radius: 9999px;
-  background: color-mix(in oklab, var(--color-surface-raised) 80%, var(--color-text));
-  color: var(--color-text);
+  background: color-mix(in oklab, var(--hig-surface) 80%, var(--hig-text));
+  color: var(--hig-text);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
 }
@@ -869,56 +785,49 @@ textarea:focus-visible {
   transition: box-shadow var(--duration-interactive) var(--ease-out);
 }
 .search-header:focus-within {
-  box-shadow: inset 0 -1px 0 var(--color-accent);
+  box-shadow: inset 0 -1px 0 var(--hig-action);
 }
+/* Search loading uses HIG skeleton rows. */
 .search-skeleton {
   display: flex;
   flex-direction: column;
   gap: --spacing(2);
   padding: --spacing(3);
 }
-.search-skeleton > span {
-  height: --spacing(10);
-  border-radius: var(--radius-md);
-  background: var(--color-fill-subtle);
-  animation: search-pulse 1.2s var(--ease-out) infinite alternate;
-}
-.search-skeleton > span:nth-child(2) {
-  animation-delay: 150ms;
-}
-.search-skeleton > span:nth-child(3) {
-  animation-delay: 300ms;
-}
-@keyframes search-pulse {
-  to {
-    opacity: 0.4;
-  }
-}
+/* HIG empty state inside the dialog list; suggestions stay as quick links. */
 .search-empty {
-  padding: --spacing(8) --spacing(4) --spacing(6);
+  padding: --spacing(3);
   font-size: var(--text-sm);
-  color: var(--color-text-muted);
+  color: var(--hig-muted);
 }
-.search-empty p {
-  margin-bottom: --spacing(3);
-  color: var(--color-text);
+.search-empty .hig-surface {
+  display: flex;
+  flex-direction: column;
+  gap: --spacing(2);
+  background: transparent;
+}
+.search-empty h3 {
+  color: var(--hig-text);
   font-weight: 600;
 }
 .search-empty ul {
   display: flex;
   flex-wrap: wrap;
   gap: --spacing(2);
+  margin-top: --spacing(1);
 }
 .search-empty a {
   display: inline-flex;
-  padding: --spacing(1) --spacing(3);
+  align-items: center;
+  min-height: var(--hig-control);
+  padding: 0 --spacing(4);
   border-radius: 9999px;
-  background: var(--color-fill-subtle);
-  color: var(--color-text);
+  background: var(--hig-nested);
+  color: var(--hig-text);
   transition: color var(--duration-interactive) var(--ease-out);
 }
 .search-empty a:hover {
-  color: var(--color-accent);
+  color: var(--hig-action);
 }
 
 @media (max-width: 850px) {
@@ -986,8 +895,7 @@ textarea:focus-visible {
     gap: --spacing(2);
     font-size: var(--text-sm);
   }
-  .button-primary,
-  .button-secondary {
+  .hero-action {
     min-width: 0;
     flex: 1 1 auto;
     padding: 0 --spacing(4);
@@ -1013,12 +921,9 @@ textarea:focus-visible {
   .hero-copy > .eyebrow,
   .hero-copy > h1,
   .hero-copy > :not(.eyebrow, h1),
-  .hero .code-window,
-  .search-skeleton > span {
+  .hero .code-window {
     animation: none;
   }
-  .button-primary,
-  .button-secondary,
   .feature-card,
   .feature-card h2,
   [data-search-full],
@@ -1026,24 +931,18 @@ textarea:focus-visible {
   .search-header {
     transition: none;
   }
-  .button-primary:active,
-  .button-secondary:active {
-    transform: none;
-  }
 }
 
-/* HIG comfortable controls, using the host font loader and Fumadocs adapters. */
-.hig-button {
-  font-family: var(--font-sans);
+/* Copy actions are HIG ghost icon buttons: a 48px square target with the icon centred. */
+.copy-button {
+  display: inline-grid;
+  place-items: center;
+  width: var(--hig-control);
+  padding: 0;
+  color: var(--hig-muted);
 }
-.install-tabs > button,
-.playground-options button {
-  min-height: var(--hig-control);
-}
-.code-copy,
-.install-copy {
-  min-width: 48px;
-  min-height: 48px;
+.copy-button:hover:not(:disabled) {
+  color: var(--hig-text);
 }
 .copy-feedback {
   font-size: 0.75rem;
@@ -1052,10 +951,37 @@ textarea:focus-visible {
 .copy-feedback[data-error="true"] {
   color: var(--hig-negative);
 }
-.hig-shell {
+[data-hig-motion] {
   min-height: 100vh;
 }
 .search-error {
   padding: var(--hig-space-lg);
-  color: var(--hig-negative);
+}
+/* HIG Alert content (search error, playground error, docs callouts) stacks title, body and action. */
+.search-error .hig-surface,
+.docs-callout .hig-surface {
+  display: flex;
+  flex-direction: column;
+  gap: --spacing(2);
+}
+/* GitHub alert blockquotes render as HIG callouts (lib/remark-callouts.ts); severity sets the edge color. */
+.docs-callout {
+  margin-block: --spacing(6);
+}
+.docs-callout .hig-surface {
+  padding: --spacing(4) --spacing(5);
+  border-radius: var(--radius);
+}
+.docs-callout .hig-surface > strong {
+  font-size: var(--text-sm);
+}
+.docs-callout[data-type="note"] .hig-surface,
+.docs-callout[data-type="important"] .hig-surface {
+  border-inline-start: 3px solid var(--hig-info);
+}
+.docs-callout[data-type="tip"] .hig-surface {
+  border-inline-start: 3px solid var(--hig-positive);
+}
+.prose .docs-callout p {
+  margin: 0;
 }

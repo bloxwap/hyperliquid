@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@bloxwap/font": "0.1.2",
-    "@bloxwap/hig-docs-css": "file:vendor/hig",
+    "@bloxwap/hig-react": "file:../../vendor/bloxwap-hig/bloxwap-hig-react-0.1.0-candidate.sha7c67a07c.tgz",
+    "@bloxwap/hig-tokens": "file:../../vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha7c67a07c.tgz",
     "@bloxwap/hyperliquid": "workspace:*",
     "animejs": "4.4.0",
     "fumadocs-core": "16.15.14",

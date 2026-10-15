@@ -35,7 +35,6 @@
       "!apps/docs/next-env.d.ts",
       // Copied brand assets retain their original formatting and provenance metadata.
       "!apps/docs/public/logos",
-      "!apps/docs/vendor/hig",
       "!.hig-source",
       "!.hig-artifacts",
       "!apps/docs/test-results",

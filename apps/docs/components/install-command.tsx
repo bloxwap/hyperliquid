@@ -1,6 +1,7 @@
 "use client";
 
-import { type CSSProperties, useState } from "react";
+import { Button } from "@bloxwap/hig-react/button";
+import { useState } from "react";
 import { CopyButton } from "./copy-button";
 
 const installers = [
@@ -14,22 +15,16 @@ export function InstallCommand() {
   const [active, setActive] = useState(0);
   return (
     <div className="install-picker">
-      <fieldset
-        className="install-tabs"
-        aria-label="Package manager"
-        style={{ "--count": installers.length, "--active": active } as CSSProperties}
-      >
-        <span className="install-tabs-thumb" aria-hidden="true" />
+      <fieldset className="install-tabs hig-group" aria-label="Package manager">
         {installers.map((installer, index) => (
-          <button
+          <Button
             key={installer.name}
-            type="button"
+            intent={index === active ? "secondary" : "ghost"}
             aria-pressed={index === active}
-            className={index === active ? "active" : undefined}
             onClick={() => setActive(index)}
           >
             {installer.name}
-          </button>
+          </Button>
         ))}
       </fieldset>
       <div className="install-command">
