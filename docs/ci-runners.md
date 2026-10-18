@@ -25,6 +25,8 @@ Install these on the Mac mini before registering the GitHub Actions runner. Work
 
 Do not install CI tools with `apt` or `sudo` for these workflows. Homebrew is not required.
 
+The runner currently lacks **`gpg`**. `codecov/codecov-action` refuses to start without it (it GPG-checks the Codecov CLI). These workflows do not need host `gpg`: they pin-download `codecovcli_macos` v11.3.1 and SHA256-verify it, the same way they install lychee. Sibling repos that still call `codecov-action` directly will need `gpg` on the Mac mini (GnuPG, on `PATH`). This repository also does not need host `gh`, `gtar`, or `jq`.
+
 The runner user must be able to write the workspace and `$RUNNER_TEMP`. The machine needs enough free disk for a Bun install, a perf worktree, and Playwright's Chromium download (a few gigabytes in total).
 
 ## What workflows install themselves
@@ -35,6 +37,7 @@ These are not machine prerequisites. The jobs fetch them into the job environmen
 - **Node.js 24** — `actions/setup-node` on the npm publish job only (OIDC trusted publishing needs npm ≥ 11.5.1).
 - **Playwright Chromium** — `bunx playwright install chromium` in the docs job. `--with-deps` is omitted; that flag installs Linux apt packages. Chromium's macOS libraries ship with the OS. The first docs run downloads the browser into Playwright's cache on the runner.
 - **lychee v0.24.2** (`aarch64-apple-darwin`) — downloaded into `$RUNNER_TEMP`, checksum-verified, and used for the same Markdown link scan as before. The `lychee-action` composite only ships a Linux GNU binary.
+- **Codecov CLI v11.3.1** (`codecovcli_macos`, universal x86_64/arm64) — downloaded into `$RUNNER_TEMP`, checksum-verified, and used for the same `upload-coverage` call as `codecov-action` (`--file`, `--disable-search`, `--fail-on-error`). The action is not used because it requires host `gpg`.
 
 ## Network egress
 

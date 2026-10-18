@@ -38,10 +38,9 @@ jobs:
           sed 's|^SF:|SF:packages/hyperliquid/|' coverage/lcov.info > "$RUNNER_TEMP/lcov.info"
           mv "$RUNNER_TEMP/lcov.info" coverage/lcov.info
 
+      # codecov-action requires host `gpg` for CLI integrity. These Mac minis do
+      # not have it; same pinned CLI + SHA256 check as lychee, same upload flags.
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./packages/hyperliquid/coverage/lcov.info
-          disable_search: true
-          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: sh .github/scripts/codecov-upload.sh ./packages/hyperliquid/coverage/lcov.info
