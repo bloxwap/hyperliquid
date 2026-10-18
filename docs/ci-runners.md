@@ -21,7 +21,7 @@ Install these on the Mac mini before registering the GitHub Actions runner. Work
 | macOS on Apple Silicon | Matches the `macOS` and `ARM64` labels. |
 | GitHub Actions runner | Registered with labels `self-hosted`, `macOS`, `ARM64`. |
 | Xcode Command Line Tools | `git`, `clang`, and the headers native packages (Bun, sharp, Playwright) expect. |
-| `curl`, `tar`, `sed`, `shasum`, `bash`, `tee` | Stock macOS. Workflow scripts stay BSD-portable and write scratch files under `$RUNNER_TEMP`. |
+| `curl`, `tar`, `sed`, `shasum`, `bash`, `tee` | Stock macOS. Workflow scripts stay BSD-portable and write scratch files under `$RUNNER_TEMP` (exported as `TMPDIR` via `$GITHUB_ENV` in a setup step; job-level `env` cannot use the `runner` context). |
 
 Do not install CI tools with `apt` or `sudo` for these workflows. Homebrew is not required.
 

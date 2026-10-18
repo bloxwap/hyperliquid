@@ -13,6 +13,9 @@ jobs:
       id-token: write
 
     steps:
+      # Job-level env cannot use the runner context on these Mac minis.
+      - name: Point TMPDIR at runner temp
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # npm publishes via OIDC trusted publishing (no token here), which needs npm >= 11.5.1.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7

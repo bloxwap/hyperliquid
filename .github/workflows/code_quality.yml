@@ -12,6 +12,9 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
 
     steps:
+      # Job-level env cannot use the runner context on these Mac minis.
+      - name: Point TMPDIR at runner temp
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:

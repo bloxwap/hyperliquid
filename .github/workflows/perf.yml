@@ -38,6 +38,9 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
 
     steps:
+      # Job-level env cannot use the runner context on these Mac minis.
+      - name: Point TMPDIR at runner temp
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # The base commit must be reachable so it can be checked out into a second worktree.
