@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   docs:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 20
     env:
       # Project Pages is served from /<repository>; PR builds use the same paths.
@@ -48,11 +48,13 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
+      # Job-level env cannot use the runner context on these Mac minis.
+      - name: Point TMPDIR at runner temp
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          # Match the rest of CI while Bun 1.4 remains canary-only.
-          bun-version: canary
+      # setup-bun writes ~/.bun, shared across runner instances on one Mac mini.
+      - name: Install Bun canary into runner temp
+        run: sh .github/scripts/setup-bun-isolated.sh
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -72,28 +74,53 @@ jobs:
         working-directory: apps/docs
         run: bun run build
 
+      # `--with-deps` is apt/sudo on Linux. Chromium's macOS deps ship with the OS.
       - name: Install browser for documentation checks
         working-directory: apps/docs
-        run: bunx playwright install --with-deps chromium
+        run: bunx playwright install chromium
 
       - name: Test production documentation interactions
         working-directory: apps/docs
         run: bun run test:browser
 
+      # lychee-action downloads only `*-unknown-linux-gnu` and uses GNU `install -t`.
+      # Same lychee v0.24.2 scan, installed into $RUNNER_TEMP for the Mac mini.
       - name: Check documentation links
-        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
-        with:
-          args: >-
-            --root-dir .
-            --no-progress
-            --max-retries 3
-            --timeout 20
-            README.md
-            packages/hyperliquid/README.md
-            'apps/docs/content/docs/**/*.md'
-          fail: true
-          failIfEmpty: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          LYCHEE_VERSION=v0.24.2
+          ARCHIVE=lychee-aarch64-apple-darwin.tar.gz
+          EXPECTED_SHA256=c9d3740ea2d891854d37116c9fba840f37b6e7c89d330e7db84ac333631c4977
+          DEST="$RUNNER_TEMP/lychee"
+          mkdir -p "$DEST"
+          curl -fsSL "https://github.com/lycheeverse/lychee/releases/download/lychee-${LYCHEE_VERSION}/${ARCHIVE}" \
+            -o "$DEST/$ARCHIVE"
+          actual=$(shasum -a 256 "$DEST/$ARCHIVE")
+          actual=${actual%% *}
+          if [ "$actual" != "$EXPECTED_SHA256" ]; then
+            echo "lychee archive checksum mismatch: got $actual want $EXPECTED_SHA256" >&2
+            exit 1
+          fi
+          tar -xzf "$DEST/$ARCHIVE" -C "$DEST"
+          LYCHEE="$DEST/lychee-aarch64-apple-darwin/lychee"
+          chmod +x "$LYCHEE"
+          report="$RUNNER_TEMP/lychee-out.md"
+          "$LYCHEE" \
+            --root-dir . \
+            --no-progress \
+            --max-retries 3 \
+            --timeout 20 \
+            --format markdown \
+            README.md \
+            packages/hyperliquid/README.md \
+            "apps/docs/content/docs/**/*.md" \
+            | tee "$report"
+          if grep -E 'Total[[:space:]]+\|[[:space:]]+0' "$report" >/dev/null; then
+            echo "No links were found. This usually indicates a configuration error." >&2
+            exit 1
+          fi
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -104,7 +131,7 @@ jobs:
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: docs
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 10
     permissions:
       pages: write
@@ -116,6 +143,9 @@ jobs:
       group: github-pages
       cancel-in-progress: false
     steps:
+      # Job-level env cannot use the runner context on these Mac minis.
+      - name: Point TMPDIR at runner temp
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       # Enable Settings > Pages > Source: GitHub Actions before the first deployment.
       # Keeping Pages API calls here lets PR checks run before Pages is enabled.
       - name: Configure GitHub Pages

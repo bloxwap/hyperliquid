@@ -8,14 +8,16 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
+      # Job-level env cannot use the runner context on these Mac minis.
+      - name: Point TMPDIR at runner temp
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          # Bun 1.4 (the Rust rewrite) ships only as canary; the `canary` tag moves with each build.
-          bun-version: canary
+      # setup-bun writes ~/.bun, shared across runner instances on one Mac mini.
+      - name: Install Bun canary into runner temp
+        run: sh .github/scripts/setup-bun-isolated.sh
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -29,15 +31,16 @@ jobs:
           bun test tests/ --coverage --coverage-reporter=lcov --coverage-dir=coverage
           test -s coverage/lcov.info
           # Bun writes SDK-relative source paths; coverage services need repository-relative paths.
-          sed -i 's|^SF:|SF:packages/hyperliquid/|' coverage/lcov.info
+          # Rewrite via $RUNNER_TEMP: BSD sed has no GNU `sed -i` in-place form.
+          sed 's|^SF:|SF:packages/hyperliquid/|' coverage/lcov.info > "$RUNNER_TEMP/lcov.info"
+          mv "$RUNNER_TEMP/lcov.info" coverage/lcov.info
 
+      # codecov-action requires host `gpg` for CLI integrity. These Mac minis do
+      # not have it; same pinned CLI + SHA256 check as lychee, same upload flags.
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./packages/hyperliquid/coverage/lcov.info
-          disable_search: true
-          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: sh .github/scripts/codecov-upload.sh ./packages/hyperliquid/coverage/lcov.info
 
       - name: Upload coverage to Coveralls.io
         uses: coverallsapp/github-action@5cbfd81b66ca5d10c19b062c04de0199c215fb6e # v2
