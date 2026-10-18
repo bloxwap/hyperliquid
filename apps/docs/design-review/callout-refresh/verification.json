@@ -1,0 +1,263 @@
+{
+  "consumerBaseline": "3ce98ef377250406ad65a2b163b1a4161d2f9983",
+  "higSourceCommit": "0e2394428a3971e677e0a97ef5259ac4ca1ec064",
+  "higVersion": "0.1.0-candidate.sha0e239442",
+  "sourceTreeDirty": false,
+  "sourceReportSha256": "2874bfd8b00d47ef90cbf21f4dee1cd98c5522919c08c915b4ff8386d3a799ce",
+  "artifacts": {
+    "bloxwap-hig-tokens-0.1.0-candidate.sha0e239442.tgz": {
+      "package": "@bloxwap/hig-tokens",
+      "bytes": 8226,
+      "sha256": "0bca5a6aa3317731166155de16f61e24e4fab9085b9e112bdc50e958f8c21d6e"
+    },
+    "bloxwap-hig-contracts-0.1.0-candidate.sha0e239442.tgz": {
+      "package": "@bloxwap/hig-contracts",
+      "bytes": 7206,
+      "sha256": "1f9305549e7d76224c188b7f22991561441e39e2b1d3bde27fd176810ab4d031"
+    },
+    "bloxwap-hig-react-0.1.0-candidate.sha0e239442.tgz": {
+      "package": "@bloxwap/hig-react",
+      "bytes": 25592,
+      "sha256": "32c8839ac38b9ba9be714c81f2952bfef94d76d875d2bd6991a999fbb820c024"
+    },
+    "bloxwap-hig-og-fonts-0.1.0-candidate.sha0e239442.tgz": {
+      "package": "@bloxwap/hig-og-fonts",
+      "bytes": 844032,
+      "sha256": "05d0e920f0988bc105a5e9374a33783f6cca4fe27eea409cd97dc236fb7c2864"
+    }
+  },
+  "fontPackage": "@bloxwap/font@0.1.2",
+  "webFontPayloadsIdentical": true,
+  "webFontPayloads": {
+    "_next/static/media/BloxwapMonoArabic-Variable.437lhmmc9md-u.woff2": {
+      "bytes": 384164,
+      "sha256": "571c098d52654fe851573b06d15f26f74c9f9df78c1110e47722224dd693cce9"
+    },
+    "_next/static/media/BloxwapMonoArmenian-Italic-Variable.0mk-9h6-eewgq.woff2": {
+      "bytes": 343096,
+      "sha256": "d65a1f29665c5337426c6adad2aa531a2145a0e9616c30f8d452f188e2bfd133"
+    },
+    "_next/static/media/BloxwapMonoArmenian-Variable.0gasp67v8dqn_.woff2": {
+      "bytes": 306868,
+      "sha256": "24b368afe8097ee5f22d2e9b510d73047273d1d5998ca2a7ba5df6dfac3bf8f3"
+    },
+    "_next/static/media/BloxwapMonoGeorgian-Italic-Variable.3vy3ugv-cr7ev.woff2": {
+      "bytes": 360908,
+      "sha256": "579bf0368160836a7edcd88ee4859e7bf1fd065b1242a47968d1e5c8b1f2621d"
+    },
+    "_next/static/media/BloxwapMonoGeorgian-Variable.2wzk18vh8ux33.woff2": {
+      "bytes": 322688,
+      "sha256": "886b8e52bc589b65716f2b0e44b38096529dc57d7248c430f73350e60e0b3ec8"
+    },
+    "_next/static/media/BloxwapMonoHebrew-Variable.0ru157vmdh9ke.woff2": {
+      "bytes": 294244,
+      "sha256": "73be4e649b017bb207febcbd673eae3e1cc343d16768bc70f055b1a2a722d074"
+    },
+    "_next/static/media/BloxwapMonoJP-Variable.1k76ykx2o5sfg.woff2": {
+      "bytes": 1408208,
+      "sha256": "91cd6db5fb40b9884ddaa21cefb1e7615e7b1809322deafb0fcc6a7df0c81708"
+    },
+    "_next/static/media/BloxwapMonoKR-Variable.19hhi_ix6qdzi.woff2": {
+      "bytes": 453104,
+      "sha256": "e36f38e99c48c65fb40731534a0aeb82acdaae877fcf7878bcff5e1c1fa09800"
+    },
+    "_next/static/media/BloxwapMonoSC-Variable.08c4nf4r7kqt-.woff2": {
+      "bytes": 1861972,
+      "sha256": "3add92b864b94150400652e6c4bd15abf163ae55b6f1ae1ca1e84cb9b8291f74"
+    },
+    "_next/static/media/BloxwapMono_Italic_Variable.1nv51ckkpuh0n.woff2": {
+      "bytes": 316116,
+      "sha256": "7e6f19e57d07511a0e3f4bd31662f90366f0f80852373625ce3fe587a3d7ae54"
+    },
+    "_next/static/media/BloxwapMono_Variable.p.3902sbrummfgd.woff2": {
+      "bytes": 281948,
+      "sha256": "fa66e41575807c3d260d8f5b493be349cac127836b0174976c7d4876237d2632"
+    },
+    "_next/static/media/BloxwapSansArabic-Variable.0sl-4vuc_nsn4.woff2": {
+      "bytes": 409748,
+      "sha256": "244db8481e159000b6e58d939140eb53fd46854cb1ec7bb48a2037ed4a7667b1"
+    },
+    "_next/static/media/BloxwapSansArmenian-Italic-Variable.3ncltkwacxh_7.woff2": {
+      "bytes": 358204,
+      "sha256": "66477814cef4ecf0783c59362c3fd2ad324a0fc0eb09ee7922ae6516bfce91aa"
+    },
+    "_next/static/media/BloxwapSansArmenian-Variable.186ukdq2wdqas.woff2": {
+      "bytes": 335848,
+      "sha256": "954ea6d59f0aff1c2baa0586549b07de986cbf0b2f50886b4ebb44d4e6dad38b"
+    },
+    "_next/static/media/BloxwapSansGeorgian-Italic-Variable.064xwovu5asyc.woff2": {
+      "bytes": 377736,
+      "sha256": "e3d98c091dcae38dbd3f9f9bd91a5d06a9612447ac87b11b22587d61366dada2"
+    },
+    "_next/static/media/BloxwapSansGeorgian-Variable.3soqw9g4pivdj.woff2": {
+      "bytes": 353548,
+      "sha256": "df5eb69cb0a280b26e3160338ea13a1a11a3170682f6e70694117f5c71c06ff7"
+    },
+    "_next/static/media/BloxwapSansHebrew-Variable.3jk9tx6l0w3fq.woff2": {
+      "bytes": 324520,
+      "sha256": "674738e06825b1e32372740373bae68883eee16e375587eb095f57610eb65bfa"
+    },
+    "_next/static/media/BloxwapSansJP-Variable.2wplheutwix8n.woff2": {
+      "bytes": 1443736,
+      "sha256": "d02c503c1dba77c9a8493fbb68eb9abd636c2eec90469f9f4870074295d38632"
+    },
+    "_next/static/media/BloxwapSansKR-Variable.2j17m9mo4yot9.woff2": {
+      "bytes": 489116,
+      "sha256": "ac41500ba7546e204d07499266cadb848e24c0e9935c2616124aedcfba5a9737"
+    },
+    "_next/static/media/BloxwapSansSC-Variable.3r2l2pba1vn4m.woff2": {
+      "bytes": 1897836,
+      "sha256": "c0244998e334bbd997dc9acfaf3f10bce169facfec1cf2bbcfc4db38c7122893"
+    },
+    "_next/static/media/BloxwapSans_Italic_Variable.3_z3tbd-qm0id.woff2": {
+      "bytes": 331172,
+      "sha256": "407ae048948bc5e39d322bb93d25915dfae5fb5bfbfe4388ab951a9761a1267a"
+    },
+    "_next/static/media/BloxwapSans_Variable.p.3ndhtztjzg9hm.woff2": {
+      "bytes": 310848,
+      "sha256": "96f6be58023b1d22152c797336282a4330a47ab4a3c0ab87451be887903746b7"
+    }
+  },
+  "ogCardsByteIdentical": true,
+  "ogCards": {
+    "og/docs/clients.png": "578f97515cd4ac480ccb7fc97cd16758158353c3dbce5dbde297735f77f6e2ef",
+    "og/docs/error-handling.png": "df1e3a0cdd614248fb4ca527500fcc726769f4c4ff65f37aff4c8b949a5fb282",
+    "og/docs/guides/agent-wallets-and-vaults.png": "60614df7ec747fae002468e42badf2956ebd7ac7ffa5c2184c6bf89764df0fe8",
+    "og/docs/guides/browser-wallets.png": "b877bb84d42258cda26ff14d1d0f294cda36e11734576ef7f2af6bd40a13e217",
+    "og/docs/guides/market-orders.png": "ddb954b7b9ceb8baece73dd359cdea60142cf2e984d6654db462ee392574651c",
+    "og/docs/guides/tree-shaking.png": "d2eed57dea3772047d7480ab96a501e16c6d949589523dbaaeed39eb57092617",
+    "og/docs/guides.png": "a80c4002d6a48660d1f2fcc323bbb38bed20558220259a3a7193438f9f2f4e40",
+    "og/docs/reference/known-drift.png": "6aba583ad6b714bf83bba0d6aa0640e2e1a6b126aa460fd26bf6a1532f3464a1",
+    "og/docs/reference.png": "5034c374ab4e6420893db82d8071c62df3dce1182420e6ba046347e6751d54ce",
+    "og/docs/signing.png": "72d0e1ce4b0b7f84dad16d8629692f16b2d134059ba26bd89b0709937bc6c337",
+    "og/docs/transports.png": "26cb114c74fcaa21280a601f7818400310200296763f649cf49e5ab8630f8363",
+    "og/docs/utilities.png": "2b8c082e3e6d12a8b286b2be3b444121b38960a7f9ef314d0697a325eaadb608",
+    "og/docs.png": "89ee61ff6a48aa47356fa64820a7285cb9fdce90796ced9bc26174269b36b681",
+    "og/home.png": "b7cec802db8e951f951f30203793a1155d419d310672e4eeda69bd460c6eed39"
+  },
+  "ogFontManifest": {
+    "package": "@bloxwap/font",
+    "version": "0.1.2",
+    "derivedFrom": "@bloxwap/hig-native-fonts",
+    "sources": {
+      "fonts/BloxwapSans/BloxwapSans-Variable.woff2": "96f6be58023b1d22152c797336282a4330a47ab4a3c0ab87451be887903746b7",
+      "fonts/BloxwapMono/BloxwapMono-Variable.woff2": "fa66e41575807c3d260d8f5b493be349cac127836b0174976c7d4876237d2632",
+      "fonts/BloxwapSansKR/BloxwapSansKR-Variable.woff2": "ac41500ba7546e204d07499266cadb848e24c0e9935c2616124aedcfba5a9737",
+      "fonts/BloxwapSansSC/BloxwapSansSC-Variable.woff2": "c0244998e334bbd997dc9acfaf3f10bce169facfec1cf2bbcfc4db38c7122893"
+    },
+    "faces": [
+      {
+        "family": "BloxwapSans",
+        "weight": 400,
+        "asset": "BloxwapSans.ttf",
+        "script": "latin",
+        "registration": "BloxwapSansRegular",
+        "postscript": "BloxwapSans-Regular",
+        "bytes": 446440
+      },
+      {
+        "family": "BloxwapSans",
+        "weight": 500,
+        "asset": "BloxwapSans-Medium.ttf",
+        "script": "latin",
+        "registration": "BloxwapSansMedium",
+        "postscript": "BloxwapSans-Medium",
+        "bytes": 447024
+      },
+      {
+        "family": "BloxwapSans",
+        "weight": 700,
+        "asset": "BloxwapSans-Bold.ttf",
+        "script": "latin",
+        "registration": "BloxwapSansBold",
+        "postscript": "BloxwapSans-Bold",
+        "bytes": 447388
+      },
+      {
+        "family": "BloxwapSans",
+        "weight": 900,
+        "asset": "BloxwapSans-Black.ttf",
+        "script": "latin",
+        "registration": "BloxwapSansBlack",
+        "postscript": "BloxwapSans-Black",
+        "bytes": 445912
+      },
+      {
+        "family": "BloxwapMono",
+        "weight": 500,
+        "asset": "BloxwapMono-Medium.ttf",
+        "script": "latin",
+        "registration": "BloxwapMonoMedium",
+        "postscript": "BloxwapMono-Medium",
+        "bytes": 385628
+      }
+    ],
+    "outputs": {
+      "BloxwapSans.ttf": "778520981b42b408c19e43fc6d62e513ff0c47bd9870d62159e2e74cda2f79f5",
+      "BloxwapSans-Medium.ttf": "add342361cd444c59fb05bb072ac71b32ed27d2fd2f9a364bddb6a930c6bd6bd",
+      "BloxwapSans-Bold.ttf": "13e10451ecec4e33733b196454f1232a16d34d5014dce66daaee4d0c58600e1b",
+      "BloxwapSans-Black.ttf": "a99894c158cff3cff828b7d17ec12f075352848843944a730caa9d64c0362ea2",
+      "BloxwapMono-Medium.ttf": "f969fd1e4d3b81a7fac108a21a8130b7618f04c39ce7fd5e598fb70fd1230b1f"
+    }
+  },
+  "vendorArchives": {
+    "beforeBytes": 4446466,
+    "afterBytes": 885056,
+    "deltaBytes": -3561410
+  },
+  "delta": {
+    "exportTotalBytes": 13439,
+    "exportFiles": 0,
+    "cssBytes": 11859,
+    "cssGzip": 2160,
+    "jsBytes": 1580,
+    "jsGzip": 554,
+    "homeInitialJsBytes": 1580,
+    "homeInitialJsGzip": 554,
+    "fontBytes": 0,
+    "fontFiles": 0,
+    "docsDirectDependencies": 1,
+    "bunLockPackages": 0
+  },
+  "toolchain": {
+    "node": "22.22.0",
+    "bun": "1.4.0",
+    "next": "16.3.8",
+    "playwright": "1.64.0",
+    "gzip": "Node gzipSync defaults, each individual asset"
+  },
+  "checks": {
+    "cleanFrozenInstall": true,
+    "rootCheck": true,
+    "docsCheckTypes": true,
+    "docsTests": 20,
+    "sdkOffline": {
+      "passed": 2087,
+      "skipped": 244,
+      "failed": 0
+    },
+    "docsBuild": {
+      "docsPages": 13,
+      "htmlFiles": 20,
+      "internalReferences": 1168,
+      "anchors": 355,
+      "socialCards": 14
+    },
+    "playwrightExisting": 8,
+    "pairedCalloutBrowser": 16
+  },
+  "limits": [
+    "No npm publication, tags, deployment, merge or physical/owner signoff.",
+    "Static docs Callouts are not live regions; original content/design and SDK feed/subscription logic remain unchanged.",
+    "Paired exports use same pinned toolchain and /hyperliquid base path; measurements cover this cumulative candidate refresh, not isolated Callout runtime cost."
+  ],
+  "checkedAt": "2026-10-18T20:10:38.457919+00:00",
+  "nonHigLockEntriesUnchanged": true,
+  "sourceSha256": {
+    "apps/docs/components/mdx.tsx": "48f451341eb239f85fd6d72e1ba8967d365641f4a5c4278a5bfee6859d23e30a",
+    "apps/docs/app/global.css": "919b9e266d0312f0d08923457ad1aaaee24735a2aef3ca176b786a8542720743",
+    "apps/docs/lib/og-image.tsx": "eb5bb758a0c5c4e21b3f7bf3f97c7e14767a48e4e9ce15d3819e0123fa9bd8d4",
+    "apps/docs/scripts/verify-callout-refresh.mjs": "8c789c82593d3bd4fc4d93e1e58e5415e3eb6db2d1bf9950b7af8312bc107704",
+    "bun.lock": "06ab7cf52721582c5cb4033a0357f9ff638f60ab391264928088d1b2b5254351"
+  }
+}

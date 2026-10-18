@@ -4,6 +4,7 @@ import { ExchangeClient } from "@bloxwap/hyperliquid/api/exchange/client";
 import { InfoClient } from "@bloxwap/hyperliquid/api/info/client";
 import { SubscriptionClient } from "@bloxwap/hyperliquid/api/subscription/client";
 import { tokens } from "@bloxwap/hig-tokens";
+import { readOgFont } from "@bloxwap/hig-og-fonts/node";
 import { ImageResponse } from "next/og";
 import { BRAND_ICON } from "@/lib/brand";
 import { socialImageSize } from "@/lib/social";
@@ -27,11 +28,10 @@ const BAR: [color: string, share: number][] = [
   ["#FFFB38", 6],
 ];
 
-// Static Bloxwap Sans instances shipped by @bloxwap/hig-tokens (OFL; the package carries the license).
-const higFonts = join(process.cwd(), "node_modules/@bloxwap/hig-tokens/assets/fonts");
+// The dedicated OG subset verifies each packaged face against its SHA-256 manifest.
 const assets = Promise.all([
-  readFile(join(higFonts, "BloxwapSans-Bold.ttf")),
-  readFile(join(higFonts, "BloxwapSans-Black.ttf")),
+  readOgFont("BloxwapSans-Bold.ttf"),
+  readOgFont("BloxwapSans-Black.ttf"),
   readFile(join(process.cwd(), "../../packages/hyperliquid/package.json"), "utf8"),
 ]);
 

@@ -143,6 +143,7 @@ test("GitHub alerts render as HIG callouts", async ({ page }) => {
   const callouts = page.locator(".docs-callout .hig-surface");
   await expect(callouts.first()).toBeVisible();
   expect(await callouts.count()).toBeGreaterThanOrEqual(4);
+  await expect(page.locator('.docs-callout[data-type="note"] [data-severity="note"]').first()).toContainText("Note");
   await expect(page.locator('.docs-callout[data-type="warning"] [data-severity="warning"]').first()).toContainText(
     "Warning",
   );

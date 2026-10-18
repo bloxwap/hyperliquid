@@ -2,6 +2,7 @@
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
 @import "@bloxwap/hig-tokens/css";
+@import "@bloxwap/hig-react/css/base";
 @import "@bloxwap/hig-react/css";
 
 @source "../node_modules/fumadocs-ui/dist/**/*.js";
@@ -60,6 +61,7 @@ body {
 }
 /* HIG recipes use the host's next/font families (the package CSS names 'Bloxwap Sans' literally). */
 .hig-button {
+  min-height: var(--hig-control);
   font-family: var(--font-sans);
 }
 html > body[data-scroll-locked] {
@@ -974,13 +976,6 @@ textarea:focus-visible {
 }
 .docs-callout .hig-surface > strong {
   font-size: var(--text-sm);
-}
-.docs-callout[data-type="note"] .hig-surface,
-.docs-callout[data-type="important"] .hig-surface {
-  border-inline-start: 3px solid var(--hig-info);
-}
-.docs-callout[data-type="tip"] .hig-surface {
-  border-inline-start: 3px solid var(--hig-positive);
 }
 .prose .docs-callout p {
   margin: 0;

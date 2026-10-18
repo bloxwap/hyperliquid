@@ -1,5 +1,8 @@
 # HIG package migration evidence · 2026-10-14
 
+The [2026-10-18 Callout refresh](../callout-refresh/README.md) records the current candidate, exact provenance and
+paired checks. This chapter retains the original migration measurements.
+
 Part of [bloxwap/hig#34](https://github.com/bloxwap/hig/issues/34), following the
 [SDK docs migration guide](https://github.com/bloxwap/hig/blob/7c67a07/docs/migration/sdk-docs.md).
 
