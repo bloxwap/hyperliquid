@@ -16,6 +16,8 @@ if [ ! -f "$BIN" ]; then
   exit 1
 fi
 chmod +x "$BIN"
+# The canary zip ships only `bun`. setup-bun also linked `bunx` (same binary).
+ln -sf bun "$(dirname "$BIN")/bunx"
 # Isolate bun's own home (install cache, etc.) from the shared ~/.bun.
 echo "BUN_INSTALL=$DEST/home" >> "$GITHUB_ENV"
 echo "$(dirname "$BIN")" >> "$GITHUB_PATH"
