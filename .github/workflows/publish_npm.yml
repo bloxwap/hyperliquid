@@ -1,4 +1,9 @@
 name: Publish to npm
+
+# npm trusted publishing does not support self-hosted runners
+# (https://docs.npmjs.com/trusted-publishers/). This job authenticates with the
+# org-level NPM_TOKEN secret instead. That drops OIDC trusted publishing and
+# automatic provenance.
 on:
   release:
     types: [published]
@@ -10,17 +15,21 @@ jobs:
 
     permissions:
       contents: read
-      id-token: write
+
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     steps:
       # Job-level env cannot use the runner context on these Mac minis.
       - name: Point TMPDIR at runner temp
         run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # npm publishes via OIDC trusted publishing (no token here), which needs npm >= 11.5.1.
+      # Token publish uses the same Node 24 / npm CLI surface as before.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24.x"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
       # setup-bun writes ~/.bun, shared across runner instances on one Mac mini.
       - name: Install Bun canary into runner temp
         run: sh .github/scripts/setup-bun-isolated.sh
@@ -47,7 +56,17 @@ jobs:
           esac
           echo "value=$TAG" >> "$GITHUB_OUTPUT"
 
+      # Fail closed before publish if the org-level secret is not shared with this repo.
+      # Never print the token.
+      - name: Verify npm token is present
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN is missing. The org-level NPM_TOKEN secret must be shared with this repository." >&2
+            exit 1
+          fi
+
+      # Scoped packages default to private access (paid); this SDK publishes public.
+      # Token publish does not attach provenance (trusted publishing is unavailable here).
       - name: Publish package
         working-directory: ./packages/hyperliquid/dist
-        # Scoped packages default to private access (paid); this SDK publishes public.
         run: npm publish --access public --tag ${{ steps.tag.outputs.value }}
