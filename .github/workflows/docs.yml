@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   docs:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 20
     env:
       # Project Pages is served from /<repository>; PR builds use the same paths.
@@ -72,28 +72,53 @@ jobs:
         working-directory: apps/docs
         run: bun run build
 
+      # `--with-deps` is apt/sudo on Linux. Chromium's macOS deps ship with the OS.
       - name: Install browser for documentation checks
         working-directory: apps/docs
-        run: bunx playwright install --with-deps chromium
+        run: bunx playwright install chromium
 
       - name: Test production documentation interactions
         working-directory: apps/docs
         run: bun run test:browser
 
+      # lychee-action downloads only `*-unknown-linux-gnu` and uses GNU `install -t`.
+      # Same lychee v0.24.2 scan, installed into $RUNNER_TEMP for the Mac mini.
       - name: Check documentation links
-        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
-        with:
-          args: >-
-            --root-dir .
-            --no-progress
-            --max-retries 3
-            --timeout 20
-            README.md
-            packages/hyperliquid/README.md
-            'apps/docs/content/docs/**/*.md'
-          fail: true
-          failIfEmpty: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          LYCHEE_VERSION=v0.24.2
+          ARCHIVE=lychee-aarch64-apple-darwin.tar.gz
+          EXPECTED_SHA256=c9d3740ea2d891854d37116c9fba840f37b6e7c89d330e7db84ac333631c4977
+          DEST="$RUNNER_TEMP/lychee"
+          mkdir -p "$DEST"
+          curl -fsSL "https://github.com/lycheeverse/lychee/releases/download/lychee-${LYCHEE_VERSION}/${ARCHIVE}" \
+            -o "$DEST/$ARCHIVE"
+          actual=$(shasum -a 256 "$DEST/$ARCHIVE")
+          actual=${actual%% *}
+          if [ "$actual" != "$EXPECTED_SHA256" ]; then
+            echo "lychee archive checksum mismatch: got $actual want $EXPECTED_SHA256" >&2
+            exit 1
+          fi
+          tar -xzf "$DEST/$ARCHIVE" -C "$DEST"
+          LYCHEE="$DEST/lychee-aarch64-apple-darwin/lychee"
+          chmod +x "$LYCHEE"
+          report="$RUNNER_TEMP/lychee-out.md"
+          "$LYCHEE" \
+            --root-dir . \
+            --no-progress \
+            --max-retries 3 \
+            --timeout 20 \
+            --format markdown \
+            README.md \
+            packages/hyperliquid/README.md \
+            "apps/docs/content/docs/**/*.md" \
+            | tee "$report"
+          if grep -E 'Total[[:space:]]+\|[[:space:]]+0' "$report" >/dev/null; then
+            echo "No links were found. This usually indicates a configuration error." >&2
+            exit 1
+          fi
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -104,7 +129,7 @@ jobs:
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: docs
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 10
     permissions:
       pages: write

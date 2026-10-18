@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -25,7 +25,7 @@ jobs:
       #
       # Inside the SDK, `bun test tests/ -- --offline` also works: tests/_offline.ts recovers the raw command line
       # because `bun test` does not forward argv to test files. The env var is preferred here because
-      # it needs no such recovery — that path reads /proc/self/cmdline on Linux and is exercised only
-      # in CI, so relying on it would put the least-tested branch on the critical path.
+      # it needs no such recovery — that path reads /proc/self/cmdline on Linux or `ps` on Darwin
+      # and is the least-tested branch, so it stays off the CI critical path.
       - name: bun test (offline)
         run: bun run test:offline

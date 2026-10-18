@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
 
     permissions:
       contents: read
@@ -34,15 +34,16 @@ jobs:
         id: tag
         run: |
           # The private workspace root has no release version; the SDK owns the published version.
-          VERSION=$(jq -r .version packages/hyperliquid/package.json)
-          # Extract tag (alpha, beta, rc) from version string if present
-          TAG=$(echo "$VERSION" | sed -n 's/.*-\(alpha\|beta\|rc\).*/\1/p')
-          # If no known tag found but version contains hyphen, use "prerelease"
-          if [[ -z "$TAG" && "$VERSION" == *-* ]]; then
-            TAG="prerelease"
-          fi
-          # Default to "latest" if no tag determined
-          echo "value=${TAG:-latest}" >> "$GITHUB_OUTPUT"
+          # bun instead of jq; case instead of GNU sed `\|` / bash `[[`.
+          VERSION=$(bun -e 'console.log(JSON.parse(await Bun.file("packages/hyperliquid/package.json").text()).version)')
+          case "$VERSION" in
+            *-alpha*) TAG=alpha ;;
+            *-beta*) TAG=beta ;;
+            *-rc*) TAG=rc ;;
+            *-*) TAG=prerelease ;;
+            *) TAG=latest ;;
+          esac
+          echo "value=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Publish package
         working-directory: ./packages/hyperliquid/dist

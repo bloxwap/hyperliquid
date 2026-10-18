@@ -12,9 +12,9 @@ jobs:
   # improve it, never regress it.
   #
   # WHY THIS MEASURES TWICE INSTEAD OF USING THE SDK'S tests/perf/results/baseline.json:
-  # the scenarios measure between 9 ns and 600 µs per unit. A GitHub-hosted runner is several times
-  # slower than a developer machine, so comparing a committed baseline (recorded on whatever machine
-  # last touched it) against a runner would flag nearly every scenario as a regression on every PR.
+  # the scenarios measure between 9 ns and 600 µs per unit. A CI runner (even this Mac mini) is
+  # not the machine that last recorded the committed baseline, so comparing that file against a
+  # runner would flag nearly every scenario as a regression on every PR.
   # The SDK's `.dev/perf/compare.ts` refuses such a comparison outright. So this job measures the base
   # commit and the head commit back to back on the SAME runner and compares those two reports.
   # The committed baseline stays useful for local runs (`bun run perf:gate`) on one machine.
@@ -35,7 +35,7 @@ jobs:
   # changes the workload being compared and is flagged for explicit review, not waved through.
   # If this job flaps, widen the threshold — do not add retries and do not drop the job.
   perf:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
