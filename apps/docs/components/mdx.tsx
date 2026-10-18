@@ -13,7 +13,7 @@ const callouts: Record<CalloutType, { title: string; severity: AlertSeverity }> 
 };
 
 /** Static documentation callouts are not live regions, so they are not announced on page load. */
-function Callout({ type = "note", children }: { type?: CalloutType; children?: ReactNode }) {
+export function Callout({ type = "note", children }: { type?: CalloutType; children?: ReactNode }) {
   const { title, severity } = callouts[type] ?? callouts.note;
   return (
     <div className="docs-callout" data-type={type}>

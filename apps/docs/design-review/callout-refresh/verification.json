@@ -251,13 +251,15 @@
     "Static docs Callouts are not live regions; original content/design and SDK feed/subscription logic remain unchanged.",
     "Paired exports use same pinned toolchain and /hyperliquid base path; measurements cover this cumulative candidate refresh, not isolated Callout runtime cost."
   ],
-  "checkedAt": "2026-10-18T20:10:38.457919+00:00",
+  "checkedAt": "2026-10-18T20:14:52.808841+00:00",
   "nonHigLockEntriesUnchanged": true,
   "sourceSha256": {
-    "apps/docs/components/mdx.tsx": "48f451341eb239f85fd6d72e1ba8967d365641f4a5c4278a5bfee6859d23e30a",
+    "apps/docs/components/mdx.tsx": "855444af12b757bed4bfdbd9f9b4e39d7e8f0c06df53e1d227a555ac241b7aa7",
     "apps/docs/app/global.css": "919b9e266d0312f0d08923457ad1aaaee24735a2aef3ca176b786a8542720743",
     "apps/docs/lib/og-image.tsx": "eb5bb758a0c5c4e21b3f7bf3f97c7e14767a48e4e9ce15d3819e0123fa9bd8d4",
     "apps/docs/scripts/verify-callout-refresh.mjs": "8c789c82593d3bd4fc4d93e1e58e5415e3eb6db2d1bf9950b7af8312bc107704",
     "bun.lock": "06ab7cf52721582c5cb4033a0357f9ff638f60ab391264928088d1b2b5254351"
-  }
+  },
+  "finalDocsTypesIncludeNewTests": true,
+  "ciTypeRegressionFix": "Callout SSR tests import the typed local component directly rather than the broad MDXComponents registry union."
 }

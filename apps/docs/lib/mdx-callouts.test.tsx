@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { getMDXComponents } from "../components/mdx";
+import { Callout } from "../components/mdx";
 import type { CalloutType } from "./remark-callouts";
-
-const { Callout } = getMDXComponents();
 
 describe("packaged documentation callout semantics", () => {
   const cases: [CalloutType, string, string][] = [
