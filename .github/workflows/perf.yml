@@ -71,6 +71,11 @@ jobs:
             exit 1
           }
           echo "Base: $BASE_REF -> $BASE_SHA"
+          # Self-hosted workspaces persist. A prior job can leave $RUNNER_TEMP/base
+          # registered after the directory was wiped; `worktree add` then fails.
+          git worktree prune
+          git worktree remove --force "$RUNNER_TEMP/base" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/base"
           git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
           # Locate each revision independently: older commits keep the SDK at the repository
           # root, while workspace commits keep the same suite under packages/hyperliquid.
