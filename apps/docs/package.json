@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@bloxwap/font": "0.1.2",
-    "@bloxwap/hig-react": "file:../../vendor/bloxwap-hig/bloxwap-hig-react-0.1.0-candidate.sha7c67a07c.tgz",
-    "@bloxwap/hig-tokens": "file:../../vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha7c67a07c.tgz",
+    "@bloxwap/hig-react": "file:../../vendor/bloxwap-hig/bloxwap-hig-react-0.1.0-candidate.sha0e239442.tgz",
+    "@bloxwap/hig-tokens": "file:../../vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha0e239442.tgz",
     "@bloxwap/hyperliquid": "workspace:*",
     "animejs": "4.4.0",
     "fumadocs-core": "16.15.14",
@@ -24,7 +24,8 @@
     "next": "16.3.8",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "rehype-raw": "7.0.0"
+    "rehype-raw": "7.0.0",
+    "@bloxwap/hig-og-fonts": "file:../../vendor/bloxwap-hig/bloxwap-hig-og-fonts-0.1.0-candidate.sha0e239442.tgz"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",
