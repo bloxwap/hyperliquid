@@ -5,7 +5,7 @@
  */
 
 import { describe, test } from "bun:test";
-import { assertEquals, assertRejects } from "@jsr/std__assert";
+import { assert, assertEquals, assertFalse, assertRejects } from "@jsr/std__assert";
 import { ReconnectingWebSocket } from "../../../src/transport/websocket/_reconnectingSocket.ts";
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
@@ -548,6 +548,63 @@ describe("WebSocketDispatcher", () => {
 
       await assertRejects(() => p1, WebSocketRequestError, "WebSocket connection closed");
       await assertRejects(() => p2, WebSocketRequestError, "WebSocket connection closed");
+    });
+
+    test("connection close rejects with plain-data snapshots, distinct messages, and no cause", async () => {
+      const { socket, requester } = createRequester();
+
+      // One subscribe already sent, one post still queued: the two messages must stay distinct.
+      const subPayload = { type: "l2Book", coin: "BTC" };
+      const subPromise = requester.request("subscribe", subPayload);
+      socket.readyState = ReconnectingWebSocket.CONNECTING;
+      const postPayload = { type: "allMids" };
+      const postPromise = requester.request("post", postPayload);
+
+      socket.disconnect();
+
+      const subErr = await assertRejects(() => subPromise, WebSocketRequestError, "WebSocket connection closed");
+      const postErr = await assertRejects(
+        () => postPromise,
+        WebSocketRequestError,
+        "WebSocket connection closed before the request was sent",
+      );
+
+      // The snapshot is a plain-data copy of what went (or would have gone) over the wire —
+      // never the caller's live object — and a disconnect error carries no cause.
+      assertEquals(subErr.request, subPayload);
+      assert(subErr.request !== subPayload);
+      assertFalse("cause" in subErr);
+      assertEquals(postErr.request, postPayload);
+      assert(postErr.request !== postPayload);
+      assertFalse("cause" in postErr);
+    });
+
+    test("connection close on a signed post redacts `signature` and multisig `action.signatures`", async () => {
+      const { socket, requester } = createRequester();
+      const signedPayload = {
+        action: {
+          type: "order",
+          orders: [{ a: 0, b: true }],
+          signatures: [
+            { r: `0x${"1".repeat(64)}`, s: `0x${"2".repeat(64)}`, v: 27 },
+            { r: `0x${"3".repeat(64)}`, s: `0x${"4".repeat(64)}`, v: 28 },
+          ],
+        },
+        signature: { r: `0x${"5".repeat(64)}`, s: `0x${"6".repeat(64)}`, v: 27 },
+        nonce: 12345,
+      };
+
+      const promise = requester.request("post", signedPayload);
+      assertEquals(getLastSent(socket).request, signedPayload); // the wire keeps the real signatures
+
+      socket.disconnect();
+
+      const err = await assertRejects(() => promise, WebSocketRequestError, "WebSocket connection closed");
+      const request = err.request as { action: { signatures: unknown }; signature: unknown; nonce: number };
+      assertEquals(request.signature, "0x<redacted>");
+      assertEquals(request.action.signatures, ["0x<redacted>", "0x<redacted>"]);
+      assertEquals(request.nonce, 12345);
+      assertEquals((signedPayload.signature as { v: number }).v, 27); // the caller's object was never mutated
     });
 
     test("connection error", async () => {
