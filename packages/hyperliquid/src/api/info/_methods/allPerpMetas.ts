@@ -28,14 +28,14 @@ export type AllPerpMetasResponse = MetaResponse[];
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request trading metadata for all DEXs.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Metadata for perpetual assets across all DEXs.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -53,9 +53,17 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetuals-metadata-universe-and-margin-tables
  */
-export function allPerpMetas(config: InfoConfig, signal?: AbortSignal): Promise<AllPerpMetasResponse> {
-  const request = parse(AllPerpMetasRequest, {
-    type: "allPerpMetas",
-  });
+export function allPerpMetas(
+  config: InfoConfig,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<AllPerpMetasResponse> {
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    AllPerpMetasRequest,
+    {
+      type: "allPerpMetas",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

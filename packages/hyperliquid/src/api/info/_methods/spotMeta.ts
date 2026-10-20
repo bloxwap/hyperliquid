@@ -73,14 +73,14 @@ export type SpotMetaResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request spot trading metadata.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Metadata for spot assets.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -98,9 +98,17 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-metadata
  */
-export function spotMeta(config: InfoConfig, signal?: AbortSignal): Promise<SpotMetaResponse> {
-  const request = parse(SpotMetaRequest, {
-    type: "spotMeta",
-  });
+export function spotMeta(
+  config: InfoConfig,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<SpotMetaResponse> {
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    SpotMetaRequest,
+    {
+      type: "spotMeta",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

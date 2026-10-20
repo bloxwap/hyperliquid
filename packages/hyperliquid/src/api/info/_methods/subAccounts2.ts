@@ -57,8 +57,7 @@ export type SubAccounts2Response =
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode subAccounts2} function. */
 export type SubAccounts2Parameters = Omit<v.InferInput<typeof SubAccounts2Request>, "type">;
@@ -70,7 +69,8 @@ export type SubAccounts2Parameters = Omit<v.InferInput<typeof SubAccounts2Reques
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of user sub-account or null if the user does not have any sub-accounts.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -91,11 +91,16 @@ export type SubAccounts2Parameters = Omit<v.InferInput<typeof SubAccounts2Reques
 export function subAccounts2(
   config: InfoConfig,
   params: SubAccounts2Parameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<SubAccounts2Response> {
-  const request = parse(SubAccounts2Request, {
-    type: "subAccounts2",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    SubAccounts2Request,
+    {
+      type: "subAccounts2",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import { fetchPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { fetchPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import {
   userTwapSliceFillsByTime,
   type UserTwapSliceFillsByTimeParameters,
@@ -28,7 +28,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Async generator yielding pages of user's TWAP slice fill by time.
  *
  * @throws {ValidationError} When the pagination options fail validation (thrown by the first
@@ -56,10 +57,10 @@ export function userTwapSliceFillsByTimePages(
   config: InfoConfig,
   params: UserTwapSliceFillsByTimePagesParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): AsyncGenerator<UserTwapSliceFillsByTimeResponse, void, undefined> {
   return fetchPages(
-    (startTime) => userTwapSliceFillsByTime(config, { ...params, startTime }, signal),
+    (startTime) => userTwapSliceFillsByTime(config, { ...params, startTime }, signalOrOptions),
     Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
     500, // time-ranged responses are documented to return at most 500 elements
     (sliceFill) => sliceFill.fill.time,

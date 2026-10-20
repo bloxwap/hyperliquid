@@ -41,8 +41,7 @@ export type UserStarStateResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode userStarState} function. */
 export type UserStarStateParameters = Omit<v.InferInput<typeof UserStarStateRequest>, "type">;
@@ -52,7 +51,8 @@ export type UserStarStateParameters = Omit<v.InferInput<typeof UserStarStateRequ
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return User HIP-3* approval state.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -75,11 +75,16 @@ export type UserStarStateParameters = Omit<v.InferInput<typeof UserStarStateRequ
 export function userStarState(
   config: InfoConfig,
   params: UserStarStateParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserStarStateResponse> {
-  const request = parse(UserStarStateRequest, {
-    type: "userStarState",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UserStarStateRequest,
+    {
+      type: "userStarState",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

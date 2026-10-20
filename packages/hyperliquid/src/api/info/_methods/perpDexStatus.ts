@@ -34,8 +34,7 @@ export type PerpDexStatusResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode perpDexStatus} function. */
 export type PerpDexStatusParameters = Omit<v.InferInput<typeof PerpDexStatusRequest>, "type">;
@@ -45,7 +44,8 @@ export type PerpDexStatusParameters = Omit<v.InferInput<typeof PerpDexStatusRequ
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Status of a perp DEX.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -68,11 +68,16 @@ export type PerpDexStatusParameters = Omit<v.InferInput<typeof PerpDexStatusRequ
 export function perpDexStatus(
   config: InfoConfig,
   params: PerpDexStatusParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<PerpDexStatusResponse> {
-  const request = parse(PerpDexStatusRequest, {
-    type: "perpDexStatus",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    PerpDexStatusRequest,
+    {
+      type: "perpDexStatus",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

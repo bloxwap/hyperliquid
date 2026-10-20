@@ -34,8 +34,7 @@ export type AllMidsResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { type InfoConfig, isAbortSignal } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, isAbortSignal, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode allMids} function. */
 export type AllMidsParameters = Omit<v.InferInput<typeof AllMidsRequest>, "type">;
@@ -45,7 +44,8 @@ export type AllMidsParameters = Omit<v.InferInput<typeof AllMidsRequest>, "type"
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Mapping of coin symbols to mid prices.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -63,19 +63,27 @@ export type AllMidsParameters = Omit<v.InferInput<typeof AllMidsRequest>, "type"
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-mids-for-all-coins
  */
-export function allMids(config: InfoConfig, params?: AllMidsParameters, signal?: AbortSignal): Promise<AllMidsResponse>;
+export function allMids(
+  config: InfoConfig,
+  params?: AllMidsParameters,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<AllMidsResponse>;
 export function allMids(config: InfoConfig, signal?: AbortSignal): Promise<AllMidsResponse>;
 export function allMids(
   config: InfoConfig,
   paramsOrSignal?: AllMidsParameters | AbortSignal,
-  maybeSignal?: AbortSignal,
+  maybeSignalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<AllMidsResponse> {
   const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
-  const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
+  const { signal, skipValidation } = infoOptions(isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignalOrOptions);
 
-  const request = parse(AllMidsRequest, {
-    type: "allMids",
-    ...params,
-  });
+  const request = parseInfo(
+    AllMidsRequest,
+    {
+      type: "allMids",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

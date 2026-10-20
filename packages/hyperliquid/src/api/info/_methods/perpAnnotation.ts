@@ -37,8 +37,7 @@ export type PerpAnnotationResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode perpAnnotation} function. */
 export type PerpAnnotationParameters = Omit<v.InferInput<typeof PerpAnnotationRequest>, "type">;
@@ -48,7 +47,8 @@ export type PerpAnnotationParameters = Omit<v.InferInput<typeof PerpAnnotationRe
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Perp annotation for an asset.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -71,11 +71,16 @@ export type PerpAnnotationParameters = Omit<v.InferInput<typeof PerpAnnotationRe
 export function perpAnnotation(
   config: InfoConfig,
   params: PerpAnnotationParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<PerpAnnotationResponse> {
-  const request = parse(PerpAnnotationRequest, {
-    type: "perpAnnotation",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    PerpAnnotationRequest,
+    {
+      type: "perpAnnotation",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

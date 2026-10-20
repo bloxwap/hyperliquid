@@ -69,8 +69,7 @@ export type MetaResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { type InfoConfig, isAbortSignal } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, isAbortSignal, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode meta} function. */
 export type MetaParameters = Omit<v.InferInput<typeof MetaRequest>, "type">;
@@ -80,7 +79,8 @@ export type MetaParameters = Omit<v.InferInput<typeof MetaRequest>, "type">;
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Metadata for perpetual assets.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -98,19 +98,27 @@ export type MetaParameters = Omit<v.InferInput<typeof MetaRequest>, "type">;
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perpetuals-metadata-universe-and-margin-tables
  */
-export function meta(config: InfoConfig, params?: MetaParameters, signal?: AbortSignal): Promise<MetaResponse>;
+export function meta(
+  config: InfoConfig,
+  params?: MetaParameters,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<MetaResponse>;
 export function meta(config: InfoConfig, signal?: AbortSignal): Promise<MetaResponse>;
 export function meta(
   config: InfoConfig,
   paramsOrSignal?: MetaParameters | AbortSignal,
-  maybeSignal?: AbortSignal,
+  maybeSignalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<MetaResponse> {
   const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
-  const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
+  const { signal, skipValidation } = infoOptions(isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignalOrOptions);
 
-  const request = parse(MetaRequest, {
-    type: "meta",
-    ...params,
-  });
+  const request = parseInfo(
+    MetaRequest,
+    {
+      type: "meta",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

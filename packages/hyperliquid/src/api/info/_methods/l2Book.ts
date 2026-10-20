@@ -64,8 +64,7 @@ export type L2BookResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode l2Book} function. */
 export type L2BookParameters = Omit<v.InferInput<typeof L2BookRequest>, "type">;
@@ -77,7 +76,8 @@ export type L2BookParameters = Omit<v.InferInput<typeof L2BookRequest>, "type">;
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return L2 order book snapshot.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -98,10 +98,19 @@ export type L2BookParameters = Omit<v.InferInput<typeof L2BookRequest>, "type">;
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#l2-book-snapshot
  */
-export function l2Book(config: InfoConfig, params: L2BookParameters, signal?: AbortSignal): Promise<L2BookResponse> {
-  const request = parse(L2BookRequest, {
-    type: "l2Book",
-    ...params,
-  });
+export function l2Book(
+  config: InfoConfig,
+  params: L2BookParameters,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<L2BookResponse> {
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    L2BookRequest,
+    {
+      type: "l2Book",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

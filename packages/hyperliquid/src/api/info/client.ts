@@ -9,7 +9,12 @@ import {
   type OutcomeDeployerLimitsParameters,
   type OutcomeDeployerLimitsResponse,
 } from "./_methods/outcomeDeployerLimits.ts";
-import { isAbortSignal, type InfoConfig, type PaginationOptions } from "./_methods/_base/mod.ts";
+import {
+  isAbortSignal,
+  type InfoConfig,
+  type InfoRequestOptions,
+  type PaginationOptions,
+} from "./_methods/_base/mod.ts";
 
 // ============================================================
 // Methods Imports
@@ -272,7 +277,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * Request user active asset data.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User active asset data.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -290,14 +296,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-users-active-asset-data
    */
-  activeAssetData(params: ActiveAssetDataParameters, signal?: AbortSignal): Promise<ActiveAssetDataResponse> {
-    return activeAssetData(this.config, params, signal);
+  activeAssetData(
+    params: ActiveAssetDataParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<ActiveAssetDataResponse> {
+    return activeAssetData(this.config, params, signalOrOptions);
   }
 
   /**
    * Request all borrow/lend reserve states.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of tuples of reserve IDs and their borrow/lend reserve state.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -315,15 +325,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-all-borrow-lend-reserve-states
    */
-  allBorrowLendReserveStates(signal?: AbortSignal): Promise<AllBorrowLendReserveStatesResponse> {
-    return allBorrowLendReserveStates(this.config, signal);
+  allBorrowLendReserveStates(
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<AllBorrowLendReserveStatesResponse> {
+    return allBorrowLendReserveStates(this.config, signalOrOptions);
   }
 
   /**
    * Request mid coin prices.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Mapping of coin symbols to mid prices.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -341,18 +354,22 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-mids-for-all-coins
    */
-  allMids(params?: AllMidsParameters, signal?: AbortSignal): Promise<AllMidsResponse>;
+  allMids(params?: AllMidsParameters, signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<AllMidsResponse>;
   allMids(signal?: AbortSignal): Promise<AllMidsResponse>;
-  allMids(paramsOrSignal?: AllMidsParameters | AbortSignal, maybeSignal?: AbortSignal): Promise<AllMidsResponse> {
+  allMids(
+    paramsOrSignal?: AllMidsParameters | AbortSignal,
+    maybeSignalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<AllMidsResponse> {
     const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
-    const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
-    return allMids(this.config, params, signal);
+    const signalOrOptions = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignalOrOptions;
+    return allMids(this.config, params, signalOrOptions);
   }
 
   /**
    * Request trading metadata for all DEXs.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Metadata for perpetual assets across all DEXs.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -370,15 +387,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetuals-metadata-universe-and-margin-tables
    */
-  allPerpMetas(signal?: AbortSignal): Promise<AllPerpMetasResponse> {
-    return allPerpMetas(this.config, signal);
+  allPerpMetas(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<AllPerpMetasResponse> {
+    return allPerpMetas(this.config, signalOrOptions);
   }
 
   /**
    * Request approved builders for a user.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of approved builder addresses.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -396,15 +414,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-approved-builders-for-user
    */
-  approvedBuilders(params: ApprovedBuildersParameters, signal?: AbortSignal): Promise<ApprovedBuildersResponse> {
-    return approvedBuilders(this.config, params, signal);
+  approvedBuilders(
+    params: ApprovedBuildersParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<ApprovedBuildersResponse> {
+    return approvedBuilders(this.config, params, signalOrOptions);
   }
 
   /**
    * Request borrow/lend reserve state.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Borrow/lend reserve state.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -424,16 +446,17 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   borrowLendReserveState(
     params: BorrowLendReserveStateParameters,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<BorrowLendReserveStateResponse> {
-    return borrowLendReserveState(this.config, params, signal);
+    return borrowLendReserveState(this.config, params, signalOrOptions);
   }
 
   /**
    * Request borrow/lend user state.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User's borrow/lend state.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -453,9 +476,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   borrowLendUserState(
     params: BorrowLendUserStateParameters,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<BorrowLendUserStateResponse> {
-    return borrowLendUserState(this.config, params, signal);
+    return borrowLendUserState(this.config, params, signalOrOptions);
   }
 
   /**
@@ -465,7 +488,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * To paginate through a range that exceeds one response, use {@linkcode candleSnapshotAll}.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of candlestick data points.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -487,8 +511,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#candle-snapshot
    */
-  candleSnapshot(params: CandleSnapshotParameters, signal?: AbortSignal): Promise<CandleSnapshotResponse> {
-    return candleSnapshot(this.config, params, signal);
+  candleSnapshot(
+    params: CandleSnapshotParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<CandleSnapshotResponse> {
+    return candleSnapshot(this.config, params, signalOrOptions);
   }
 
   /**
@@ -506,7 +533,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of candlestick data points.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -531,9 +559,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   candleSnapshotAll(
     params: CandleSnapshotAllParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<CandleSnapshotResponse> {
-    return candleSnapshotAll(this.config, params, options, signal);
+    return candleSnapshotAll(this.config, params, options, signalOrOptions);
   }
 
   /**
@@ -553,7 +581,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Async generator yielding pages of candlestick data points.
    *
    * @throws {ValidationError} When the pagination options fail validation (thrown by the first
@@ -581,16 +610,17 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   candleSnapshotPages(
     params: CandleSnapshotPagesParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): AsyncGenerator<CandleSnapshotResponse, void, undefined> {
-    return candleSnapshotPages(this.config, params, options, signal);
+    return candleSnapshotPages(this.config, params, options, signalOrOptions);
   }
 
   /**
    * Request clearinghouse state.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Account summary for perpetual trading.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -608,15 +638,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-users-perpetuals-account-summary
    */
-  clearinghouseState(params: ClearinghouseStateParameters, signal?: AbortSignal): Promise<ClearinghouseStateResponse> {
-    return clearinghouseState(this.config, params, signal);
+  clearinghouseState(
+    params: ClearinghouseStateParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<ClearinghouseStateResponse> {
+    return clearinghouseState(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user staking delegations.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user's delegations to validators.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -634,15 +668,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-delegations
    */
-  delegations(params: DelegationsParameters, signal?: AbortSignal): Promise<DelegationsResponse> {
-    return delegations(this.config, params, signal);
+  delegations(
+    params: DelegationsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<DelegationsResponse> {
+    return delegations(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user staking history.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of records of staking events by a delegator.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -660,15 +698,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-history
    */
-  delegatorHistory(params: DelegatorHistoryParameters, signal?: AbortSignal): Promise<DelegatorHistoryResponse> {
-    return delegatorHistory(this.config, params, signal);
+  delegatorHistory(
+    params: DelegatorHistoryParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<DelegatorHistoryResponse> {
+    return delegatorHistory(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user staking rewards.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of rewards received from staking activities.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -686,15 +728,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-rewards
    */
-  delegatorRewards(params: DelegatorRewardsParameters, signal?: AbortSignal): Promise<DelegatorRewardsResponse> {
-    return delegatorRewards(this.config, params, signal);
+  delegatorRewards(
+    params: DelegatorRewardsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<DelegatorRewardsResponse> {
+    return delegatorRewards(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user's staking summary.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User's staking summary.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -712,14 +758,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-staking-summary
    */
-  delegatorSummary(params: DelegatorSummaryParameters, signal?: AbortSignal): Promise<DelegatorSummaryResponse> {
-    return delegatorSummary(this.config, params, signal);
+  delegatorSummary(
+    params: DelegatorSummaryParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<DelegatorSummaryResponse> {
+    return delegatorSummary(this.config, params, signalOrOptions);
   }
 
   /**
    * Request exchange system status information.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Exchange system status information.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -735,15 +785,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.exchangeStatus();
    * ```
    */
-  exchangeStatus(signal?: AbortSignal): Promise<ExchangeStatusResponse> {
-    return exchangeStatus(this.config, signal);
+  exchangeStatus(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<ExchangeStatusResponse> {
+    return exchangeStatus(this.config, signalOrOptions);
   }
 
   /**
    * Request user extra agents.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of extra agent details for a user.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -759,15 +810,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.extraAgents({ user: "0x..." });
    * ```
    */
-  extraAgents(params: ExtraAgentsParameters, signal?: AbortSignal): Promise<ExtraAgentsResponse> {
-    return extraAgents(this.config, params, signal);
+  extraAgents(
+    params: ExtraAgentsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<ExtraAgentsResponse> {
+    return extraAgents(this.config, params, signalOrOptions);
   }
 
   /**
    * Request frontend open orders.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of open orders with additional display information.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -785,8 +840,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-open-orders-with-additional-frontend-info
    */
-  frontendOpenOrders(params: FrontendOpenOrdersParameters, signal?: AbortSignal): Promise<FrontendOpenOrdersResponse> {
-    return frontendOpenOrders(this.config, params, signal);
+  frontendOpenOrders(
+    params: FrontendOpenOrdersParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<FrontendOpenOrdersResponse> {
+    return frontendOpenOrders(this.config, params, signalOrOptions);
   }
 
   /**
@@ -796,7 +854,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * To fetch a larger range, use {@linkcode fundingHistoryAll}, which paginates automatically.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of historical funding rate records for an asset.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -817,8 +876,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-historical-funding-rates
    */
-  fundingHistory(params: FundingHistoryParameters, signal?: AbortSignal): Promise<FundingHistoryResponse> {
-    return fundingHistory(this.config, params, signal);
+  fundingHistory(
+    params: FundingHistoryParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<FundingHistoryResponse> {
+    return fundingHistory(this.config, params, signalOrOptions);
   }
 
   /**
@@ -833,7 +895,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of historical funding rate records for an asset.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -857,9 +920,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   fundingHistoryAll(
     params: FundingHistoryAllParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<FundingHistoryResponse> {
-    return fundingHistoryAll(this.config, params, options, signal);
+    return fundingHistoryAll(this.config, params, options, signalOrOptions);
   }
 
   /**
@@ -876,7 +939,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Async generator yielding pages of historical funding rate records for an asset.
    *
    * @throws {ValidationError} When the pagination options fail validation (thrown by the first
@@ -903,15 +967,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   fundingHistoryPages(
     params: FundingHistoryPagesParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): AsyncGenerator<FundingHistoryResponse, void, undefined> {
-    return fundingHistoryPages(this.config, params, options, signal);
+    return fundingHistoryPages(this.config, params, options, signalOrOptions);
   }
 
   /**
    * Request gossip priority auction status (previous winners and current auctions).
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Gossip priority auction status.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -929,14 +994,17 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/priority-fees
    */
-  gossipPriorityAuctionStatus(signal?: AbortSignal): Promise<GossipPriorityAuctionStatusResponse> {
-    return gossipPriorityAuctionStatus(this.config, signal);
+  gossipPriorityAuctionStatus(
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<GossipPriorityAuctionStatusResponse> {
+    return gossipPriorityAuctionStatus(this.config, signalOrOptions);
   }
 
   /**
    * Request gossip root IPs.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of gossip root IPs.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -952,8 +1020,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.gossipRootIps();
    * ```
    */
-  gossipRootIps(signal?: AbortSignal): Promise<GossipRootIpsResponse> {
-    return gossipRootIps(this.config, signal);
+  gossipRootIps(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<GossipRootIpsResponse> {
+    return gossipRootIps(this.config, signalOrOptions);
   }
 
   /**
@@ -963,7 +1031,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * so it cannot be paginated.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of frontend orders with current processing status.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -981,15 +1050,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-historical-orders
    */
-  historicalOrders(params: HistoricalOrdersParameters, signal?: AbortSignal): Promise<HistoricalOrdersResponse> {
-    return historicalOrders(this.config, params, signal);
+  historicalOrders(
+    params: HistoricalOrdersParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<HistoricalOrdersResponse> {
+    return historicalOrders(this.config, params, signalOrOptions);
   }
 
   /**
    * Request to check if a user is a VIP.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Boolean indicating user's VIP status.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1005,8 +1078,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.isVip({ user: "0x..." });
    * ```
    */
-  isVip(params: IsVipParameters, signal?: AbortSignal): Promise<IsVipResponse> {
-    return isVip(this.config, params, signal);
+  isVip(params: IsVipParameters, signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<IsVipResponse> {
+    return isVip(this.config, params, signalOrOptions);
   }
 
   /**
@@ -1015,7 +1088,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * Returns at most 20 levels per side.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return L2 order book snapshot.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1033,15 +1107,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#l2-book-snapshot
    */
-  l2Book(params: L2BookParameters, signal?: AbortSignal): Promise<L2BookResponse> {
-    return l2Book(this.config, params, signal);
+  l2Book(params: L2BookParameters, signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<L2BookResponse> {
+    return l2Book(this.config, params, signalOrOptions);
   }
 
   /**
    * Request leading vaults for a user.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of leading vaults for a user.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1057,15 +1132,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.leadingVaults({ user: "0x..." });
    * ```
    */
-  leadingVaults(params: LeadingVaultsParameters, signal?: AbortSignal): Promise<LeadingVaultsResponse> {
-    return leadingVaults(this.config, params, signal);
+  leadingVaults(
+    params: LeadingVaultsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<LeadingVaultsResponse> {
+    return leadingVaults(this.config, params, signalOrOptions);
   }
 
   /**
    * Request legal verification status of a user.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Legal verification status for a user.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1081,14 +1160,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.legalCheck({ user: "0x..." });
    * ```
    */
-  legalCheck(params: LegalCheckParameters, signal?: AbortSignal): Promise<LegalCheckResponse> {
-    return legalCheck(this.config, params, signal);
+  legalCheck(
+    params: LegalCheckParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<LegalCheckResponse> {
+    return legalCheck(this.config, params, signalOrOptions);
   }
 
   /**
    * Request liquidatable.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of liquidatable positions.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1104,15 +1187,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.liquidatable();
    * ```
    */
-  liquidatable(signal?: AbortSignal): Promise<LiquidatableResponse> {
-    return liquidatable(this.config, signal);
+  liquidatable(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<LiquidatableResponse> {
+    return liquidatable(this.config, signalOrOptions);
   }
 
   /**
    * Request margin table data.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Margin requirements table with multiple tiers.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1128,15 +1212,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.marginTable({ id: 1 });
    * ```
    */
-  marginTable(params: MarginTableParameters, signal?: AbortSignal): Promise<MarginTableResponse> {
-    return marginTable(this.config, params, signal);
+  marginTable(
+    params: MarginTableParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<MarginTableResponse> {
+    return marginTable(this.config, params, signalOrOptions);
   }
 
   /**
    * Request builder fee approval.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Maximum builder fee approval.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1154,14 +1242,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#check-builder-fee-approval
    */
-  maxBuilderFee(params: MaxBuilderFeeParameters, signal?: AbortSignal): Promise<MaxBuilderFeeResponse> {
-    return maxBuilderFee(this.config, params, signal);
+  maxBuilderFee(
+    params: MaxBuilderFeeParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<MaxBuilderFeeResponse> {
+    return maxBuilderFee(this.config, params, signalOrOptions);
   }
 
   /**
    * Request maximum market order notionals.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Maximum market order notionals.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1177,15 +1269,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.maxMarketOrderNtls();
    * ```
    */
-  maxMarketOrderNtls(signal?: AbortSignal): Promise<MaxMarketOrderNtlsResponse> {
-    return maxMarketOrderNtls(this.config, signal);
+  maxMarketOrderNtls(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<MaxMarketOrderNtlsResponse> {
+    return maxMarketOrderNtls(this.config, signalOrOptions);
   }
 
   /**
    * Request trading metadata.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Metadata for perpetual assets.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1203,19 +1296,23 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perpetuals-metadata-universe-and-margin-tables
    */
-  meta(params?: MetaParameters, signal?: AbortSignal): Promise<MetaResponse>;
+  meta(params?: MetaParameters, signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<MetaResponse>;
   meta(signal?: AbortSignal): Promise<MetaResponse>;
-  meta(paramsOrSignal?: MetaParameters | AbortSignal, maybeSignal?: AbortSignal): Promise<MetaResponse> {
+  meta(
+    paramsOrSignal?: MetaParameters | AbortSignal,
+    maybeSignalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<MetaResponse> {
     const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
-    const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
-    return meta(this.config, params, signal);
+    const signalOrOptions = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignalOrOptions;
+    return meta(this.config, params, signalOrOptions);
   }
 
   /**
    * Request metadata and asset contexts.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Metadata and context for perpetual assets.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1233,22 +1330,26 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perpetuals-asset-contexts-includes-mark-price-current-funding-open-interest-etc
    */
-  metaAndAssetCtxs(params?: MetaAndAssetCtxsParameters, signal?: AbortSignal): Promise<MetaAndAssetCtxsResponse>;
+  metaAndAssetCtxs(
+    params?: MetaAndAssetCtxsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<MetaAndAssetCtxsResponse>;
   metaAndAssetCtxs(signal?: AbortSignal): Promise<MetaAndAssetCtxsResponse>;
   metaAndAssetCtxs(
     paramsOrSignal?: MetaAndAssetCtxsParameters | AbortSignal,
-    maybeSignal?: AbortSignal,
+    maybeSignalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<MetaAndAssetCtxsResponse> {
     const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
-    const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
-    return metaAndAssetCtxs(this.config, params, signal);
+    const signalOrOptions = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignalOrOptions;
+    return metaAndAssetCtxs(this.config, params, signalOrOptions);
   }
 
   /**
    * Request open orders.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of open orders.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1266,15 +1367,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-open-orders
    */
-  openOrders(params: OpenOrdersParameters, signal?: AbortSignal): Promise<OpenOrdersResponse> {
-    return openOrders(this.config, params, signal);
+  openOrders(
+    params: OpenOrdersParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<OpenOrdersResponse> {
+    return openOrders(this.config, params, signalOrOptions);
   }
 
   /**
    * Request order status.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Order status response.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1292,14 +1397,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-order-status-by-oid-or-cloid
    */
-  orderStatus(params: OrderStatusParameters, signal?: AbortSignal): Promise<OrderStatusResponse> {
-    return orderStatus(this.config, params, signal);
+  orderStatus(
+    params: OrderStatusParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<OrderStatusResponse> {
+    return orderStatus(this.config, params, signalOrOptions);
   }
 
   /**
    * Request prediction market outcome metadata.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Prediction market outcome metadata including outcomes and questions.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1317,14 +1426,15 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-outcome-metadata
    */
-  outcomeMeta(signal?: AbortSignal): Promise<OutcomeMetaResponse> {
-    return outcomeMeta(this.config, signal);
+  outcomeMeta(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<OutcomeMetaResponse> {
+    return outcomeMeta(this.config, signalOrOptions);
   }
 
   /**
    * Request outcome templates.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of templates that outcome deployers instantiate.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1342,15 +1452,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions#read-api
    */
-  outcomeTemplates(signal?: AbortSignal): Promise<OutcomeTemplatesResponse> {
-    return outcomeTemplates(this.config, signal);
+  outcomeTemplates(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<OutcomeTemplatesResponse> {
+    return outcomeTemplates(this.config, signalOrOptions);
   }
 
   /**
    * Request perp annotation.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Perp annotation for an asset.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1368,14 +1479,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perp-annotation
    */
-  perpAnnotation(params: PerpAnnotationParameters, signal?: AbortSignal): Promise<PerpAnnotationResponse> {
-    return perpAnnotation(this.config, params, signal);
+  perpAnnotation(
+    params: PerpAnnotationParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<PerpAnnotationResponse> {
+    return perpAnnotation(this.config, params, signalOrOptions);
   }
 
   /**
    * Request all perpetual asset categories.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of tuples mapping coin names to their categories.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1393,14 +1508,15 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-perp-categories
    */
-  perpCategories(signal?: AbortSignal): Promise<PerpCategoriesResponse> {
-    return perpCategories(this.config, signal);
+  perpCategories(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<PerpCategoriesResponse> {
+    return perpCategories(this.config, signalOrOptions);
   }
 
   /**
    * Request concise annotations for all perpetual assets.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of tuples mapping coin names to their concise annotations.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1418,14 +1534,15 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-concise-perp-annotations
    */
-  perpConciseAnnotations(signal?: AbortSignal): Promise<PerpConciseAnnotationsResponse> {
-    return perpConciseAnnotations(this.config, signal);
+  perpConciseAnnotations(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<PerpConciseAnnotationsResponse> {
+    return perpConciseAnnotations(this.config, signalOrOptions);
   }
 
   /**
    * Request for the status of the perpetual deploy auction.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Status of the perpetual deploy auction.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1443,15 +1560,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-information-about-the-perp-deploy-auction
    */
-  perpDeployAuctionStatus(signal?: AbortSignal): Promise<PerpDeployAuctionStatusResponse> {
-    return perpDeployAuctionStatus(this.config, signal);
+  perpDeployAuctionStatus(
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<PerpDeployAuctionStatusResponse> {
+    return perpDeployAuctionStatus(this.config, signalOrOptions);
   }
 
   /**
    * Request builder deployed perpetual market limits.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Builder deployed perpetual market limits.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1469,8 +1589,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-builder-deployed-perp-market-limits
    */
-  perpDexLimits(params: PerpDexLimitsParameters, signal?: AbortSignal): Promise<PerpDexLimitsResponse> {
-    return perpDexLimits(this.config, params, signal);
+  perpDexLimits(
+    params: PerpDexLimitsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<PerpDexLimitsResponse> {
+    return perpDexLimits(this.config, params, signalOrOptions);
   }
 
   /**
@@ -1478,7 +1601,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @deprecated use `perpDexes` — will be removed in v1.0.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of perpetual dexes (null is main dex).
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1496,8 +1620,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetual-dexs
    */
-  perpDexs(signal?: AbortSignal): Promise<PerpDexsResponse> {
-    return perpDexs(this.config, signal);
+  perpDexs(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<PerpDexsResponse> {
+    return perpDexs(this.config, signalOrOptions);
   }
 
   /**
@@ -1506,7 +1630,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * Friendly alias of {@linkcode perpDexs} (the wire name): sends the same `perpDexs` request and
    * returns its response unchanged.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of perpetual dexes (null is main dex).
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1524,15 +1649,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetual-dexs
    */
-  perpDexes(signal?: AbortSignal): Promise<PerpDexesResponse> {
-    return perpDexes(this.config, signal);
+  perpDexes(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<PerpDexesResponse> {
+    return perpDexes(this.config, signalOrOptions);
   }
 
   /**
    * Request perp DEX status.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Status of a perp DEX.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1550,15 +1676,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#get-perp-market-status
    */
-  perpDexStatus(params: PerpDexStatusParameters, signal?: AbortSignal): Promise<PerpDexStatusResponse> {
-    return perpDexStatus(this.config, params, signal);
+  perpDexStatus(
+    params: PerpDexStatusParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<PerpDexStatusResponse> {
+    return perpDexStatus(this.config, params, signalOrOptions);
   }
 
   /**
    * Request perpetuals at open interest cap.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of perpetuals at open interest caps.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1578,23 +1708,24 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   perpsAtOpenInterestCap(
     params?: PerpsAtOpenInterestCapParameters,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<PerpsAtOpenInterestCapResponse>;
   perpsAtOpenInterestCap(signal?: AbortSignal): Promise<PerpsAtOpenInterestCapResponse>;
   perpsAtOpenInterestCap(
     paramsOrSignal?: PerpsAtOpenInterestCapParameters | AbortSignal,
-    maybeSignal?: AbortSignal,
+    maybeSignalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<PerpsAtOpenInterestCapResponse> {
     const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
-    const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
-    return perpsAtOpenInterestCap(this.config, params, signal);
+    const signalOrOptions = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignalOrOptions;
+    return perpsAtOpenInterestCap(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user portfolio.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Portfolio metrics grouped by time periods.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1612,14 +1743,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-portfolio
    */
-  portfolio(params: PortfolioParameters, signal?: AbortSignal): Promise<PortfolioResponse> {
-    return portfolio(this.config, params, signal);
+  portfolio(
+    params: PortfolioParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<PortfolioResponse> {
+    return portfolio(this.config, params, signalOrOptions);
   }
 
   /**
    * Request predicted funding rates.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of predicted funding rates.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1637,15 +1772,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-predicted-funding-rates-for-different-venues
    */
-  predictedFundings(signal?: AbortSignal): Promise<PredictedFundingsResponse> {
-    return predictedFundings(this.config, signal);
+  predictedFundings(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<PredictedFundingsResponse> {
+    return predictedFundings(this.config, signalOrOptions);
   }
 
   /**
    * Request user existence check before transfer.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Pre-transfer user existence check result.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1661,15 +1797,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.preTransferCheck({ user: "0x...", source: "0x..." });
    * ```
    */
-  preTransferCheck(params: PreTransferCheckParameters, signal?: AbortSignal): Promise<PreTransferCheckResponse> {
-    return preTransferCheck(this.config, params, signal);
+  preTransferCheck(
+    params: PreTransferCheckParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<PreTransferCheckResponse> {
+    return preTransferCheck(this.config, params, signalOrOptions);
   }
 
   /**
    * Request recent trades.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of recent trades.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1685,15 +1825,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.recentTrades({ coin: "ETH" });
    * ```
    */
-  recentTrades(params: RecentTradesParameters, signal?: AbortSignal): Promise<RecentTradesResponse> {
-    return recentTrades(this.config, params, signal);
+  recentTrades(
+    params: RecentTradesParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<RecentTradesResponse> {
+    return recentTrades(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user referral.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Referral details for a user.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1711,15 +1855,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-referral-information
    */
-  referral(params: ReferralParameters, signal?: AbortSignal): Promise<ReferralResponse> {
-    return referral(this.config, params, signal);
+  referral(params: ReferralParameters, signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<ReferralResponse> {
+    return referral(this.config, params, signalOrOptions);
   }
 
   /**
    * Request information about a settled outcome.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Information about a settled outcome.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1737,15 +1882,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-a-settled-outcome
    */
-  settledOutcome(params: SettledOutcomeParameters, signal?: AbortSignal): Promise<SettledOutcomeResponse> {
-    return settledOutcome(this.config, params, signal);
+  settledOutcome(
+    params: SettledOutcomeParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<SettledOutcomeResponse> {
+    return settledOutcome(this.config, params, signalOrOptions);
   }
 
   /**
    * Request spot clearinghouse state.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Account summary for spot trading.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1765,16 +1914,17 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   spotClearinghouseState(
     params: SpotClearinghouseStateParameters,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<SpotClearinghouseStateResponse> {
-    return spotClearinghouseState(this.config, params, signal);
+    return spotClearinghouseState(this.config, params, signalOrOptions);
   }
 
   /**
    * Request spot deploy state.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Deploy state for spot tokens.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1792,14 +1942,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-the-spot-deploy-auction
    */
-  spotDeployState(params: SpotDeployStateParameters, signal?: AbortSignal): Promise<SpotDeployStateResponse> {
-    return spotDeployState(this.config, params, signal);
+  spotDeployState(
+    params: SpotDeployStateParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<SpotDeployStateResponse> {
+    return spotDeployState(this.config, params, signalOrOptions);
   }
 
   /**
    * Request spot trading metadata.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Metadata for spot assets.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1817,14 +1971,15 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-metadata
    */
-  spotMeta(signal?: AbortSignal): Promise<SpotMetaResponse> {
-    return spotMeta(this.config, signal);
+  spotMeta(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<SpotMetaResponse> {
+    return spotMeta(this.config, signalOrOptions);
   }
 
   /**
    * Request spot metadata and asset contexts.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Metadata and context for spot assets.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1842,14 +1997,15 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-asset-contexts
    */
-  spotMetaAndAssetCtxs(signal?: AbortSignal): Promise<SpotMetaAndAssetCtxsResponse> {
-    return spotMetaAndAssetCtxs(this.config, signal);
+  spotMetaAndAssetCtxs(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<SpotMetaAndAssetCtxsResponse> {
+    return spotMetaAndAssetCtxs(this.config, signalOrOptions);
   }
 
   /**
    * Request for the status of the spot deploy auction.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Status of the spot deploy auction.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1867,15 +2023,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-the-spot-pair-deploy-auction
    */
-  spotPairDeployAuctionStatus(signal?: AbortSignal): Promise<SpotPairDeployAuctionStatusResponse> {
-    return spotPairDeployAuctionStatus(this.config, signal);
+  spotPairDeployAuctionStatus(
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<SpotPairDeployAuctionStatusResponse> {
+    return spotPairDeployAuctionStatus(this.config, signalOrOptions);
   }
 
   /**
    * Request user sub-accounts.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user sub-account or null if the user does not have any sub-accounts.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1893,8 +2052,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-subaccounts
    */
-  subAccounts(params: SubAccountsParameters, signal?: AbortSignal): Promise<SubAccountsResponse> {
-    return subAccounts(this.config, params, signal);
+  subAccounts(
+    params: SubAccountsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<SubAccountsResponse> {
+    return subAccounts(this.config, params, signalOrOptions);
   }
 
   /**
@@ -1903,7 +2065,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @deprecated use `subAccountsV2` — will be removed in v1.0.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user sub-account or null if the user does not have any sub-accounts.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1919,8 +2082,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.subAccounts2({ user: "0x..." });
    * ```
    */
-  subAccounts2(params: SubAccounts2Parameters, signal?: AbortSignal): Promise<SubAccounts2Response> {
-    return subAccounts2(this.config, params, signal);
+  subAccounts2(
+    params: SubAccounts2Parameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<SubAccounts2Response> {
+    return subAccounts2(this.config, params, signalOrOptions);
   }
 
   /**
@@ -1930,7 +2096,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * request and returns its response unchanged.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user sub-account or null if the user does not have any sub-accounts.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1946,15 +2113,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.subAccountsV2({ user: "0x..." });
    * ```
    */
-  subAccountsV2(params: SubAccountsV2Parameters, signal?: AbortSignal): Promise<SubAccountsV2Response> {
-    return subAccountsV2(this.config, params, signal);
+  subAccountsV2(
+    params: SubAccountsV2Parameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<SubAccountsV2Response> {
+    return subAccountsV2(this.config, params, signalOrOptions);
   }
 
   /**
    * Request token details.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Details of a token.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1972,15 +2143,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-information-about-a-token
    */
-  tokenDetails(params: TokenDetailsParameters, signal?: AbortSignal): Promise<TokenDetailsResponse> {
-    return tokenDetails(this.config, params, signal);
+  tokenDetails(
+    params: TokenDetailsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<TokenDetailsResponse> {
+    return tokenDetails(this.config, params, signalOrOptions);
   }
 
   /**
    * Request TWAP history of a user.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user's TWAP history.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -1996,14 +2171,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.twapHistory({ user: "0x..." });
    * ```
    */
-  twapHistory(params: TwapHistoryParameters, signal?: AbortSignal): Promise<TwapHistoryResponse> {
-    return twapHistory(this.config, params, signal);
+  twapHistory(
+    params: TwapHistoryParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<TwapHistoryResponse> {
+    return twapHistory(this.config, params, signalOrOptions);
   }
 
   /**
    * Request USDC transfer routing.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Routes currently used to move USDC in and out of the platform.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2019,15 +2198,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.usdcRouting();
    * ```
    */
-  usdcRouting(signal?: AbortSignal): Promise<UsdcRoutingResponse> {
-    return usdcRouting(this.config, signal);
+  usdcRouting(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<UsdcRoutingResponse> {
+    return usdcRouting(this.config, signalOrOptions);
   }
 
   /**
    * Request user abstraction state.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User abstraction state.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2045,15 +2225,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-abstraction-state
    */
-  userAbstraction(params: UserAbstractionParameters, signal?: AbortSignal): Promise<UserAbstractionResponse> {
-    return userAbstraction(this.config, params, signal);
+  userAbstraction(
+    params: UserAbstractionParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<UserAbstractionResponse> {
+    return userAbstraction(this.config, params, signalOrOptions);
   }
 
   /**
    * Request borrow/lend user interest.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User's borrow/lend interest.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2074,16 +2258,17 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   userBorrowLendInterest(
     params: UserBorrowLendInterestParameters,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<UserBorrowLendInterestResponse> {
-    return userBorrowLendInterest(this.config, params, signal);
+    return userBorrowLendInterest(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user HIP-3 DEX abstraction state.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User HIP-3 DEX abstraction state.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2101,15 +2286,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-hip-3-dex-abstraction-state
    */
-  userDexAbstraction(params: UserDexAbstractionParameters, signal?: AbortSignal): Promise<UserDexAbstractionResponse> {
-    return userDexAbstraction(this.config, params, signal);
+  userDexAbstraction(
+    params: UserDexAbstractionParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<UserDexAbstractionResponse> {
+    return userDexAbstraction(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user fees.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User fees.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2127,8 +2316,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-fees
    */
-  userFees(params: UserFeesParameters, signal?: AbortSignal): Promise<UserFeesResponse> {
-    return userFees(this.config, params, signal);
+  userFees(params: UserFeesParameters, signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<UserFeesResponse> {
+    return userFees(this.config, params, signalOrOptions);
   }
 
   /**
@@ -2137,7 +2326,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * Returns at most 2000 most recent fills.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user trade fills.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2155,8 +2345,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-fills
    */
-  userFills(params: UserFillsParameters, signal?: AbortSignal): Promise<UserFillsResponse> {
-    return userFills(this.config, params, signal);
+  userFills(
+    params: UserFillsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<UserFillsResponse> {
+    return userFills(this.config, params, signalOrOptions);
   }
 
   /**
@@ -2166,7 +2359,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * To fetch a larger range, use {@linkcode userFillsByTimeAll}, which paginates automatically.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user trade fills by time.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2187,8 +2381,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-fills-by-time
    */
-  userFillsByTime(params: UserFillsByTimeParameters, signal?: AbortSignal): Promise<UserFillsByTimeResponse> {
-    return userFillsByTime(this.config, params, signal);
+  userFillsByTime(
+    params: UserFillsByTimeParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<UserFillsByTimeResponse> {
+    return userFillsByTime(this.config, params, signalOrOptions);
   }
 
   /**
@@ -2204,7 +2401,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user trade fills by time.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2228,9 +2426,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   userFillsByTimeAll(
     params: UserFillsByTimeAllParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<UserFillsByTimeResponse> {
-    return userFillsByTimeAll(this.config, params, options, signal);
+    return userFillsByTimeAll(this.config, params, options, signalOrOptions);
   }
 
   /**
@@ -2248,7 +2446,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Async generator yielding pages of user trade fills by time.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending), or when
@@ -2276,16 +2475,17 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   userFillsByTimePages(
     params: UserFillsByTimePagesParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): AsyncGenerator<UserFillsByTimeResponse, void, undefined> {
-    return userFillsByTimePages(this.config, params, options, signal);
+    return userFillsByTimePages(this.config, params, options, signalOrOptions);
   }
 
   /**
    * Request array of user funding ledger updates.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user funding ledger updates.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2303,8 +2503,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-a-users-funding-history-or-non-funding-ledger-updates
    */
-  userFunding(params: UserFundingParameters, signal?: AbortSignal): Promise<UserFundingResponse> {
-    return userFunding(this.config, params, signal);
+  userFunding(
+    params: UserFundingParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<UserFundingResponse> {
+    return userFunding(this.config, params, signalOrOptions);
   }
 
   /**
@@ -2314,7 +2517,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * To fetch a larger range, use {@linkcode userNonFundingLedgerUpdatesAll}, which paginates automatically.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user's non-funding ledger update.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2334,9 +2538,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   userNonFundingLedgerUpdates(
     params: UserNonFundingLedgerUpdatesParameters,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<UserNonFundingLedgerUpdatesResponse> {
-    return userNonFundingLedgerUpdates(this.config, params, signal);
+    return userNonFundingLedgerUpdates(this.config, params, signalOrOptions);
   }
 
   /**
@@ -2351,7 +2555,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user's non-funding ledger update.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2375,9 +2580,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   userNonFundingLedgerUpdatesAll(
     params: UserNonFundingLedgerUpdatesAllParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<UserNonFundingLedgerUpdatesResponse> {
-    return userNonFundingLedgerUpdatesAll(this.config, params, options, signal);
+    return userNonFundingLedgerUpdatesAll(this.config, params, options, signalOrOptions);
   }
 
   /**
@@ -2394,7 +2599,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Async generator yielding pages of user's non-funding ledger update.
    *
    * @throws {ValidationError} When the pagination options fail validation (thrown by the first
@@ -2421,16 +2627,17 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   userNonFundingLedgerUpdatesPages(
     params: UserNonFundingLedgerUpdatesPagesParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): AsyncGenerator<UserNonFundingLedgerUpdatesResponse, void, undefined> {
-    return userNonFundingLedgerUpdatesPages(this.config, params, options, signal);
+    return userNonFundingLedgerUpdatesPages(this.config, params, options, signalOrOptions);
   }
 
   /**
    * Request user rate limits.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User rate limits.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2448,15 +2655,19 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-user-rate-limits
    */
-  userRateLimit(params: UserRateLimitParameters, signal?: AbortSignal): Promise<UserRateLimitResponse> {
-    return userRateLimit(this.config, params, signal);
+  userRateLimit(
+    params: UserRateLimitParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<UserRateLimitResponse> {
+    return userRateLimit(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user role.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User role.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2474,15 +2685,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#query-a-users-role
    */
-  userRole(params: UserRoleParameters, signal?: AbortSignal): Promise<UserRoleResponse> {
-    return userRole(this.config, params, signal);
+  userRole(params: UserRoleParameters, signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<UserRoleResponse> {
+    return userRole(this.config, params, signalOrOptions);
   }
 
   /**
    * Request multi-sig signers for a user.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Multi-sig signers for a user or null if the user does not have any multi-sig signers.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2500,16 +2712,17 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   userToMultiSigSigners(
     params: UserToMultiSigSignersParameters,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<UserToMultiSigSignersResponse> {
-    return userToMultiSigSigners(this.config, params, signal);
+    return userToMultiSigSigners(this.config, params, signalOrOptions);
   }
 
   /**
    * Request user TWAP slice fills.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user's TWAP slice fills.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2527,8 +2740,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-twap-slice-fills
    */
-  userTwapSliceFills(params: UserTwapSliceFillsParameters, signal?: AbortSignal): Promise<UserTwapSliceFillsResponse> {
-    return userTwapSliceFills(this.config, params, signal);
+  userTwapSliceFills(
+    params: UserTwapSliceFillsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<UserTwapSliceFillsResponse> {
+    return userTwapSliceFills(this.config, params, signalOrOptions);
   }
 
   /**
@@ -2538,7 +2754,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * To fetch a larger range, use {@linkcode userTwapSliceFillsByTimeAll}, which paginates automatically.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user's TWAP slice fill by time.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2561,9 +2778,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   userTwapSliceFillsByTime(
     params: UserTwapSliceFillsByTimeParameters,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<UserTwapSliceFillsByTimeResponse> {
-    return userTwapSliceFillsByTime(this.config, params, signal);
+    return userTwapSliceFillsByTime(this.config, params, signalOrOptions);
   }
 
   /**
@@ -2577,7 +2794,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user's TWAP slice fill by time.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2601,9 +2819,9 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   userTwapSliceFillsByTimeAll(
     params: UserTwapSliceFillsByTimeAllParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<UserTwapSliceFillsByTimeResponse> {
-    return userTwapSliceFillsByTimeAll(this.config, params, options, signal);
+    return userTwapSliceFillsByTimeAll(this.config, params, options, signalOrOptions);
   }
 
   /**
@@ -2619,7 +2837,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @param params Parameters specific to the API request.
    * @param options Pagination options (see {@linkcode PaginationOptions}).
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Async generator yielding pages of user's TWAP slice fill by time.
    *
    * @throws {ValidationError} When the pagination options fail validation (thrown by the first
@@ -2646,16 +2865,17 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
   userTwapSliceFillsByTimePages(
     params: UserTwapSliceFillsByTimePagesParameters,
     options?: PaginationOptions,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): AsyncGenerator<UserTwapSliceFillsByTimeResponse, void, undefined> {
-    return userTwapSliceFillsByTimePages(this.config, params, options, signal);
+    return userTwapSliceFillsByTimePages(this.config, params, options, signalOrOptions);
   }
 
   /**
    * Request user vault deposits.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of user's vault deposits.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2673,14 +2893,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-a-users-vault-deposits
    */
-  userVaultEquities(params: UserVaultEquitiesParameters, signal?: AbortSignal): Promise<UserVaultEquitiesResponse> {
-    return userVaultEquities(this.config, params, signal);
+  userVaultEquities(
+    params: UserVaultEquitiesParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<UserVaultEquitiesResponse> {
+    return userVaultEquities(this.config, params, signalOrOptions);
   }
 
   /**
    * Request validator L1 votes.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of L1 governance votes cast by validators.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2696,14 +2920,15 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.validatorL1Votes();
    * ```
    */
-  validatorL1Votes(signal?: AbortSignal): Promise<ValidatorL1VotesResponse> {
-    return validatorL1Votes(this.config, signal);
+  validatorL1Votes(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<ValidatorL1VotesResponse> {
+    return validatorL1Votes(this.config, signalOrOptions);
   }
 
   /**
    * Request validator summaries.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of validator performance statistics.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2719,15 +2944,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.validatorSummaries();
    * ```
    */
-  validatorSummaries(signal?: AbortSignal): Promise<ValidatorSummariesResponse> {
-    return validatorSummaries(this.config, signal);
+  validatorSummaries(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<ValidatorSummariesResponse> {
+    return validatorSummaries(this.config, signalOrOptions);
   }
 
   /**
    * Request details of a vault.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Details of a vault or null if the vault does not exist.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2745,14 +2971,18 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint#retrieve-details-for-a-vault
    */
-  vaultDetails(params: VaultDetailsParameters, signal?: AbortSignal): Promise<VaultDetailsResponse> {
-    return vaultDetails(this.config, params, signal);
+  vaultDetails(
+    params: VaultDetailsParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<VaultDetailsResponse> {
+    return vaultDetails(this.config, params, signalOrOptions);
   }
 
   /**
    * Request a list of vaults less than 2 hours old.
    *
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Array of vaults less than 2 hours old.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2768,8 +2998,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.vaultSummaries();
    * ```
    */
-  vaultSummaries(signal?: AbortSignal): Promise<VaultSummariesResponse> {
-    return vaultSummaries(this.config, signal);
+  vaultSummaries(signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<VaultSummariesResponse> {
+    return vaultSummaries(this.config, signalOrOptions);
   }
 
   /**
@@ -2778,7 +3008,8 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * @deprecated use `webData3` and other component subscriptions instead — will be removed in v1.0.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Comprehensive user and market data.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2794,14 +3025,15 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    * const data = await client.webData2({ user: "0x..." });
    * ```
    */
-  webData2(params: WebData2Parameters, signal?: AbortSignal): Promise<WebData2Response> {
-    return webData2(this.config, params, signal);
+  webData2(params: WebData2Parameters, signalOrOptions?: AbortSignal | InfoRequestOptions): Promise<WebData2Response> {
+    return webData2(this.config, params, signalOrOptions);
   }
   /**
    * Request the remaining outcome deployment capacity for a venue.
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return Remaining daily and active outcome deployment capacity.
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-outcome-deployer-limits
    *
@@ -2823,15 +3055,16 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    */
   outcomeDeployerLimits(
     params: OutcomeDeployerLimitsParameters,
-    signal?: AbortSignal,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
   ): Promise<OutcomeDeployerLimitsResponse> {
-    return outcomeDeployerLimits(this.config, params, signal);
+    return outcomeDeployerLimits(this.config, params, signalOrOptions);
   }
   /**
    * Request user HIP-3* approval state (testnet only).
    *
    * @param params Parameters specific to the API request.
-   * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+   * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+   * the request, or an {@linkcode InfoRequestOptions} object.
    * @return User HIP-3* approval state.
    *
    * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -2852,8 +3085,11 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
    *
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-3-deployer-actions#user-star-state
    */
-  userStarState(params: UserStarStateParameters, signal?: AbortSignal): Promise<UserStarStateResponse> {
-    return userStarState(this.config, params, signal);
+  userStarState(
+    params: UserStarStateParameters,
+    signalOrOptions?: AbortSignal | InfoRequestOptions,
+  ): Promise<UserStarStateResponse> {
+    return userStarState(this.config, params, signalOrOptions);
   }
 }
 
@@ -2861,7 +3097,7 @@ export class InfoClient<C extends InfoConfig = InfoConfig> {
 // Type Re-exports
 // ============================================================
 
-export type { InfoConfig } from "./_methods/_base/mod.ts";
+export type { InfoConfig, InfoRequestOptions } from "./_methods/_base/mod.ts";
 
 export type { ActiveAssetDataParameters, ActiveAssetDataResponse } from "./_methods/activeAssetData.ts";
 export type { AllBorrowLendReserveStatesResponse } from "./_methods/allBorrowLendReserveStates.ts";

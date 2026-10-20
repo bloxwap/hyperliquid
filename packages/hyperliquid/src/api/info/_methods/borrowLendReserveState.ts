@@ -71,8 +71,7 @@ export type BorrowLendReserveStateResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode borrowLendReserveState} function. */
 export type BorrowLendReserveStateParameters = Omit<v.InferInput<typeof BorrowLendReserveStateRequest>, "type">;
@@ -82,7 +81,8 @@ export type BorrowLendReserveStateParameters = Omit<v.InferInput<typeof BorrowLe
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Borrow/lend reserve state.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -105,11 +105,16 @@ export type BorrowLendReserveStateParameters = Omit<v.InferInput<typeof BorrowLe
 export function borrowLendReserveState(
   config: InfoConfig,
   params: BorrowLendReserveStateParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<BorrowLendReserveStateResponse> {
-  const request = parse(BorrowLendReserveStateRequest, {
-    type: "borrowLendReserveState",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    BorrowLendReserveStateRequest,
+    {
+      type: "borrowLendReserveState",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

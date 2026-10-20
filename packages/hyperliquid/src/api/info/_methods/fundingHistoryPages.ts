@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import { fetchPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { fetchPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import { fundingHistory, type FundingHistoryParameters, type FundingHistoryResponse } from "./fundingHistory.ts";
 
 /** Request parameters for the {@linkcode fundingHistoryPages} function. */
@@ -25,7 +25,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Async generator yielding pages of historical funding rate records for an asset.
  *
  * @throws {ValidationError} When the pagination options fail validation (thrown by the first
@@ -53,10 +54,10 @@ export function fundingHistoryPages(
   config: InfoConfig,
   params: FundingHistoryPagesParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): AsyncGenerator<FundingHistoryResponse, void, undefined> {
   return fetchPages(
-    (startTime) => fundingHistory(config, { ...params, startTime }, signal),
+    (startTime) => fundingHistory(config, { ...params, startTime }, signalOrOptions),
     Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
     500, // the server returns at most 500 funding records per response
     (record) => record.time,

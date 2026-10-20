@@ -43,8 +43,7 @@ export type DelegationsResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode delegations} function. */
 export type DelegationsParameters = Omit<v.InferInput<typeof DelegationsRequest>, "type">;
@@ -54,7 +53,8 @@ export type DelegationsParameters = Omit<v.InferInput<typeof DelegationsRequest>
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of user's delegations to validators.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -77,11 +77,16 @@ export type DelegationsParameters = Omit<v.InferInput<typeof DelegationsRequest>
 export function delegations(
   config: InfoConfig,
   params: DelegationsParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<DelegationsResponse> {
-  const request = parse(DelegationsRequest, {
-    type: "delegations",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    DelegationsRequest,
+    {
+      type: "delegations",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

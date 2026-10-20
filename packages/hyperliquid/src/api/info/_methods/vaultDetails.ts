@@ -127,8 +127,7 @@ export type VaultDetailsResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode vaultDetails} function. */
 export type VaultDetailsParameters = Omit<v.InferInput<typeof VaultDetailsRequest>, "type">;
@@ -138,7 +137,8 @@ export type VaultDetailsParameters = Omit<v.InferInput<typeof VaultDetailsReques
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Details of a vault or null if the vault does not exist.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -161,11 +161,16 @@ export type VaultDetailsParameters = Omit<v.InferInput<typeof VaultDetailsReques
 export function vaultDetails(
   config: InfoConfig,
   params: VaultDetailsParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<VaultDetailsResponse> {
-  const request = parse(VaultDetailsRequest, {
-    type: "vaultDetails",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    VaultDetailsRequest,
+    {
+      type: "vaultDetails",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

@@ -4,7 +4,7 @@
 
 import * as v from "valibot";
 import { parse } from "../../../_base.ts";
-import { fetchPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { fetchPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import { userFillsByTime, type UserFillsByTimeParameters, type UserFillsByTimeResponse } from "./userFillsByTime.ts";
 
 /** Request parameters for the {@linkcode userFillsByTimePages} function. */
@@ -34,7 +34,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Async generator yielding pages of user trade fills by time.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending), or when
@@ -63,7 +64,7 @@ export function userFillsByTimePages(
   config: InfoConfig,
   params: UserFillsByTimePagesParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): AsyncGenerator<UserFillsByTimeResponse, void, undefined> {
   // `reversed` is excluded at the type level; this rejects it for untyped callers, before any request.
   parse(
@@ -76,7 +77,7 @@ export function userFillsByTimePages(
     params.reversed,
   );
   return fetchPages(
-    (startTime) => userFillsByTime(config, { ...params, startTime }, signal),
+    (startTime) => userFillsByTime(config, { ...params, startTime }, signalOrOptions),
     Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
     2000, // the server returns at most 2000 fills per response
     (fill) => fill.time,

@@ -49,8 +49,7 @@ export type FundingHistoryResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode fundingHistory} function. */
 export type FundingHistoryParameters = Omit<v.InferInput<typeof FundingHistoryRequest>, "type">;
@@ -63,7 +62,8 @@ export type FundingHistoryParameters = Omit<v.InferInput<typeof FundingHistoryRe
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of historical funding rate records for an asset.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -87,11 +87,16 @@ export type FundingHistoryParameters = Omit<v.InferInput<typeof FundingHistoryRe
 export function fundingHistory(
   config: InfoConfig,
   params: FundingHistoryParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<FundingHistoryResponse> {
-  const request = parse(FundingHistoryRequest, {
-    type: "fundingHistory",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    FundingHistoryRequest,
+    {
+      type: "fundingHistory",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

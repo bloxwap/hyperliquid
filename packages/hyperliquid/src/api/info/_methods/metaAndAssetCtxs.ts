@@ -36,8 +36,7 @@ export type MetaAndAssetCtxsResponse = [
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { type InfoConfig, isAbortSignal } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, isAbortSignal, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode metaAndAssetCtxs} function. */
 export type MetaAndAssetCtxsParameters = Omit<v.InferInput<typeof MetaAndAssetCtxsRequest>, "type">;
@@ -47,7 +46,8 @@ export type MetaAndAssetCtxsParameters = Omit<v.InferInput<typeof MetaAndAssetCt
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Metadata and context for perpetual assets.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -68,20 +68,24 @@ export type MetaAndAssetCtxsParameters = Omit<v.InferInput<typeof MetaAndAssetCt
 export function metaAndAssetCtxs(
   config: InfoConfig,
   params?: MetaAndAssetCtxsParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<MetaAndAssetCtxsResponse>;
 export function metaAndAssetCtxs(config: InfoConfig, signal?: AbortSignal): Promise<MetaAndAssetCtxsResponse>;
 export function metaAndAssetCtxs(
   config: InfoConfig,
   paramsOrSignal?: MetaAndAssetCtxsParameters | AbortSignal,
-  maybeSignal?: AbortSignal,
+  maybeSignalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<MetaAndAssetCtxsResponse> {
   const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
-  const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
+  const { signal, skipValidation } = infoOptions(isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignalOrOptions);
 
-  const request = parse(MetaAndAssetCtxsRequest, {
-    type: "metaAndAssetCtxs",
-    ...params,
-  });
+  const request = parseInfo(
+    MetaAndAssetCtxsRequest,
+    {
+      type: "metaAndAssetCtxs",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }
