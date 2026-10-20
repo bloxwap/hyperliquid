@@ -35,6 +35,8 @@ jobs:
   # changes the workload being compared and is flagged for explicit review, not waved through.
   # If this job flaps, widen the threshold — do not add retries and do not drop the job.
   perf:
+    # Security: never run fork PR code on the self-hosted runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, ARM64]
 
     steps:
