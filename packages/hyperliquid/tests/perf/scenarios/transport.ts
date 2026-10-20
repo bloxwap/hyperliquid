@@ -15,9 +15,18 @@
  * @module
  */
 
-import { HttpTransport, WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
+import { ExchangeClient, HttpTransport, WebSocketQuota, WebSocketTransport } from "@bloxwap/hyperliquid";
+import { buildOrder } from "@bloxwap/hyperliquid/actions";
+import { privateKeyToAccount } from "viem/accounts";
 import { scenario } from "../_harness.ts";
-import { installMockWebSocket, lastMockWebSocket, type MockWebSocket, restoreWebSocket } from "../_helpers.ts";
+import {
+  installMockWebSocket,
+  lastMockWebSocket,
+  type MockWebSocket,
+  ORDER_SUCCESS,
+  restoreWebSocket,
+  TEST_PRIVATE_KEY,
+} from "../_helpers.ts";
 
 /** A minimal `allMids` body — small on purpose, so decode cost does not dominate. */
 const SMALL_BODY = JSON.stringify({ BTC: "97000.0", ETH: "3400.5" });
@@ -36,15 +45,17 @@ interface HttpContext {
  * The stub builds a real `Response`, because that is what the transport consumes
  * (`headers.get`, `text()`); its construction cost is a constant included in every sample.
  */
-function httpContext(): HttpContext {
+function httpContext(transport = new HttpTransport(), responseBody = SMALL_BODY): HttpContext {
   const originalFetch = globalThis.fetch;
   const served = { count: 0 };
   globalThis.fetch = ((_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
     served.count++;
-    return Promise.resolve(new Response(SMALL_BODY, { status: 200, headers: { "Content-Type": "application/json" } }));
+    return Promise.resolve(
+      new Response(responseBody, { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
   }) as typeof globalThis.fetch;
 
-  return { transport: new HttpTransport(), originalFetch, served };
+  return { transport, originalFetch, served };
 }
 
 /** Restores the `fetch` implementation the scenario replaced. */
@@ -96,6 +107,127 @@ scenario({
   }),
   run: async ({ transport, controller }: HttpContext & { controller: AbortController }) => {
     await transport.request("info", { type: "allMids" }, controller.signal);
+  },
+  teardown: restoreFetch,
+});
+
+// --- HTTP, rate-limited ------------------------------------------------------
+// The opt-in token bucket, sized so it never empties: what remains is the per-request billing
+// cost itself — computing the weight (verified against the wire string, no JSON round-trip)
+// and the bucket bookkeeping.
+
+/** A bucket that never waits: the refill dwarfs anything a sample can spend. */
+function rateLimitedContext(): HttpContext {
+  return httpContext(new HttpTransport({ rateLimit: { capacity: 1_000_000_000, refillPerMinute: 1_000_000_000 } }));
+}
+
+scenario({
+  name: "transport/http_request_rate_limited",
+  group: "transport",
+  description: "HttpTransport.request() with the rate limiter enabled (weight billing only; the bucket never waits)",
+  unit: "request",
+  iterations: 200,
+  samples: 25, // see transport/http_request for why 25
+  setup: rateLimitedContext,
+  run: async ({ transport }: HttpContext) => {
+    await transport.request("info", { type: "allMids" });
+  },
+  teardown: restoreFetch,
+});
+
+// ~5 KB info body: billing used to parse the whole wire string to read one `type`, so a large
+// body is where the verified-type fast path diverges from the old JSON round-trip. The payload
+// is built once — the transport never mutates it — so only the per-request cost is measured.
+
+/** A ~5 KB `userFillsByTime` request: a realistic small head plus a sizeable array field. */
+const LARGE_INFO_PAYLOAD = {
+  type: "userFillsByTime",
+  user: "0x0000000000000000000000000000000000000001",
+  startTime: 1_700_000_000_000,
+  aggregateByTime: false,
+  filter: Array.from({ length: 100 }, (_, i) => ({ coin: `COIN${i}`, tid: i * 1_000_003 })),
+};
+
+scenario({
+  name: "transport/http_request_rate_limited_large_info",
+  group: "transport",
+  description:
+    "HttpTransport.request() rate-limited, with a ~5 KB info body (weight verification vs a full wire-body parse)",
+  unit: "request",
+  iterations: 200,
+  samples: 25, // see transport/http_request for why 25
+  setup: rateLimitedContext,
+  run: async ({ transport }: HttpContext) => {
+    await transport.request("info", LARGE_INFO_PAYLOAD);
+  },
+  teardown: restoreFetch,
+});
+
+// A 100-order batch through ExchangeClient over the rate-limited HttpTransport (~8 KB wire
+// body). One ECDSA signature per batch is included, so the figures are per order, like
+// transaction/order_batch_100. `client.order()` sends an envelope the wire registry does not
+// know, so billing still parses the wire body; `client.execute(buildOrder(...))` sends an
+// SDK-registered canonical envelope, which billing walks directly without the parse.
+
+/** ExchangeClient over a never-waiting, rate-limited HttpTransport answering ORDER_SUCCESS. */
+function rateLimitedExchangeContext(): HttpContext & { client: ExchangeClient } {
+  const context = httpContext(
+    new HttpTransport({ isTestnet: true, rateLimit: { capacity: 1_000_000_000, refillPerMinute: 1_000_000_000 } }),
+    JSON.stringify(ORDER_SUCCESS),
+  );
+  const client = new ExchangeClient({ transport: context.transport, wallet: privateKeyToAccount(TEST_PRIVATE_KEY) });
+  return { ...context, client };
+}
+
+scenario({
+  name: "transport/http_order_batch_100_rate_limited",
+  group: "transport",
+  description: "ExchangeClient.order() with 100 orders over a rate-limited HttpTransport (stubbed fetch), per order",
+  unit: "order",
+  unitsPerIteration: 100,
+  iterations: 10,
+  samples: 10,
+  setup: rateLimitedExchangeContext,
+  run: async ({ client }: HttpContext & { client: ExchangeClient }) => {
+    await client.order({
+      orders: Array.from({ length: 100 }, (_, i) => ({
+        a: i % 200,
+        b: i % 2 === 0,
+        p: "30000",
+        s: "0.001",
+        r: false,
+        t: { limit: { tif: "Gtc" as const } },
+      })),
+      grouping: "na",
+    });
+  },
+  teardown: restoreFetch,
+});
+
+scenario({
+  name: "transport/http_execute_order_batch_100_rate_limited",
+  group: "transport",
+  description:
+    "ExchangeClient.execute(buildOrder()) with 100 orders over a rate-limited HttpTransport (stubbed fetch), per order",
+  unit: "order",
+  unitsPerIteration: 100,
+  iterations: 10,
+  samples: 10,
+  setup: rateLimitedExchangeContext,
+  run: async ({ client }: HttpContext & { client: ExchangeClient }) => {
+    await client.execute(
+      buildOrder({
+        orders: Array.from({ length: 100 }, (_, i) => ({
+          a: i % 200,
+          b: i % 2 === 0,
+          p: "30000",
+          s: "0.001",
+          r: false,
+          t: { limit: { tif: "Gtc" as const } },
+        })),
+        grouping: "na",
+      }),
+    );
   },
   teardown: restoreFetch,
 });
