@@ -165,6 +165,22 @@ const REQUESTS: [name: string, schema: v.GenericSchema, input: unknown][] = [
     { setOracle: { externalPerpPxs: [], markPxs: [], oraclePxs: [], dex: "test" }, type: "perpDeploy" },
   ],
   [
+    "spotDeploy setTokenAnnotation (nullable displayName present)",
+    exchange.SpotDeployRequest.entries.action as v.GenericSchema,
+    {
+      setTokenAnnotation: {
+        annotation: { keywords: ["test"], displayName: null, description: "d", category: "defi" },
+        token: 0,
+      },
+      type: "spotDeploy",
+    },
+  ],
+  [
+    "spotDeploy setDeployerLabel",
+    exchange.SpotDeployRequest.entries.action as v.GenericSchema,
+    { setDeployerLabel: { label: "abc" }, type: "spotDeploy" },
+  ],
+  [
     "usdSend (user-signed envelope)",
     exchange.UsdSendRequest.entries.action as v.GenericSchema,
     {

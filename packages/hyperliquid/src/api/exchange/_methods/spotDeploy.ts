@@ -143,6 +143,41 @@ export const SpotDeployRequest = /* @__PURE__ */ (() => {
         /** Type of action. */
         type: v.literal("spotDeploy"),
         /**
+         * Set token annotation parameters.
+         * Optional; can be sent any time after `registerToken2`. The annotation can change at most once per day.
+         */
+        setTokenAnnotation: v.object({
+          /** Token identifier. */
+          token: UnsignedInteger,
+          /** Token annotation metadata. */
+          annotation: v.object({
+            /** Token category (up to 15 characters). */
+            category: v.pipe(v.string(), v.maxLength(15)),
+            /** Token description (up to 400 characters). */
+            description: v.pipe(v.string(), v.maxLength(400)),
+            /** Display name (up to 9 characters), or `null` for none. */
+            displayName: v.nullable(v.pipe(v.string(), v.maxLength(9))),
+            /** Search keywords (up to 2 keywords, each up to 10 characters). */
+            keywords: v.pipe(v.array(v.pipe(v.string(), v.maxLength(10))), v.maxLength(2)),
+          }),
+        }),
+      }),
+      v.object({
+        /** Type of action. */
+        type: v.literal("spotDeploy"),
+        /**
+         * Set deployer label parameters.
+         * The label is displayed for the deployer's tokens and can only be set once per deployer.
+         */
+        setDeployerLabel: v.object({
+          /** Deployer label: 2-4 lowercase characters, unique across perp dexs and other deployer labels. */
+          label: v.pipe(v.string(), v.minLength(2), v.maxLength(4), v.regex(/^[a-z]+$/)),
+        }),
+      }),
+      v.object({
+        /** Type of action. */
+        type: v.literal("spotDeploy"),
+        /**
          * Request link of a HyperCore spot token to an ERC-20 contract on the HyperEVM.
          * Must be sent by the spot deployer. The link is finalized by the EVM deployer via {@link finalizeEvmContract}.
          * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/hypercore-less-than-greater-than-hyperevm-transfers
