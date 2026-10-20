@@ -194,6 +194,21 @@ When an entry is resolved upstream (docs fixed, or server aligned with docs), mo
 - **SDK behavior:** `AllPerpMetasResponse` follows the plain-object format. `SymbolConverter` uses it for
   four-request all-DEX reloads and rejects registry/metadata mismatches before publishing asset IDs.
 
+### 16. `spotDeploy` gained `setTokenAnnotation` and `setDeployerLabel`
+
+- **Observed:** 2026-10-20.
+- **Docs claim:** the
+  [HIP-1/HIP-2 deployment page](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/deploying-hip-1-and-hip-2-assets)
+  documents two `spotDeploy` variants the SDK did not cover: `setTokenAnnotation`
+  (`{ token, annotation: { category, description, displayName, keywords } }`, with `displayName` nullable and
+  documented length limits) and `setDeployerLabel` (`{ label }`, 2-4 lowercase characters, settable once per
+  deployer).
+- **Server reality:** unverified; no live probe was run for this entry.
+- **SDK behavior:** fixed. Both variants are implemented with the documented key order (which decides the signed
+  msgpack bytes) and client-side validation of the documented limits
+  (`packages/hyperliquid/src/api/exchange/_methods/spotDeploy.ts`). The entry stays open until server behavior is
+  verified.
+
 ## Resolved
 
 _None yet._
