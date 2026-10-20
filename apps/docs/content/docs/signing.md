@@ -651,41 +651,59 @@ already create today.
 
 ## Low-latency recipe (bots / HFT)
 
-Stack the accelerators when signature latency is on the critical path:
+Stack the accelerators when signature and request latency are on the critical path:
 
-1. **`createFastLocalWallet`** — halves ECDSA (~55 µs vs ~85 µs). ECDSA is ~90% of a single-order `signL1Action`.
-2. **`hash-wasm`** — ambient keccak speedup on every L1 hash and Agent digest (install the optional dep; no code change).
-3. **`skipValidation: true`** — skip the valibot parse + key canonicalization on trusted, already-canonical wire input
-   (~3× less non-ECDSA CPU). See [ExchangeClient](clients.md#skipping-validation-unsafe) for the contract.
-4. **`await exchange.warmup()`** at start-up — the first order a cold process signs is several times slower than the
-   steady state (measured ~5.5 ms vs ~0.1 ms with a viem local account): the WASM keccak is still loading, the curve's
-   precomputed tables are not built, and nothing is compiled yet. `warmup()` settles all three (first order ~1.3 ms)
-   without sending anything or consuming a nonce. It signs throwaway data only with keys held in the process (viem
-   `privateKeyToAccount` / `mnemonicToAccount` / `hdKeyToAccount`, `createFastLocalWallet`, or a `WalletClient`
-   wrapping one) — never with a JSON-RPC wallet or a custom HSM / MPC / remote signer. `warmupSigning(wallet)` from
+1. **Batch orders.** Put many orders into one `exchange.order({ orders: [...] })` call: the whole batch is a single
+   action with a single signature, which amortizes both the ECDSA cost and the request round trip. When orders arrive
+   from independent call sites, [`createOrderBatcher`](clients.md#optional-order-batching) (from
+   `@bloxwap/hyperliquid/actions/orderBatcher`) collects them into shared actions automatically.
+2. **`createFastLocalWallet`.** WASM secp256k1 signing for every signature that remains (measured below).
+3. **`hash-wasm`.** Ambient keccak speedup on every L1 hash and Agent digest. Install the optional dep; no code change.
+4. **`skipValidation: true`.** Skip the valibot parse and key canonicalization on trusted, already-canonical wire
+   input (about 3× less non-ECDSA CPU). See [ExchangeClient](clients.md#skipping-validation-unsafe) for the contract.
+5. **`await exchange.warmup()`.** Run it at start-up: the first order a cold process signs is several times slower than
+   the steady state (measured ~5.5 ms vs ~0.1 ms with a viem local account). The WASM keccak is still loading, the
+   curve's precomputed tables are not built, and nothing is compiled yet. `warmup()` settles all three (first order
+   ~1.3 ms) without sending anything or consuming a nonce. It signs throwaway data only with keys held in the process
+   (viem `privateKeyToAccount` / `mnemonicToAccount` / `hdKeyToAccount`, `createFastLocalWallet`, or a `WalletClient`
+   wrapping one), never with a JSON-RPC wallet or a custom HSM / MPC / remote signer. `warmupSigning(wallet)` from
    `@bloxwap/hyperliquid/signing` does the signing part without a client.
+
+Measured (median of `bun run tests/perf/run.ts`, Bun 1.4.2 on a Linux x64 box with an Intel Xeon CPU; results vary by
+machine):
+
+- **Signing.** `signing/sign_l1_action_order_1`: ~159 µs per signed order with a viem local account, ~118 µs with
+  `createFastLocalWallet`, about 26% less.
+- **End to end.** `transaction/order_sequential` (one order per `order()` call, viem wallet, zero-latency mock
+  transport): ~161 µs per order. `transaction/order_batch_100` (100 orders in one `order()` call): ~3.2 µs per order,
+  about 50x less, because one action carries one signature for the whole batch.
 
 ```ts
 import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { createFastLocalWallet } from "@bloxwap/hyperliquid/signing";
 
-// npm i tiny-secp256k1 hash-wasm   # optional deps; install explicitly if your package manager skips them
+// Install the optional deps explicitly if your package manager skips them: npm i tiny-secp256k1 hash-wasm
 const wallet = await createFastLocalWallet("0x...");
 const exchange = new ExchangeClient({ transport: new HttpTransport(), wallet });
-await exchange.warmup(); // before the first latency-sensitive order
+await exchange.warmup(); // settle the WASM modules and the JIT before the first latency-sensitive order
 
-// Action must already be in canonical wire form (schema key order, normalized decimals, lowercase hex, defaults filled).
+// One call carries one signature for the whole batch.
+// The action must already be in canonical wire form when skipValidation is set.
 await exchange.order(
   {
-    orders: [{ a: 0, b: true, p: "95000", s: "0.01", r: false, t: { limit: { tif: "Gtc" } } }],
+    orders: [
+      { a: 0, b: true, p: "95000", s: "0.01", r: false, t: { limit: { tif: "Gtc" } } },
+      { a: 0, b: true, p: "94900", s: "0.02", r: false, t: { limit: { tif: "Gtc" } } },
+      { a: 0, b: false, p: "95100", s: "0.01", r: false, t: { limit: { tif: "Gtc" } } },
+    ],
     grouping: "na",
   },
   { skipValidation: true },
 );
 ```
 
-Without step 3 the other steps still apply and are safe for any input. Step 3 is an escape hatch: invalid input is no
-longer a client-side `ValidationError` — the server rejects it instead.
+Without `skipValidation: true` the other steps still apply and are safe for any input. Skipping validation is an
+escape hatch: invalid input is no longer a client-side `ValidationError`; the server rejects it instead.
 
 ## Helpers
 
