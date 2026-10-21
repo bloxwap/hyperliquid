@@ -316,9 +316,9 @@
   "scripts": {
     "//check": "SDK checks; workspace formatting, linting, and documentation checks run from the root.",
     "check": "bun run check:types && bun run check:ts7 && bun run check:jsdoc && bun run check:export && bun run check:imports",
-    "//check:types": "Type-checks sources, tests and dev scripts with tsrs (the Rust port of the TypeScript 7 compiler; ~30x faster than tsc 5.9 here). `check:types:tsc` is the TypeScript 5 fallback, which also remains the version the JS-API tooling pins and the compiler the published-consumer check uses.",
+    "//check:types": "Type-checks sources, tests and dev scripts with tsrs (the Rust port of the TypeScript 7 compiler; ~30x faster than tsc 5.9 here). `typecheck:tsc` is the TypeScript 5 fallback (tsrs ships no Windows or Intel macOS binary), which also remains the version the JS-API tooling pins and the compiler the published-consumer check uses.",
     "check:types": "tsrs --project tsconfig.json",
-    "check:types:tsc": "tsc --project tsconfig.json",
+    "typecheck:tsc": "tsc --project tsconfig.json",
     "//check:ts7": "Forward-compatibility gate: TypeScript 7 (native) over src/. See .dev/ts7/tsconfig.json.",
     "check:ts7": "cd .dev/ts7 && bun install --frozen-lockfile && ./node_modules/.bin/tsc --project tsconfig.json",
     "//check:jsdoc": "Verifies JSDoc on API methods stays in sync with the schemas.",

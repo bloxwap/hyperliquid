@@ -51,6 +51,7 @@ code generation.
 - Native HTML details, summaries, and explicit anchors are supported. Existing code examples remain Markdown.
 
 Run `bun run docs:check` from the repository root to check content and app types.
+App types are checked with tsrs (`bun run typecheck` in `apps/docs`), which also runs before `next build`; Next's own TypeScript pass is off (`typescript.ignoreBuildErrors` in `next.config.mjs`), so type errors still fail the build. On Windows or Intel macOS, where tsrs has no binary, run `bun run typecheck:tsc` instead.
 For content checks alone, run `bun run check:docs` from the root or `bun run check:content` from `apps/docs`.
 The repository's `bun run check` also formats and lints app source.
 
