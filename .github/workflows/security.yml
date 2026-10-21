@@ -8,13 +8,43 @@ on:
     - cron: "17 5 * * 1"
   workflow_dispatch:
 
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
-  osv-scan:
+  changes:
     # Security: never run fork PR code on the self-hosted runner.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      dependencies: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.dependencies }}
+    steps:
+      # Scan only when PRs change the two scanned lockfiles, manifests/overrides, or scan implementation.
+      # Non-PR events always run every heavy job, including reusable-workflow calls.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          filters: |
+            dependencies:
+              - 'bun.lock'
+              - 'packages/hyperliquid/.dev/ts7/bun.lock'
+              - '**/package.json'
+              - '.github/scripts/osv-scan.sh'
+              - '.github/workflows/security.yml'
+
+  osv-scan:
+    needs: changes
+    # Security: never run fork PR code on the self-hosted runner.
+    if: needs.changes.outputs.dependencies == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     name: OSV-Scanner (dependency vulnerabilities)
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 15
