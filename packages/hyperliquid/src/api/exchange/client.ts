@@ -19,8 +19,10 @@ import {
   type ActionOptions,
 } from "../../actions/execution.ts";
 import { preloadWasmKeccak } from "../../signing/mod.ts";
+import { preloadPrivateKeyWallet } from "../../signing/_privateKeyWallet.ts";
 import { SymbolConverter } from "../../utils/mod.ts";
 import type { ExchangeConfig, ExchangeSingleWalletConfig } from "./_methods/_base/mod.ts";
+import { configWallet } from "./_methods/_base/_wallet.ts";
 
 // ============================================================
 // Methods Imports
@@ -542,23 +544,23 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * @example Local key — fastest
    * ```ts
    * import * as hl from "@bloxwap/hyperliquid";
-   * import { createFastLocalWallet } from "@bloxwap/hyperliquid/signing";
    *
-   * const wallet = await createFastLocalWallet("0x...");
    * const transport = new hl.HttpTransport(); // or `WebSocketTransport`
    *
-   * const client = new hl.ExchangeClient({ transport, wallet });
+   * const client = new hl.ExchangeClient({ transport, wallet: "0x..." }); // raw 32-byte private key
    * ```
    *
    * secp256k1 is ~90% of the cost of signing an order, so which curve implementation the wallet
-   * uses dominates every write path. {@linkcode createFastLocalWallet} signs on WASM
-   * libsecp256k1 and measures **71.3 µs per `order()` against 106.6 µs** for the viem local
-   * account below (−33.6%, paired across 90 interleaved runs); the signature is byte-identical.
-   * It needs the optional `tiny-secp256k1` dependency and transparently falls back to the viem
-   * path when that is unavailable, so it is safe to prefer unconditionally.
+   * uses dominates every write path. A raw private key string signs with the WASM secp256k1 of the
+   * optional `tiny-secp256k1` dependency by default, falling back to pure-JS `@noble/curves` when
+   * the WASM module cannot load (e.g. in a bundled browser app); the signature is byte-identical
+   * either way. Measured on an Intel Xeon box with a zero-latency mock transport: ~104 µs per
+   * `order()` against ~274 µs for a viem local account on Node 24, ~102 µs against ~155 µs on
+   * Bun 1.4. To opt out, pass a viem account (`privateKeyToAccount(key)`) or
+   * `createFastLocalWallet(key, { wasm: false })` as the wallet instead.
    *
-   * The SDK cannot make this choice for you: it receives an opaque wallet object, and a viem
-   * local account does not expose the key material needed to upgrade it.
+   * Wallet objects are never upgraded: a viem local account does not expose the key material, so
+   * it keeps signing on viem's pure-JS secp256k1.
    *
    * @example [viem](https://viem.sh/docs/clients/wallet#local-accounts-private-key-mnemonic-etc)
    * ```ts
@@ -594,6 +596,14 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
     // Start loading the optional WASM keccak now rather than on the first hash, so it is usually
     // ready before the first action is signed. Never rejects; see `preloadWasmKeccak`.
     void preloadWasmKeccak();
+    // A raw private key gets the same treatment for its signing backend: kick the one-time WASM
+    // load + self-check now so the first order does not pay it. The preload rejects only for a
+    // well-formed key outside the secp256k1 scalar range; that must surface on the first signing
+    // call (the memoized init re-rejects there), so the background rejection is swallowed here.
+    // A malformed string instead throws synchronously from `configWallet`, by contract.
+    if ("wallet" in config && typeof config.wallet === "string") {
+      void preloadPrivateKeyWallet(configWallet(config as ExchangeSingleWalletConfig)).catch(() => {});
+    }
   }
 
   /**
@@ -637,11 +647,11 @@ export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfi
    * built yet, and none of the validation or signing code is compiled. Call this during start-up,
    * before the first latency-sensitive action.
    *
-   * Signs throwaway data only with wallets whose key is held in this process (viem
-   * `privateKeyToAccount` / `mnemonicToAccount` / `hdKeyToAccount`, `createFastLocalWallet`, or a
-   * viem `WalletClient` wrapping one). JSON-RPC wallets and custom signers (HSM, MPC, remote
-   * services) are never asked to sign; they get the hash-path warm-up only. Nothing is sent and no
-   * nonce is consumed.
+   * Signs throwaway data only with wallets whose key is held in this process (a raw private key
+   * string passed as `wallet`, viem `privateKeyToAccount` / `mnemonicToAccount` /
+   * `hdKeyToAccount`, `createFastLocalWallet`, or a viem `WalletClient` wrapping one). JSON-RPC
+   * wallets and custom signers (HSM, MPC, remote services) are never asked to sign; they get the
+   * hash-path warm-up only. Nothing is sent and no nonce is consumed.
    *
    * @return A promise that resolves when the warm-up has finished.
    *
