@@ -316,8 +316,9 @@
   "scripts": {
     "//check": "SDK checks; workspace formatting, linting, and documentation checks run from the root.",
     "check": "bun run check:types && bun run check:ts7 && bun run check:jsdoc && bun run check:export && bun run check:imports",
-    "//check:types": "TypeScript 5 pass over sources and tests (the version the JS-API tooling pins).",
-    "check:types": "tsc --project tsconfig.json",
+    "//check:types": "Type-checks sources, tests and dev scripts with tsrs (the Rust port of the TypeScript 7 compiler; ~30x faster than tsc 5.9 here). `check:types:tsc` is the TypeScript 5 fallback, which also remains the version the JS-API tooling pins and the compiler the published-consumer check uses.",
+    "check:types": "tsrs --project tsconfig.json",
+    "check:types:tsc": "tsc --project tsconfig.json",
     "//check:ts7": "Forward-compatibility gate: TypeScript 7 (native) over src/. See .dev/ts7/tsconfig.json.",
     "check:ts7": "cd .dev/ts7 && bun install --frozen-lockfile && ./node_modules/.bin/tsc --project tsconfig.json",
     "//check:jsdoc": "Verifies JSDoc on API methods stays in sync with the schemas.",
@@ -333,6 +334,7 @@
     "perf": "bun run tests/perf/run.ts",
     "//perf:gate": "Zero-regression gate: fails if any scenario got materially slower than the baseline.",
     "perf:gate": "bun run .dev/perf/gate.ts",
+    "//build": "Emits declarations with tsrs; set HL_TSC=tsc to emit them with TypeScript 5 instead.",
     "build": "bun run .dev/build/build.ts"
   },
   "dependencies": {
@@ -356,6 +358,7 @@
     "decimal.js": "10.6.0",
     "esbuild": "0.28.2",
     "ts-json-schema-generator": "2.9.0",
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
     "typescript": "5.9.3",
     "viem": "2.55.8"
   },

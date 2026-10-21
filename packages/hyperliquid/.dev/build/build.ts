@@ -101,18 +101,30 @@ async function readRootManifest(): Promise<RootManifest> {
   return manifest;
 }
 
+/** Platforms tsrs publishes a native binary for (`@tsrs/*` optional dependencies). */
+const TSRS_PLATFORMS: ReadonlySet<string> = new Set(["darwin-arm64", "linux-x64", "linux-arm64"]);
+
+/**
+ * Declaration compiler: tsrs (the Rust port of the TypeScript 7 compiler) by default, or TypeScript 5 `tsc` when
+ * `HL_TSC=tsc` or on a platform tsrs ships no binary for (Windows, Intel macOS). Both emit semantically identical
+ * declarations; tsrs output is byte-identical to TypeScript 7.0.2's and differs from TypeScript 5's only in the order
+ * it prints union members.
+ */
+const DECLARATION_COMPILER: string =
+  process.env.HL_TSC === "tsc" || !TSRS_PLATFORMS.has(`${process.platform}-${process.arch}`) ? "tsc" : "tsrs";
+
 /**
  * Emits declaration files for `src/` into `dist/` (JavaScript is emitted by {@linkcode bundleSources}).
  *
- * @throws If `tsc` reports any diagnostic; its output is streamed to this process' stdio.
+ * @throws If the compiler reports any diagnostic; its output is streamed to this process' stdio.
  */
 async function emitDeclarations(): Promise<void> {
-  const tsc = Bun.spawn(["bunx", "tsc", "--project", BUILD_TSCONFIG], {
+  const compiler = Bun.spawn(["bunx", DECLARATION_COMPILER, "--project", BUILD_TSCONFIG], {
     cwd: ROOT_DIR,
     stdio: ["inherit", "inherit", "inherit"],
   });
-  const code = await tsc.exited;
-  if (code !== 0) throw new Error(`tsc exited with code ${code}`);
+  const code = await compiler.exited;
+  if (code !== 0) throw new Error(`${DECLARATION_COMPILER} exited with code ${code}`);
 }
 
 /**

@@ -6,7 +6,8 @@
     "dev": "fumadocs-mdx && next dev --port 3901",
     "preview": "bun run scripts/preview.ts",
     "build": "fumadocs-mdx && next build && bun run scripts/export-markdown.ts && bun run scripts/verify-export.ts",
-    "check": "bun run check:content && fumadocs-mdx && next typegen && tsc --noEmit",
+    "check": "bun run check:content && fumadocs-mdx && next typegen && tsrs --noEmit",
+    "check:tsc": "bun run check:content && fumadocs-mdx && next typegen && tsc --noEmit",
     "test": "bun test lib/",
     "check:content": "bun run scripts/check-content.ts && bun run scripts/lint-markdown.ts",
     "test:browser": "playwright test"
@@ -38,6 +39,7 @@
     "markdownlint": "0.41.1",
     "postcss": "8.5.28",
     "tailwindcss": "4.3.3",
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
     "typescript": "5.9.3"
   }
 }
