@@ -87,8 +87,7 @@ export type WebData2Response = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode webData2} function. */
 export type WebData2Parameters = Omit<v.InferInput<typeof WebData2Request>, "type">;
@@ -100,7 +99,8 @@ export type WebData2Parameters = Omit<v.InferInput<typeof WebData2Request>, "typ
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Comprehensive user and market data.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -121,11 +121,16 @@ export type WebData2Parameters = Omit<v.InferInput<typeof WebData2Request>, "typ
 export function webData2(
   config: InfoConfig,
   params: WebData2Parameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<WebData2Response> {
-  const request = parse(WebData2Request, {
-    type: "webData2",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    WebData2Request,
+    {
+      type: "webData2",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

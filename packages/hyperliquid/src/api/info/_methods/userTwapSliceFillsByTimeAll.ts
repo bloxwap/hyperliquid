@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { collectPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import type {
   UserTwapSliceFillsByTimeParameters,
   UserTwapSliceFillsByTimeResponse,
@@ -26,7 +26,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of user's TWAP slice fill by time.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -51,7 +52,7 @@ export function userTwapSliceFillsByTimeAll(
   config: InfoConfig,
   params: UserTwapSliceFillsByTimeAllParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserTwapSliceFillsByTimeResponse> {
-  return collectPages(userTwapSliceFillsByTimePages(config, params, options, signal));
+  return collectPages(userTwapSliceFillsByTimePages(config, params, options, signalOrOptions));
 }

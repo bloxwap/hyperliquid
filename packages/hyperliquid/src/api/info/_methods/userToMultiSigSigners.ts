@@ -36,8 +36,7 @@ export type UserToMultiSigSignersResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode userToMultiSigSigners} function. */
 export type UserToMultiSigSignersParameters = Omit<v.InferInput<typeof UserToMultiSigSignersRequest>, "type">;
@@ -47,7 +46,8 @@ export type UserToMultiSigSignersParameters = Omit<v.InferInput<typeof UserToMul
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Multi-sig signers for a user or null if the user does not have any multi-sig signers.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -68,11 +68,16 @@ export type UserToMultiSigSignersParameters = Omit<v.InferInput<typeof UserToMul
 export function userToMultiSigSigners(
   config: InfoConfig,
   params: UserToMultiSigSignersParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserToMultiSigSignersResponse> {
-  const request = parse(UserToMultiSigSignersRequest, {
-    type: "userToMultiSigSigners",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UserToMultiSigSignersRequest,
+    {
+      type: "userToMultiSigSigners",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

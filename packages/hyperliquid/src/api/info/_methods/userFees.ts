@@ -215,8 +215,7 @@ export type UserFeesResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode userFees} function. */
 export type UserFeesParameters = Omit<v.InferInput<typeof UserFeesRequest>, "type">;
@@ -226,7 +225,8 @@ export type UserFeesParameters = Omit<v.InferInput<typeof UserFeesRequest>, "typ
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return User fees.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -249,11 +249,16 @@ export type UserFeesParameters = Omit<v.InferInput<typeof UserFeesRequest>, "typ
 export function userFees(
   config: InfoConfig,
   params: UserFeesParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserFeesResponse> {
-  const request = parse(UserFeesRequest, {
-    type: "userFees",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UserFeesRequest,
+    {
+      type: "userFees",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

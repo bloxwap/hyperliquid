@@ -30,8 +30,7 @@ export type UserDexAbstractionResponse = boolean | null;
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode userDexAbstraction} function. */
 export type UserDexAbstractionParameters = Omit<v.InferInput<typeof UserDexAbstractionRequest>, "type">;
@@ -41,7 +40,8 @@ export type UserDexAbstractionParameters = Omit<v.InferInput<typeof UserDexAbstr
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return User HIP-3 DEX abstraction state.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -64,11 +64,16 @@ export type UserDexAbstractionParameters = Omit<v.InferInput<typeof UserDexAbstr
 export function userDexAbstraction(
   config: InfoConfig,
   params: UserDexAbstractionParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserDexAbstractionResponse> {
-  const request = parse(UserDexAbstractionRequest, {
-    type: "userDexAbstraction",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UserDexAbstractionRequest,
+    {
+      type: "userDexAbstraction",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

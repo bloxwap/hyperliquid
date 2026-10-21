@@ -72,8 +72,7 @@ export type HistoricalOrdersResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode historicalOrders} function. */
 export type HistoricalOrdersParameters = Omit<v.InferInput<typeof HistoricalOrdersRequest>, "type">;
@@ -86,7 +85,8 @@ export type HistoricalOrdersParameters = Omit<v.InferInput<typeof HistoricalOrde
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of frontend orders with current processing status.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -109,11 +109,16 @@ export type HistoricalOrdersParameters = Omit<v.InferInput<typeof HistoricalOrde
 export function historicalOrders(
   config: InfoConfig,
   params: HistoricalOrdersParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<HistoricalOrdersResponse> {
-  const request = parse(HistoricalOrdersRequest, {
-    type: "historicalOrders",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    HistoricalOrdersRequest,
+    {
+      type: "historicalOrders",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

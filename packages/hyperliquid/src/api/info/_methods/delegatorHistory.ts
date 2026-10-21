@@ -79,8 +79,7 @@ export type DelegatorHistoryResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode delegatorHistory} function. */
 export type DelegatorHistoryParameters = Omit<v.InferInput<typeof DelegatorHistoryRequest>, "type">;
@@ -90,7 +89,8 @@ export type DelegatorHistoryParameters = Omit<v.InferInput<typeof DelegatorHisto
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of records of staking events by a delegator.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -113,11 +113,16 @@ export type DelegatorHistoryParameters = Omit<v.InferInput<typeof DelegatorHisto
 export function delegatorHistory(
   config: InfoConfig,
   params: DelegatorHistoryParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<DelegatorHistoryResponse> {
-  const request = parse(DelegatorHistoryRequest, {
-    type: "delegatorHistory",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    DelegatorHistoryRequest,
+    {
+      type: "delegatorHistory",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

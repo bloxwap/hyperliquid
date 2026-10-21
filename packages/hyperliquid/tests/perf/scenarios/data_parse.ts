@@ -88,6 +88,44 @@ scenario({
   },
 });
 
+// --- Request validation -----------------------------------------------------
+// The request-side half of a call: valibot parse of the params versus the opt-in
+// `skipValidation` escape hatch. Normalized per CALL (not per element). The transport answers
+// with a tiny `{}` body, so the shared response decode stays far below the ~1 µs request parse
+// the pair brackets (a full clearinghouseState fixture costs ~20 µs to decode and buries it).
+
+scenario({
+  name: "data/info_request_validated",
+  group: "data",
+  description: "InfoClient.clearinghouseState() with default validation (valibot parse of the request), per call",
+  unit: "request",
+  // Sub-microsecond per call: many iterations per sample so timer resolution and JIT
+  // tier-up do not dominate (at 200 the pair measured inverted run to run).
+  iterations: 5_000,
+  samples: 25,
+  warmupSamples: 5,
+  setup: () => infoClient({ clearinghouseState: {} }),
+  run: async ({ client }: { client: InfoClient }) => {
+    await client.clearinghouseState({ user: FIXTURE_USER });
+  },
+});
+
+scenario({
+  name: "data/info_request_skip_validation",
+  group: "data",
+  description: "InfoClient.clearinghouseState() with { skipValidation: true } (no valibot parse), per call",
+  unit: "request",
+  // Sub-microsecond per call: many iterations per sample so timer resolution and JIT
+  // tier-up do not dominate (at 200 the pair measured inverted run to run).
+  iterations: 5_000,
+  samples: 25,
+  warmupSamples: 5,
+  setup: () => infoClient({ clearinghouseState: {} }),
+  run: async ({ client }: { client: InfoClient }) => {
+    await client.clearinghouseState({ user: FIXTURE_USER }, { skipValidation: true });
+  },
+});
+
 // --- Metadata + contexts --------------------------------------------------
 // The largest payload the API serves routinely: full perp metadata plus a context per
 // asset, fetched at startup and on every metadata refresh.

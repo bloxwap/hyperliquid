@@ -64,14 +64,14 @@ export type OutcomeTemplatesResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request outcome templates.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of templates that outcome deployers instantiate.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -89,9 +89,17 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/hip-4-deployer-actions#read-api
  */
-export function outcomeTemplates(config: InfoConfig, signal?: AbortSignal): Promise<OutcomeTemplatesResponse> {
-  const request = parse(OutcomeTemplatesRequest, {
-    type: "outcomeTemplates",
-  });
+export function outcomeTemplates(
+  config: InfoConfig,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<OutcomeTemplatesResponse> {
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    OutcomeTemplatesRequest,
+    {
+      type: "outcomeTemplates",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import { fetchPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { fetchPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import {
   userNonFundingLedgerUpdates,
   type UserNonFundingLedgerUpdatesParameters,
@@ -32,7 +32,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Async generator yielding pages of user's non-funding ledger update.
  *
  * @throws {ValidationError} When the pagination options fail validation (thrown by the first
@@ -60,10 +61,10 @@ export function userNonFundingLedgerUpdatesPages(
   config: InfoConfig,
   params: UserNonFundingLedgerUpdatesPagesParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): AsyncGenerator<UserNonFundingLedgerUpdatesResponse, void, undefined> {
   return fetchPages(
-    (startTime) => userNonFundingLedgerUpdates(config, { ...params, startTime }, signal),
+    (startTime) => userNonFundingLedgerUpdates(config, { ...params, startTime }, signalOrOptions),
     Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
     500, // time-ranged responses are documented to return at most 500 elements
     (update) => update.time,

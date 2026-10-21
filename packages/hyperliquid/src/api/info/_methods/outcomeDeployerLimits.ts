@@ -32,8 +32,7 @@ export type OutcomeDeployerLimitsResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode outcomeDeployerLimits} function. */
 export type OutcomeDeployerLimitsParameters = Omit<v.InferInput<typeof OutcomeDeployerLimitsRequest>, "type">;
@@ -43,7 +42,8 @@ export type OutcomeDeployerLimitsParameters = Omit<v.InferInput<typeof OutcomeDe
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Remaining daily and active outcome deployment capacity.
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-outcome-deployer-limits
  *
@@ -65,11 +65,16 @@ export type OutcomeDeployerLimitsParameters = Omit<v.InferInput<typeof OutcomeDe
 export function outcomeDeployerLimits(
   config: InfoConfig,
   params: OutcomeDeployerLimitsParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<OutcomeDeployerLimitsResponse> {
-  const request = parse(OutcomeDeployerLimitsRequest, {
-    type: "outcomeDeployerLimits",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    OutcomeDeployerLimitsRequest,
+    {
+      type: "outcomeDeployerLimits",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

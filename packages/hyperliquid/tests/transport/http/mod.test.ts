@@ -10,6 +10,8 @@ import { beforeEach, describe, test } from "bun:test";
 import { getEventListeners } from "node:events";
 import { assert, assertEquals, assertIsError, assertRejects } from "@jsr/std__assert";
 import { HttpRateLimitError, HttpRequestError, HttpTransport } from "@bloxwap/hyperliquid";
+import { buildOrder } from "../../../src/api/exchange/_methods/order.ts";
+import { registerExchangeWireRequest } from "../../../src/transport/_wire.ts";
 import { FakeRuntime } from "../../_fakeRuntime.ts";
 
 // =============================================================================
@@ -1221,6 +1223,26 @@ describe("HttpTransport", () => {
       clock = new FakeRuntime();
     });
 
+    /**
+     * Counts `JSON.parse` calls (recording the parsed strings) until `restore` runs. The
+     * weight fast paths bill WITHOUT parsing the request body; the only way to observe that
+     * from the outside is to watch the parse itself.
+     */
+    function countingJsonParse(): { parsedTexts: string[]; restore: () => void } {
+      const original = JSON.parse;
+      const parsedTexts: string[] = [];
+      JSON.parse = ((text: string) => {
+        parsedTexts.push(text);
+        return original(text);
+      }) as typeof JSON.parse;
+      return {
+        parsedTexts,
+        restore: () => {
+          JSON.parse = original;
+        },
+      };
+    }
+
     test("waits for weight before sending instead of throwing", async () => {
       const stub = fakeFetch(() => jsonResponse());
       const transport = new HttpTransport({
@@ -1482,6 +1504,254 @@ describe("HttpTransport", () => {
         await pending;
         assertEquals(stub.calls, 2);
       });
+
+      /**
+       * Asserts an info/exchange `payload` costing exactly `weight` tokens was billed WITHOUT
+       * its wire body going through `JSON.parse` (the fast path), then proves the weight the
+       * same way {@linkcode assertWeight} does.
+       */
+      async function assertFastPathWeight(
+        endpoint: "info" | "exchange",
+        payload: unknown,
+        weight: number,
+        wireBody: string,
+      ) {
+        const stub = fakeFetch(() => jsonResponse());
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: weight, refillPerMinute: 60 },
+        });
+
+        const counter = countingJsonParse();
+        try {
+          await transport.request(endpoint, payload);
+        } finally {
+          counter.restore();
+        }
+        assertEquals(stub.calls, 1);
+        assert(!counter.parsedTexts.includes(wireBody), "the fast path must not parse the request body");
+
+        const pending = transport.request("exchange", { action: { type: "noop" } }); // weight 1
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        clock.advance(999);
+        await flush();
+        assertEquals(stub.calls, 1);
+
+        clock.advance(1);
+        await pending;
+        assertEquals(stub.calls, 2);
+      }
+
+      /** An SDK-built order envelope, registered for wire-fragment reuse the way the execution shell does it. */
+      function sdkOrderEnvelope(orderCount: number) {
+        const request = {
+          action: buildOrder({
+            orders: Array.from({ length: orderCount }, () => ({
+              a: 0,
+              b: true,
+              p: "30000",
+              s: "0.1",
+              r: false,
+              t: { limit: { tif: "Gtc" as const } },
+            })),
+          }).payload,
+          signature: { r: "0x11", s: "0x22", v: 27 },
+          nonce: 1_700_000_000_000,
+        };
+        registerExchangeWireRequest(request, request.action);
+        return request;
+      }
+
+      // The documented info weights, billed off the payload's own `type` verified against the
+      // wire string — no JSON round-trip.
+      test("info weights 2/20/60 bill via the wire-verified fast path", async () => {
+        await assertFastPathWeight("info", { type: "allMids" }, 2, '{"type":"allMids"}');
+        await assertFastPathWeight("info", { type: "meta" }, 20, '{"type":"meta"}');
+        await assertFastPathWeight("info", { type: "userRole", user: "0x1" }, 60, '{"type":"userRole","user":"0x1"}');
+      });
+
+      test("an info payload whose `type` is not the first key falls back to the parsed wire form", async () => {
+        const stub = fakeFetch(() => jsonResponse());
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: 2, refillPerMinute: 60 },
+        });
+
+        // The wire keeps insertion order (`{"dex":"","type":"allMids"}`), so the `{"type":`
+        // prefix check fails and billing falls back to the parsed wire form — still weight 2.
+        const payload = { dex: "", type: "allMids" };
+        const counter = countingJsonParse();
+        try {
+          await transport.request("info", payload);
+        } finally {
+          counter.restore();
+        }
+        assert(counter.parsedTexts.includes('{"dex":"","type":"allMids"}'), "the fallback must parse the wire body");
+
+        const pending = transport.request("exchange", { action: { type: "noop" } }); // bucket empty: waits 1 s
+        await flush();
+        assertEquals(stub.calls, 1);
+        clock.advance(1_000);
+        await pending;
+        assertEquals(stub.calls, 2);
+      });
+
+      test("a wire type that only shares the live type's prefix is billed by the wire", async () => {
+        // The live `type` is "userRole" (60), but toJSON puts "userRoleX" (20) on the wire: the
+        // in-place match covers "userRole" and then finds `X` instead of the closing quote.
+        await assertWeight(
+          "info",
+          {
+            type: "userRole",
+            toJSON() {
+              return { type: "userRoleX" };
+            },
+          },
+          20,
+        );
+        // And the reverse: live "allMidsX" (20) with "allMids" (2) on the wire.
+        await assertWeight(
+          "info",
+          {
+            type: "allMidsX",
+            toJSON() {
+              return { type: "allMids" };
+            },
+          },
+          2,
+        );
+      });
+
+      test("a type containing a quote or backslash falls back to the parsed wire form", async () => {
+        for (const type of ['all"Mids', "all\\Mids"]) {
+          const stub = fakeFetch(() => jsonResponse());
+          const transport = new HttpTransport({ runtime: clock, fetch: stub.fetch, rateLimit: { capacity: 100 } });
+          const counter = countingJsonParse();
+          try {
+            await transport.request("info", { type });
+          } finally {
+            counter.restore();
+          }
+          assert(counter.parsedTexts.includes(JSON.stringify({ type })), "escaped types must parse the wire body");
+        }
+      });
+
+      test("an accessor `type` is billed by the wire form and runs exactly once", async () => {
+        const stub = fakeFetch(() => jsonResponse());
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: 2, refillPerMinute: 60 },
+        });
+
+        // The fast path declines accessors without invoking them, so the getter runs once —
+        // inside JSON.stringify — and the parsed wire form bills 2.
+        let calls = 0;
+        const payload = {
+          get type(): string {
+            calls++;
+            return "allMids";
+          },
+        };
+        const counter = countingJsonParse();
+        try {
+          await transport.request("info", payload);
+        } finally {
+          counter.restore();
+        }
+        assertEquals(calls, 1);
+        assert(counter.parsedTexts.includes('{"type":"allMids"}'), "the accessor payload must take the parse fallback");
+
+        const pending = transport.request("exchange", { action: { type: "noop" } }); // bucket empty: waits 1 s
+        await flush();
+        assertEquals(stub.calls, 1);
+        clock.advance(1_000);
+        await pending;
+        assertEquals(stub.calls, 2);
+      });
+
+      test("a Proxy payload is billed by the wire form", async () => {
+        // The proxy's own descriptor says "allMids" (2) but its `get` — which is what
+        // JSON.stringify invokes — says "userRole" (60). The wire disagrees with the
+        // descriptor, so the verification fails and the parsed wire form bills 60.
+        const payload = new Proxy(
+          { type: "allMids" },
+          {
+            get(target, prop, receiver) {
+              if (prop === "type") return "userRole";
+              return Reflect.get(target, prop, receiver);
+            },
+          },
+        );
+        await assertWeight("info", payload, 60);
+      });
+
+      test("SDK-built exchange envelopes bill by their action without parsing the wire body", async () => {
+        const envelope41 = sdkOrderEnvelope(41);
+        await assertFastPathWeight("exchange", envelope41, 2, JSON.stringify(envelope41));
+        const envelope80 = sdkOrderEnvelope(80);
+        await assertFastPathWeight("exchange", envelope80, 3, JSON.stringify(envelope80));
+        const envelope39 = sdkOrderEnvelope(39);
+        await assertFastPathWeight("exchange", envelope39, 1, JSON.stringify(envelope39));
+      });
+
+      test("an unregistered exchange payload keeps the parsed-wire billing", async () => {
+        // Not built by the SDK, so `exchangeWireJSON` declines and billing parses the wire
+        // form — the same 41-order batch costs 2.
+        const payload = { action: { type: "order", orders: Array.from({ length: 41 }) }, nonce: 1 };
+        const stub = fakeFetch(() => jsonResponse());
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: 2, refillPerMinute: 60 },
+        });
+
+        const counter = countingJsonParse();
+        try {
+          await transport.request("exchange", payload);
+        } finally {
+          counter.restore();
+        }
+        assert(counter.parsedTexts.includes(JSON.stringify(payload)), "unregistered payloads must parse the wire body");
+
+        const pending = transport.request("exchange", { action: { type: "noop" } }); // bucket empty: waits 1 s
+        await flush();
+        assertEquals(stub.calls, 1);
+        clock.advance(1_000);
+        await pending;
+        assertEquals(stub.calls, 2);
+      });
+
+      test("error request snapshots stay the parsed wire form, never the live payload", async () => {
+        const stub = fakeFetch(() => new Response("nope", { status: 500 }));
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: 1_000, refillPerMinute: 60 },
+        });
+
+        // The info fast path leaves `snapshot` unset, so the error path parses the wire body
+        // lazily: a plain-data copy, not the live object and not the surcharge stand-in.
+        const payload = { type: "allMids" };
+        const error = await assertRejects(() => transport.request("info", payload), HttpRequestError);
+        assertEquals(error.request, { type: "allMids" });
+        assert(error.request !== payload, "error.request must be a plain-data copy");
+        assertEquals(stub.calls, 1);
+
+        // Same on the exchange fast path: the SDK-built envelope fails, and the snapshot is
+        // the parsed wire form (signature redacted at any depth), not the registered envelope.
+        const envelope = sdkOrderEnvelope(41);
+        const exchangeError = await assertRejects(() => transport.request("exchange", envelope), HttpRequestError);
+        const request = exchangeError.request as Record<string, unknown>;
+        assert(request !== envelope, "error.request must be a plain-data copy");
+        assertEquals(request.action, JSON.parse(JSON.stringify(envelope.action)));
+        assertEquals(request.signature, "0x<redacted>");
+        assertEquals(stub.calls, 2);
+      });
     });
 
     describe("response-size surcharges", () => {
@@ -1534,6 +1804,57 @@ describe("HttpTransport", () => {
 
       test("no surcharge on endpoints the docs do not list", async () => {
         await assertSurcharge("info", { type: "allMids" }, 100, 2, 0);
+      });
+
+      test("the surcharge bills off the verified type without parsing the request body", async () => {
+        const stub = fakeFetch(() => jsonResponse(Array.from({ length: 25 })));
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: 20, refillPerMinute: 60 },
+        });
+
+        // The info fast path verified `userFills` against the wire before sending, so the
+        // post-response debit keys off that type — the request body is never parsed.
+        const payload = { type: "userFills", user: "0x1" };
+        const counter = countingJsonParse();
+        try {
+          await transport.request("info", payload);
+        } finally {
+          counter.restore();
+        }
+        assert(!counter.parsedTexts.includes(JSON.stringify(payload)), "the surcharge must reuse the verified type");
+
+        // ceil(25 / 20) = 2 debited after the response: the follow-up weight-1 request waits 3 s.
+        const pending = transport.request("exchange", { action: { type: "noop" } });
+        await flush();
+        assertEquals(stub.calls, 1);
+        clock.advance(2_000);
+        await flush();
+        assertEquals(stub.calls, 1);
+        clock.advance(1_000);
+        await pending;
+        assertEquals(stub.calls, 2);
+      });
+
+      test("explorer still parses the wire body lazily for the blockList surcharge", async () => {
+        const stub = fakeFetch(() => jsonResponse(Array.from({ length: 3 })));
+        const transport = new HttpTransport({
+          runtime: clock,
+          fetch: stub.fetch,
+          rateLimit: { capacity: 40, refillPerMinute: 60 },
+        });
+
+        // Explorer skipped the pre-send parse (flat weight 40), so the blockList surcharge
+        // parses the wire body after the response arrives.
+        const payload = { type: "blockList" };
+        const counter = countingJsonParse();
+        try {
+          await transport.request("explorer", payload);
+        } finally {
+          counter.restore();
+        }
+        assert(counter.parsedTexts.includes(JSON.stringify(payload)), "explorer must parse lazily for the surcharge");
       });
     });
 

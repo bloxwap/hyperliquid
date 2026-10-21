@@ -42,8 +42,7 @@ export type PreTransferCheckResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode preTransferCheck} function. */
 export type PreTransferCheckParameters = Omit<v.InferInput<typeof PreTransferCheckRequest>, "type">;
@@ -53,7 +52,8 @@ export type PreTransferCheckParameters = Omit<v.InferInput<typeof PreTransferChe
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Pre-transfer user existence check result.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -75,11 +75,16 @@ export type PreTransferCheckParameters = Omit<v.InferInput<typeof PreTransferChe
 export function preTransferCheck(
   config: InfoConfig,
   params: PreTransferCheckParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<PreTransferCheckResponse> {
-  const request = parse(PreTransferCheckRequest, {
-    type: "preTransferCheck",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    PreTransferCheckRequest,
+    {
+      type: "preTransferCheck",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

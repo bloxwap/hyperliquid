@@ -147,8 +147,7 @@ export type SpotClearinghouseStateResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode spotClearinghouseState} function. */
 export type SpotClearinghouseStateParameters = Omit<v.InferInput<typeof SpotClearinghouseStateRequest>, "type">;
@@ -158,7 +157,8 @@ export type SpotClearinghouseStateParameters = Omit<v.InferInput<typeof SpotClea
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Account summary for spot trading.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -181,11 +181,16 @@ export type SpotClearinghouseStateParameters = Omit<v.InferInput<typeof SpotClea
 export function spotClearinghouseState(
   config: InfoConfig,
   params: SpotClearinghouseStateParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<SpotClearinghouseStateResponse> {
-  const request = parse(SpotClearinghouseStateRequest, {
-    type: "spotClearinghouseState",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    SpotClearinghouseStateRequest,
+    {
+      type: "spotClearinghouseState",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

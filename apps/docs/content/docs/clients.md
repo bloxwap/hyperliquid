@@ -727,7 +727,8 @@ transport was not provided is a compile-time error.
 ### Cancellation
 
 Request methods of [`InfoClient`](#info-endpoint) and [`ExplorerClient`](#explorer-endpoint) accept an optional
-[`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) as the last argument:
+[`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) as the last argument (the Info methods
+also accept an options object there — see [Skipping validation](#skipping-validation-unsafe)):
 
 ```ts
 const controller = new AbortController();
@@ -773,6 +774,25 @@ await client.order({ orders: [/* ... */], grouping: "na" }, {
 > Invalid input is the caller's problem: instead of a client-side `ValidationError`, the server rejects the request —
 > detecting that drift is the cost of the saved microseconds. Cheap deterministic guards for documented constraints
 > (e.g. `scheduleCancel`'s 5-second lead time) still run.
+
+---
+
+[`InfoClient`](#info-endpoint) methods (and the raw functions in `@bloxwap/hyperliquid/api/info`) offer the same
+escape hatch: pass an options object instead of a bare `AbortSignal` as the last argument:
+
+```ts
+const info = new InfoClient({ transport });
+await info.clearinghouseState({ user: "0x..." }, { skipValidation: true });
+```
+
+> [!CAUTION]
+>
+> **Unsafe for untrusted input.** On this path the SDK performs no validation, normalization, default-filling, or key
+> reordering — parameters are posted exactly as given, so they must already be in wire form: addresses and hex strings
+> in lowercase, and every value already of the exact type the schema outputs. Invalid input is rejected by the server
+> instead of a client-side `ValidationError`.
+>
+> The saving is ~1 µs per call — small next to a network round trip, so this is only worth it in hot polling loops.
 
 ### Shared fast price decoding
 

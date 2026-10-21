@@ -57,8 +57,7 @@ export type RecentTradesResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode recentTrades} function. */
 export type RecentTradesParameters = Omit<v.InferInput<typeof RecentTradesRequest>, "type">;
@@ -68,7 +67,8 @@ export type RecentTradesParameters = Omit<v.InferInput<typeof RecentTradesReques
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of recent trades.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -89,11 +89,16 @@ export type RecentTradesParameters = Omit<v.InferInput<typeof RecentTradesReques
 export function recentTrades(
   config: InfoConfig,
   params: RecentTradesParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<RecentTradesResponse> {
-  const request = parse(RecentTradesRequest, {
-    type: "recentTrades",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    RecentTradesRequest,
+    {
+      type: "recentTrades",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

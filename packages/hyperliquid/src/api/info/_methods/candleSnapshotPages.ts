@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import { fetchPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { fetchPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import { candleSnapshot, type CandleSnapshotParameters, type CandleSnapshotResponse } from "./candleSnapshot.ts";
 
 /** Request parameters for the {@linkcode candleSnapshotPages} function. */
@@ -28,7 +28,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Async generator yielding pages of candlestick data points.
  *
  * @throws {ValidationError} When the pagination options fail validation (thrown by the first
@@ -57,10 +58,10 @@ export function candleSnapshotPages(
   config: InfoConfig,
   params: CandleSnapshotPagesParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): AsyncGenerator<CandleSnapshotResponse, void, undefined> {
   return fetchPages(
-    (startTime) => candleSnapshot(config, { ...params, startTime }, signal),
+    (startTime) => candleSnapshot(config, { ...params, startTime }, signalOrOptions),
     Number(params.startTime), // valibot input allows `string | number`; the walk needs a number
     5000, // only the most recent 5000 candles are available, so a full window arrives as one page
     (candle) => candle.t,

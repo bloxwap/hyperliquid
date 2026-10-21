@@ -175,8 +175,7 @@ export type ClearinghouseStateResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode clearinghouseState} function. */
 export type ClearinghouseStateParameters = Omit<v.InferInput<typeof ClearinghouseStateRequest>, "type">;
@@ -186,7 +185,8 @@ export type ClearinghouseStateParameters = Omit<v.InferInput<typeof Clearinghous
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Account summary for perpetual trading.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -209,11 +209,16 @@ export type ClearinghouseStateParameters = Omit<v.InferInput<typeof Clearinghous
 export function clearinghouseState(
   config: InfoConfig,
   params: ClearinghouseStateParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<ClearinghouseStateResponse> {
-  const request = parse(ClearinghouseStateRequest, {
-    type: "clearinghouseState",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    ClearinghouseStateRequest,
+    {
+      type: "clearinghouseState",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

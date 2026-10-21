@@ -23,7 +23,7 @@
  * @module
  */
 
-export type { InfoConfig } from "./_methods/_base/mod.ts";
+export type { InfoConfig, InfoRequestOptions } from "./_methods/_base/mod.ts";
 
 export * from "./_methods/activeAssetData.ts";
 export * from "./_methods/allBorrowLendReserveStates.ts";

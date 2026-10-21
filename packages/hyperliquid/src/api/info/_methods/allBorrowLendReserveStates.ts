@@ -33,14 +33,14 @@ export type AllBorrowLendReserveStatesResponse = [
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request all borrow/lend reserve states.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of tuples of reserve IDs and their borrow/lend reserve state.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -60,10 +60,15 @@ import type { InfoConfig } from "./_base/mod.ts";
  */
 export function allBorrowLendReserveStates(
   config: InfoConfig,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<AllBorrowLendReserveStatesResponse> {
-  const request = parse(AllBorrowLendReserveStatesRequest, {
-    type: "allBorrowLendReserveStates",
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    AllBorrowLendReserveStatesRequest,
+    {
+      type: "allBorrowLendReserveStates",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

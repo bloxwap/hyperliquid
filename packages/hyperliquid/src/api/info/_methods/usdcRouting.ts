@@ -37,14 +37,14 @@ export type UsdcRoutingResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request USDC transfer routing.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Routes currently used to move USDC in and out of the platform.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -60,9 +60,17 @@ import type { InfoConfig } from "./_base/mod.ts";
  * const data = await usdcRouting({ transport });
  * ```
  */
-export function usdcRouting(config: InfoConfig, signal?: AbortSignal): Promise<UsdcRoutingResponse> {
-  const request = parse(UsdcRoutingRequest, {
-    type: "usdcRouting",
-  });
+export function usdcRouting(
+  config: InfoConfig,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<UsdcRoutingResponse> {
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UsdcRoutingRequest,
+    {
+      type: "usdcRouting",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { collectPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import type { FundingHistoryParameters, FundingHistoryResponse } from "./fundingHistory.ts";
 import { fundingHistoryPages } from "./fundingHistoryPages.ts";
 
@@ -24,7 +24,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of historical funding rate records for an asset.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -49,7 +50,7 @@ export function fundingHistoryAll(
   config: InfoConfig,
   params: FundingHistoryAllParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<FundingHistoryResponse> {
-  return collectPages(fundingHistoryPages(config, params, options, signal));
+  return collectPages(fundingHistoryPages(config, params, options, signalOrOptions));
 }

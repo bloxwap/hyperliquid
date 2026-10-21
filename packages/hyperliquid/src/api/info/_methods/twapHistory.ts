@@ -56,8 +56,7 @@ export type TwapHistoryResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode twapHistory} function. */
 export type TwapHistoryParameters = Omit<v.InferInput<typeof TwapHistoryRequest>, "type">;
@@ -67,7 +66,8 @@ export type TwapHistoryParameters = Omit<v.InferInput<typeof TwapHistoryRequest>
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of user's TWAP history.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -88,11 +88,16 @@ export type TwapHistoryParameters = Omit<v.InferInput<typeof TwapHistoryRequest>
 export function twapHistory(
   config: InfoConfig,
   params: TwapHistoryParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<TwapHistoryResponse> {
-  const request = parse(TwapHistoryRequest, {
-    type: "twapHistory",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    TwapHistoryRequest,
+    {
+      type: "twapHistory",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

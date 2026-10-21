@@ -136,8 +136,7 @@ export type TokenDetailsResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode tokenDetails} function. */
 export type TokenDetailsParameters = Omit<v.InferInput<typeof TokenDetailsRequest>, "type">;
@@ -147,7 +146,8 @@ export type TokenDetailsParameters = Omit<v.InferInput<typeof TokenDetailsReques
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Details of a token.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -170,11 +170,16 @@ export type TokenDetailsParameters = Omit<v.InferInput<typeof TokenDetailsReques
 export function tokenDetails(
   config: InfoConfig,
   params: TokenDetailsParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<TokenDetailsResponse> {
-  const request = parse(TokenDetailsRequest, {
-    type: "tokenDetails",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    TokenDetailsRequest,
+    {
+      type: "tokenDetails",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

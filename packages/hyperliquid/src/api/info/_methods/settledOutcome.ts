@@ -82,8 +82,7 @@ export type SettledOutcomeResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode settledOutcome} function. */
 export type SettledOutcomeParameters = Omit<v.InferInput<typeof SettledOutcomeRequest>, "type">;
@@ -93,7 +92,8 @@ export type SettledOutcomeParameters = Omit<v.InferInput<typeof SettledOutcomeRe
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Information about a settled outcome.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -116,11 +116,16 @@ export type SettledOutcomeParameters = Omit<v.InferInput<typeof SettledOutcomeRe
 export function settledOutcome(
   config: InfoConfig,
   params: SettledOutcomeParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<SettledOutcomeResponse> {
-  const request = parse(SettledOutcomeRequest, {
-    type: "settledOutcome",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    SettledOutcomeRequest,
+    {
+      type: "settledOutcome",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

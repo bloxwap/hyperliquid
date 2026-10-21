@@ -35,8 +35,7 @@ export type UserTwapSliceFillsByTimeResponse = UserTwapSliceFillsResponse;
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode userTwapSliceFillsByTime} function. */
 export type UserTwapSliceFillsByTimeParameters = Omit<v.InferInput<typeof UserTwapSliceFillsByTimeRequest>, "type">;
@@ -49,7 +48,8 @@ export type UserTwapSliceFillsByTimeParameters = Omit<v.InferInput<typeof UserTw
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of user's TWAP slice fill by time.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -73,11 +73,16 @@ export type UserTwapSliceFillsByTimeParameters = Omit<v.InferInput<typeof UserTw
 export function userTwapSliceFillsByTime(
   config: InfoConfig,
   params: UserTwapSliceFillsByTimeParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserTwapSliceFillsByTimeResponse> {
-  const request = parse(UserTwapSliceFillsByTimeRequest, {
-    type: "userTwapSliceFillsByTime",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UserTwapSliceFillsByTimeRequest,
+    {
+      type: "userTwapSliceFillsByTime",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

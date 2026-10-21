@@ -33,8 +33,7 @@ export type FrontendOpenOrdersResponse = FrontendOpenOrder[];
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode frontendOpenOrders} function. */
 export type FrontendOpenOrdersParameters = Omit<v.InferInput<typeof FrontendOpenOrdersRequest>, "type">;
@@ -44,7 +43,8 @@ export type FrontendOpenOrdersParameters = Omit<v.InferInput<typeof FrontendOpen
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of open orders with additional display information.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -67,11 +67,16 @@ export type FrontendOpenOrdersParameters = Omit<v.InferInput<typeof FrontendOpen
 export function frontendOpenOrders(
   config: InfoConfig,
   params: FrontendOpenOrdersParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<FrontendOpenOrdersResponse> {
-  const request = parse(FrontendOpenOrdersRequest, {
-    type: "frontendOpenOrders",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    FrontendOpenOrdersRequest,
+    {
+      type: "frontendOpenOrders",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }
