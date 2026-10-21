@@ -109,11 +109,11 @@ await exchange.updateLeverage({ asset: 0, isCross: true, leverage: 5 });
 await exchange.withdraw3({ destination: "0x...", amount: "1" });
 ```
 
-For low-latency bots, prefer
-[`createFastLocalWallet`](https://bloxwap.github.io/hyperliquid/docs/signing/#fast-local-wallet-wasm-secp256k1) (WASM
-secp256k1) and batch many orders into one `exchange.order({ orders: [...] })` call. Measured with Bun 1.4.2 on a Linux
-box: ~159 to ~118 µs per signed order, and ~161 µs down to ~3.2 µs per order when 100 orders share one call. Details
-in the [low-latency recipe](https://bloxwap.github.io/hyperliquid/docs/signing/#low-latency-recipe-bots--hft).
+For low-latency bots, pass the raw private key string as `wallet`: the client then signs with WASM secp256k1 by
+default, with a pure-JS fallback where WASM cannot load (~274 to ~104 µs per order on Node 24, ~155 to ~102 µs on
+Bun 1.4, measured on a Linux box). Also batch many orders into one `exchange.order({ orders: [...] })` call: ~161 µs
+down to ~3.2 µs per order when 100 orders share one call. Details in the
+[low-latency recipe](https://bloxwap.github.io/hyperliquid/docs/signing/#low-latency-recipe-bots--hft).
 
 ### Subscribe
 

@@ -12,6 +12,7 @@ import { admitBounded, assertDetachedAllowed, assertOrderedAllowed, reserveDispa
 import { assertSuccessResponse } from "./errors.ts";
 import { globalNonceManager } from "./_nonce.ts";
 import { withLock } from "./_semaphore.ts";
+import { configWallet } from "./_wallet.ts";
 
 /** Result returned by the {@linkcode executeWithShell} `build` callback. */
 export interface BuildResult {
@@ -167,7 +168,7 @@ export async function executeWithShell<T>(
   signal?: AbortSignal,
   prepareOnly = false,
 ): Promise<T> {
-  const leader = "wallet" in config ? config.wallet : config.signers[0];
+  const leader = "wallet" in config ? configWallet(config) : config.signers[0];
   const walletAddress = await getWalletAddress(leader);
 
   // Serialize nonce allocation per (wallet × testnet); the dispatch policy controls delivery order.

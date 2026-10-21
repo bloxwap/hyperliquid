@@ -140,8 +140,24 @@ caller waiting on it has aborted.
 
 ## Exchange endpoint
 
-`ExchangeClient` requires a wallet for [signing](signing.md#wallet-compatibility) and works with any transport. See all
+`ExchangeClient` requires a wallet for [signing](signing.md#wallet-compatibility) and works with any transport. The
+`wallet` option also accepts a raw 32-byte hex private key string, which signs with WASM secp256k1 by default (see
+[Private keys (WASM by default)](signing.md#private-keys-wasm-by-default)). See all
 [Exchange methods](https://nktkas.gitbook.io/hyperliquid/api-reference/exchange-methods).
+
+<details>
+<summary>Private key string (WASM by default)</summary>
+
+```ts
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
+
+const transport = new HttpTransport();
+const client = new ExchangeClient({ transport, wallet: "0x..." }); // raw 32-byte private key
+
+await client.order({ orders: [/* ... */], grouping: "na" });
+```
+
+</details>
 
 <details>
 <summary>viem</summary>
@@ -277,7 +293,7 @@ await client.order({ orders: [/* ... */], grouping: "na" }, {
 ### Signature chain ID
 
 Sets the EIP-712 domain `chainId` for [user-signed actions](signing.md#user-signed-action). Defaults to the wallet's
-provider chain ID. Local wallets without a provider (e.g.,
+provider chain ID. Local wallets without a provider (a raw private key string, or
 [`privateKeyToAccount`](https://viem.sh/docs/accounts/local/privateKeyToAccount)) fall back to `0x1`. Override to set a
 different chain:
 

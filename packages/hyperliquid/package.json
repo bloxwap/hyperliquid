@@ -336,6 +336,7 @@
     "build": "bun run .dev/build/build.ts"
   },
   "dependencies": {
+    "@noble/curves": "2.2.0",
     "@noble/hashes": "2.2.0",
     "valibot": "1.4.2"
   },

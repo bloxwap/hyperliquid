@@ -8,6 +8,7 @@ import type { ExchangeConfig, PreparedExchangeRequest } from "./_base/mod.ts";
 import { assertSuccessResponse } from "./_base/errors.ts";
 import { assertDetachedAllowed, needsDetachedCheck } from "./_base/_dispatch.ts";
 import { getPreparedRequestState, getSigningContext } from "./_base/_shell.ts";
+import { configWallet } from "./_base/_wallet.ts";
 
 /** Request options for the {@linkcode submitPrepared} function. */
 export interface SubmitPreparedOptions {
@@ -60,7 +61,7 @@ export async function submitPrepared<T>(
   // when known, so routing it through another client's config cannot bypass its active bounded lane.
   if (needsDetachedCheck(config.dispatchPolicy)) {
     const context = getSigningContext(prepared);
-    const leader = "wallet" in config ? config.wallet : config.signers[0];
+    const leader = "wallet" in config ? configWallet(config) : config.signers[0];
     assertDetachedAllowed(
       context?.key ?? `${await getWalletAddress(leader)}:${config.transport.isTestnet}`,
       config.dispatchPolicy,

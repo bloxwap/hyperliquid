@@ -8,6 +8,7 @@ import type { IRequestTransport } from "../../../transport/mod.ts";
 import type { ExchangeConfig, PreparedExchangeRequest } from "./_base/mod.ts";
 import { assertDetachedAllowed, needsDetachedCheck } from "./_base/_dispatch.ts";
 import { linkPreparedRequestState, type PreparedRequestState } from "./_base/_shell.ts";
+import { configWallet } from "./_base/_wallet.ts";
 
 export type { PreparedExchangeRequest } from "./_base/mod.ts";
 
@@ -132,7 +133,7 @@ export async function prepareRequest<T>(
   // Prepared payloads bypass the dispatch coordinator, so they are unavailable in bounded mode or
   // while bounded calls for this signer/network are outstanding.
   if (needsDetachedCheck(config.dispatchPolicy)) {
-    const leader = "wallet" in config ? config.wallet : config.signers[0];
+    const leader = "wallet" in config ? configWallet(config) : config.signers[0];
     assertDetachedAllowed(`${await getWalletAddress(leader)}:${config.transport.isTestnet}`, config.dispatchPolicy);
   }
 
