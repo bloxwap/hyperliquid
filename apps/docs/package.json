@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "fumadocs-mdx && next dev --port 3901",
     "preview": "bun run scripts/preview.ts",
-    "build": "fumadocs-mdx && next build && bun run scripts/export-markdown.ts && bun run scripts/verify-export.ts",
-    "check": "bun run check:content && fumadocs-mdx && next typegen && tsrs --noEmit",
-    "check:tsc": "bun run check:content && fumadocs-mdx && next typegen && tsc --noEmit",
+    "build": "fumadocs-mdx && bun run typecheck && next build && bun run scripts/export-markdown.ts && bun run scripts/verify-export.ts",
+    "check": "bun run check:content && fumadocs-mdx && bun run typecheck",
+    "//typecheck": "next.config.mjs sets typescript.ignoreBuildErrors, so `next build` skips its own tsc pass; this tsrs pass runs before it instead and fails the build on any type error. `typecheck:tsc` is the TypeScript 5 fallback for platforms tsrs ships no binary for (Windows, Intel macOS).",
+    "typecheck": "next typegen && tsrs --noEmit",
+    "typecheck:tsc": "next typegen && tsc --noEmit",
     "test": "bun test lib/",
     "check:content": "bun run scripts/check-content.ts && bun run scripts/lint-markdown.ts",
     "test:browser": "playwright test"
