@@ -25,3 +25,9 @@ All notable changes to `@bloxwap/hyperliquid` are documented in this file.
 
 - `exchange.warmup()` / `warmupSigning` treat a raw private key string as an in-process key: they await its backend
   initialization and sign the throwaway warm-up actions with it. Wallet objects behave exactly as before.
+- Declaration files are now emitted with [tsrs](https://github.com/oxc-project/tsrs), the Rust port of the TypeScript 7
+  compiler, and type-checked with it in `check:types`. The emitted `.d.ts` files are byte-identical to TypeScript
+  7.0.2's and type-equivalent to the previous TypeScript 5.9 output; the only visible difference is that union members
+  print in a stable sorted order in editor hovers. The JavaScript bundle is unchanged, and the published package is
+  still verified with TypeScript 5.9 as the consumer. Set `HL_TSC=tsc` to build with TypeScript 5, or run
+  `bun run check:types:tsc` for the TypeScript 5 type-check.

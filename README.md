@@ -172,6 +172,11 @@ bun run test:offline
 bun run build
 ```
 
+Type-checking and declaration emit use [tsrs](https://github.com/oxc-project/tsrs), the Rust port of the TypeScript 7
+compiler, which ships native binaries for macOS arm64 and Linux x64/arm64. On other platforms, or to compare against
+TypeScript 5, run `bun run check:types:tsc` and build with `HL_TSC=tsc bun run build`. TypeScript 5.9 stays installed
+for the build's JS-API tooling and for the published-consumer check.
+
 To develop the documentation, run `bun run docs:dev` and open `http://localhost:3901`. See the
 [documentation app guide](apps/docs/README.md) for content checks, production builds, and GitHub Pages deployment.
 
