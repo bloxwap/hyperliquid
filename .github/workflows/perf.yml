@@ -4,10 +4,43 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: perf-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
+  changes:
+    # Security: never run fork PR code on the self-hosted runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.code }}
+    steps:
+      # Skip doc-only PRs; SDK tests and performance scenarios do not read Markdown.
+      # Non-PR events always run every heavy job, including reusable-workflow calls.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!**/*.mdx'
+              - '!LICENSE'
+              - '!.github/ISSUE_TEMPLATE/**'
+              - '!.github/pull_request_template.md'
+              - '!CODEOWNERS'
+              - '!.github/CODEOWNERS'
+
   # Enforces the zero-performance-regression policy: a change may keep performance the same or
   # improve it, never regress it.
   #
@@ -35,8 +68,9 @@ jobs:
   # changes the workload being compared and is flagged for explicit review, not waved through.
   # If this job flaps, widen the threshold — do not add retries and do not drop the job.
   perf:
+    needs: changes
     # Security: never run fork PR code on the self-hosted runner.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, macOS, ARM64]
 
     steps:
