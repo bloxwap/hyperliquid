@@ -4,6 +4,10 @@ Web body text uses Bloxwap Sans and code uses Bloxwap Mono from the exact
 `@bloxwap/font@0.1.2` dependency. The Next.js exports self-host variable weights
 100–900, italics, and script companions without requests to Google Fonts.
 Space Grotesk Bold remains the heading face, with its adjacent OFL notice.
+`SpaceGrotesk-Bold.woff2` is a lossless WOFF2 conversion of the original
+`SpaceGrotesk-Bold.ttf`, created with the Google WOFF2 reference encoder.
+It retains all glyphs and metrics; the heading face remains preloaded because
+it appears above the fold on the landing and documentation pages.
 
 `BloxwapSans-Bold.ttf` (700) and `BloxwapSans-Black.ttf` (900) are static
 instances of `fonts/BloxwapSans/BloxwapSans-Variable.woff2` from the published
