@@ -9,7 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, test } from "bun:test";
-import { assert, assertEquals, assertFalse, assertInstanceOf, assertRejects } from "@jsr/std__assert";
+import { assert, assertEquals, assertFalse, assertInstanceOf, assertRejects, assertThrows } from "@jsr/std__assert";
 import {
   ReconnectingWebSocket,
   ReconnectingWebSocketError,
@@ -233,6 +233,39 @@ describe("ReconnectingWebSocket", () => {
       ws.removeEventListener("message", listener);
       lastSocket().serverMessage("retired");
       assertEquals(dispatches(), 1);
+    });
+
+    test("undefined runtime message listeners retain the native no-op behavior", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      // JavaScript callers can pass undefined even though the public overload accepts null.
+      const absent = undefined as unknown as EventListener;
+      ws.addEventListener("message", absent);
+      lastSocket().serverMessage("no-listeners");
+      assertEquals(dispatches(), 0);
+
+      const seen: unknown[] = [];
+      const listener = (event: MessageEvent): void => void seen.push(event.data);
+      ws.addEventListener("message", listener);
+      ws.removeEventListener("message", absent);
+      lastSocket().serverMessage("live");
+      ws.removeEventListener("message", listener);
+      lastSocket().serverMessage("retired");
+
+      assertEquals(seen, ["live"]);
+      assertEquals(dispatches(), 1);
+    });
+
+    test("invalid primitive message listeners fail during native registration and removal", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      for (const invalid of [0, "listener", true, Symbol("listener")]) {
+        const listener = invalid as unknown as EventListener;
+        assertThrows(() => ws.addEventListener("message", listener), TypeError);
+        assertThrows(() => ws.removeEventListener("message", listener), TypeError);
+      }
+      lastSocket().serverMessage("no-listeners");
+      assertEquals(dispatches(), 0);
     });
 
     test("duplicate message registrations retain the original lifecycle and need one removal", () => {

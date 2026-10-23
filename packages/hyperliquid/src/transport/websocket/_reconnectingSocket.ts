@@ -737,7 +737,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | AddEventListenerOptions,
   ): void {
-    if (type !== "message" || listener === null) {
+    if (type !== "message" || listener === null || (typeof listener !== "function" && typeof listener !== "object")) {
       super.addEventListener(type, listener, options);
       return;
     }
@@ -807,7 +807,7 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | EventListenerOptions,
   ): void {
-    if (type !== "message" || listener === null) {
+    if (type !== "message" || listener === null || (typeof listener !== "function" && typeof listener !== "object")) {
       super.removeEventListener(type, listener, options);
       return;
     }
