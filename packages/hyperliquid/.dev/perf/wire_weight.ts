@@ -60,6 +60,15 @@ for (const count of [1, 100, 1000]) {
   for (const scenario of scenarios) {
     // Count in a separate pass so instrumentation cannot inflate the measured CPU cost.
     const parse = JSON.parse;
+    const iterate = Array.prototype[Symbol.iterator];
+    let batchElementsVisited = 0;
+    Array.prototype[Symbol.iterator] = function* () {
+      for (const value of iterate.call(this)) {
+        if (this.length === count) batchElementsVisited++;
+        yield value;
+      }
+      return undefined;
+    };
     let parses = 0;
     let characters = 0;
     JSON.parse = ((text: string, reviver?: (this: unknown, key: string, value: unknown) => unknown): unknown => {
@@ -73,6 +82,7 @@ for (const count of [1, 100, 1000]) {
       for (let i = 0; i < 10; i++) await scenario.run();
     } finally {
       JSON.parse = parse;
+      Array.prototype[Symbol.iterator] = iterate;
     }
     const sorted = [...scenario.samples].sort((a, b) => a - b);
     console.log(
@@ -83,6 +93,7 @@ for (const count of [1, 100, 1000]) {
         p90UsPerRequest: sorted[Math.ceil(sorted.length * 0.9) - 1],
         warmRequestParsesPer10: parses,
         warmParsedCharactersPer10: characters,
+        warmBatchElementsVisitedPer10: batchElementsVisited,
         outgoingBytes: scenario.bytes(),
       }),
     );

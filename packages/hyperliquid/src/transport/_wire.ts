@@ -101,9 +101,9 @@ export function exchangeWireJSON(payload: unknown, billing?: ExchangeWireWeight)
   const actionJSON = (record.entry.json ??= JSON.stringify(record.action));
   const metadataJSON = JSON.stringify(metadata);
   if (billing !== undefined) {
-    // Derive the cold weight from the cached wire fragment once, not the live tree.
-    // Ownership and every serialization guard above must pass before using this hint.
-    billing.weight = record.entry.weight ??= exchangeWeight({ action: JSON.parse(actionJSON) });
+    // The serializer proved that the entire immutable tree is owned plain data. Walk
+    // it once, preserving the no-parse fast path, and reuse its weight with the fragment.
+    billing.weight = record.entry.weight ??= exchangeWeight({ action: record.action });
   }
   return metadataJSON === "{}" ? `{"action":${actionJSON}}` : `{"action":${actionJSON},${metadataJSON.slice(1)}`;
 }
@@ -120,7 +120,7 @@ export function exchangeWireJSON(payload: unknown, billing?: ExchangeWireWeight)
  * (`< 40` entries: fixed tuples, a single `twap` object carries no array at all,
  * `convertToMultiSigUser`'s wire-stringified `signers`) — cost the documented minimum of 1.
  *
- * @param payload The parsed wire request.
+ * @param payload The parsed wire request, or a guarded SDK-owned envelope.
  * @return Its conservative pre-send weight.
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
  */
@@ -152,8 +152,14 @@ function maxArrayLength(value: unknown): number {
  */
 function exchangeAction(payload: unknown): Record<string, unknown> | undefined {
   if (!isRecord(payload) || !isRecord(payload.action)) return undefined;
-  const action = payload.action;
-  // A multi-sig action wraps the real one: { type: "multiSig", signatures, payload: { ..., action } }.
+  return unwrapMultiSigAction(payload.action);
+}
+
+/**
+ * Unwraps a multi-sig action one level: `{ type: "multiSig", signatures, payload: { ..., action } }`
+ * yields the wrapped action; anything else is returned as-is.
+ */
+function unwrapMultiSigAction(action: Record<string, unknown>): Record<string, unknown> {
   if (action.type === "multiSig" && isRecord(action.payload) && isRecord(action.payload.action)) {
     return action.payload.action;
   }

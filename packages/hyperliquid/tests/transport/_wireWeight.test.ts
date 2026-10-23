@@ -45,10 +45,11 @@ async function assertWeight(payload: unknown, weight: number): Promise<string> {
   return sent[0];
 }
 
-test("rate-limited repeated owned actions parse their action fragment only once across fresh envelopes", async () => {
+test("rate-limited owned actions walk their batch once without parsing across fresh envelopes", async () => {
   const action = buildOrder({ orders: Array.from({ length: 1000 }, () => order) }).payload;
-  const actionJSON = JSON.stringify(action);
   const parse = JSON.parse;
+  const iterate = Array.prototype[Symbol.iterator];
+  let batchElementsVisited = 0;
   const parsed: string[] = [];
   const bodies: string[] = [];
   const transport = new HttpTransport({
@@ -59,6 +60,13 @@ test("rate-limited repeated owned actions parse their action fragment only once 
       return Response.json({ ok: true });
     },
   });
+  Array.prototype[Symbol.iterator] = function* () {
+    for (const value of iterate.call(this)) {
+      if (this === action.orders) batchElementsVisited++;
+      yield value;
+    }
+    return undefined;
+  };
   JSON.parse = ((text: string, reviver?: (this: unknown, key: string, value: unknown) => unknown): unknown => {
     if (text.includes('"orders"')) parsed.push(text);
     return parse(text, reviver);
@@ -71,8 +79,10 @@ test("rate-limited repeated owned actions parse their action fragment only once 
     }
   } finally {
     JSON.parse = parse;
+    Array.prototype[Symbol.iterator] = iterate;
   }
-  expect(parsed).toEqual([actionJSON]);
+  expect(parsed).toEqual([]);
+  expect(batchElementsVisited).toBe(1000);
   expect(bodies).toHaveLength(10);
   expect(new Set(bodies).size).toBe(10);
 });
