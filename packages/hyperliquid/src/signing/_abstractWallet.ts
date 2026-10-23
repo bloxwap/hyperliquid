@@ -4,7 +4,7 @@
  */
 
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { HyperliquidError } from "../_base.ts";
+import { HyperliquidError } from "../_errors.ts";
 
 // ============================================================
 // Error

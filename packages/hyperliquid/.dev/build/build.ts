@@ -135,6 +135,7 @@ async function bundleSources(root: RootManifest): Promise<number> {
   // Bundle pure operation/schema code separately, but externalize every identity/state boundary
   // to one shared core so mixed entry points keep instanceof, nonce, and action ownership intact.
   const core = [
+    "_errors.ts",
     "_base.ts",
     "api/_errors.ts",
     "signing/mod.ts",
@@ -153,15 +154,17 @@ async function bundleSources(root: RootManifest): Promise<number> {
   const aggregators = new Map<string, string>();
   for (const [index, name] of core.entries()) {
     const file = join(ROOT_DIR, "src", name);
-    const group = ["_base.ts", "api/_errors.ts", "transport/_base.ts", "transport/runtime.ts"].includes(name)
+    const group = ["_errors.ts", "api/_errors.ts", "transport/_base.ts", "transport/runtime.ts"].includes(name)
       ? "runtime"
-      : name === "signing/mod.ts"
-        ? "signing"
-        : ["actions/_canonical.ts", "signing/_canonicalize.ts"].includes(name)
-          ? "canonical"
-          : name === "api/subscription/_methods/fastAssetCtxs.ts"
-            ? "subscriptions"
-            : "exchange";
+      : name === "_base.ts"
+        ? "validation"
+        : name === "signing/mod.ts"
+          ? "signing"
+          : ["actions/_canonical.ts", "signing/_canonicalize.ts"].includes(name)
+            ? "canonical"
+            : name === "api/subscription/_methods/fastAssetCtxs.ts"
+              ? "subscriptions"
+              : "exchange";
     const names = Object.keys(await import(file));
     const aliases = names.map((value) => ({ value, alias: `m${index}_${value}` }));
     const exports = aliases.map(({ value, alias }) => `${alias} as ${value}`).join(", ");
@@ -508,7 +511,7 @@ async function verifyConsumer(root: RootManifest): Promise<void> {
       entries[specifier] = Object.keys(await import(join(ROOT_DIR, target))).sort();
     }
     await writeFile(join(consumer, "entries.json"), JSON.stringify(entries));
-    for (const name of ["consumer.ts", "consumer.mjs"]) {
+    for (const name of ["consumer.ts", "consumer.mjs", "transport-only.mjs"]) {
       await copyFile(join(ROOT_DIR, ".dev/build", name), join(consumer, name));
     }
     const tsc = (...resolution: string[]): string[] => [
@@ -524,7 +527,10 @@ async function verifyConsumer(root: RootManifest): Promise<void> {
     ];
     // Every resolution mode that honours `exports`: Node's two ESM modes, and the bundler mode that
     // Vite, esbuild, webpack and Bun projects use.
+    const validationFreeEntries = ["transport/http", "transport/websocket", "signing"];
     const commands = [
+      ...validationFreeEntries.map((entry) => ["node", "transport-only.mjs", `${root.name}/${entry}`]),
+      ...validationFreeEntries.map((entry) => [process.execPath, "transport-only.mjs", `${root.name}/${entry}`]),
       ["node", "consumer.mjs"],
       [process.execPath, "consumer.mjs"],
       tsc("--module", "nodenext"),

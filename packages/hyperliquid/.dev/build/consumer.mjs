@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import * as root from "@bloxwap/hyperliquid";
 import { ExchangeClient } from "@bloxwap/hyperliquid/api/exchange/client";
 import { ApiRequestError } from "@bloxwap/hyperliquid/api/exchange";
-import { HttpTransport } from "@bloxwap/hyperliquid/transport/http";
+import { HttpRequestError, HttpTransport } from "@bloxwap/hyperliquid/transport/http";
+import { TransportError } from "@bloxwap/hyperliquid/transport";
+import { AbstractWalletError, CanonicalizeError } from "@bloxwap/hyperliquid/signing";
 import { systemRuntime } from "@bloxwap/hyperliquid/transport/runtime";
 import { allMids } from "@bloxwap/hyperliquid/api/info/allMids";
 import { buildOrder } from "@bloxwap/hyperliquid/actions/order";
@@ -14,6 +16,11 @@ import { fastAssetCtxs as individualFastAssetCtxs } from "@bloxwap/hyperliquid/a
 
 assert.equal(root.ExchangeClient, ExchangeClient);
 assert.equal(root.HttpTransport, HttpTransport);
+assert.equal(root.HttpRequestError, HttpRequestError);
+assert.equal(root.TransportError, TransportError);
+for (const ErrorClass of [TransportError, AbstractWalletError, CanonicalizeError]) {
+  assert(new ErrorClass("identity check") instanceof root.HyperliquidError);
+}
 assert.equal(root.ApiRequestError, ApiRequestError);
 assert.equal(root.systemRuntime, systemRuntime);
 assert.equal(barrelFastAssetCtxs, individualFastAssetCtxs);
@@ -51,6 +58,11 @@ const params = { orders: [{ a: 0, b: true, p: "1", s: "1", r: false, t: { limit:
 const action = buildOrder(params);
 assert(Object.isFrozen(action.payload.orders));
 assert.deepEqual(await allMids({ transport }), { BTC: "1" });
+assert.throws(
+  () => allMids({ transport }, { dex: 1 }),
+  (error) =>
+    error instanceof root.ValidationError && error instanceof root.HyperliquidError && error.cause.name === "ValiError",
+);
 const signed = await client.sign(action);
 assert.equal(nonces.length, 0);
 await submitAction(config, signed);
@@ -59,5 +71,8 @@ await client.submit(await signAction(config, action));
 await Promise.all([client.execute(action), order(config, params)]);
 assert.equal(new Set(nonces).size, nonces.length);
 failure = true;
-await assert.rejects(client.execute(action), ApiRequestError);
+await assert.rejects(
+  client.execute(action),
+  (error) => error instanceof ApiRequestError && error instanceof root.HyperliquidError,
+);
 console.log("Published consumer imports, identities, nonce sharing, signing ownership, and error types passed.");

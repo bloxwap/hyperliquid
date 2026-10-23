@@ -4,7 +4,7 @@
  */
 
 import type { GenericSchema } from "valibot";
-import { HyperliquidError } from "../_base.ts";
+import { HyperliquidError } from "../_errors.ts";
 
 /** Thrown when canonicalization fails due to schema/data key mismatch. */
 export class CanonicalizeError extends HyperliquidError {
