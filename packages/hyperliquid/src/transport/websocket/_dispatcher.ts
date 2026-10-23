@@ -130,10 +130,8 @@ interface PendingRequest {
    * envelope (the object form of the entry's string id) and its specificity. Absent for `post`
    * requests, which match on their numeric id.
    *
-   * Every `subscriptionResponse` frame that misses the exact-id bucket walks the whole queue
-   * looking for its match, so deriving this per scan made a burst of N re-subscriptions cost
-   * N² parses — a reconnect at the 1000-subscription cap stalled the event loop exactly when
-   * the book was most stale.
+   * Rewritten subscription responses compare a compatible discriminator bucket by subset.
+   * Keeping the normalized envelope here avoids re-parsing ids during candidate matching.
    */
   echo?: {
     /** The normalized request envelope compared against the echo. */
@@ -144,6 +142,10 @@ interface PendingRequest {
      * server rewrote the echo — so it is computed lazily on first access (see {@linkcode echoData}).
      */
     readonly specificity: number;
+    /** Enqueue order, preserving earliest-first ties across fallback candidate buckets. */
+    order: number;
+    /** Lazily derived discriminator bucket, reused during removal. */
+    indexKey?: string;
   };
   // deno-lint-ignore no-explicit-any
   resolve: (value?: any) => void;
@@ -180,6 +182,13 @@ export class WebSocketDispatcher {
    * re-subscription echoes cost N² subset checks.
    */
   private readonly _byEchoId: Map<string, PendingRequest[]> = new Map();
+  /**
+   * Secondary subset candidates, allocated only after the first rewritten echo. Each pending
+   * subscription occupies one method/type/coin/user bucket; absent or non-string discriminators
+   * are wildcards. An echo probes the at-most-eight compatible buckets instead of the full queue.
+   */
+  private _echoCandidates: Map<string, Set<PendingRequest>> | undefined;
+  private _lastEchoOrder = 0;
   /** Shared request-timeout scheduler: at most one armed native timer, however many requests are in flight. */
   private readonly _timeouts: abort.TimeoutWheel;
   /**
@@ -236,6 +245,7 @@ export class WebSocketDispatcher {
       this._queue.clear();
       this._posts.clear();
       this._byEchoId.clear();
+      this._echoCandidates?.clear();
       for (const entry of abandoned) {
         entry.reject(
           new WebSocketRequestError(
@@ -455,6 +465,10 @@ export class WebSocketDispatcher {
   /** Queues a request and indexes it by id. */
   private _enqueue(entry: PendingRequest): void {
     this._queue.add(entry);
+    if (entry.echo !== undefined) {
+      entry.echo.order = ++this._lastEchoOrder;
+      if (this._echoCandidates !== undefined) this._indexEcho(entry);
+    }
     if (typeof entry.id === "number") this._posts.set(entry.id, entry);
     if (typeof entry.id === "string") {
       const bucket = this._byEchoId.get(entry.id);
@@ -466,6 +480,12 @@ export class WebSocketDispatcher {
   /** Removes a request from the queue and from the id indexes. Idempotent. */
   private _dequeue(entry: PendingRequest): void {
     if (!this._queue.delete(entry)) return;
+    const candidateKey = entry.echo?.indexKey;
+    if (candidateKey !== undefined) {
+      const candidates = this._echoCandidates?.get(candidateKey);
+      candidates?.delete(entry);
+      if (candidates?.size === 0) this._echoCandidates?.delete(candidateKey);
+    }
     // Post ids are handed out by `++this._lastId`, so no later entry can hold this one.
     if (typeof entry.id === "number") this._posts.delete(entry.id);
     if (typeof entry.id === "string") {
@@ -476,6 +496,15 @@ export class WebSocketDispatcher {
         if (bucket.length === 0) this._byEchoId.delete(entry.id);
       }
     }
+  }
+
+  /** Adds one subscription to the secondary subset index. */
+  private _indexEcho(entry: PendingRequest): void {
+    if (entry.echo === undefined) return;
+    const key = (entry.echo.indexKey ??= echoIndexKey(entry.echo.request));
+    const bucket = this._echoCandidates!.get(key);
+    if (bucket === undefined) this._echoCandidates!.set(key, new Set([entry]));
+    else bucket.add(entry);
   }
 
   // ===========================================================================
@@ -605,7 +634,7 @@ export class WebSocketDispatcher {
    * The server usually echoes the request verbatim, so the echo's normalized form is
    * byte-identical to the pending entry's id and a bucket lookup answers in O(1). The server
    * can also normalize the echo — fields can be added to the payload and unknown ones dropped —
-   * in which case the bucket misses and the queue is searched by subset. Among several subset
+   * in which case compatible secondary buckets are searched by subset. Among several subset
    * matches the most specific pending wins: when one in-flight payload is a subset of another,
    * the looser one must not swallow the echo meant for the stricter one.
    */
@@ -628,15 +657,31 @@ export class WebSocketDispatcher {
       }
     }
 
+    if (this._echoCandidates === undefined) {
+      this._echoCandidates = new Map();
+      for (const pending of this._queue) this._indexEcho(pending);
+    }
+    const [method, type, coin, user] = echoDiscriminators(echo);
     let best: PendingRequest | undefined;
     let bestSpecificity = -1;
-    for (const pending of this._queue) {
-      // Only subscription requests match by echo, and those are exactly the entries carrying it.
-      if (pending.echo === undefined) continue;
-      if (!isSubset(pending.echo.request, echo)) continue;
-      if (pending.echo.specificity > bestSpecificity) {
-        best = pending;
-        bestSpecificity = pending.echo.specificity;
+    // An omitted discriminator in a pending request can match any echoed value. Probe both
+    // the echoed atom and its wildcard, never excluding a possible generic subset match.
+    for (const candidateType of type === undefined ? [undefined] : [type, undefined]) {
+      for (const candidateCoin of coin === undefined ? [undefined] : [coin, undefined]) {
+        for (const candidateUser of user === undefined ? [undefined] : [user, undefined]) {
+          const bucket = this._echoCandidates.get(
+            JSON.stringify([method, candidateType, candidateCoin, candidateUser]),
+          );
+          if (bucket === undefined) continue;
+          for (const pending of bucket) {
+            if (!isSubset(pending.echo!.request, echo)) continue;
+            const score = pending.echo!.specificity;
+            if (score > bestSpecificity || (score === bestSpecificity && pending.echo!.order < best!.echo!.order)) {
+              best = pending;
+              bestSpecificity = score;
+            }
+          }
+        }
       }
     }
     return best;
@@ -652,6 +697,7 @@ function echoData(request: unknown): NonNullable<PendingRequest["echo"]> {
   let cached: number | undefined;
   return {
     request,
+    order: 0,
     // Accessor names bind nothing in the body scope: `specificity` here is the `_id.ts` import.
     get specificity(): number {
       return (cached ??= specificity(request));
@@ -670,4 +716,20 @@ function payloadSnapshot(frame: string | undefined, post: boolean): unknown {
   if (frame === undefined) return UNSERIALIZABLE_REQUEST;
   const parsed = JSON.parse(frame) as Record<string, unknown>;
   return post ? parsed.request : parsed.subscription;
+}
+
+/** Reads only safe pruning discriminators; non-string fields stay in a generic bucket. */
+function echoDiscriminators(
+  request: unknown,
+): [string | undefined, string | undefined, string | undefined, string | undefined] {
+  const envelope = request as { method?: unknown; subscription?: unknown } | null;
+  const subscription = envelope?.subscription as Record<string, unknown> | null | undefined;
+  const atom = (value: unknown): string | undefined =>
+    typeof value === "string" ? (/^0x[0-9a-f]+$/i.test(value) ? value.toLowerCase() : value) : undefined;
+  return [atom(envelope?.method), atom(subscription?.type), atom(subscription?.coin), atom(subscription?.user)];
+}
+
+/** The single secondary bucket occupied by a normalized pending request. */
+function echoIndexKey(request: unknown): string {
+  return JSON.stringify(echoDiscriminators(request));
 }
