@@ -40,15 +40,15 @@ interface TimeoutEntry {
    * CLAMPED deadline is what keeps a covered re-arm from re-clamping into a 1 ms spin.
    */
   deadline: number;
-  /** Controller aborted with {@linkcode reason} once the deadline passes. */
-  target: AbortController;
+  /** Controller aborted at the deadline; released immediately when cancelled or fired. */
+  target: AbortController | undefined;
   /**
    * Memoized abort reason, created lazily: a request that settles before its deadline never needs
    * it, and callers classify timeouts by reference (`error === timeout.reason`), so the abort and
    * every `reason` read must observe the same object.
    */
   reason?: Error;
-  /** Set by `cancel()`: the entry is drained without aborting when it reaches the head. */
+  /** Set by `cancel()`: the remaining tombstone is skipped or removed during compaction. */
   cancelled: boolean;
 }
 
@@ -63,16 +63,21 @@ interface TimeoutEntry {
  * insertion order, the way same-delay native timers would. What changes is the amortization: a
  * request whose deadline is covered by the already-armed timer — the common case, one transport
  * running requests that share a timeout value — costs a queue insert and nothing else, and
- * cancelling any but the head entry is a flag set. The armed timer is also left in place when the
- * queue drains, so the next schedule usually rides it for free; the callback fires to find an
+ * cancelling any but the head entry clears its controller and marks a tombstone. Tombstones are
+ * compacted when they dominate storage; a head cursor avoids moving every later entry on drain.
+ * The armed timer is also left in place when the queue drains, so the next schedule usually rides it for free; the callback fires to find an
  * empty queue and disarms. That stale timer is `unref`'d where the platform supports it: while a
  * request is in flight its fetch holds the event loop anyway, and once every request has settled
  * the timer must not extend the process's life (the per-request timers it replaces were cleared
  * on settle).
  */
 export class TimeoutWheel {
-  /** Live and spent entries, sorted by deadline ascending; equal deadlines keep insertion order. */
-  private readonly _entries: TimeoutEntry[];
+  /** Sorted active suffix, plus cleared prefix slots awaiting amortized compaction. */
+  private readonly _entries: (TimeoutEntry | undefined)[];
+  /** First unconsumed slot; entries before it are cleared so they retain no request state. */
+  private _head = 0;
+  /** Tombstones in the active suffix, excluding consumed prefix slots. */
+  private _cancelled = 0;
   /** The single armed native timer, or `undefined` when nothing is armed. */
   private _timer: TimerHandle | undefined;
   /** The deadline {@linkcode _timer} is armed for; never later than the head entry's deadline. */
@@ -104,14 +109,18 @@ export class TimeoutWheel {
     };
     // Sorted insert: inserting after existing equals keeps equal deadlines FIFO.
     const entries = this._entries;
-    let lo = 0;
-    let hi = entries.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (entries[mid].deadline <= entry.deadline) lo = mid + 1;
-      else hi = mid;
+    if (entries.length === 0 || entries[entries.length - 1]!.deadline <= entry.deadline) {
+      entries.push(entry);
+    } else {
+      let lo = this._head;
+      let hi = entries.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (entries[mid]!.deadline <= entry.deadline) lo = mid + 1;
+        else hi = mid;
+      }
+      entries.splice(lo, 0, entry);
     }
-    entries.splice(lo, 0, entry);
     // Re-arm only when the entry out-ranks the armed timer; a timer armed for an earlier-or-equal
     // deadline covers it — the callback fires first and re-arms for what remains.
     if (this._timer === undefined || this._timerDeadline > entry.deadline) this._rearm();
@@ -123,17 +132,63 @@ export class TimeoutWheel {
     };
   }
 
-  /** Withdraws `entry`: a head entry leaves immediately, mid-queue ones are drained lazily. */
+  /** Withdraws a live entry without retaining its controller until an earlier deadline. */
   private _cancel(entry: TimeoutEntry): void {
-    if (entry.cancelled) return;
+    if (entry.cancelled) return; // already cancelled or fired
     entry.cancelled = true;
+    entry.target = undefined;
+    // The usual HTTP path schedules one request and cancels it before the next: clear the
+    // singleton directly, without tombstone accounting or a compaction pass.
     const entries = this._entries;
-    if (entries[0] !== entry) return; // mid-queue: removed when it reaches the head
-    do entries.shift();
-    while (entries[0]?.cancelled);
+    if (this._head + 1 === entries.length && entries[this._head] === entry) {
+      if (this._head === 0) entries.pop();
+      else entries.length = 0;
+      this._head = 0;
+      return;
+    }
+    this._cancelled++;
+    if (
+      entries[this._head] === entry ||
+      (this._cancelled >= 64 && this._cancelled * 2 >= entries.length - this._head)
+    ) {
+      this._trim();
+    }
     // No re-arm: the timer's deadline is <= the old head's, hence <= the new head's — it still
     // covers the queue. And when the queue ran dry, the armed timer is left stale on purpose
     // (see the class doc): the next schedule then usually skips arming entirely.
+  }
+
+  /**
+   * Discards the cancelled head and occasionally compacts storage. Each compaction removes at
+   * least half the active suffix or consumed prefix, with a small floor to keep short bursts
+   * cheap. Thus one stalled request retains at most 63 cancelled entries, not a traffic-sized
+   * history; their controllers are already released even before this pass.
+   */
+  private _trim(): void {
+    const entries = this._entries;
+    while (entries[this._head]?.cancelled) {
+      entries[this._head++] = undefined;
+      this._cancelled--;
+    }
+    if (this._head === entries.length) {
+      entries.length = 0;
+      this._head = 0;
+      return;
+    }
+    const active = entries.length - this._head;
+    if (
+      (this._head >= 64 && this._head * 2 >= entries.length) ||
+      (this._cancelled >= 64 && this._cancelled * 2 >= active)
+    ) {
+      let write = 0;
+      for (let read = this._head; read < entries.length; read++) {
+        const entry = entries[read]!;
+        if (!entry.cancelled) entries[write++] = entry;
+      }
+      entries.length = write;
+      this._head = 0;
+      this._cancelled = 0;
+    }
   }
 
   /** Fires every overdue entry in deadline order and re-arms for what remains. */
@@ -142,17 +197,18 @@ export class TimeoutWheel {
     const now = this._runtime.monotonicNow();
     const entries = this._entries;
     for (;;) {
-      const head = entries[0];
-      if (head === undefined) break;
-      if (head.cancelled) {
-        entries.shift();
-        continue;
-      }
-      if (head.deadline > now) break;
-      entries.shift();
+      this._trim();
+      const head = entries[this._head];
+      if (head === undefined || head.deadline > now) break;
+      entries[this._head++] = undefined;
+      const target = head.target!;
+      head.target = undefined;
+      head.cancelled = true;
       // Abort listeners may re-enter the wheel (schedule/cancel from signal handlers): the loop
       // re-reads the head each pass, and the trailing _rearm settles the timer state either way.
-      head.target.abort((head.reason ??= new DOMException_("Signal timed out.", "TimeoutError")));
+      // Trim before callbacks so a reentrant schedule sees an empty wheel after its final entry.
+      this._trim();
+      target.abort((head.reason ??= new DOMException_("Signal timed out.", "TimeoutError")));
     }
     this._rearm();
   }
@@ -163,7 +219,7 @@ export class TimeoutWheel {
       this._runtime.clearTimeout(this._timer);
       this._timer = undefined;
     }
-    const head = this._entries[0];
+    const head = this._entries[this._head];
     if (head === undefined) return;
     this._timerDeadline = head.deadline;
     this._timer = this._runtime.setTimeout(() => this._onTimer(), head.deadline - this._runtime.monotonicNow());
