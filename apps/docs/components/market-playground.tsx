@@ -1,9 +1,6 @@
 "use client";
 
-import { SubscriptionClient } from "@bloxwap/hyperliquid/api/subscription/client";
-import { WebSocketTransport } from "@bloxwap/hyperliquid/transport/websocket";
-import { animate } from "animejs/animation";
-import { scrambleText } from "animejs/text";
+import type { WebSocketTransport } from "@bloxwap/hyperliquid/transport/websocket";
 import { Radio, RotateCcw } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CopyButton } from "@/components/copy-button";
@@ -109,40 +106,53 @@ function AnimatedCode({ text }: { text: string }) {
       return;
     }
 
-    // Pin the current height before swapping in the new line count, so the first frame (and a
-    // Strict Mode re-run of this effect) still starts from the old height.
-    viewport.style.height = `${oldHeight}px`;
-
-    // Animate each line independently so scrambling never removes the code's line breaks.
-    const oldLines = previous.current.split("\n");
-    const newLines = text.split("\n");
-    const lines = newLines.map((line, index) => {
-      const span = document.createElement("span");
-      span.className = "playground-code-line";
-      span.textContent = oldLines[index] || line;
-      return span;
-    });
-    code.replaceChildren(...lines);
-    const reveal = animate(lines, {
-      innerHTML: scrambleText({ text: (_target, index) => newLines[index], chars: "a-z0-9_", duration: 420 }),
-      onComplete: () => {
+    // Keep the code usable while interaction-only animation modules load. A retired effect
+    // must not animate a later selection or touch a component that has unmounted.
+    highlight(code, text);
+    let retired = false;
+    let cancel = () => {};
+    Promise.all([import("animejs/animation"), import("animejs/text")])
+      .then(([{ animate }, { scrambleText }]) => {
+        if (retired) return;
+        viewport.style.height = `${oldHeight}px`;
+        const oldLines = previous.current.split("\n");
+        const newLines = text.split("\n");
+        const lines = newLines.map((line, index) => {
+          const span = document.createElement("span");
+          span.className = "playground-code-line";
+          span.textContent = oldLines[index] || line;
+          return span;
+        });
+        code.replaceChildren(...lines);
+        const reveal = animate(lines, {
+          innerHTML: scrambleText({ text: (_target, index) => newLines[index], chars: "a-z0-9_", duration: 420 }),
+          onComplete: () => {
+            highlight(code, text);
+            previous.current = text;
+          },
+        });
+        const resize = animate(viewport, {
+          height: [`${oldHeight}px`, `${newHeight}px`],
+          duration: 420,
+          ease: "out(3)",
+          onComplete: () => {
+            viewport.style.height = "auto";
+          },
+        });
+        cancel = () => {
+          reveal.cancel();
+          resize.cancel();
+        };
+      })
+      .catch(() => {
+        if (retired) return;
         highlight(code, text);
-        // Committed only once the reveal lands: a cancelled run (Strict Mode, or a quick second
-        // click) must animate again rather than snap.
         previous.current = text;
-      },
-    });
-    const resize = animate(viewport, {
-      height: [`${oldHeight}px`, `${newHeight}px`],
-      duration: 420,
-      ease: "out(3)",
-      onComplete: () => {
         viewport.style.height = "auto";
-      },
-    });
+      });
     return () => {
-      reveal.cancel();
-      resize.cancel();
+      retired = true;
+      cancel();
     };
   }, [text]);
 
@@ -183,9 +193,7 @@ function useMarketStream(coin: Coin, feed: Feed | null, retry: number): Stream {
       return;
     }
     const controller = new AbortController();
-    const transport = transportRef.current ?? new WebSocketTransport();
-    transportRef.current = transport;
-    const client = new SubscriptionClient({ transport });
+    let transport: WebSocketTransport | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let count = 0;
     let latest: unknown;
@@ -210,45 +218,34 @@ function useMarketStream(coin: Coin, feed: Feed | null, retry: number): Stream {
       if (controller.signal.aborted) return;
       clearTimeout(timer);
       controller.abort();
-      transport.close();
+      transport?.close();
       if (transportRef.current === transport) transportRef.current = null;
       setStream({ ...idle, status: "error" });
     };
-    transport.events.addEventListener(
-      "connectionstatechange",
-      (event) => {
-        if (event.detail === "connected") {
-          setStream((current) => ({ ...current, status: "waiting" }));
-        } else if (event.detail === "reconnecting" || event.detail === "connecting") {
-          clearTimeout(timer);
-          timer = undefined;
-          setStream((current) => ({ ...current, status: "reconnecting" }));
-        } else if (event.detail === "disconnected") {
-          fail();
-        }
-      },
-      { signal: controller.signal },
-    );
-
-    const options = { signal: controller.signal, onError: fail };
-    const subscription =
-      feed === "allMids"
-        ? client.allMids(
-            {},
-            (data) => {
-              if (data.mids[coin] !== undefined) receive({ coin, midPx: data.mids[coin] });
-            },
-            options,
-          )
-        : feed === "l2Book"
-          ? client.l2Book({ coin }, receive, options)
-          : feed === "trades"
-            ? client.trades({ coin }, receive, options)
-            : feed === "candle"
-              ? client.candle({ coin, interval: "1m" }, receive, options)
-              : client.activeAssetCtx({ coin }, receive, options);
-
-    subscription
+    // The SDK is loaded only after selecting a feed. Checking the effect's lease before
+    // constructing a socket also handles rapid feed changes, Off, unmount, and Strict Mode.
+    import("./market-playground-stream")
+      .then(({ WebSocketTransport, subscribeMarketFeed }) => {
+        if (controller.signal.aborted) return;
+        transport = transportRef.current ?? new WebSocketTransport();
+        transportRef.current = transport;
+        transport.events.addEventListener(
+          "connectionstatechange",
+          (event) => {
+            if (event.detail === "connected") {
+              setStream((current) => ({ ...current, status: "waiting" }));
+            } else if (event.detail === "reconnecting" || event.detail === "connecting") {
+              clearTimeout(timer);
+              timer = undefined;
+              setStream((current) => ({ ...current, status: "reconnecting" }));
+            } else if (event.detail === "disconnected") {
+              fail();
+            }
+          },
+          { signal: controller.signal },
+        );
+        return subscribeMarketFeed(transport, coin, feed, receive, { signal: controller.signal, onError: fail });
+      })
       .then(() => {
         if (!controller.signal.aborted) {
           setStream((current) => (current.status === "live" ? current : { ...current, status: "waiting" }));

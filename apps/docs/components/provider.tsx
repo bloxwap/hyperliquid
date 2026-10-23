@@ -1,8 +1,9 @@
 "use client";
 
 import { RootProvider } from "fumadocs-ui/provider/next";
-import type { ReactNode } from "react";
-import SearchDialog from "./search";
+import { lazy, type ReactNode } from "react";
+
+const SearchDialog = lazy(() => import("./search"));
 
 /**
  * The docs are dark-only by brand decision, not by omission: Bloxwap's identity is built on neon
@@ -12,7 +13,7 @@ import SearchDialog from "./search";
  */
 export function Provider({ children }: { children: ReactNode }) {
   return (
-    <RootProvider theme={{ forcedTheme: "dark" }} search={{ SearchDialog }}>
+    <RootProvider theme={{ forcedTheme: "dark" }} search={{ SearchDialog, preload: false }}>
       {children}
     </RootProvider>
   );
