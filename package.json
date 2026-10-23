@@ -33,7 +33,7 @@
     "docs:check": "cd apps/docs && bun run check"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.5"
+    "@biomejs/biome": "2.5.15"
   },
   "overrides": {
     "@bloxwap/hig-contracts": "file:./vendor/bloxwap-hig/bloxwap-hig-contracts-0.1.0-candidate.sha0e239442.tgz",
