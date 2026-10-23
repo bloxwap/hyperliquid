@@ -1,9 +1,8 @@
 name: Publish to npm
 
-# npm trusted publishing does not support self-hosted runners
-# (https://docs.npmjs.com/trusted-publishers/). This job authenticates with the
-# org-level NPM_TOKEN secret instead. That drops OIDC trusted publishing and
-# automatic provenance.
+# npm trusted publishing requires a GitHub-hosted runner. This publishing job
+# uses OIDC so the package can retain its 2FA requirement and disallow tokens.
+# https://docs.npmjs.com/trusted-publishers/
 on:
   release:
     types: [published]
@@ -11,28 +10,22 @@ on:
 
 jobs:
   publish:
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
-
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      id-token: write
 
     steps:
-      # Job-level env cannot use the runner context on these Mac minis.
-      - name: Point TMPDIR at runner temp
-        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # Token publish uses the same Node 24 / npm CLI surface as before.
+      # npm >= 11.5.1 detects the OIDC environment and uses the configured trusted publisher.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24.x"
-          registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
-      # setup-bun writes ~/.bun, shared across runner instances on one Mac mini.
-      - name: Install Bun canary into runner temp
-        run: sh .github/scripts/setup-bun-isolated.sh
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: canary
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -56,17 +49,8 @@ jobs:
           esac
           echo "value=$TAG" >> "$GITHUB_OUTPUT"
 
-      # Fail closed before publish if the org-level secret is not shared with this repo.
-      # Never print the token.
-      - name: Verify npm token is present
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "NPM_TOKEN is missing. The org-level NPM_TOKEN secret must be shared with this repository." >&2
-            exit 1
-          fi
-
       # Scoped packages default to private access (paid); this SDK publishes public.
-      # Token publish does not attach provenance (trusted publishing is unavailable here).
+      # Trusted publishing automatically attaches provenance for this public package.
       - name: Publish package
         working-directory: ./packages/hyperliquid/dist
         run: npm publish --access public --tag ${{ steps.tag.outputs.value }}
