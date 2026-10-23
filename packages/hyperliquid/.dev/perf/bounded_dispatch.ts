@@ -1,6 +1,7 @@
 /**
  * Paired bounded-dispatch burst measurements, outside the regression-suite workload.
  * Run from the repo root: bun packages/hyperliquid/.dev/perf/bounded_dispatch.ts --compare-ref <git-ref>
+ * Focus small lanes with --counts 1,10,50 --max-overtakes 99 --bursts 2000 --rounds 21.
  * Counts cancellation registrations separately from timings so instrumentation is not timed.
  * Timings exclude signing/network work; managed HTTP/WS behavior is tested in _runtimeIntegration.
  */
@@ -87,10 +88,33 @@ async function burst(
 }
 const median = (values: number[]): number => values.toSorted((a, b) => a - b)[Math.floor(values.length / 2)];
 const results: object[] = [];
+function positiveOption(name: string, fallback: number): number {
+  const value = Number(flag(name) ?? fallback);
+  if (!Number.isSafeInteger(value) || value < 1) throw new RangeError(`${name} must be a positive integer`);
+  return value;
+}
+const rounds = positiveOption("--rounds", 15);
+const burstsPerBlock = positiveOption("--bursts", 20);
+const warmupBlocks = positiveOption("--warmup-blocks", 5);
+const counts = (flag("--counts") ?? "1,10,50,100,128,129,200").split(",").map(Number);
+const caps = (flag("--max-overtakes") ?? "0,99").split(",").map(Number);
+if (counts.some((count) => !Number.isSafeInteger(count) || count < 1)) throw new RangeError("Invalid --counts");
+if (caps.some((cap) => !Number.isSafeInteger(cap) || cap < 0 || cap > 99))
+  throw new RangeError("Invalid --max-overtakes");
+async function sample(
+  dispatcher: Dispatcher,
+  count: number,
+  maxOvertakes: number,
+  pendingResponses: boolean,
+): Promise<number> {
+  const start = performance.now();
+  for (let i = 0; i < burstsPerBlock; i++) await burst(dispatcher, count, maxOvertakes, pendingResponses, false);
+  return ((performance.now() - start) * 1000) / burstsPerBlock;
+}
 try {
-  for (const maxOvertakes of [0, 99]) {
+  for (const maxOvertakes of caps) {
     for (const pendingResponses of [false, true]) {
-      for (const count of [50, 100, 200]) {
+      for (const count of counts) {
         const variants =
           baseline === undefined
             ? [{ name: "current", dispatcher: current }]
@@ -101,13 +125,15 @@ try {
         const timings = new Map<string, number[]>();
         for (const variant of variants) {
           timings.set(variant.name, []);
-          await burst(variant.dispatcher, count, maxOvertakes, pendingResponses, false);
         }
-        for (let round = 0; round < 9; round++) {
+        for (let block = 0; block < warmupBlocks; block++) {
+          for (const variant of block % 2 === 0 ? variants : variants.toReversed()) {
+            await sample(variant.dispatcher, count, maxOvertakes, pendingResponses);
+          }
+        }
+        for (let round = 0; round < rounds; round++) {
           for (const variant of round % 2 === 0 ? variants : variants.toReversed()) {
-            const start = performance.now();
-            await burst(variant.dispatcher, count, maxOvertakes, pendingResponses, false);
-            timings.get(variant.name)!.push((performance.now() - start) * 1000);
+            timings.get(variant.name)!.push(await sample(variant.dispatcher, count, maxOvertakes, pendingResponses));
           }
         }
         const measurements = [];
@@ -115,17 +141,38 @@ try {
           measurements.push({
             variant: variant.name,
             medianBurstUs: median(timings.get(variant.name)!),
+            samplesUs: timings.get(variant.name),
             cancellationRegistrations: await burst(variant.dispatcher, count, maxOvertakes, pendingResponses, true),
           });
         }
-        const row = { count, maxOvertakes, pendingResponses, measurements };
+        const pairedRatios =
+          baseline === undefined
+            ? undefined
+            : timings.get("current")!.map((value, i) => value / timings.get("baseline")![i]);
+        const row = {
+          count,
+          maxOvertakes,
+          pendingResponses,
+          measurements,
+          pairedRatios,
+          medianRatio: pairedRatios === undefined ? undefined : median(pairedRatios),
+        };
         results.push(row);
-        console.log(JSON.stringify(row));
+        console.log(
+          JSON.stringify({
+            ...row,
+            measurements: measurements.map(({ samplesUs: _, ...summary }) => summary),
+            pairedRatios: undefined,
+          }),
+        );
       }
     }
   }
   if (out !== undefined)
-    await writeFile(out, `${JSON.stringify({ runtime: process.version, compareRef: ref, results }, null, 2)}\n`);
+    await writeFile(
+      out,
+      `${JSON.stringify({ runtime: process.versions.bun === undefined ? `Node ${process.version}` : `Bun ${process.versions.bun}`, versions: process.versions, compareRef: ref, rounds, burstsPerBlock, warmupBlocks, results }, null, 2)}\n`,
+    );
 } finally {
   if (temporary !== undefined) await rm(temporary, { recursive: true, force: true });
 }

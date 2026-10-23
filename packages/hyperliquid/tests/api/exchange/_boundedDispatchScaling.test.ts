@@ -95,7 +95,7 @@ describe("bounded dispatch scaling", () => {
     const first = reserveDispatch(key, 21, limits);
     await first.wait();
     first.release();
-    // The old subtree has deferred overtake debits when this suffix is appended.
+    // Older reservations have spent overtake credits when this suffix is appended.
     const later = Array.from({ length: 5 }, (_, i) => reserveDispatch(key, i + 22, limits));
     for (const slot of older) slot.release();
     await later[4].wait();
@@ -122,6 +122,60 @@ describe("bounded dispatch scaling", () => {
     expect(() => admitBounded(zeroKey, { mode: "bounded", ...zero })).toThrow("queue is full");
     pendingResponse.release();
     expect(() => admitBounded(zeroKey, { mode: "bounded", ...zero })).not.toThrow();
+  });
+
+  test("size promotion preserves credits spent by completed newer requests", async () => {
+    const key = `promote-credit-${++laneId}`;
+    const limits = { maxOvertakes: 99, maxPending: 300 };
+    const older = Array.from({ length: 100 }, (_, i) => reserveDispatch(key, i + 1, limits));
+    for (let i = 99; i >= 90; i--) {
+      await older[i].wait();
+      older[i].release();
+    }
+    // Growing from 90 to 140 constraints promotes the lane after ten newer sends already settled.
+    const suffix = Array.from({ length: 50 }, (_, i) => reserveDispatch(key, i + 101, limits));
+    await suffix[49].wait();
+    suffix[49].release();
+    for (let nonce = 151; nonce <= 238; nonce++) {
+      const reservation = reserveDispatch(key, nonce, limits);
+      await reservation.wait();
+      reservation.release();
+    }
+    let sent = false;
+    const last = reserveDispatch(key, 239, limits);
+    const pending = last.wait().then(() => {
+      sent = true;
+    });
+    await drain();
+    expect(sent).toBe(false); // 99 cumulative overtakes, including the ten before promotion.
+    older[0].release();
+    await drain();
+    expect(sent).toBe(false); // Other early reservations retain the same exhausted credits.
+    for (const reservation of older) reservation.release();
+    await pending;
+    for (const reservation of suffix) reservation.release();
+    last.release();
+    expect(() => assertOrderedAllowed(key)).not.toThrow();
+  });
+
+  test("zero-limit reservations sent before promotion stay counted without acquiring tree constraints", async () => {
+    const key = `promote-sent-${++laneId}`;
+    const limits = { maxOvertakes: 0, maxPending: 200 };
+    const first = reserveDispatch(key, 1, limits);
+    await first.wait(); // This response stays pending while the remaining lane grows/promotes.
+    const rest = Array.from({ length: 129 }, (_, i) => reserveDispatch(key, i + 2, limits));
+    first.release();
+    const sent: number[] = [];
+    await Promise.all(
+      rest.toReversed().map((reservation, index) =>
+        reservation.wait().then(() => {
+          sent.push(128 - index);
+        }),
+      ),
+    );
+    expect(sent).toEqual(Array.from({ length: 129 }, (_, i) => i));
+    for (const reservation of rest) reservation.release();
+    expect(() => assertOrderedAllowed(key)).not.toThrow();
   });
 
   for (const maxOvertakes of [0, 1, 3, 99]) {

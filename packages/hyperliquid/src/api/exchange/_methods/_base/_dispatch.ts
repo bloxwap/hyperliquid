@@ -41,11 +41,14 @@ export interface BoundedLimits {
   maxPending: number;
 }
 
-/** One reservation in the nonce-ordered treap, retained until its response settles. */
-interface Slot {
+/** Flat lanes need only the nonce and its remaining cumulative overtake budget. */
+interface FlatSlot {
   nonce: number;
-  /** Remaining newer sends allowed while this request is outstanding. */
   credit: number;
+}
+
+/** Tree-only fields are initialized when a reservation first needs an indexed lane. */
+interface Slot extends FlatSlot {
   /** Lazy credit decrement shared by this entire subtree. */
   pendingOvertakes: number;
   /** Minimum remaining credit in this subtree. */
@@ -68,6 +71,8 @@ interface Waiter {
 
 /** Shared state of every bounded request outstanding for one signer/network. */
 interface Lane extends BoundedLimits {
+  /** Small unqueued lanes avoid tree maintenance; this is removed permanently on promotion. */
+  flat?: Set<FlatSlot>;
   root?: Slot;
   /** Includes sent zero-overtake requests, which need no remaining tree constraint. */
   size: number;
@@ -80,6 +85,9 @@ interface Lane extends BoundedLimits {
 
 /** Active lanes per `(walletAddress × isTestnet)` key; a lane is dropped once its last slot releases. */
 const lanes = new Map<string, Lane>();
+
+/** Flat prefix scans are bounded; larger or queued lanes use the indexed scheduler. */
+const MAX_FLAT_CONSTRAINTS = 128;
 
 /** Reservation of one nonce in a bounded lane. */
 export interface DispatchReservation {
@@ -138,6 +146,34 @@ export function admitBounded(key: string, policy: Exclude<DispatchPolicy, string
     if (lane.size >= maxPending) throw new HyperliquidError("Bounded dispatch queue is full");
   }
   return { maxOvertakes, maxPending };
+}
+
+/** Assign a treap priority only when a reservation actually needs an indexed lane. */
+function nextPriority(lane: Lane): number {
+  let priority = lane.priorityState;
+  priority ^= priority << 13;
+  priority ^= priority >>> 17;
+  priority ^= priority << 5;
+  return (lane.priorityState = priority >>> 0);
+}
+
+/** Add the tree-only fields lazily, preserving the reservation's identity for its caller. */
+function indexed(slot: FlatSlot, lane: Lane): Slot {
+  const node = slot as Slot;
+  node.pendingOvertakes = 0;
+  node.minCredit = node.credit;
+  node.priority = nextPriority(lane);
+  return node;
+}
+
+/** Preserve cumulative credits when a lane first grows large or needs to queue. */
+function promote(lane: Lane): void {
+  const flat = lane.flat!;
+  lane.flat = undefined;
+  // Set insertion order is nonce order; removed reservations need no node in the new tree.
+  for (const slot of flat) {
+    lane.root = merge(lane.root, indexed(slot, lane));
+  }
 }
 
 /** Apply one or more newer sends to an entire older subtree in constant time. */
@@ -256,6 +292,35 @@ function scheduleDrain(lane: Lane): void {
   });
 }
 
+/** Keep queued promise/abort closures out of the common uncontended wait frame. */
+function queueWait(lane: Lane, slot: Slot, signal: AbortSignal | undefined, onSent: () => void): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const waiter: Waiter = {
+      resolve: (): void => {
+        onSent();
+        resolve();
+      },
+      reject,
+      signal,
+    };
+    slot.waiter = waiter;
+    if (signal !== undefined) {
+      const onAbort = (): void => {
+        if (slot.waiter !== waiter) return;
+        slot.waiter = undefined;
+        detach(waiter);
+        refresh(lane.root!, slot.nonce);
+        reject(signal.reason);
+        scheduleDrain(lane);
+      };
+      waiter.onAbort = onAbort;
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+    refresh(lane.root!, slot.nonce);
+    scheduleDrain(lane);
+  });
+}
+
 /**
  * Reserves `nonce` in the lane, under the same nonce lock as {@linkcode admitBounded}. The slot is
  * kept after dispatch until {@linkcode DispatchReservation.release}, because a sent request can
@@ -270,24 +335,18 @@ export function reserveDispatch(key: string, nonce: number, limits: BoundedLimit
     throw new HyperliquidError("Bounded dispatch requires strictly increasing unique nonces");
   }
   if (lane === undefined) {
-    lane = { ...limits, size: 0, latestNonce: -1, priorityState: 0x9e3779b9, scheduled: false };
+    lane = { ...limits, flat: new Set(), size: 0, latestNonce: -1, priorityState: 0x9e3779b9, scheduled: false };
     lanes.set(key, lane);
   }
   lane.latestNonce = nonce;
-  let priority = lane.priorityState;
-  priority ^= priority << 13;
-  priority ^= priority >>> 17;
-  priority ^= priority << 5;
-  lane.priorityState = priority >>> 0;
-  const slot: Slot = {
-    nonce,
-    credit: limits.maxOvertakes,
-    pendingOvertakes: 0,
-    minCredit: limits.maxOvertakes,
-    priority: lane.priorityState,
-  };
-  // Nonces are strictly increasing, so an append is a treap merge, not a key search.
-  lane.root = merge(lane.root, slot);
+  const slot: FlatSlot = { nonce, credit: limits.maxOvertakes };
+  if (lane.flat !== undefined) {
+    lane.flat.add(slot);
+    if (lane.flat.size > MAX_FLAT_CONSTRAINTS) promote(lane);
+  } else {
+    // Nonces are strictly increasing, so an append is a treap merge, not a key search.
+    lane.root = merge(lane.root, indexed(slot, lane));
+  }
   lane.size++;
   let active: Lane | undefined = lane;
   let released = false;
@@ -299,6 +358,25 @@ export function reserveDispatch(key: string, nonce: number, limits: BoundedLimit
       if (signal?.aborted) return Promise.reject(signal.reason);
       if (released) return Promise.reject(new HyperliquidError("Dispatch reservation was released"));
       const owner = active!;
+      const flat = owner.flat;
+      if (flat !== undefined) {
+        // Credits are nondecreasing in nonce order: appends start full and sends debit only
+        // older prefixes. Thus only the earliest constraint can block an unqueued flat lane.
+        const first = flat.values().next().value!;
+        if (first.nonce >= nonce || first.credit > 0) {
+          if (owner.maxOvertakes === 0) flat.delete(slot);
+          else {
+            for (const older of flat) {
+              if (older.nonce >= nonce) break;
+              older.credit--;
+            }
+          }
+          sent = true;
+          waiting = Promise.resolve();
+          return waiting;
+        }
+        promote(owner);
+      }
       const firstReady = owner.root?.firstReady;
       if ((firstReady === undefined || firstReady.nonce > nonce) && !blockedBefore(owner.root, nonce)) {
         // Uncontended admissions need neither a waiter nor an abort listener. Dispatch marking
@@ -310,30 +388,8 @@ export function reserveDispatch(key: string, nonce: number, limits: BoundedLimit
         if (owner.root?.firstReady !== undefined) scheduleDrain(owner);
         return waiting;
       }
-      waiting = new Promise<void>((resolve, reject) => {
-        const waiter: Waiter = {
-          resolve: (): void => {
-            sent = true;
-            resolve();
-          },
-          reject,
-          signal,
-        };
-        slot.waiter = waiter;
-        if (signal !== undefined) {
-          const onAbort = (): void => {
-            if (slot.waiter !== waiter) return;
-            slot.waiter = undefined;
-            detach(waiter);
-            refresh(owner.root!, nonce);
-            reject(signal.reason);
-            scheduleDrain(owner);
-          };
-          waiter.onAbort = onAbort;
-          signal.addEventListener("abort", onAbort, { once: true });
-        }
-        refresh(owner.root!, nonce);
-        scheduleDrain(owner);
+      waiting = queueWait(owner, slot as Slot, signal, (): void => {
+        sent = true;
       });
       return waiting;
     },
@@ -342,15 +398,19 @@ export function reserveDispatch(key: string, nonce: number, limits: BoundedLimit
       released = true;
       const owner = active!;
       active = undefined;
-      const waiter = slot.waiter;
-      slot.waiter = undefined;
-      if (waiter !== undefined) {
-        detach(waiter);
-        waiter.reject(new HyperliquidError("Dispatch reservation was released"));
+      if (owner.flat !== undefined) owner.flat.delete(slot);
+      else {
+        const node = slot as Slot;
+        const waiter = node.waiter;
+        node.waiter = undefined;
+        if (waiter !== undefined) {
+          detach(waiter);
+          waiter.reject(new HyperliquidError("Dispatch reservation was released"));
+        }
+        if (!sent || owner.maxOvertakes > 0) owner.root = remove(owner.root!, nonce);
       }
-      if (!sent || owner.maxOvertakes > 0) owner.root = remove(owner.root!, nonce);
       owner.size--;
-      drain(owner);
+      if (owner.flat === undefined) drain(owner);
       if (owner.size === 0 && lanes.get(key) === owner) lanes.delete(key);
     },
   };
