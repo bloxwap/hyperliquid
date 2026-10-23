@@ -35,6 +35,9 @@ interface ChannelRoute {
   fromPayload: KeyReader;
   /** Route key of a frame body. */
   fromEvent: KeyReader;
+  /** Optional secondary discriminator, with missing values retaining the primary fallback. */
+  secondaryPayload?: KeyReader;
+  secondaryEvent?: KeyReader;
 }
 
 /** Reads `value[key]`, or `undefined` when `value` is not an object. */
@@ -81,13 +84,26 @@ const BY_USER: ChannelRoute = {
   fromEvent: caseFolded((data: unknown): string | undefined => stringProp(data, "user")),
 };
 
-/**
- * `candle.ts`: `e.detail.s === payload.coin && e.detail.i === payload.interval`. The interval is
- * left to the filter, so two intervals of one coin share a route.
- */
-const BY_CANDLE_COIN: ChannelRoute = {
+/** `candle.ts`: frames distinguish both the coin and interval. */
+const BY_CANDLE: ChannelRoute = {
   fromPayload: payloadCoin,
   fromEvent: (data: unknown): string | undefined => stringProp(data, "s"),
+  secondaryPayload: (payload: unknown): string | undefined => stringProp(payload, "interval"),
+  secondaryEvent: (data: unknown): string | undefined => stringProp(data, "i"),
+};
+
+/** Asset data distinguishes the account within one coin. */
+const BY_COIN_USER: ChannelRoute = {
+  ...BY_COIN,
+  secondaryPayload: payloadUser,
+  secondaryEvent: BY_USER.fromEvent,
+};
+
+/** Account state distinguishes the DEX within one user; the empty string is a valid base DEX. */
+const BY_USER_DEX: ChannelRoute = {
+  ...BY_USER,
+  secondaryPayload: (payload: unknown): string | undefined => stringProp(payload, "dex"),
+  secondaryEvent: (data: unknown): string | undefined => stringProp(data, "dex"),
 };
 
 /** `trades.ts`: `e.detail[0]?.coin === payload.coin` — the frame is an array of one coin's trades. */
@@ -118,10 +134,8 @@ const ROUTES: Map<string, ChannelRoute> = new Map([
   ["activeSpotAssetCtx", BY_COIN], // activeSpotAssetCtx.ts: e.detail.coin === payload.coin
   ["bbo", BY_COIN], //                bbo.ts:                e.detail.coin === payload.coin
   ["l2Book", BY_COIN], //             l2Book.ts:             e.detail.coin === payload.coin
-  // activeAssetData.ts compares the coin *and* the user; the coin alone routes, the filter still
-  // checks the user, so a shared coin costs at most one extra discarded call.
-  ["activeAssetData", BY_COIN],
-  ["candle", BY_CANDLE_COIN],
+  ["activeAssetData", BY_COIN_USER],
+  ["candle", BY_CANDLE],
   ["trades", BY_TRADES_COIN],
   // --- User channels ---------------------------------------------------------
   ["allDexsClearinghouseState", BY_USER], //   e.detail.user === payload.user
@@ -132,10 +146,9 @@ const ROUTES: Map<string, ChannelRoute> = new Map([
   ["userNonFundingLedgerUpdates", BY_USER], // e.detail.user === payload.user
   ["userTwapHistory", BY_USER], //             e.detail.user === payload.user
   ["userTwapSliceFills", BY_USER], //          e.detail.user === payload.user
-  // These compare the user *and* the dex; the user alone routes, the filter checks the dex.
-  ["clearinghouseState", BY_USER],
-  ["openOrders", BY_USER],
-  ["twapStates", BY_USER],
+  ["clearinghouseState", BY_USER_DEX],
+  ["openOrders", BY_USER_DEX],
+  ["twapStates", BY_USER_DEX],
   ["webData3", BY_USER_STATE],
 ]);
 
@@ -160,6 +173,14 @@ export function isBareChannel(eventType: string): boolean {
   return !eventType.includes(KEY_SEPARATOR);
 }
 
+/** The channel whose primary compound route `eventType` listens on, if any. */
+export function primaryFallbackChannel(eventType: string): string | undefined {
+  const separator = eventType.indexOf(KEY_SEPARATOR);
+  if (separator < 0 || eventType.indexOf(KEY_SEPARATOR, separator + 1) >= 0) return undefined;
+  const channel = eventType.slice(0, separator);
+  return ROUTES.get(channel)?.secondaryEvent === undefined ? undefined : channel;
+}
+
 /**
  * Event type a subscription for `payload` must listen on: the routed type when the channel is
  * routed and the payload carries its discriminator, the bare channel otherwise.
@@ -174,7 +195,9 @@ export function payloadEventType(channel: string, payload: unknown): string {
   const route = ROUTES.get(channel);
   if (route === undefined) return channel;
   const key = route.fromPayload(payload);
-  return key === undefined ? channel : channel + KEY_SEPARATOR + key;
+  if (key === undefined) return channel;
+  const secondary = route.secondaryPayload?.(payload);
+  return channel + KEY_SEPARATOR + key + (secondary === undefined ? "" : KEY_SEPARATOR + secondary);
 }
 
 /**
@@ -222,6 +245,21 @@ function internRoutedType(channel: string, key: string): string {
 export function frameEventType(channel: string, data: unknown): string | undefined {
   const route = ROUTES.get(channel);
   if (route === undefined) return undefined;
+  const key = route.fromEvent(data);
+  if (key === undefined) return undefined;
+  if (route.secondaryEvent === undefined) return internRoutedType(channel, key);
+  const secondary = route.secondaryEvent(data);
+  return internRoutedType(channel, secondary === undefined ? key : key + KEY_SEPARATOR + secondary);
+}
+
+/**
+ * Primary route for subscriptions lacking a compound channel's optional secondary field. A frame
+ * also visits this route, so adding a secondary discriminator cannot starve these subscriptions.
+ * Ordinary single-key channels have no additional dispatch.
+ */
+export function frameFallbackEventType(channel: string, data: unknown): string | undefined {
+  const route = ROUTES.get(channel);
+  if (route?.secondaryEvent === undefined) return undefined;
   const key = route.fromEvent(data);
   return key === undefined ? undefined : internRoutedType(channel, key);
 }

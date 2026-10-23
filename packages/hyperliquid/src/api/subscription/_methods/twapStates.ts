@@ -97,7 +97,7 @@ export function twapStates(
   return config.transport.subscribe<TwapStatesEvent>(
     payload.type,
     payload,
-    // Routing keys only by user; dex still needs a local filter.
+    // Retain the DEX guard for custom transports without compound routing.
     (e) => {
       if (e.detail.dex === payload.dex) listener(e.detail);
     },

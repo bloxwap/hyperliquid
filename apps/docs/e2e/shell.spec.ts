@@ -178,3 +178,98 @@ test("playground controls are keyboard operable and its code copies", async ({ p
     .poll(() => page.evaluate(() => (window as unknown as { copied?: string }).copied ?? ""))
     .toContain("Explore live Hyperliquid market data");
 });
+
+test("search and market implementations load only after interaction", async ({ page }) => {
+  const scripts: string[] = [];
+  const pendingScripts: Promise<void>[] = [];
+  let sockets = 0;
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname.endsWith(".js")) {
+      pendingScripts.push(
+        response.text().then((source) => {
+          scripts.push(source);
+        }),
+      );
+    }
+  });
+  await page.routeWebSocket("wss://api.hyperliquid.xyz/ws", (socket) => {
+    sockets++;
+    socket.onMessage((raw) => {
+      const message = JSON.parse(String(raw));
+      if (message.method === "subscribe") {
+        socket.send(JSON.stringify({ channel: "subscriptionResponse", data: message }));
+        socket.send(JSON.stringify({ channel: "allMids", data: { mids: { BTC: "65000" } } }));
+      }
+    });
+  });
+  await page.goto("/hyperliquid/");
+  await page.waitForLoadState("networkidle");
+  await Promise.all(pendingScripts);
+  expect(scripts.some((source) => source.includes("search-index.json"))).toBe(false);
+  expect(scripts.some((source) => source.includes("api.hyperliquid.xyz/ws"))).toBe(false);
+  expect(sockets).toBe(0);
+
+  await page.keyboard.press("Control+k");
+  await page.getByRole("dialog").locator("input").fill("transport");
+  await expect(page.getByRole("dialog").getByRole("option").first()).toBeVisible();
+  await Promise.all(pendingScripts);
+  expect(scripts.some((source) => source.includes("search-index.json"))).toBe(true);
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Mid price", exact: true }).click();
+  await expect(page.locator(".playground-status")).toHaveAttribute("data-status", "live");
+  await Promise.all(pendingScripts);
+  expect(scripts.some((source) => source.includes("api.hyperliquid.xyz/ws"))).toBe(true);
+  expect(sockets).toBe(1);
+});
+
+test("turning a feed off while its SDK chunk loads creates no socket", async ({ page }) => {
+  let holdStream = false;
+  let releaseStream = () => {};
+  let streamRequested = () => {};
+  const gate = new Promise<void>((resolve) => {
+    releaseStream = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    streamRequested = resolve;
+  });
+  let sockets = 0;
+  await page.routeWebSocket("wss://api.hyperliquid.xyz/ws", (socket) => {
+    sockets++;
+    socket.onMessage((raw) => {
+      const message = JSON.parse(String(raw));
+      if (message.method === "subscribe") {
+        socket.send(JSON.stringify({ channel: "subscriptionResponse", data: message }));
+      }
+    });
+  });
+  await page.route("**/*.js", async (route) => {
+    const response = await route.fetch();
+    if (holdStream && (await response.text()).includes("api.hyperliquid.xyz/ws")) {
+      streamRequested();
+      await gate;
+    }
+    await route.fulfill({ response });
+  });
+  try {
+    await page.goto("/hyperliquid/");
+    await page.waitForLoadState("networkidle");
+    holdStream = true;
+    await page.getByRole("button", { name: "Mid price", exact: true }).click();
+    await requested;
+    await page.getByRole("button", { name: "Off", exact: true }).click();
+    await expect(page.locator(".playground-status")).toHaveAttribute("data-status", "off");
+    holdStream = false;
+    releaseStream();
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator(".playground-status")).toHaveAttribute("data-status", "off");
+    expect(sockets).toBe(0);
+
+    // The cached module remains usable for a later, live effect.
+    await page.getByRole("button", { name: "Trades", exact: true }).click();
+    await expect.poll(() => sockets).toBe(1);
+    await expect(page.locator(".playground-status")).toHaveAttribute("data-status", "waiting");
+  } finally {
+    releaseStream();
+  }
+});

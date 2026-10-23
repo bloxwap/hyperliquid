@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { WebSocketTransport, WebSocketQuota, SubscriptionClient } from "@bloxwap/hyperliquid";
 import {
   frameEventType,
+  frameFallbackEventType,
   payloadEventType,
   _routedTypeCacheSizeForTests,
 } from "../../../src/transport/websocket/_routing.ts";
@@ -51,4 +52,18 @@ test("evicting interned keys preserves active listener routes on separate transp
     for (const transport of transports) transport.close();
     restoreWebSocket();
   }
+});
+
+test("compound and primary fallback route retention stays bounded under secondary-key churn", () => {
+  const compound = payloadEventType("candle", { coin: "BTC", interval: "1m" });
+  const primary = payloadEventType("candle", { coin: "BTC" });
+  for (let i = 0; i < 20000; i++) {
+    const data = { s: `COIN${i}`, i: "1m" };
+    frameEventType("candle", data);
+    frameFallbackEventType("candle", data);
+  }
+  expect(_routedTypeCacheSizeForTests("candle")).toBe(1024);
+  expect(frameEventType("candle", { s: "BTC", i: "1m" })).toBe(compound);
+  expect(frameFallbackEventType("candle", { s: "BTC", i: "1m" })).toBe(primary);
+  expect(_routedTypeCacheSizeForTests("candle")).toBe(1024);
 });

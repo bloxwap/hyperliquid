@@ -7,6 +7,7 @@
  */
 
 import type { ISubscription, ISubscriptionTransport, TransportError } from "../../../../transport/mod.ts";
+import { ON_TRACKED_UNSUBSCRIBE, registerSubscriptionTransport } from "./_identity.ts";
 
 /**
  * Subscription handle returned by {@linkcode SubscriptionClient} methods.
@@ -31,6 +32,8 @@ export interface ClientSubscription extends ISubscription {
 export class SubscriptionTracker implements ISubscriptionTransport {
   /** Confirmed subscriptions not yet unsubscribed or failed. */
   private readonly _active = new Set<ClientSubscription>();
+  /** Method-owned delivery state awaiting transport confirmation. */
+  private readonly _pendingRetire = new Set<() => void>();
   /**
    * Bumped by {@linkcode SubscriptionTracker.unsubscribeAll}; a subscribe call whose confirmation
    * lands against a stale epoch is retired on arrival instead of joining the registry.
@@ -42,6 +45,7 @@ export class SubscriptionTracker implements ISubscriptionTransport {
 
   constructor(inner: ISubscriptionTransport) {
     this._inner = inner;
+    registerSubscriptionTransport(this, inner);
   }
 
   /**
@@ -57,35 +61,52 @@ export class SubscriptionTracker implements ISubscriptionTransport {
       signal?: AbortSignal;
       /** Forwarded to the wrapped transport after the tracker's own bookkeeping runs. */
       onError?: (error: TransportError) => void;
+      /** Retires method-owned delivery state when unsubscribeAll bypasses the outer handle. */
+      [ON_TRACKED_UNSUBSCRIBE]?: () => void;
     },
   ): Promise<ClientSubscription> {
     const epoch = this._epoch;
     let failure: TransportError | undefined;
     let failureController: AbortController | undefined;
     let tracked: ClientSubscription | undefined;
-
-    return this._inner
-      .subscribe<T>(channel, payload, listener, {
-        signal: options?.signal,
-        onError: (error: TransportError) => {
-          // A failed subscription is gone — it leaves the registry here, not on a later
-          // unsubscribeAll(). The failure is recorded so a `failureSignal` first accessed
-          // afterwards is still created already aborted with the same reason.
-          failure = error;
-          failureController?.abort(error);
-          if (tracked !== undefined) this._active.delete(tracked);
-          options?.onError?.(error);
-        },
-      })
-      .then((subscription) => {
+    const retire = options?.[ON_TRACKED_UNSUBSCRIBE];
+    if (retire !== undefined) this._pendingRetire.add(retire);
+    const delegatedOptions = {
+      signal: options?.signal,
+      [ON_TRACKED_UNSUBSCRIBE]: retire,
+      onError: (error: TransportError): void => {
+        // A failed subscription is gone — it leaves the registry here, not on a later
+        // unsubscribeAll(). The failure is recorded so a `failureSignal` first accessed
+        // afterwards is still created already aborted with the same reason.
+        failure = error;
+        if (retire !== undefined) this._pendingRetire.delete(retire);
+        failureController?.abort(error);
+        if (tracked !== undefined) this._active.delete(tracked);
+        options?.onError?.(error);
+      },
+    };
+    let confirmation: Promise<ISubscription>;
+    try {
+      confirmation = this._inner.subscribe<T>(channel, payload, listener, delegatedOptions);
+    } catch (error) {
+      if (retire !== undefined) this._pendingRetire.delete(retire);
+      throw error;
+    }
+    return confirmation.then(
+      (subscription) => {
+        if (retire !== undefined) this._pendingRetire.delete(retire);
         // unsubscribeAll() ran while the confirmation was in flight: the teardown covers this
         // subscription too, so retire it on arrival and keep it out of the registry. Fire and
         // forget — the caller's promise must not wait for (or reject with) the teardown.
         const stale = epoch !== this._epoch;
-        if (stale) subscription.unsubscribe().catch(() => {});
+        if (stale) {
+          options?.[ON_TRACKED_UNSUBSCRIBE]?.();
+          subscription.unsubscribe().catch(() => {});
+        }
 
         const handle: ClientSubscription = {
           unsubscribe: async (): Promise<void> => {
+            options?.[ON_TRACKED_UNSUBSCRIBE]?.();
             try {
               await subscription.unsubscribe();
             } finally {
@@ -107,16 +128,24 @@ export class SubscriptionTracker implements ISubscriptionTransport {
         tracked = handle;
         if (!stale) this._active.add(handle);
         return handle;
-      });
+      },
+      (error) => {
+        if (retire !== undefined) this._pendingRetire.delete(retire);
+        throw error;
+      },
+    );
   }
 
   /**
    * Unsubscribes every confirmed subscription concurrently and clears the registry. Handles
    * removed individually or by a failure are not revisited; subscribe calls still awaiting their
-   * confirmation are retired as they land (see {@linkcode SubscriptionTracker._epoch}).
+   * confirmation have their method-owned delivery state retired immediately; the transport lease
+   * is retired when it lands (see {@linkcode SubscriptionTracker._epoch}).
    */
   async unsubscribeAll(): Promise<void> {
     this._epoch++;
+    for (const retire of this._pendingRetire) retire();
+    this._pendingRetire.clear();
     const active = [...this._active];
     this._active.clear();
     await Promise.all(active.map((subscription) => subscription.unsubscribe()));
@@ -128,6 +157,7 @@ const trackers = new WeakMap<ISubscriptionTransport, SubscriptionTracker>();
 
 /** Returns the shared {@linkcode SubscriptionTracker} for `transport`, creating it on first use. */
 export function trackerFor(transport: ISubscriptionTransport): SubscriptionTracker {
+  if (transport instanceof SubscriptionTracker) return transport;
   let tracker = trackers.get(transport);
   if (tracker === undefined) trackers.set(transport, (tracker = new SubscriptionTracker(transport)));
   return tracker;

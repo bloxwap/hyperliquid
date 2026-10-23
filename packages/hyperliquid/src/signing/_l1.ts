@@ -344,6 +344,8 @@ async function signL1ActionHash(args: {
    * Default: `false`
    */
   isTestnet?: boolean;
+  /** Shared lazy digest for multi-sig inner signers; invoked only by a raw-capable wallet. */
+  digestThunk?: () => Uint8Array;
 }): Promise<Signature> {
   const { wallet, actionHashBytes, isTestnet = false } = args;
 
@@ -354,7 +356,7 @@ async function signL1ActionHash(args: {
   // typed-data path without paying for a digest they would discard.
   const fast = await signRawDigestBytes({
     wallet,
-    digest: () => createL1AgentDigestBytes(actionHashBytes, isTestnet),
+    digest: args.digestThunk ?? (() => createL1AgentDigestBytes(actionHashBytes, isTestnet)),
   });
   if (fast !== undefined) return fast;
 
@@ -423,11 +425,14 @@ export async function signL1InnerBytes(args: {
    * Default: `false`
    */
   isTestnet?: boolean;
+  /** Shared lazy Agent digest; typed-data-only signers never invoke it. */
+  digestThunk?: () => Uint8Array;
 }): Promise<Signature> {
   const signature = await signL1ActionHash({
     wallet: args.signer,
     actionHashBytes: args.actionHashBytes,
     isTestnet: args.isTestnet,
+    digestThunk: args.digestThunk,
   });
   return trimSignature(signature);
 }

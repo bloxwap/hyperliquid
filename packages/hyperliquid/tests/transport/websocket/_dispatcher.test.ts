@@ -348,6 +348,89 @@ describe("WebSocketDispatcher", () => {
         assertEquals((result.subscription as Record<string, unknown>).coin, "BTC");
       });
 
+      test("verbatim confirmations do not allocate the secondary subset index", async () => {
+        const { socket, requester } = createRequester();
+        const payload = { type: "l2Book", coin: "BTC" };
+        const promise = requester.request("subscribe", payload);
+        socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+        await promise;
+        assertEquals((requester as unknown as { _echoCandidates?: unknown })._echoCandidates, undefined);
+      });
+
+      test("rewritten echoes inspect only compatible candidates across a 500-subscribe burst", async () => {
+        const { socket, requester } = createRequester(null);
+        const coins = Array.from({ length: 500 }, (_, i) => `COIN${i}`);
+        const promises = coins.map((coin) => requester.request("subscribe", { type: "l2Book", coin }));
+        const queue = (requester as unknown as { _queue: Set<{ echo: { request: unknown } }> })._queue;
+        let inspected = 0;
+        for (const pending of queue) {
+          const request = pending.echo.request;
+          Object.defineProperty(pending.echo, "request", {
+            get: () => {
+              inspected++;
+              return request;
+            },
+          });
+        }
+        for (const coin of [...coins].reverse()) {
+          socket.mockMessage(
+            RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin, nSigFigs: null, mantissa: null }),
+          );
+        }
+        const results = (await Promise.all(promises)) as { subscription: { coin: string } }[];
+        assertEquals(
+          results.map((result) => result.subscription.coin),
+          coins,
+        );
+        // One lazy index-build read and one subset-check read per entry, rather than N*(N+1)/2.
+        assertEquals(inspected, 2 * coins.length);
+        assertEquals((requester as unknown as { _echoCandidates: Map<string, unknown> })._echoCandidates.size, 0);
+      });
+
+      test("generic candidate buckets preserve earliest enqueue order for equal-specificity matches", async () => {
+        const { socket, requester } = createRequester();
+        const seen: string[] = [];
+        const first = requester.request("subscribe", { coin: "BTC" }).then(() => seen.push("coin"));
+        const second = requester.request("subscribe", { type: "l2Book" }).then(() => seen.push("type"));
+        const echo = { type: "l2Book", coin: "BTC", nSigFigs: null };
+        socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", echo));
+        await drain();
+        assertEquals(seen, ["coin"]);
+        socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", echo));
+        await Promise.all([first, second]);
+        assertEquals(seen, ["coin", "type"]);
+      });
+
+      test("rewritten user echoes preserve hexadecimal case folding and generic payload matching", async () => {
+        const { socket, requester } = createRequester();
+        const user = requester.request("subscribe", { type: "userFills", user: "0xABCD" });
+        socket.mockMessage(
+          RESPONSES.subscriptionResponse("subscribe", { type: "userFills", user: "0xabCD", added: true }),
+        );
+        await user;
+        const generic = requester.request("subscribe", { custom: 42 });
+        socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { custom: 42, added: true }));
+        await generic;
+      });
+
+      test("secondary candidate buckets clean up on caller abort and disconnect", async () => {
+        for (const finish of ["abort", "close"] as const) {
+          const { socket, requester } = createRequester(null);
+          const controller = new AbortController();
+          const promise = requester.request("subscribe", { type: "l2Book", coin: "BTC" }, controller.signal);
+          // Build the secondary index without settling our request.
+          socket.mockMessage(
+            RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin: "OTHER", added: true }),
+          );
+          const candidates = () => (requester as unknown as { _echoCandidates: Map<string, unknown> })._echoCandidates;
+          assertEquals(candidates().size, 1);
+          if (finish === "abort") controller.abort(new Error("cancelled"));
+          else socket.disconnect();
+          await assertRejects(() => promise, WebSocketRequestError);
+          assertEquals(candidates().size, 0);
+        }
+      });
+
       test("duplicate subscriptions resolve in enqueue order", async () => {
         const { socket, requester } = createRequester();
         const payload = { type: "l2Book", coin: "BTC" };

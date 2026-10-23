@@ -448,6 +448,96 @@ describe("abort.TimeoutWheel", () => {
       assertEquals(clock.pendingTimers, 0);
     });
 
+    test("stalled-head churn bounds retained entries and releases cancelled controllers", () => {
+      const wheel = new TimeoutWheel(clock);
+      const head = new AbortController();
+      const headHandle = wheel.schedule(head, 10_000);
+      // Inspect retention rather than depend on nondeterministic GC or heap-size sampling.
+      const storage = wheel as unknown as {
+        _entries: ({ target?: AbortController } | undefined)[];
+      };
+      const cancelled = new AbortController();
+      const cancelledHandle = wheel.schedule(cancelled, 20_000);
+      const cancelledEntry = storage._entries[1]!;
+      const reason = cancelledHandle.reason;
+      cancelledHandle.cancel();
+      assertStrictEquals(cancelledEntry.target, undefined);
+
+      for (let i = 0; i < 10_000; i++) {
+        wheel.schedule(new AbortController(), 20_000 + i).cancel();
+      }
+      assert(storage._entries.length <= 128, "completed timeouts must not accumulate behind a stalled request");
+      assertEquals(storage._entries.filter((entry) => entry?.target !== undefined).length, 1);
+      assertEquals(clock.pendingTimers, 1);
+      assert(!head.signal.aborted);
+      assert(!cancelled.signal.aborted);
+      assertStrictEquals(cancelledHandle.reason, reason); // compaction does not invalidate handles
+      cancelledHandle.cancel(); // and a retained handle remains idempotent
+
+      clock.advance(10_000);
+      assert(head.signal.aborted);
+      assertStrictEquals(head.signal.reason, headHandle.reason);
+      assertEquals(storage._entries.length, 0);
+      assertEquals(clock.pendingTimers, 0);
+    });
+
+    test("compaction preserves mixed deadline ordering and equal-deadline FIFO", () => {
+      const wheel = new TimeoutWheel(clock);
+      const observed: number[] = [];
+      const expected: { id: number; deadline: number }[] = [];
+      const controllers: AbortController[] = [];
+      const handles: ReturnType<TimeoutWheel["schedule"]>[] = [];
+      for (let i = 0; i < 512; i++) {
+        const controller = new AbortController();
+        const deadline = 100 + ((i * 73) % 31);
+        controller.signal.addEventListener("abort", () => observed.push(i));
+        controllers.push(controller);
+        handles.push(wheel.schedule(controller, deadline));
+        if (i % 3 === 0) expected.push({ id: i, deadline });
+      }
+      for (let i = 0; i < handles.length; i++) {
+        if (i % 3 !== 0) handles[i].cancel();
+      }
+      expected.sort((a, b) => a.deadline - b.deadline || a.id - b.id);
+      clock.advance(1_000);
+      assertEquals(
+        observed,
+        expected.map(({ id }) => id),
+      );
+      assertEquals(controllers.filter((controller) => controller.signal.aborted).length, expected.length);
+      // Cancelling handles after their entries fired must not corrupt later wheel accounting.
+      for (const handle of handles) handle.cancel();
+      const later = new AbortController();
+      wheel.schedule(later, 5);
+      clock.advance(5);
+      assert(later.signal.aborted);
+      assertEquals(clock.pendingTimers, 0);
+    });
+
+    test("callbacks can cancel and schedule while a compacted queue is draining", () => {
+      const wheel = new TimeoutWheel(clock);
+      const observed: string[] = [];
+      const first = new AbortController();
+      const skipped = new AbortController();
+      const final = new AbortController();
+      const reentrant = new AbortController();
+      wheel.schedule(first, 5);
+      const skippedHandle = wheel.schedule(skipped, 5);
+      wheel.schedule(final, 10);
+      for (let i = 0; i < 200; i++) wheel.schedule(new AbortController(), 20).cancel();
+      first.signal.addEventListener("abort", () => {
+        observed.push("first");
+        skippedHandle.cancel();
+        wheel.schedule(reentrant, 0);
+      });
+      reentrant.signal.addEventListener("abort", () => observed.push("reentrant"));
+      final.signal.addEventListener("abort", () => observed.push("final"));
+      clock.advance(10);
+      assertEquals(observed, ["first", "reentrant", "final"]);
+      assert(!skipped.signal.aborted);
+      assertEquals(clock.pendingTimers, 0);
+    });
+
     test("deadlines are monotonic: a wall-clock rollback neither delays nor hastens them", () => {
       const wheel = new TimeoutWheel(clock);
       const controller = new AbortController();

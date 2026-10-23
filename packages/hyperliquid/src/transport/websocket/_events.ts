@@ -7,7 +7,7 @@
  * @module
  */
 
-import { frameEventType, isBareChannel } from "./_routing.ts";
+import { frameEventType, frameFallbackEventType, isBareChannel, primaryFallbackChannel } from "./_routing.ts";
 
 /**
  * Confirmation frame of a `subscribe` / `unsubscribe` request.
@@ -177,14 +177,14 @@ type Listeners = EventListenerOrEventListenerObject | EventListenerOrEventListen
  */
 export class HyperliquidEventTarget {
   /**
-   * Channels that have ever had a listener on their bare name, so a routed frame knows it still
-   * owes them a broadcast.
+   * Channels that have had bare listeners (bit 1) or primary compound-route listeners (bit 2).
+   * One lookup tells a routed frame which fallback dispatches may be observed.
    *
    * Entries are never removed: the set exists only to skip a dispatch nobody would observe, so a
    * stale entry costs one such dispatch, while a missing entry would silently drop frames. Growth
    * is bounded by the number of channels.
    */
-  private readonly _bareChannels: Set<string> = new Set();
+  private readonly _channelFallbacks: Map<string, number> = new Map();
 
   /**
    * Live listeners per event type. The original listener reference is stored so
@@ -224,7 +224,11 @@ export class HyperliquidEventTarget {
     options?: boolean | AddEventListenerOptions,
   ): void {
     if (listener === null) return;
-    if (isBareChannel(type)) this._bareChannels.add(type);
+    if (isBareChannel(type)) this._channelFallbacks.set(type, (this._channelFallbacks.get(type) ?? 0) | 1);
+    else {
+      const channel = primaryFallbackChannel(type);
+      if (channel !== undefined) this._channelFallbacks.set(channel, (this._channelFallbacks.get(channel) ?? 0) | 2);
+    }
 
     // `once` is rare on this path (the package never uses it for Hyperliquid frames) but the
     // EventTarget contract still requires it: wrap so the first firing removes the wrapper.
@@ -385,8 +389,16 @@ export class HyperliquidEventTarget {
       // mistake can therefore only ever cost an extra discarded call, never a missed frame.
       const routed = frameEventType(msg.channel, msg.data);
       if (routed !== undefined) {
+        // Resolve both routes before user callbacks can mutate the shared frame data. Skip
+        // primary fallback computation entirely unless a subscription has requested it.
+        const generation = this._generation;
+        let fallbacks = this._channelFallbacks.get(msg.channel) ?? 0;
+        const fallback = (fallbacks & 2) === 0 ? undefined : frameFallbackEventType(msg.channel, msg.data);
         this._emit(routed, msg.data);
-        if (!this._bareChannels.has(msg.channel)) return;
+        if (fallback !== undefined && fallback !== routed) this._emit(fallback, msg.data);
+        // Keep existing behavior if a callback registered a bare-channel listener mid-frame.
+        if (this._generation !== generation) fallbacks = this._channelFallbacks.get(msg.channel) ?? 0;
+        if ((fallbacks & 1) === 0) return;
       }
       this._emit(msg.channel, msg.data);
     } else if (isExplorerBlockEvent(msg)) {
