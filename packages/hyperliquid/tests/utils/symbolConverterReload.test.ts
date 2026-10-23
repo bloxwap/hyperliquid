@@ -220,6 +220,82 @@ describe("SymbolConverter reload() consistency", () => {
     assertEquals(converter.getSpotPairId("PURR/USDC"), before.spotPairId);
     assertEquals(converter.getSymbolBySpotPairId("@1"), before.spotSymbol);
   });
+
+  test("selected DEX metadata starts when its registry resolves and publishes only with the full snapshot", async () => {
+    const registry = createDeferred<PerpDexsResponse>();
+    const outcome = createDeferred<OutcomeMetaResponse>();
+    const selected: string[] = [];
+    let gated = false;
+    const transport: IRequestTransport = {
+      isTestnet: false,
+      request<T>(_endpoint: "info" | "exchange" | "explorer", payload: unknown): Promise<T> {
+        const { type, dex } = payload as { type: string; dex?: string };
+        if (gated && type === "perpDexs") return registry.promise as Promise<T>;
+        if (gated && type === "outcomeMeta") return outcome.promise as Promise<T>;
+        if (type === "meta" && dex !== undefined) {
+          selected.push(dex);
+          return Promise.resolve(
+            (gated ? { ...DEX_META, universe: [{ ...DEX_META.universe[0], name: "test:DEF" }] } : DEX_META) as T,
+          );
+        }
+        const responses: Record<string, unknown> = {
+          meta: PERP_META,
+          spotMeta: SPOT_META,
+          perpDexs: PERP_DEXS,
+          outcomeMeta: EMPTY_OUTCOME_META,
+        };
+        return Promise.resolve(responses[type] as T);
+      },
+    };
+    const converter = await SymbolConverter.create({ transport, dexs: ["test", "missing"] });
+    assertEquals(converter.getAssetId("test:ABC"), 110000);
+    selected.length = 0;
+    gated = true;
+    let settled = false;
+    const reload = converter.reload().then(() => {
+      settled = true;
+    });
+    assertEquals(selected, []); // A selected name still needs registry validation.
+
+    registry.resolve([null, null, PERP_DEXS[1]]);
+    for (let i = 0; i < 20 && selected.length === 0; i++) await Promise.resolve();
+    assertEquals(selected, ["test"]); // Starts while outcome metadata is still blocked.
+    assertEquals(settled, false);
+    assertEquals(converter.getAssetId("test:ABC"), 110000);
+    assertEquals(converter.getAssetId("test:DEF"), undefined);
+
+    outcome.resolve(EMPTY_OUTCOME_META);
+    await reload;
+    assertEquals(converter.getAssetId("test:ABC"), undefined);
+    assertEquals(converter.getAssetId("test:DEF"), 120000); // Sparse registry index is preserved.
+    assertEquals(converter.getAssetId("BTC"), 0);
+  });
+
+  test("an early selected DEX failure does not discard successful DEX or unrelated metadata", async () => {
+    const selected: string[] = [];
+    const transport: IRequestTransport = {
+      isTestnet: false,
+      request<T>(_endpoint: "info" | "exchange" | "explorer", payload: unknown): Promise<T> {
+        const { type, dex } = payload as { type: string; dex?: string };
+        if (type === "meta" && dex !== undefined) {
+          selected.push(dex);
+          return dex === "broken" ? Promise.reject(new Error("unavailable DEX")) : Promise.resolve(DEX_META as T);
+        }
+        const responses: Record<string, unknown> = {
+          meta: PERP_META,
+          spotMeta: SPOT_META,
+          perpDexs: [null, PERP_DEXS[1], { ...PERP_DEXS[1], name: "broken" }],
+          outcomeMeta: EMPTY_OUTCOME_META,
+        };
+        return Promise.resolve(responses[type] as T);
+      },
+    };
+    const converter = await SymbolConverter.create({ transport, dexs: ["test", "broken", "missing"] });
+    assertEquals(selected, ["test", "broken"]);
+    assertEquals(converter.getAssetId("test:ABC"), 110000);
+    assertEquals(converter.getAssetId("BTC"), 0);
+    assertEquals(converter.getAssetId("PURR/USDC"), 10000);
+  });
 });
 
 describe("SymbolConverter reload() dedup", () => {

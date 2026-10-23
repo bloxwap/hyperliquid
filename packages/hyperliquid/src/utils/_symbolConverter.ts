@@ -223,11 +223,17 @@ export class SymbolConverter {
     const needDexs = this._dexOption === true || (Array.isArray(this._dexOption) && this._dexOption.length > 0);
 
     const bulk = this._dexOption === true;
-    const [perpData, spotMetaData, perpDexsData, outcomeMetaData] = await Promise.all([
+    const registry = needDexs ? perpDexs(config) : undefined;
+    // Selected DEX requests depend only on the registry. Start them while unrelated spot/outcome
+    // metadata is still in flight, but wait for everything before constructing the new snapshot.
+    const selectedMetas =
+      !bulk && registry !== undefined ? registry.then((data) => this._loadBuilderDexs(data)) : undefined;
+    const [perpData, spotMetaData, perpDexsData, outcomeMetaData, builderMetas] = await Promise.all([
       bulk ? allPerpMetas(config) : meta(config),
       spotMeta(config),
-      needDexs ? perpDexs(config) : undefined,
+      registry,
       outcomeMeta(config),
+      selectedMetas,
     ]);
 
     if (bulk) this._validateBulkMetas(perpData as AllPerpMetasResponse, perpDexsData!);
@@ -253,7 +259,9 @@ export class SymbolConverter {
           if (index > 0 && dex !== null && dex.name.length > 0)
             this._processBuilderMeta(draft, bulkMetas[index], index);
         });
-      } else await this._processBuilderDexs(draft, perpDexsData);
+      } else {
+        for (const { data, index } of builderMetas ?? []) this._processBuilderMeta(draft, data, index);
+      }
     }
 
     // Publish atomically: no await may run between these assignments, so a concurrent
@@ -305,27 +313,25 @@ export class SymbolConverter {
   // Builder dexs
   // ============================================================
 
-  private async _processBuilderDexs(draft: SymbolConverterDraft, perpDexsData: PerpDexsResponse): Promise<void> {
+  private async _loadBuilderDexs(perpDexsData: PerpDexsResponse): Promise<{ data: MetaResponse; index: number }[]> {
     const builderDexs = perpDexsData
       .map((dex, index) => ({ dex, index }))
       .filter((item): item is { dex: NonNullable<PerpDexsResponse[number]>; index: number } => {
         return item.index > 0 && item.dex !== null && item.dex.name.length > 0;
       });
-    if (builderDexs.length === 0) return;
+    if (builderDexs.length === 0) return [];
 
     const dexsToProcess = Array.isArray(this._dexOption)
       ? builderDexs.filter((item) => (this._dexOption as string[]).includes(item.dex.name))
       : builderDexs;
-    if (dexsToProcess.length === 0) return;
+    if (dexsToProcess.length === 0) return [];
 
     const config = { transport: this._transport };
     const results = await Promise.allSettled(dexsToProcess.map((item) => meta(config, { dex: item.dex.name })));
 
-    results.forEach((result, idx) => {
-      if (result.status !== "fulfilled") return;
-
-      this._processBuilderMeta(draft, result.value, dexsToProcess[idx].index);
-    });
+    return results.flatMap((result, idx) =>
+      result.status === "fulfilled" ? [{ data: result.value, index: dexsToProcess[idx].index }] : [],
+    );
   }
 
   private _processBuilderMeta(draft: SymbolConverterDraft, data: MetaResponse, dexIndex: number): void {
