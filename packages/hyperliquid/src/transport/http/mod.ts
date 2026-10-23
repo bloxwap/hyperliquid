@@ -33,7 +33,7 @@ import { type IRequestTransport, TransportError } from "../_base.ts";
 import * as abort from "../_abort.ts";
 import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import { TokenBucketRateLimiter } from "../_rateLimiter.ts";
-import { exchangeWireJSON } from "../_wire.ts";
+import { exchangeWeight, exchangeWireJSON, type ExchangeWireWeight } from "../_wire.ts";
 import { delay, resolveRuntime, type Runtime } from "../runtime.ts";
 
 /** Configuration options for the HTTP transport layer. */
@@ -426,7 +426,9 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       // An SDK-built exchange envelope serializes from its registered pre-built fragments; the
       // result doubles as proof the envelope's action tree is SDK-owned plain data (see
       // _wire.ts), which the rate-limit weight below can then walk without parsing the wire.
-      const sdkEnvelope = endpoint === "exchange" ? exchangeWireJSON(payload) : undefined;
+      const billing: ExchangeWireWeight | undefined =
+        endpoint === "exchange" && this._rateLimit !== null ? {} : undefined;
+      const sdkEnvelope = endpoint === "exchange" ? exchangeWireJSON(payload, billing) : undefined;
       body = sdkEnvelope ?? JSON.stringify(payload);
 
       // --- Rate limiting -------------------------------------------------------
@@ -453,9 +455,9 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
         //   infoTypeFromPayload — the wire is the ground truth, so a toJSON override, a
         //   stateful getter, or a proxy can only force the fallback, never mis-bill);
         // - exchange: an SDK-built envelope (`sdkEnvelope`) has an SDK-owned plain-data action
-        //   tree, so the batch length is walked off the action, read via its own data
-        //   descriptor. Arbitrary caller objects may carry getters/toJSON, so they keep
-        //   billing off the parsed wire form.
+        //   tree, so its batch weight can be cached after the first trusted-tree walk.
+        //   Its type is read via its own data descriptor. Arbitrary caller objects may
+        //   carry getters/toJSON, so they keep billing off the parsed wire form.
         if (endpoint === "explorer") {
           weight = 40;
         } else if (endpoint === "info") {
@@ -469,7 +471,8 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
           const action =
             actionDescriptor !== undefined && "value" in actionDescriptor ? actionDescriptor.value : undefined;
           verifiedType = payloadType(action);
-          weight = exchangeWeightFromAction(action);
+          // The serializer cached the same trusted-tree calculation with the immutable action.
+          weight = billing?.weight ?? exchangeWeight({ action });
         } else {
           weight = requestWeight(endpoint, (snapshot = JSON.parse(body)));
         }
@@ -757,72 +760,6 @@ function infoTypeFromPayload(payload: unknown, body: string): string | undefined
 
 /** The wire prefix of an info body whose first key is a string `type`. */
 const INFO_TYPE_PREFIX = '{"type":"';
-
-/**
- * Exchange weight: `1 + floor(batchLength / 40)`, where the docs define `batchLength` as "the
- * length of the array in the action" (a batched order request is their example). The confirmed
- * batch arrays are `orders` (order), `cancels` (cancel / cancelByCloid) and `modifies`
- * (batchModify), but the docs never close the set, so the batch length here is the LONGEST array
- * found anywhere in the action at any depth — which also bills the deployer arrays (`spotDeploy`
- * genesis tuples, `perpDeploy` setter lists) and any future batch action. Over-billing only
- * throttles the client harder while under-billing risks the server limit (429s, ultimately an IP
- * ban), so the max is the conservative reading. Actions without arrays — or with only short ones
- * (`< 40` entries: fixed tuples, a single `twap` object carries no array at all,
- * `convertToMultiSigUser`'s wire-stringified `signers`) — cost the documented minimum of 1.
- *
- * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
- */
-function exchangeWeight(payload: unknown): number {
-  const action = exchangeAction(payload);
-  if (action === undefined) return 1;
-  return 1 + Math.floor(maxArrayLength(action) / 40);
-}
-
-/**
- * {@linkcode exchangeWeight} for an action read directly off an SDK-built envelope (whose action
- * tree is SDK-owned plain data — see `_wire.ts`), skipping the payload walk. A non-record action
- * bills the documented minimum of 1, exactly as the walking variant does.
- */
-function exchangeWeightFromAction(action: unknown): number {
-  if (!isRecord(action)) return 1;
-  return 1 + Math.floor(maxArrayLength(unwrapMultiSigAction(action)) / 40);
-}
-
-/** The length of the longest array found in `value` at any depth (0 when there is none). */
-function maxArrayLength(value: unknown): number {
-  if (Array.isArray(value)) {
-    let max = value.length;
-    for (const item of value) max = Math.max(max, maxArrayLength(item));
-    return max;
-  }
-  if (isRecord(value)) {
-    let max = 0;
-    for (const key in value) max = Math.max(max, maxArrayLength(value[key]));
-    return max;
-  }
-  return 0;
-}
-
-/**
- * The action carrying the batch: the payload's `action`, unwrapped one level for multi-sig.
- * Unwrapping also keeps the wrapper's `signatures` array — authentication material, not batch
- * items — out of the billing walk.
- */
-function exchangeAction(payload: unknown): Record<string, unknown> | undefined {
-  if (!isRecord(payload) || !isRecord(payload.action)) return undefined;
-  return unwrapMultiSigAction(payload.action);
-}
-
-/**
- * Unwraps a multi-sig action one level: `{ type: "multiSig", signatures, payload: { ..., action } }`
- * yields the wrapped action; anything else is returned as-is.
- */
-function unwrapMultiSigAction(action: Record<string, unknown>): Record<string, unknown> {
-  if (action.type === "multiSig" && isRecord(action.payload) && isRecord(action.payload.action)) {
-    return action.payload.action;
-  }
-  return action;
-}
 
 /**
  * Additional weight that only becomes knowable once the response arrives, debited

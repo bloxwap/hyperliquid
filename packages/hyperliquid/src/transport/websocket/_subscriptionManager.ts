@@ -12,7 +12,7 @@ import { ReconnectingWebSocket } from "./_reconnectingSocket.ts";
 import * as abort from "../_abort.ts";
 import type { ISubscription } from "../_base.ts";
 import type { HyperliquidEventTarget } from "./_events.ts";
-import { type WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
+import { type RequestLifecycle, type WebSocketDispatcher, WebSocketRequestError } from "./_dispatcher.ts";
 import { normalize } from "./_id.ts";
 import { WebSocketQuota } from "./_quota.ts";
 import { payloadEventType } from "./_routing.ts";
@@ -102,6 +102,8 @@ interface SubscriptionState {
   promise: Promise<unknown>;
   /** Whether the subscription request has completed. */
   promiseFinished: boolean;
+  /** The current initial/reconnect attempt, independent of any one caller's abort signal. */
+  request: RequestLifecycle;
   /**
    * The failure this subscription was torn down with, recorded by `_failSubscription` so a
    * joiner whose confirmation continuation runs after the teardown can reject with it
@@ -225,8 +227,9 @@ export class WebSocketSubscriptionManager {
 
       // The snapshot doubles as the normalized wire payload; the id is handed over with it so
       // the dispatcher skips its own normalize of the subscription subtree.
+      const request: RequestLifecycle = { sent: false };
       const promise = this._dispatcher
-        .request("subscribe", snapshot, undefined, { subscriptionId: id })
+        .request("subscribe", snapshot, undefined, { subscriptionId: id, lifecycle: request })
         .finally(() => (created.promiseFinished = true));
       const created: SubscriptionState = {
         payload: snapshot,
@@ -234,6 +237,7 @@ export class WebSocketSubscriptionManager {
         listeners: new Map(),
         promise,
         promiseFinished: false,
+        request,
       };
       this._addSubscription(id, created);
       subscription = created;
@@ -269,6 +273,21 @@ export class WebSocketSubscriptionManager {
       await this._retireRegistration(id, subscription, listener, registration, true);
     };
 
+    // Retire synchronously on caller abort: an open event or quota refill in the same
+    // turn must not send a frame after its final lease has already been cancelled. The
+    // promise race still supplies the caller's own abort reason and handles settlement.
+    const onAbort =
+      signal === undefined
+        ? undefined
+        : (): void => {
+            if (!registration.handles.delete(handle) || registration.handles.size > 0) return;
+            this._retireRegistration(id, subscription, listener, registration, true)?.catch(() => {});
+          };
+    if (onAbort !== undefined) {
+      signal!.addEventListener("abort", onAbort, { once: true });
+      if (signal!.aborted) onAbort();
+    }
+
     // --- Server confirmation -------------------------------------------------
     try {
       await abort.race(subscription.promise, signal);
@@ -294,8 +313,8 @@ export class WebSocketSubscriptionManager {
       // handles reference it — an abort is private to its caller, a failure is shared.
       registration.handles.delete(handle);
       if (registration.handles.size === 0) {
-        // On abort the shared request stays in flight and may still confirm: free the
-        // server-side slot nobody is listening to. On failure there is nothing to free.
+        // On abort, retire the shared attempt only when no leases remain: cancel an
+        // unsent frame or free the server-side slot if it may already have been sent.
         const aborted = signal !== undefined && error === signal.reason;
         this._retireRegistration(id, subscription, listener, registration, aborted)?.catch(() => {});
       }
@@ -303,6 +322,8 @@ export class WebSocketSubscriptionManager {
         throw new WebSocketRequestError("Subscription was aborted", { cause: error, request: payload });
       }
       throw error;
+    } finally {
+      if (onAbort !== undefined) signal!.removeEventListener("abort", onAbort);
     }
 
     return {
@@ -343,7 +364,12 @@ export class WebSocketSubscriptionManager {
         continue;
       }
 
-      const promise = this._dispatcher.request("subscribe", subscription.payload, undefined, { subscriptionId: id });
+      const request: RequestLifecycle = { sent: false };
+      subscription.request = request;
+      const promise = this._dispatcher.request("subscribe", subscription.payload, undefined, {
+        subscriptionId: id,
+        lifecycle: request,
+      });
       subscription.promise = promise;
       subscription.promiseFinished = false;
 
@@ -430,6 +456,13 @@ export class WebSocketSubscriptionManager {
     if (subscription.listeners.size > 0) return undefined;
 
     this._deleteSubscription(id);
+    if (!subscription.request.sent) {
+      // Pacing and disconnected-socket queues must not outlive their last lease. The
+      // controller belongs to the attempt, so cancelling one of several callers never
+      // abandons a subscription another caller still needs. No server slot exists yet.
+      subscription.request.controller?.abort();
+      return undefined;
+    }
     if (wireUnsubscribe && this._socket.readyState === ReconnectingWebSocket.OPEN) {
       return this._dispatcher.request("unsubscribe", subscription.payload, undefined, { subscriptionId: id });
     }
@@ -453,6 +486,9 @@ export class WebSocketSubscriptionManager {
     // Recorded for joiners whose confirmation continuation is still queued: they reject
     // with this failure instead of resolving a handle into the dead subscription.
     subscription.failure = error;
+    // A failed subscription must also leave the quota/disconnected queue. In-flight
+    // sent frames are already settled by the dispatcher's disconnect/error handling.
+    if (!subscription.request.sent) subscription.request.controller?.abort(error);
 
     // Pass 1 — detach listeners and snapshot every live confirmed lease, recording the
     // failure on each BEFORE any user code runs. Both notification channels invoke user

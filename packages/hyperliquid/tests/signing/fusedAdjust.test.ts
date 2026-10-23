@@ -523,6 +523,77 @@ function randomActionShape(depth: number): unknown {
 // --- Byte-level differential -------------------------------------------------
 
 describe("MsgpackWriter.valueL1() fused adjust+encode", () => {
+  test("encodes optional undefined fields without replaying preceding order subtrees", () => {
+    const expected = legacyEncode({
+      ...ORDER_ACTION,
+      orders: Array.from({ length: 100 }, () => ({ ...ORDER_ACTION.orders[0] })),
+    });
+    for (const rootUndefined of [false, true]) {
+      for (const childUndefined of [false, true]) {
+        let reads = 0;
+        const action = {
+          ...ORDER_ACTION,
+          orders: Array.from({ length: 100 }, () => ({
+            ...ORDER_ACTION.orders[0],
+            get b(): boolean {
+              reads++;
+              return true;
+            },
+            ...(childUndefined ? { c: undefined } : {}),
+          })),
+          ...(rootUndefined ? { builder: undefined } : {}),
+        };
+        expect(fusedEncode(action)).toEqual(expected);
+        expect(reads).toBe(100);
+      }
+    }
+  });
+
+  test("reads consistent getters after an omitted field only once", () => {
+    let reads = 0;
+    const action = {
+      omitted: undefined,
+      get orders(): unknown {
+        reads++;
+        return ORDER_ACTION.orders;
+      },
+      alsoOmitted: undefined,
+    };
+    expect(fusedEncode(action)).toEqual(legacyEncode({ orders: ORDER_ACTION.orders }));
+    expect(reads).toBe(1);
+  });
+
+  test("compacts dropped-key headers inside a larger preimage at both map-size boundaries", () => {
+    for (const length of [16, 65536]) {
+      for (const dropped of [1, length]) {
+        const value = Object.fromEntries(
+          Array.from({ length }, (_, index) => [`k${index}`, index >= length - dropped ? undefined : index]),
+        );
+        const writer = new MsgpackWriter();
+        writer.value("prefix");
+        writer.valueL1(value);
+        writer.value({ suffix: [42, "end"] });
+        const expected = new MsgpackWriter();
+        expected.value("prefix");
+        expected.value(legacyAdjust(value as ValueType) as MsgpackValue);
+        expected.value({ suffix: [42, "end"] });
+        expect(writer.view()).toEqual(expected.view());
+      }
+    }
+  });
+
+  test("preserves own __proto__ rebuild behavior before and after an omitted field", () => {
+    for (const protoFirst of [false, true]) {
+      const action = Object.create(null) as Record<string, unknown>;
+      if (protoFirst) Object.defineProperty(action, "__proto__", { value: 7, enumerable: true });
+      action.before = { orders: ORDER_ACTION.orders };
+      action.omitted = undefined;
+      if (!protoFirst) Object.defineProperty(action, "__proto__", { value: 7, enumerable: true });
+      action.after = 7;
+      expect(fusedEncode(action)).toEqual(legacyEncode(action));
+    }
+  });
+
   test("matches legacy adjust()+encode() across the fixed corpus", () => {
     for (const [index, value] of CORPUS.entries()) {
       expect(fusedEncode(value), `CORPUS[${index}]`).toEqual(legacyEncode(value));
@@ -580,8 +651,19 @@ describe("createL1ActionHashBytes() fused preimage", () => {
 
   test("keeps byte-equality when a getter re-enters the hash", () => {
     for (const modifiers of MODIFIERS) {
-      const args = { action: GETTER_REENTRANT_ACTION, nonce: NONCE, ...modifiers };
-      expect(createL1ActionHashBytes(args), JSON.stringify(modifiers)).toEqual(legacyHashBytes(args));
+      for (const action of [
+        GETTER_REENTRANT_ACTION,
+        Object.assign(Object.defineProperties({}, Object.getOwnPropertyDescriptors(GETTER_REENTRANT_ACTION)), {
+          builder: undefined,
+        }),
+        Object.defineProperty({ omitted: undefined }, "orders", {
+          enumerable: true,
+          get: Object.getOwnPropertyDescriptor(GETTER_REENTRANT_ACTION, "orders")!.get,
+        }),
+      ]) {
+        const args = { action, nonce: NONCE, ...modifiers };
+        expect(createL1ActionHashBytes(args), JSON.stringify(modifiers)).toEqual(legacyHashBytes(args));
+      }
     }
   });
 });

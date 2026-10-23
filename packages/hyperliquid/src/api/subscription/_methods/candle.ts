@@ -111,7 +111,7 @@ export function candle(
   return config.transport.subscribe<CandleEvent>(
     payload.type,
     payload,
-    // Routing keys only by coin; interval still needs a local filter (two intervals share a route).
+    // Keep the interval guard for custom transports that do not use the SDK's compound routing.
     (e) => {
       if (e.detail.i === payload.interval) listener(e.detail);
     },

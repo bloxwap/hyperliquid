@@ -587,9 +587,9 @@ export class MsgpackWriter {
    * returns such an object unchanged when nothing needs normalizing, so the two-pass header counts ALL
    * keys; only a rebuild (triggered by a dropped or changed entry) drops the `undefined` ones. The header
    * must still precede the entries, so this reserves header bytes sized for the full key set, encodes the
-   * entries reading each property once, and backpatches the header when no key was dropped. The first
-   * `undefined` entry rewinds to {@linkcode MsgpackWriter.mapL1Counted}, which knows its exact count up
-   * front — the rare path, and the only one where the header can shrink below the reservation's form.
+   * entries reading each property once, and backpatches the header. The first `undefined` entry hands
+   * the remaining keys to {@linkcode MsgpackWriter.mapL1Omitted}: it keeps the encoded prefix instead
+   * of walking a potentially large subtree again, then compacts the reserved header if needed.
    */
   private mapL1(value: { readonly [key: string]: L1Value }): void {
     const keys = Object.keys(value);
@@ -604,8 +604,8 @@ export class MsgpackWriter {
     for (const key of keys) {
       const entry = value[key];
       if (entry === undefined) {
-        this.offset = headerAt;
-        this.mapL1Counted(value, keys);
+        // A compact cold-path call keeps JSC from enlarging every ordinary map's call frame.
+        this.mapL1Omitted(value, { keys, omittedKey: key, headerAt, reservedHeaderSize: headerSize });
         return;
       }
       this.string(key);
@@ -619,6 +619,49 @@ export class MsgpackWriter {
     } else {
       this.buffer[headerAt] = 0xdf;
       this.dataView.setUint32(headerAt + 1, length);
+    }
+  }
+
+  /**
+   * Finishes a plain map after its first omitted property. The already-written prefix is retained;
+   * only a header crossing 16 or 65536 entries needs a byte move, never another subtree traversal.
+   * Own `__proto__` properties keep the existing counted fallback: a rebuild drops them even when
+   * they preceded the first omission, whereas the unchanged-map path must preserve them.
+   */
+  private mapL1Omitted(
+    value: { readonly [key: string]: L1Value },
+    state: { keys: readonly string[]; omittedKey: string; headerAt: number; reservedHeaderSize: number },
+  ): void {
+    const { keys, omittedKey, headerAt, reservedHeaderSize } = state;
+    if (keys.includes("__proto__")) {
+      this.offset = headerAt;
+      this.mapL1Counted(value, keys);
+      return;
+    }
+    // The prefix before this key was encoded once by mapL1. Keep its count without adding work to
+    // the no-omission hot path, then read and encode only the keys that have not yet been visited.
+    let count = keys.indexOf(omittedKey);
+    for (let index = count + 1; index < keys.length; index++) {
+      const key = keys[index];
+      const entry = value[key];
+      if (entry === undefined) continue;
+      this.string(key);
+      this.valueL1(entry);
+      count++;
+    }
+    const headerSize = count < 16 ? 1 : count < 65536 ? 3 : 5;
+    if (headerSize !== reservedHeaderSize) {
+      this.buffer.copyWithin(headerAt + headerSize, headerAt + reservedHeaderSize, this.offset);
+      this.offset -= reservedHeaderSize - headerSize;
+    }
+    if (headerSize === 1) {
+      this.buffer[headerAt] = 0x80 | count;
+    } else if (headerSize === 3) {
+      this.buffer[headerAt] = 0xde;
+      this.dataView.setUint16(headerAt + 1, count);
+    } else {
+      this.buffer[headerAt] = 0xdf;
+      this.dataView.setUint32(headerAt + 1, count);
     }
   }
 

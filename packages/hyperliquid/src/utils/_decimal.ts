@@ -7,7 +7,7 @@
  * @module
  */
 
-import { HyperliquidError } from "../_base.ts";
+import { HyperliquidError } from "../_errors.ts";
 
 /**
  * Thrown when a price or size value cannot be formatted to a valid decimal.

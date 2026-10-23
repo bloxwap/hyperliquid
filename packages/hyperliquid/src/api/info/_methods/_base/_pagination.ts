@@ -49,8 +49,8 @@ export type PaginationOptions = v.InferInput<typeof PaginationOptions>;
  * millisecond (see each helper for its endpoint's key).
  *
  * The generator ends when a page comes back empty or short (fewer than `pageLimit` elements), or
- * when it contributes nothing new: a page whose newest timestamp does not pass the running
- * watermark is dropped rather than yielded, so a server that ignores `startTime` and repeats a
+ * when it contributes nothing new and its newest timestamp does not pass the running watermark.
+ * Such a page is dropped rather than yielded, so a server that ignores `startTime` and repeats a
  * page can neither cause duplicates nor an infinite loop.
  *
  * Nothing is requested until iteration starts: the generator is lazy, so breaking out of a
@@ -95,16 +95,17 @@ export async function* fetchPages<T>(
     if (pageMax < watermark) return;
     const advancing = pageMax > watermark;
     const fresh: T[] = [];
+    // Count overlap within this response without consuming the cumulative history. A later
+    // full page can repeat only part of the boundary cluster, then repeat earlier records again.
+    const boundaryOccurrences = new Map<string, number>();
     for (const item of items) {
       const time = timeOf(item);
       if (time < watermark) continue; // stale repeat from a server ignoring startTime
       if (time === watermark) {
         const key = keyOf(item);
-        const seen = tail.get(key) ?? 0;
-        if (seen > 0) {
-          tail.set(key, seen - 1); // inclusive-boundary overlap: already yielded
-          continue;
-        }
+        const occurrence = (boundaryOccurrences.get(key) ?? 0) + 1;
+        boundaryOccurrences.set(key, occurrence);
+        if (occurrence <= (tail.get(key) ?? 0)) continue; // inclusive-boundary overlap: already yielded
       }
       fresh.push(item);
     }

@@ -4,7 +4,7 @@
  * @module
  */
 
-import { HyperliquidError } from "../_base.ts";
+import { HyperliquidError } from "../_errors.ts";
 
 /**
  * Transport interface for executing requests to the Hyperliquid API.

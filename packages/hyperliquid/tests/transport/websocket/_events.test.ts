@@ -126,6 +126,65 @@ describe("HyperliquidEventTarget", () => {
       assertEquals(seen, ["ETH"]);
     });
 
+    test("one candle interval frame reaches only its interval plus primary and channel fallbacks", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const intervals = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d", "3d", "1w", "1M"];
+      const seen: string[] = [];
+      for (const interval of intervals) {
+        target.addEventListener(payloadEventType("candle", { coin: "BTC", interval }), () => seen.push(interval));
+      }
+      target.addEventListener(payloadEventType("candle", { coin: "BTC" }), () => seen.push("primary"));
+      target.addEventListener("candle", () => seen.push("channel"));
+      dispatchMessage(socket, JSON.stringify({ channel: "candle", data: { s: "BTC", i: "1m" } }));
+      assertEquals(seen, ["1m", "primary", "channel"]);
+      seen.length = 0;
+      dispatchMessage(socket, JSON.stringify({ channel: "candle", data: { s: "BTC" } }));
+      assertEquals(seen, ["primary", "channel"]);
+    });
+
+    test("compound listener mutations do not change the captured primary fallback route", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const seen: string[] = [];
+      target.addEventListener(payloadEventType("candle", { coin: "BTC", interval: "1m" }), (event) => {
+        seen.push("interval");
+        event.detail.s = "ETH";
+      });
+      target.addEventListener(payloadEventType("candle", { coin: "BTC" }), () => seen.push("primary"));
+      target.addEventListener(payloadEventType("candle", { coin: "ETH" }), () => seen.push("wrong"));
+      dispatchMessage(socket, JSON.stringify({ channel: "candle", data: { s: "BTC", i: "1m" } }));
+      assertEquals(seen, ["interval", "primary"]);
+    });
+
+    test("compound asset and account routes invoke only the requested user and DEX", () => {
+      const socket = createFakeSocket();
+      const target = new HyperliquidEventTarget(socket);
+      const seen: string[] = [];
+      for (const user of ["0x1111", "0x2222"]) {
+        target.addEventListener(payloadEventType("activeAssetData", { coin: "BTC", user }), () => seen.push(user));
+      }
+      for (const channel of ["clearinghouseState", "openOrders", "twapStates"]) {
+        for (const dex of ["", "foo", "bar"]) {
+          target.addEventListener(payloadEventType(channel, { user: "0xABCD", dex }), () =>
+            seen.push(`${channel}:${dex}`),
+          );
+        }
+        target.addEventListener(payloadEventType(channel, { user: "0xabcd" }), () => seen.push(`${channel}:primary`));
+        dispatchMessage(socket, JSON.stringify({ channel, data: { user: "0xabcd", dex: "foo" } }));
+      }
+      dispatchMessage(socket, JSON.stringify({ channel: "activeAssetData", data: { coin: "BTC", user: "0x2222" } }));
+      assertEquals(seen, [
+        "clearinghouseState:foo",
+        "clearinghouseState:primary",
+        "openOrders:foo",
+        "openOrders:primary",
+        "twapStates:foo",
+        "twapStates:primary",
+        "0x2222",
+      ]);
+    });
+
     test("a listener on the bare channel still receives routed frames", () => {
       const socket = createFakeSocket();
       const target = new HyperliquidEventTarget(socket);

@@ -3,7 +3,7 @@
  * @module
  */
 
-import { HyperliquidError } from "../_base.ts";
+import { HyperliquidError } from "../_errors.ts";
 
 // ============================================================
 // Error response shapes

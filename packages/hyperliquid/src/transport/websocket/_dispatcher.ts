@@ -86,8 +86,16 @@ interface SubscribeUnsubscribeRequest {
   subscription: unknown;
 }
 
+/** Mutable lifecycle shared with the subscription manager for cancelling only unsent attempts. */
+export interface RequestLifecycle {
+  /** Set before handing the frame to the socket, which may have accepted it even if send throws. */
+  sent: boolean;
+  /** The dispatcher's own controller while this request is pending; cleared after settlement. */
+  controller?: AbortController;
+}
+
 /**
- * Internal-only precomputation a trusted caller can hand to {@linkcode WebSocketDispatcher.request}.
+ * Internal-only precomputation and lifecycle tracking a trusted caller can hand to {@linkcode WebSocketDispatcher.request}.
  * The dispatcher class is not re-exported from the package entry point, so this hint never
  * reaches the public API surface.
  */
@@ -101,6 +109,8 @@ export interface RequestHint {
   subscriptionId?: string;
   /** The original exchange payload in the transport-owned {type: "action", payload} envelope. */
   exchangePayload?: unknown;
+  /** Optional state for retiring an underlying subscription before its frame reaches the socket. */
+  lifecycle?: RequestLifecycle;
 }
 
 /** A queued request awaiting its response. */
@@ -113,15 +123,15 @@ interface PendingRequest {
    */
   frame: string;
   sent: boolean;
+  /** The trusted caller's state to update when a disconnected request is flushed. */
+  lifecycle?: RequestLifecycle;
   /**
    * Echo-matching data for a `subscribe` / `unsubscribe` request: the normalized request
    * envelope (the object form of the entry's string id) and its specificity. Absent for `post`
    * requests, which match on their numeric id.
    *
-   * Every `subscriptionResponse` frame that misses the exact-id bucket walks the whole queue
-   * looking for its match, so deriving this per scan made a burst of N re-subscriptions cost
-   * N² parses — a reconnect at the 1000-subscription cap stalled the event loop exactly when
-   * the book was most stale.
+   * Rewritten subscription responses compare a compatible discriminator bucket by subset.
+   * Keeping the normalized envelope here avoids re-parsing ids during candidate matching.
    */
   echo?: {
     /** The normalized request envelope compared against the echo. */
@@ -132,6 +142,10 @@ interface PendingRequest {
      * server rewrote the echo — so it is computed lazily on first access (see {@linkcode echoData}).
      */
     readonly specificity: number;
+    /** Enqueue order, preserving earliest-first ties across fallback candidate buckets. */
+    order: number;
+    /** Lazily derived discriminator bucket, reused during removal. */
+    indexKey?: string;
   };
   // deno-lint-ignore no-explicit-any
   resolve: (value?: any) => void;
@@ -168,6 +182,13 @@ export class WebSocketDispatcher {
    * re-subscription echoes cost N² subset checks.
    */
   private readonly _byEchoId: Map<string, PendingRequest[]> = new Map();
+  /**
+   * Secondary subset candidates, allocated only after the first rewritten echo. Each pending
+   * subscription occupies one method/type/coin/user bucket; absent or non-string discriminators
+   * are wildcards. An echo probes the at-most-eight compatible buckets instead of the full queue.
+   */
+  private _echoCandidates: Map<string, Set<PendingRequest>> | undefined;
+  private _lastEchoOrder = 0;
   /** Shared request-timeout scheduler: at most one armed native timer, however many requests are in flight. */
   private readonly _timeouts: abort.TimeoutWheel;
   /**
@@ -224,6 +245,7 @@ export class WebSocketDispatcher {
       this._queue.clear();
       this._posts.clear();
       this._byEchoId.clear();
+      this._echoCandidates?.clear();
       for (const entry of abandoned) {
         entry.reject(
           frameError(
@@ -241,6 +263,7 @@ export class WebSocketDispatcher {
       // Everything still queued at this point was held back while disconnected.
       for (const entry of this._queue) {
         entry.sent = true;
+        if (entry.lifecycle !== undefined) entry.lifecycle.sent = true;
         this._socket.send(entry.frame);
         // Only `post` entries (numeric id) debit the message budget here: their frame is
         // reaching the socket for the first time and the send-immediately charge in
@@ -285,55 +308,14 @@ export class WebSocketDispatcher {
     signal?: AbortSignal,
     hint?: RequestHint,
   ): Promise<T> {
-    // --- Outbound budget ------------------------------------------------------
-    // Paced before the timeout is armed, so deliberate throttling never trips the request
-    // timeout — the same ordering `HttpTransport` uses.
-    //
-    // `post` is deliberately excluded: `_shell.ts` fixes the wire order of an exchange
-    // action on `transport.request` reaching `send` synchronously, so awaiting here would
-    // let a later nonce overtake an earlier one. Posts debit the budget without waiting —
-    // when their frame reaches the socket, in the send-immediately branch below or in the
-    // `open` flush — which still slows subscription traffic when orders are heavy but can
-    // never delay or reorder an order. `acquireSend` returns `undefined` rather than a
-    // resolved promise when nothing needs waiting on, keeping this function synchronous to
-    // `send` for every request that is not actually being throttled.
-    if (method !== "post" && this._quota !== undefined) {
-      // The wait must not outlive the connection: the socket's termination signal abandons
-      // the wait when the transport closes for good. Otherwise each paced waiter of a
-      // closed transport would still consume a token for a frame that can never send — and
-      // hold its FIFO slot ahead of live transports sharing the quota. A caller signal
-      // composes with it via `AbortSignal.any`, with the caller's reason winning when both
-      // are already aborted — the same precedence the controller relay below reproduces.
-      // No in-repo paced caller passes a signal today (the subscription manager never
-      // does), so the common path allocates no composite.
-      const pacingSignal =
-        signal === undefined
-          ? this._socket.terminationSignal
-          : AbortSignal.any([signal, this._socket.terminationSignal]);
-      const paced = this._quota.acquireSend(pacingSignal);
-      if (paced !== undefined) {
-        try {
-          await paced;
-        } catch (error) {
-          // Wrapped here because this await runs before the main try — whose catch would
-          // never see this rejection — and the dispatcher's contract is to reject only
-          // with WebSocketRequestError. `payload` is safe to attach: only the subscription
-          // manager reaches this path, and it always hands over its own plain-data snapshot.
-          const terminated = this._socket.terminationSignal.aborted && error === this._socket.terminationSignal.reason;
-          throw new WebSocketRequestError(
-            terminated ? "WebSocket connection permanently terminated" : "Request aborted",
-            { cause: error, request: payload },
-          );
-        }
-      }
-    }
-
     // One controller per request: the timeout timer, the user signal, and the
     // socket termination relay into it, and `finally` detaches everything, so
     // no listener or timer outlives the request.
     const controller = new AbortController();
-    const timeoutMs = this.timeout; // for correct error message after user changes
-    const timeout = this._timeouts.schedule(controller, timeoutMs);
+    const lifecycle = hint?.lifecycle;
+    if (lifecycle !== undefined) lifecycle.controller = controller;
+    let timeoutMs = this.timeout; // captured again after pacing, when the timeout is armed
+    let timeout: ReturnType<abort.TimeoutWheel["schedule"]> | undefined;
     // The caller's signal is relayed first, and the termination branch below runs only while the
     // controller is still unaborted. Together those reproduce `relay([signal, terminationSignal])`
     // exactly, INCLUDING its reason precedence: `relay` aborts with the first already-aborted
@@ -352,6 +334,31 @@ export class WebSocketDispatcher {
     // The one serialization of the request envelope — wire form and error snapshot source.
     let frame: string | undefined;
     try {
+      // Pace before arming the request timeout: intentional quota waiting cannot time out.
+      // Posts retain their synchronous send path so nonce dispatch order cannot change.
+      if (method !== "post" && this._quota !== undefined) {
+        // Reuse this request's controller for pacing, caller cancellation, and the shared
+        // termination fan-out. An unsent subscription can therefore be retired without
+        // allocating a second controller or a composite signal on the common path.
+        const paced = this._quota.acquireSend(controller.signal);
+        if (paced !== undefined) {
+          try {
+            await paced;
+          } catch (error) {
+            if (error instanceof TransportError) throw error;
+            // The manager owns a normalized snapshot: before serialization it is already
+            // safe to attach to this error, unlike arbitrary post payloads.
+            const terminated =
+              this._socket.terminationSignal.aborted && error === this._socket.terminationSignal.reason;
+            throw new WebSocketRequestError(
+              terminated ? "WebSocket connection permanently terminated" : "Request aborted",
+              { cause: error, request: payload },
+            );
+          }
+        }
+      }
+      timeoutMs = this.timeout;
+      timeout = this._timeouts.schedule(controller, timeoutMs);
       if (controller.signal.aborted) throw controller.signal.reason;
 
       // --- Build request envelope --------------------------------------------
@@ -392,6 +399,7 @@ export class WebSocketDispatcher {
       frame ??= JSON.stringify(request);
       const sent = this._socket.readyState === ReconnectingWebSocket.OPEN;
       if (sent) {
+        if (lifecycle !== undefined) lifecycle.sent = true;
         this._socket.send(frame);
         // The charging story, stated once: every frame debits the message budget exactly
         // one time. `subscribe`/`unsubscribe` paid a token in `acquireSend` above, whether
@@ -403,7 +411,7 @@ export class WebSocketDispatcher {
       }
 
       const { promise, resolve, reject } = Promise_.withResolvers<T>();
-      const pending = (entry = { id, frame, sent, echo, resolve, reject });
+      const pending = (entry = { id, frame, sent, echo, resolve, reject, lifecycle });
       this._enqueue(pending);
 
       controller.signal.addEventListener(
@@ -420,7 +428,7 @@ export class WebSocketDispatcher {
       return await promise;
     } catch (error) {
       if (error instanceof TransportError) throw error;
-      if (error === timeout.reason) {
+      if (timeout !== undefined && error === timeout.reason) {
         throw frameError(`Request timed out after ${timeoutMs} ms`, frame, method === "post", entry, { cause: error });
       }
       if (this._socket.terminationSignal.aborted && error === this._socket.terminationSignal.reason) {
@@ -436,10 +444,11 @@ export class WebSocketDispatcher {
       });
     } finally {
       if (entry) this._dequeue(entry);
-      timeout.cancel();
+      timeout?.cancel();
       detachRelay();
       // O(1) — this is the detach that used to scan the shared signal's listener list.
       this._terminating.delete(controller);
+      if (lifecycle !== undefined) lifecycle.controller = undefined;
     }
   }
 
@@ -450,6 +459,10 @@ export class WebSocketDispatcher {
   /** Queues a request and indexes it by id. */
   private _enqueue(entry: PendingRequest): void {
     this._queue.add(entry);
+    if (entry.echo !== undefined) {
+      entry.echo.order = ++this._lastEchoOrder;
+      if (this._echoCandidates !== undefined) this._indexEcho(entry);
+    }
     if (typeof entry.id === "number") this._posts.set(entry.id, entry);
     if (typeof entry.id === "string") {
       const bucket = this._byEchoId.get(entry.id);
@@ -461,6 +474,12 @@ export class WebSocketDispatcher {
   /** Removes a request from the queue and from the id indexes. Idempotent. */
   private _dequeue(entry: PendingRequest): void {
     if (!this._queue.delete(entry)) return;
+    const candidateKey = entry.echo?.indexKey;
+    if (candidateKey !== undefined) {
+      const candidates = this._echoCandidates?.get(candidateKey);
+      candidates?.delete(entry);
+      if (candidates?.size === 0) this._echoCandidates?.delete(candidateKey);
+    }
     // Post ids are handed out by `++this._lastId`, so no later entry can hold this one.
     if (typeof entry.id === "number") this._posts.delete(entry.id);
     if (typeof entry.id === "string") {
@@ -471,6 +490,15 @@ export class WebSocketDispatcher {
         if (bucket.length === 0) this._byEchoId.delete(entry.id);
       }
     }
+  }
+
+  /** Adds one subscription to the secondary subset index. */
+  private _indexEcho(entry: PendingRequest): void {
+    if (entry.echo === undefined) return;
+    const key = (entry.echo.indexKey ??= echoIndexKey(entry.echo.request));
+    const bucket = this._echoCandidates!.get(key);
+    if (bucket === undefined) this._echoCandidates!.set(key, new Set([entry]));
+    else bucket.add(entry);
   }
 
   // ===========================================================================
@@ -602,7 +630,7 @@ export class WebSocketDispatcher {
    * The server usually echoes the request verbatim, so the echo's normalized form is
    * byte-identical to the pending entry's id and a bucket lookup answers in O(1). The server
    * can also normalize the echo — fields can be added to the payload and unknown ones dropped —
-   * in which case the bucket misses and the queue is searched by subset. Among several subset
+   * in which case compatible secondary buckets are searched by subset. Among several subset
    * matches the most specific pending wins: when one in-flight payload is a subset of another,
    * the looser one must not swallow the echo meant for the stricter one.
    */
@@ -625,15 +653,31 @@ export class WebSocketDispatcher {
       }
     }
 
+    if (this._echoCandidates === undefined) {
+      this._echoCandidates = new Map();
+      for (const pending of this._queue) this._indexEcho(pending);
+    }
+    const [method, type, coin, user] = echoDiscriminators(echo);
     let best: PendingRequest | undefined;
     let bestSpecificity = -1;
-    for (const pending of this._queue) {
-      // Only subscription requests match by echo, and those are exactly the entries carrying it.
-      if (pending.echo === undefined) continue;
-      if (!isSubset(pending.echo.request, echo)) continue;
-      if (pending.echo.specificity > bestSpecificity) {
-        best = pending;
-        bestSpecificity = pending.echo.specificity;
+    // An omitted discriminator in a pending request can match any echoed value. Probe both
+    // the echoed atom and its wildcard, never excluding a possible generic subset match.
+    for (const candidateType of type === undefined ? [undefined] : [type, undefined]) {
+      for (const candidateCoin of coin === undefined ? [undefined] : [coin, undefined]) {
+        for (const candidateUser of user === undefined ? [undefined] : [user, undefined]) {
+          const bucket = this._echoCandidates.get(
+            JSON.stringify([method, candidateType, candidateCoin, candidateUser]),
+          );
+          if (bucket === undefined) continue;
+          for (const pending of bucket) {
+            if (!isSubset(pending.echo!.request, echo)) continue;
+            const score = pending.echo!.specificity;
+            if (score > bestSpecificity || (score === bestSpecificity && pending.echo!.order < best!.echo!.order)) {
+              best = pending;
+              bestSpecificity = score;
+            }
+          }
+        }
       }
     }
     return best;
@@ -649,6 +693,7 @@ function echoData(request: unknown): NonNullable<PendingRequest["echo"]> {
   let cached: number | undefined;
   return {
     request,
+    order: 0,
     // Accessor names bind nothing in the body scope: `specificity` here is the `_id.ts` import.
     get specificity(): number {
       return (cached ??= specificity(request));
@@ -712,6 +757,22 @@ function payloadSnapshot(frame: string | undefined, post: boolean, entry?: Pendi
   }
   const parsed = JSON.parse(frame) as Record<string, unknown>;
   return post ? parsed.request : parsed.subscription;
+}
+
+/** Reads only safe pruning discriminators; non-string fields stay in a generic bucket. */
+function echoDiscriminators(
+  request: unknown,
+): [string | undefined, string | undefined, string | undefined, string | undefined] {
+  const envelope = request as { method?: unknown; subscription?: unknown } | null;
+  const subscription = envelope?.subscription as Record<string, unknown> | null | undefined;
+  const atom = (value: unknown): string | undefined =>
+    typeof value === "string" ? (/^0x[0-9a-f]+$/i.test(value) ? value.toLowerCase() : value) : undefined;
+  return [atom(envelope?.method), atom(subscription?.type), atom(subscription?.coin), atom(subscription?.user)];
+}
+
+/** The single secondary bucket occupied by a normalized pending request. */
+function echoIndexKey(request: unknown): string {
+  return JSON.stringify(echoDiscriminators(request));
 }
 
 /**
