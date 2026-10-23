@@ -33,7 +33,7 @@ import { type IRequestTransport, TransportError } from "../_base.ts";
 import * as abort from "../_abort.ts";
 import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import { TokenBucketRateLimiter } from "../_rateLimiter.ts";
-import { exchangeWireJSON } from "../_wire.ts";
+import { exchangeWeight, exchangeWireJSON, type ExchangeWireWeight } from "../_wire.ts";
 import { delay, resolveRuntime, type Runtime } from "../runtime.ts";
 
 /** Configuration options for the HTTP transport layer. */
@@ -421,7 +421,9 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
 
     try {
       // --- Serialize -----------------------------------------------------------
-      body = (endpoint === "exchange" ? exchangeWireJSON(payload) : undefined) ?? JSON.stringify(payload);
+      const billing: ExchangeWireWeight | undefined =
+        endpoint === "exchange" && this._rateLimit !== null ? {} : undefined;
+      body = (endpoint === "exchange" ? exchangeWireJSON(payload, billing) : undefined) ?? JSON.stringify(payload);
 
       // --- Rate limiting -------------------------------------------------------
       // Opt-in token bucket: the request waits here for its weight. The wait honors caller
@@ -436,7 +438,9 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
         // The parsed wire form — never the live payload — is the billing source, so
         // getters/proxies/toJSON cannot move the weight off what was actually sent. Explorer
         // requests are a flat 40 whatever the payload, so they skip the parse entirely.
-        weight = endpoint === "explorer" ? 40 : requestWeight(endpoint, (snapshot = JSON.parse(body)));
+        // Registered immutable actions can reuse the guarded wire serializer's cached weight.
+        weight =
+          billing?.weight ?? (endpoint === "explorer" ? 40 : requestWeight(endpoint, (snapshot = JSON.parse(body))));
         await rateLimit.acquire(weight, controller?.signal);
       }
 
@@ -676,56 +680,6 @@ function requestWeight(endpoint: "info" | "exchange" | "explorer", payload: unkn
     return 20; // all other documented info requests
   }
   return exchangeWeight(payload);
-}
-
-/**
- * Exchange weight: `1 + floor(batchLength / 40)`, where the docs define `batchLength` as "the
- * length of the array in the action" (a batched order request is their example). The confirmed
- * batch arrays are `orders` (order), `cancels` (cancel / cancelByCloid) and `modifies`
- * (batchModify), but the docs never close the set, so the batch length here is the LONGEST array
- * found anywhere in the action at any depth — which also bills the deployer arrays (`spotDeploy`
- * genesis tuples, `perpDeploy` setter lists) and any future batch action. Over-billing only
- * throttles the client harder while under-billing risks the server limit (429s, ultimately an IP
- * ban), so the max is the conservative reading. Actions without arrays — or with only short ones
- * (`< 40` entries: fixed tuples, a single `twap` object carries no array at all,
- * `convertToMultiSigUser`'s wire-stringified `signers`) — cost the documented minimum of 1.
- *
- * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
- */
-function exchangeWeight(payload: unknown): number {
-  const action = exchangeAction(payload);
-  if (action === undefined) return 1;
-  return 1 + Math.floor(maxArrayLength(action) / 40);
-}
-
-/** The length of the longest array found in `value` at any depth (0 when there is none). */
-function maxArrayLength(value: unknown): number {
-  if (Array.isArray(value)) {
-    let max = value.length;
-    for (const item of value) max = Math.max(max, maxArrayLength(item));
-    return max;
-  }
-  if (isRecord(value)) {
-    let max = 0;
-    for (const key in value) max = Math.max(max, maxArrayLength(value[key]));
-    return max;
-  }
-  return 0;
-}
-
-/**
- * The action carrying the batch: the payload's `action`, unwrapped one level for multi-sig.
- * Unwrapping also keeps the wrapper's `signatures` array — authentication material, not batch
- * items — out of the billing walk.
- */
-function exchangeAction(payload: unknown): Record<string, unknown> | undefined {
-  if (!isRecord(payload) || !isRecord(payload.action)) return undefined;
-  const action = payload.action;
-  // A multi-sig action wraps the real one: { type: "multiSig", signatures, payload: { ..., action } }.
-  if (action.type === "multiSig" && isRecord(action.payload) && isRecord(action.payload.action)) {
-    return action.payload.action;
-  }
-  return action;
 }
 
 /**

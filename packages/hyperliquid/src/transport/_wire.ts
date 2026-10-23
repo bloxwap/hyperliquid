@@ -2,9 +2,15 @@
 
 interface ActionEntry {
   json?: string;
+  weight?: number;
 }
 const actions = new WeakMap<object, ActionEntry>();
 const requests = new WeakMap<object, { action: object; signature: object; entry: ActionEntry }>();
+/** Optional billing result, populated only when registered wire serialization succeeds. */
+export interface ExchangeWireWeight {
+  weight?: number;
+}
+
 const keys = new Set(["action", "signature", "nonce", "vaultAddress", "expiresAfter"]);
 
 /**
@@ -43,9 +49,11 @@ export function registerExchangeWireRequest(request: object, action: unknown): v
  * Prototype toJSON hooks invalidate this optimization, including hooks on nested arrays.
  *
  * @param payload The exchange request to inspect.
+ * @param billing Optional weight hint for rate-limited HTTP requests.
  * @return Its exact native JSON form, or undefined to request normal JSON.stringify.
  */
-export function exchangeWireJSON(payload: unknown): string | undefined {
+export function exchangeWireJSON(payload: unknown, billing?: ExchangeWireWeight): string | undefined {
+  if (billing !== undefined) billing.weight = undefined;
   if (payload === null || typeof payload !== "object") return undefined;
   const record = requests.get(payload);
   if (record === undefined) return undefined;
@@ -92,5 +100,67 @@ export function exchangeWireJSON(payload: unknown): string | undefined {
   // Native JSON still handles escaping, omission, non-finite numbers, and signature fields.
   const actionJSON = (record.entry.json ??= JSON.stringify(record.action));
   const metadataJSON = JSON.stringify(metadata);
+  if (billing !== undefined) {
+    // Derive the cold weight from the cached wire fragment once, not the live tree.
+    // Ownership and every serialization guard above must pass before using this hint.
+    billing.weight = record.entry.weight ??= exchangeWeight({ action: JSON.parse(actionJSON) });
+  }
   return metadataJSON === "{}" ? `{"action":${actionJSON}}` : `{"action":${actionJSON},${metadataJSON.slice(1)}`;
+}
+
+/**
+ * Exchange weight: `1 + floor(batchLength / 40)`, where the docs define `batchLength` as "the
+ * length of the array in the action" (a batched order request is their example). The confirmed
+ * batch arrays are `orders` (order), `cancels` (cancel / cancelByCloid) and `modifies`
+ * (batchModify), but the docs never close the set, so the batch length here is the LONGEST array
+ * found anywhere in the action at any depth — which also bills the deployer arrays (`spotDeploy`
+ * genesis tuples, `perpDeploy` setter lists) and any future batch action. Over-billing only
+ * throttles the client harder while under-billing risks the server limit (429s, ultimately an IP
+ * ban), so the max is the conservative reading. Actions without arrays — or with only short ones
+ * (`< 40` entries: fixed tuples, a single `twap` object carries no array at all,
+ * `convertToMultiSigUser`'s wire-stringified `signers`) — cost the documented minimum of 1.
+ *
+ * @param payload The parsed wire request.
+ * @return Its conservative pre-send weight.
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
+ */
+export function exchangeWeight(payload: unknown): number {
+  const action = exchangeAction(payload);
+  if (action === undefined) return 1;
+  return 1 + Math.floor(maxArrayLength(action) / 40);
+}
+
+/** The length of the longest array found in `value` at any depth (0 when there is none). */
+function maxArrayLength(value: unknown): number {
+  if (Array.isArray(value)) {
+    let max = value.length;
+    for (const item of value) max = Math.max(max, maxArrayLength(item));
+    return max;
+  }
+  if (isRecord(value)) {
+    let max = 0;
+    for (const key in value) max = Math.max(max, maxArrayLength(value[key]));
+    return max;
+  }
+  return 0;
+}
+
+/**
+ * The action carrying the batch: the payload's `action`, unwrapped one level for multi-sig.
+ * Unwrapping also keeps the wrapper's `signatures` array — authentication material, not batch
+ * items — out of the billing walk.
+ */
+function exchangeAction(payload: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(payload) || !isRecord(payload.action)) return undefined;
+  const action = payload.action;
+  // A multi-sig action wraps the real one: { type: "multiSig", signatures, payload: { ..., action } }.
+  if (action.type === "multiSig" && isRecord(action.payload) && isRecord(action.payload.action)) {
+    return action.payload.action;
+  }
+  return action;
+}
+
+/** True when `value` is a non-null object. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
