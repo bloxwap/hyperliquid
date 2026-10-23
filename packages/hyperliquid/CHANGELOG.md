@@ -2,32 +2,62 @@
 
 All notable changes to `@bloxwap/hyperliquid` are documented in this file.
 
-## Unreleased
+## 0.7.0 - 2026-10-23
 
 ### Added
 
-- `ExchangeSingleWalletConfig.wallet` accepts a raw 32-byte hex private key string, in addition to wallet objects.
-  Such keys sign in-process with WASM secp256k1 (`tiny-secp256k1`, an optional dependency) by default: the module is
-  loaded through an opaque dynamic import, shape-validated, and must pass a known-answer signature self-check before
-  it is used. When WASM is unavailable or fails the self-check (the usual outcome in browsers and bundled apps),
-  signing silently falls back to the pure-JS `@noble/curves` implementation. Both backends produce byte-identical
-  signatures. A malformed key string throws `AbstractWalletError` synchronously from the `ExchangeClient`
-  constructor; a well-formed key outside the secp256k1 scalar range rejects on the first signing call. To opt out of
-  the WASM path, pass a viem account (`privateKeyToAccount(key)`) or `createFastLocalWallet(key, { wasm: false })` as
-  before. Measured on an Intel Xeon box with a zero-latency mock transport: `ExchangeClient.order()` goes from ~274 to
-  ~104 µs per order on Node 24 and from ~155 to ~102 µs on Bun 1.4 compared with a viem `privateKeyToAccount`.
-- `getWalletAddress`, `getWalletChainId` and `warmupSigning` accept the raw private key string form too, so
-  `getWalletAddress(client.config.wallet)` keeps type-checking and working for either form.
-- `@noble/curves` (2.2.0, the release paired with the existing `@noble/hashes` 2.2.0) is a new dependency. It is
-  loaded only through a dynamic import, and only when a raw key cannot use WASM.
+- Exchange wallet configuration accepts raw 32-byte hex private key strings. Local signing uses optional WASM
+  secp256k1 after a known-answer self-check, with a byte-equivalent pure-JS fallback. Existing wallet objects remain
+  supported.
+- `getWalletAddress`, `getWalletChainId`, and `warmupSigning` accept raw private key strings too.
+- Info methods and `InfoClient` accept opt-in `skipValidation` options for trusted parameters already in wire form,
+  while retaining request cancellation.
+- `spotDeploy` supports `setTokenAnnotation` and `setDeployerLabel` actions.
+
+### Fixed
+
+- Time-ranged pagination preserves cumulative boundary multiplicities across repeated full pages, preventing
+  duplicate records and unnecessary requests.
+- Public WebSocket message listeners correctly track callback identity, capture flags, `once`, and abort signals.
+  Removing an unregistered listener no longer suppresses a live listener.
+- Cancelling a subscription's final local lease removes an unsent attempt from quota and disconnected-socket
+  queues, while preserving other subscribers' leases.
+- Compressed asset feeds retire recipients immediately on cancellation, failure, and `unsubscribeAll`, including
+  pending confirmations and nested client trackers.
+
+### Performance
+
+- MessagePack encoding retains encoded prefixes when optional properties are explicitly `undefined`, preserving
+  byte-for-byte action hashes without replaying large subtrees.
+- HTTP transports cache rate-limit weights for reused immutable exchange actions and avoid redundant parsing for
+  verified Info request types.
+- WebSocket confirmation matching indexes rewritten subscription echoes. Compound routing selects matching
+  candle intervals, users, and DEXs before invoking listeners.
+- Bounded dispatch uses indexed eligibility and cumulative overtake accounting under queue pressure, retaining a
+  lightweight path for small lanes and preserving nonce-window and wire-order guarantees.
+- Cancelled timeout entries release their controllers promptly; queue compaction bounds retention behind stalled
+  requests.
+- Compressed asset feeds share decoding across client and free-function subscriptions, skip obsolete queued work,
+  and avoid one full snapshot copy per multi-recipient frame.
+- L1 multisig signers share a lazily computed inner digest. Typed-data-only wallets do not trigger unused hashing.
+- Selected builder-DEX metadata requests overlap unrelated metadata loading while replacement mappings publish
+  atomically.
+- Transport-only and signing-only imports avoid loading the validation library.
 
 ### Changed
 
-- `exchange.warmup()` / `warmupSigning` treat a raw private key string as an in-process key: they await its backend
-  initialization and sign the throwaway warm-up actions with it. Wallet objects behave exactly as before.
-- Declaration files are now emitted with [tsrs](https://github.com/oxc-project/tsrs), the Rust port of the TypeScript 7
-  compiler, and type-checked with it in `check:types`. The emitted `.d.ts` files are byte-identical to TypeScript
-  7.0.2's and type-equivalent to the previous TypeScript 5.9 output; the only visible difference is that union members
-  print in a stable sorted order in editor hovers. The JavaScript bundle is unchanged, and the published package is
-  still verified with TypeScript 5.9 as the consumer. Set `HL_TSC=tsc` to build with TypeScript 5, or run
-  `bun run typecheck:tsc` for the TypeScript 5 type-check.
+- Runtime dependencies now use `@noble/curves` and `@noble/hashes` 2.4.0 and Valibot 1.5.0. The curves dependency is
+  loaded dynamically when raw-key signing cannot use WASM.
+- `exchange.warmup()` and `warmupSigning` initialize and warm the local signing backend for raw private keys.
+- Declaration builds and the primary type check use tsrs. Published consumers remain verified with TypeScript
+  5.9; set `HL_TSC=tsc` for the declaration-build fallback or run `bun run typecheck:tsc` for its type check.
+- Documentation uses the HIG presentation, updated callouts and fonts, and deferred search, market SDK, and
+  animation dependencies. Documentation and development dependencies are refreshed.
+
+### Upgrading from 0.6.0
+
+Wallet-object configurations remain supported. The wallet field can now also be a private key string; use
+`getWalletAddress` and `getWalletChainId` when reading either form. Request validation remains enabled by default.
+The Node.js minimum remains 22.12.0.
+
+Full comparison: https://github.com/bloxwap/hyperliquid/compare/v0.6.0...v0.7.0
