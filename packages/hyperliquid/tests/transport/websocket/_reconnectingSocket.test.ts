@@ -114,6 +114,17 @@ function webSocketFactory(url: string, protocols?: string | string[]): WebSocket
   return new FakeWebSocket(url, protocols) as unknown as WebSocket;
 }
 
+/** Counts public message dispatches without adding a listener that would itself enable them. */
+function countMessageDispatches(ws: ReconnectingWebSocket): () => number {
+  let count = 0;
+  const dispatch = ws.dispatchEvent;
+  ws.dispatchEvent = function (event: Event): boolean {
+    if (event.type === "message") count++;
+    return dispatch.call(this, event);
+  };
+  return () => count;
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -207,6 +218,176 @@ describe("ReconnectingWebSocket", () => {
       assertEquals(a, ["fan-out"]);
       assertEquals(b, ["fan-out"]);
       ws.close();
+    });
+
+    test("removing an unregistered message listener does not suppress a live listener", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const seen: unknown[] = [];
+      const listener = (event: MessageEvent): void => void seen.push(event.data);
+      ws.addEventListener("message", listener);
+      ws.removeEventListener("message", () => {});
+
+      lastSocket().serverMessage("live");
+      assertEquals(seen, ["live"]);
+      ws.removeEventListener("message", listener);
+      lastSocket().serverMessage("retired");
+      assertEquals(dispatches(), 1);
+    });
+
+    test("duplicate message registrations retain the original lifecycle and need one removal", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const duplicateController = new AbortController();
+      const seen: unknown[] = [];
+      const listener = (event: MessageEvent): void => void seen.push(event.data);
+      ws.addEventListener("message", listener);
+      ws.addEventListener("message", listener, { once: true, signal: duplicateController.signal });
+      duplicateController.abort();
+
+      lastSocket().serverMessage("first");
+      lastSocket().serverMessage("second");
+      assertEquals(seen, ["first", "second"]);
+      ws.removeEventListener("message", listener);
+      lastSocket().serverMessage("after-removal");
+      assertEquals(dispatches(), 2);
+    });
+
+    test("capture flags distinguish message registrations and removals", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const seen: unknown[] = [];
+      const listener = (event: MessageEvent): void => void seen.push(event.data);
+      ws.addEventListener("message", listener, { capture: true });
+      ws.removeEventListener("message", listener, false);
+      lastSocket().serverMessage("capture-only");
+      ws.addEventListener("message", listener, false);
+      lastSocket().serverMessage("both");
+      ws.removeEventListener("message", listener, true);
+      lastSocket().serverMessage("bubble-only");
+      ws.removeEventListener("message", listener, { capture: false });
+      lastSocket().serverMessage("neither");
+
+      assertEquals(seen, ["capture-only", "both", "both", "bubble-only"]);
+      assertEquals(dispatches(), 3);
+    });
+
+    test("once message listeners restore the event-free receive path", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const seen: unknown[] = [];
+      ws.addEventListener("message", (event) => seen.push(event.data), { once: true });
+      lastSocket().serverMessage("once");
+      lastSocket().serverMessage("after-once");
+
+      assertEquals(seen, ["once"]);
+      assertEquals(dispatches(), 1);
+    });
+
+    test("once callbacks can register themselves again before a recursive frame", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const seen: unknown[] = [];
+      const listener = (event: MessageEvent): void => {
+        seen.push(event.data);
+        if (event.data === "outer") {
+          ws.addEventListener("message", listener, { once: true });
+          lastSocket().serverMessage("inner");
+        }
+      };
+      ws.addEventListener("message", listener, { once: true });
+      lastSocket().serverMessage("outer");
+      lastSocket().serverMessage("retired");
+
+      assertEquals(seen, ["outer", "inner"]);
+      assertEquals(dispatches(), 2);
+    });
+
+    test("aborting a message listener restores the event-free receive path", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const controller = new AbortController();
+      const seen: unknown[] = [];
+      ws.addEventListener("message", (event) => seen.push(event.data), { signal: controller.signal });
+      lastSocket().serverMessage("before-abort");
+      controller.abort();
+      lastSocket().serverMessage("after-abort");
+
+      assertEquals(seen, ["before-abort"]);
+      assertEquals(dispatches(), 1);
+    });
+
+    test("an already-aborted signal never enables public message dispatch", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const controller = new AbortController();
+      controller.abort();
+      ws.addEventListener("message", () => assert(false, "aborted listener ran"), { signal: controller.signal });
+      lastSocket().serverMessage("not-observed");
+      assertEquals(dispatches(), 0);
+    });
+
+    test("retiring an old signal does not remove a replacement registration", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const controller = new AbortController();
+      const seen: unknown[] = [];
+      const listener = (event: MessageEvent): void => void seen.push(event.data);
+      ws.addEventListener("message", listener, { signal: controller.signal });
+      ws.removeEventListener("message", listener);
+      ws.addEventListener("message", listener);
+      controller.abort();
+      lastSocket().serverMessage("replacement");
+      ws.removeEventListener("message", listener);
+      lastSocket().serverMessage("retired");
+
+      assertEquals(seen, ["replacement"]);
+      assertEquals(dispatches(), 1);
+    });
+
+    test("an earlier abort callback can replace the retiring message registration", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const controller = new AbortController();
+      const seen: unknown[] = [];
+      const listener = (event: MessageEvent): void => void seen.push(event.data);
+      controller.signal.addEventListener("abort", () => ws.addEventListener("message", listener));
+      ws.addEventListener("message", listener, { signal: controller.signal });
+      controller.abort();
+      lastSocket().serverMessage("replacement");
+      ws.removeEventListener("message", listener);
+      lastSocket().serverMessage("retired");
+
+      assertEquals(seen, ["replacement"]);
+      assertEquals(dispatches(), 1);
+    });
+
+    test("stopping the caller's abort event cannot leave public message dispatch enabled", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const controller = new AbortController();
+      controller.signal.addEventListener("abort", (event) => event.stopImmediatePropagation());
+      ws.addEventListener("message", () => assert(false, "aborted listener ran"), { signal: controller.signal });
+      controller.abort();
+      lastSocket().serverMessage("retired");
+      assertEquals(dispatches(), 0);
+    });
+
+    test("object message listeners retain their receiver and once lifecycle", () => {
+      const ws = createSocket();
+      const dispatches = countMessageDispatches(ws);
+      const listener = {
+        seen: [] as unknown[],
+        handleEvent(event: Event): void {
+          this.seen.push((event as MessageEvent).data);
+        },
+      };
+      ws.addEventListener("message", listener, { once: true });
+      lastSocket().serverMessage("object");
+      lastSocket().serverMessage("retired");
+
+      assertEquals(listener.seen, ["object"]);
+      assertEquals(dispatches(), 1);
     });
 
     test("resolves the url through an async factory before connecting", async () => {

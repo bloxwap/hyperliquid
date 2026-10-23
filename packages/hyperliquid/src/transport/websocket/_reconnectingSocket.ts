@@ -179,6 +179,14 @@ const CloseEvent_ = /* @__PURE__ */ (() => {
 /** Upper bound of the default reconnection delay, in ms. */
 const MAX_RECONNECTION_DELAY = 10_000;
 
+/** One public message registration, with the wrapper used for native lifecycle handling. */
+interface MessageListenerRegistration {
+  capture: boolean;
+  listener: EventListener;
+  signal?: AbortSignal;
+  onAbort?: () => void;
+}
+
 /**
  * Default reconnection delay: exponential backoff `2 ** attempt * 150` capped
  * at {@linkcode MAX_RECONNECTION_DELAY}, with equal jitter — half the capped
@@ -229,15 +237,12 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
    */
   _onFrame: ((data: unknown) => void) | undefined = undefined;
 
-  /**
-   * Registrations seen for the `message` event through the public API.
-   *
-   * Deliberately an upper bound rather than an exact count: `EventTarget` collapses duplicate
-   * registrations and drops `once` listeners without a `removeEventListener` call, so this can sit
-   * above the true number. Erring high only costs an event nobody reads; erring low would drop
-   * frames from a live listener.
-   */
+  /** Live public message registrations; zero skips constructing and dispatching a public event. */
   private _messageListeners = 0;
+  /** Created only for public listeners; each callback can have one registration per capture flag. */
+  private _messageRegistrations:
+    | Map<EventListenerOrEventListenerObject, [MessageListenerRegistration?, MessageListenerRegistration?]>
+    | undefined;
 
   /** URL provider for creating new connections. */
   private readonly _urlProvider: UrlProvider;
@@ -732,8 +737,58 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | AddEventListenerOptions,
   ): void {
-    if (type === "message" && listener !== null) this._messageListeners++;
-    super.addEventListener(type, listener, options);
+    if (type !== "message" || listener === null) {
+      super.addEventListener(type, listener, options);
+      return;
+    }
+    const normalized: AddEventListenerOptions & { capture: boolean } =
+      typeof options === "boolean"
+        ? { capture: options }
+        : {
+            capture: !!options?.capture,
+            once: !!options?.once,
+            passive: options?.passive,
+            signal: options?.signal ?? undefined,
+          };
+    const { capture, signal } = normalized;
+    const index = capture ? 1 : 0;
+    const existing = this._messageRegistrations?.get(listener)?.[index];
+    if (existing !== undefined) {
+      // An earlier callback on the source signal may re-enter before our abort callback runs.
+      if (existing.signal?.aborted) this._removeMessageListener(listener, existing);
+      // Do not forward duplicates: some hosts attach the new signal even when they deduplicate
+      // the callback, allowing that signal to remove the original registration behind our back.
+      else return;
+    }
+    // Observe a private dependent signal: stopImmediatePropagation on the caller's abort event
+    // must not prevent native listener removal or leave our registration bookkeeping stale.
+    const lifecycleSignal = signal === undefined ? undefined : AbortSignal.any([signal]);
+    normalized.signal = lifecycleSignal;
+    const registration: MessageListenerRegistration = {
+      capture,
+      signal: lifecycleSignal,
+      listener: (event: Event): void => {
+        // Remove before invoking: a once callback may register itself again or dispatch recursively.
+        if (normalized.once) this._removeMessageListener(listener, registration);
+        if (typeof listener === "function") listener.call(this, event);
+        else listener.handleEvent(event);
+      },
+    };
+    super.addEventListener(type, registration.listener, normalized);
+    if (lifecycleSignal?.aborted) return;
+    const registrations = (this._messageRegistrations ??= new Map());
+    let pair = registrations.get(listener);
+    if (pair === undefined) {
+      pair = [];
+      registrations.set(listener, pair);
+    }
+    pair[index] = registration;
+    this._messageListeners++;
+    if (lifecycleSignal !== undefined) {
+      const onAbort = (): void => this._removeMessageListener(listener, registration);
+      registration.onAbort = onAbort;
+      lifecycleSignal.addEventListener("abort", onAbort, { once: true });
+    }
   }
 
   /** Counterpart to {@linkcode ReconnectingWebSocket.addEventListener}'s `message` bookkeeping. */
@@ -752,8 +807,31 @@ export class ReconnectingWebSocket extends EventTarget implements WebSocket {
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | EventListenerOptions,
   ): void {
-    if (type === "message" && listener !== null && this._messageListeners > 0) this._messageListeners--;
-    super.removeEventListener(type, listener, options);
+    if (type !== "message" || listener === null) {
+      super.removeEventListener(type, listener, options);
+      return;
+    }
+    const capture = typeof options === "boolean" ? options : !!options?.capture;
+    const registration = this._messageRegistrations?.get(listener)?.[capture ? 1 : 0];
+    if (registration !== undefined) this._removeMessageListener(listener, registration);
+  }
+
+  /** Removes an actual registration once, including its signal bookkeeping. */
+  private _removeMessageListener(
+    original: EventListenerOrEventListenerObject,
+    registration: MessageListenerRegistration,
+  ): void {
+    const registrations = this._messageRegistrations;
+    if (registrations === undefined) return;
+    const pair = registrations.get(original);
+    const index = registration.capture ? 1 : 0;
+    if (pair?.[index] !== registration) return;
+    pair[index] = undefined;
+    if (pair[0] === undefined && pair[1] === undefined) registrations.delete(original);
+    if (registrations.size === 0) this._messageRegistrations = undefined;
+    this._messageListeners--;
+    super.removeEventListener("message", registration.listener, { capture: registration.capture });
+    if (registration.onAbort !== undefined) registration.signal?.removeEventListener("abort", registration.onAbort);
   }
 
   /** Attaches or detaches the dispatcher for an attribute-style event handler. */
