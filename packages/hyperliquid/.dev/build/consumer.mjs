@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { deflateRawSync } from "node:zlib";
 import * as root from "@bloxwap/hyperliquid";
 import { ExchangeClient } from "@bloxwap/hyperliquid/api/exchange/client";
 import { ApiRequestError } from "@bloxwap/hyperliquid/api/exchange";
@@ -13,6 +14,8 @@ import { order } from "@bloxwap/hyperliquid/api/exchange/order";
 import { signAction, submitAction } from "@bloxwap/hyperliquid/actions/execution";
 import { fastAssetCtxs as barrelFastAssetCtxs } from "@bloxwap/hyperliquid/api/subscription";
 import { fastAssetCtxs as individualFastAssetCtxs } from "@bloxwap/hyperliquid/api/subscription/fastAssetCtxs";
+import { SubscriptionClient as IndividualSubscriptionClient } from "@bloxwap/hyperliquid/api/subscription/client";
+import { unsubscribeAll as individualUnsubscribeAll } from "@bloxwap/hyperliquid/api/subscription/unsubscribeAll";
 
 assert.equal(root.ExchangeClient, ExchangeClient);
 assert.equal(root.HttpTransport, HttpTransport);
@@ -76,3 +79,51 @@ await assert.rejects(
   (error) => error instanceof ApiRequestError && error instanceof root.HyperliquidError,
 );
 console.log("Published consumer imports, identities, nonce sharing, signing ownership, and error types passed.");
+
+// Mixed published entry points must share decoder identity and client teardown scope.
+const listeners = new Map();
+const subscriptionTransport = {
+  async subscribe(_channel, _payload, listener) {
+    listeners.set(listener, (listeners.get(listener) ?? 0) + 1);
+    let active = true;
+    return {
+      async unsubscribe() {
+        if (!active) return;
+        active = false;
+        const remaining = listeners.get(listener) - 1;
+        if (remaining === 0) listeners.delete(listener);
+        else listeners.set(listener, remaining);
+      },
+    };
+  },
+};
+const rawPrices = [];
+const clientPrices = [];
+const otherPrices = [];
+const rawFeed = await individualFastAssetCtxs({ transport: subscriptionTransport }, (data) => {
+  rawPrices.push(data.COIN.markPx);
+  data.COIN.markPx = "changed";
+});
+await new root.SubscriptionClient({ transport: subscriptionTransport }).fastAssetCtxs((data) => {
+  clientPrices.push(data.COIN.markPx);
+});
+await new IndividualSubscriptionClient({ transport: subscriptionTransport }).fastAssetCtxs((data) => {
+  otherPrices.push(data.COIN.markPx);
+});
+assert.equal(listeners.size, 1, "one decode callback across root/client/function entry points");
+const deliver = (price) => {
+  const payload = deflateRawSync(JSON.stringify({ COIN: { markPx: price } })).toString("base64");
+  for (const listener of listeners.keys()) listener(new CustomEvent("fastAssetCtxs", { detail: payload }));
+};
+deliver("1");
+assert.deepEqual(rawPrices, ["1"]);
+assert.deepEqual(clientPrices, ["1"]);
+assert.deepEqual(otherPrices, ["1"]);
+await individualUnsubscribeAll({ transport: subscriptionTransport });
+deliver("2");
+assert.deepEqual(rawPrices, ["1", "2"]);
+assert.deepEqual(clientPrices, ["1"]);
+assert.deepEqual(otherPrices, ["1"]);
+await rawFeed.unsubscribe();
+assert.equal(listeners.size, 0);
+console.log("Published mixed-entry subscription decoding, isolation, and lease tracking passed.");

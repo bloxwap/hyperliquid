@@ -45,6 +45,7 @@ export type FastAssetCtxsEvent = {
 import { parse } from "../../../_base.ts";
 import type { ISubscription, ISubscriptionTransport, TransportError } from "../../../transport/mod.ts";
 import type { SubscriptionConfig, SubscriptionOptions } from "./_base/mod.ts";
+import { ON_TRACKED_UNSUBSCRIBE, subscriptionTransportIdentity } from "./_base/_identity.ts";
 
 /**
  * Subscribe to mark and mid prices for all assets.
@@ -78,10 +79,11 @@ export function fastAssetCtxs(
   options?: SubscriptionOptions,
 ): Promise<ISubscription> {
   const payload = parse(FastAssetCtxsRequest, { type: "fastAssetCtxs" });
-  let decoder = DECODERS.get(config.transport);
+  const identity = subscriptionTransportIdentity(config.transport);
+  let decoder = DECODERS.get(identity);
   if (decoder === undefined) {
     decoder = createDecoder();
-    DECODERS.set(config.transport, decoder);
+    DECODERS.set(identity, decoder);
   }
   const recipient: Recipient = { listener, active: true };
   decoder.recipients.add(recipient);
@@ -94,35 +96,35 @@ export function fastAssetCtxs(
   };
   options?.signal?.addEventListener("abort", retire, { once: true });
   if (options?.signal?.aborted) retire();
+  const subscribeOptions = {
+    ...options,
+    [ON_TRACKED_UNSUBSCRIBE]: retire,
+    onError: (error: TransportError): void => {
+      retire();
+      options?.onError?.(error);
+    },
+  };
   try {
     // One shared listener identity gives the transport manager one event registration while
     // retaining an independent transport lease, cancellation and error callback for each caller.
-    return config.transport
-      .subscribe<string>(payload.type, payload, decoder.onFrame, {
-        ...options,
-        onError: (error: TransportError): void => {
-          retire();
-          options?.onError?.(error);
-        },
-      })
-      .then(
-        (subscription) => {
-          failureSignal = subscription.failureSignal;
-          failureSignal?.addEventListener("abort", retire, { once: true });
-          if (failureSignal?.aborted) retire();
-          return {
-            failureSignal,
-            unsubscribe: (): Promise<void> => {
-              retire();
-              return subscription.unsubscribe();
-            },
-          };
-        },
-        (error) => {
-          retire();
-          throw error;
-        },
-      );
+    return config.transport.subscribe<string>(payload.type, payload, decoder.onFrame, subscribeOptions).then(
+      (subscription) => {
+        failureSignal = subscription.failureSignal;
+        failureSignal?.addEventListener("abort", retire, { once: true });
+        if (failureSignal?.aborted) retire();
+        return {
+          failureSignal,
+          unsubscribe: (): Promise<void> => {
+            retire();
+            return subscription.unsubscribe();
+          },
+        };
+      },
+      (error) => {
+        retire();
+        throw error;
+      },
+    );
   } catch (error) {
     retire();
     throw error;
@@ -166,6 +168,8 @@ function createDecoder(): Decoder {
       queued++;
       queue = queue.then(async () => {
         try {
+          // Retired leases must not spend decompression/parse work ahead of live queued frames.
+          if (!hasActiveRecipient(targets)) return;
           fanOut(await decompress(data), targets);
         } catch (error) {
           console.error(DELIVERY_FAILED, error);
@@ -186,11 +190,19 @@ function fanOut(data: FastAssetCtxsEvent, targets: Recipient | Recipient[]): voi
     invoke(targets, data);
     return;
   }
-  const coins = Object.keys(data);
-  for (const recipient of targets) {
+  let coins: string[] | undefined;
+  let last = targets.length - 1;
+  for (let index = 0; index <= last; index++) {
+    // Earlier callbacks can retire later recipients. Keep the original for the final live one.
+    while (last > index && !targets[last].active) last--;
+    const recipient = targets[index];
     if (!recipient.active) continue;
+    if (index === last) {
+      invoke(recipient, data);
+      break;
+    }
     const copy: FastAssetCtxsEvent = {};
-    for (const coin of coins) {
+    for (const coin of (coins ??= Object.keys(data))) {
       const prices = { ...data[coin] };
       if (coin === "__proto__")
         Object.defineProperty(copy, coin, { value: prices, enumerable: true, writable: true, configurable: true });
@@ -198,6 +210,12 @@ function fanOut(data: FastAssetCtxsEvent, targets: Recipient | Recipient[]): voi
     }
     invoke(recipient, copy);
   }
+}
+/** Whether a captured delivery still has a live lease before queued decoding begins. */
+function hasActiveRecipient(targets: Recipient | Recipient[]): boolean {
+  if (!Array.isArray(targets)) return targets.active;
+  for (const recipient of targets) if (recipient.active) return true;
+  return false;
 }
 function invoke(recipient: Recipient, data: FastAssetCtxsEvent): void {
   if (!recipient.active) return;

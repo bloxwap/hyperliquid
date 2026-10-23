@@ -149,6 +149,8 @@ async function bundleSources(root: RootManifest): Promise<number> {
     "actions/_canonical.ts",
     "actions/execution.ts",
     "api/subscription/_methods/fastAssetCtxs.ts",
+    "api/subscription/_methods/_base/_identity.ts",
+    "api/subscription/_methods/_base/_tracking.ts",
   ];
   const coreFiles = new Map<string, { group: string; exports: string }>();
   const aggregators = new Map<string, string>();
@@ -164,7 +166,12 @@ async function bundleSources(root: RootManifest): Promise<number> {
             ? "canonical"
             : name === "api/subscription/_methods/fastAssetCtxs.ts"
               ? "subscriptions"
-              : "exchange";
+              : [
+                    "api/subscription/_methods/_base/_identity.ts",
+                    "api/subscription/_methods/_base/_tracking.ts",
+                  ].includes(name)
+                ? "subscription-tracking"
+                : "exchange";
     const names = Object.keys(await import(file));
     const aliases = names.map((value) => ({ value, alias: `m${index}_${value}` }));
     const exports = aliases.map(({ value, alias }) => `${alias} as ${value}`).join(", ");
