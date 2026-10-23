@@ -84,6 +84,20 @@ describe("userFillsByTimeAll", () => {
     expect(tids).toEqual(Array.from({ length: 2_003 }, (_, i) => i + 1)); // every tid exactly once
   });
 
+  test("stops when a repeated full boundary cluster contributes no new fills", async () => {
+    const cluster = Array.from({ length: PAGE }, (_, i) => ({ time: 2_999, tid: 1_999 + i }));
+    const dataset = [...fillsPage(1_000, PAGE - 2), ...cluster];
+    const transport = new MockInfoTransport((payload) =>
+      dataset.filter((fill) => fill.time >= Number(payload.startTime)).slice(0, PAGE),
+    );
+
+    const result = await userFillsByTimeAll({ transport }, { user: USER, startTime: 1_000 });
+
+    expect(requestedStartTimes(transport)).toEqual([1_000, 2_999, 2_999]);
+    expect(result.map(({ time, tid }) => ({ time, tid }))).toEqual(dataset);
+    expect(new Set(result.map((fill) => fill.tid)).size).toBe(dataset.length);
+  });
+
   test("respects maxPages when the server always has more data", async () => {
     let firstTime = 1_000;
     const transport = new MockInfoTransport(() => {
