@@ -11,7 +11,7 @@ import {
   signRawDigestBytes,
   signTypedData,
 } from "./_abstractWallet.ts";
-import { createMultiSigDigestBytes } from "./_fastDigest.ts";
+import { createL1AgentDigestBytes, createMultiSigDigestBytes } from "./_fastDigest.ts";
 import { createL1ActionHashBytes, preadjustL1Action, signL1InnerBytes } from "./_l1.ts";
 import { createUserSignedInnerDigestThunk, signUserSignedInner } from "./_userSigned.ts";
 
@@ -241,6 +241,12 @@ export async function signMultiSigL1(args: {
     vaultAddress: args.vaultAddress,
     expiresAfter: args.expiresAfter,
   });
+  // Every raw-capable signer authorizes the same Agent digest. Compute it once, lazily so
+  // typed-data-only signers do not pay for it. Each wallet gets its own bytes because a custom
+  // SIGN_DIGEST_BYTES implementation may retain or mutate its argument.
+  let innerDigest: Uint8Array | undefined;
+  const innerDigestThunk = (): Uint8Array =>
+    (innerDigest ??= createL1AgentDigestBytes(innerActionHashBytes, args.isTestnet ?? false)).slice();
 
   // --- Collect inner signatures from all signers -----------
   const innerSignatures = await Promise.all(
@@ -249,6 +255,7 @@ export async function signMultiSigL1(args: {
         signer,
         actionHashBytes: innerActionHashBytes,
         isTestnet: args.isTestnet,
+        digestThunk: innerDigestThunk,
       }),
     ),
   );
