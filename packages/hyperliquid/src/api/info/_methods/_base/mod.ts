@@ -4,6 +4,7 @@
  */
 
 export type { InfoConfig } from "./_config.ts";
+export * from "./_options.ts";
 export * from "./_pagination.ts";
 export * from "./_schemas.ts";
 export * from "./_signal.ts";

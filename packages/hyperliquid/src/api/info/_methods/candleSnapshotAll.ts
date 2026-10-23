@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { collectPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import type { CandleSnapshotParameters, CandleSnapshotResponse } from "./candleSnapshot.ts";
 import { candleSnapshotPages } from "./candleSnapshotPages.ts";
 
@@ -27,7 +27,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of candlestick data points.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -53,7 +54,7 @@ export function candleSnapshotAll(
   config: InfoConfig,
   params: CandleSnapshotAllParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<CandleSnapshotResponse> {
-  return collectPages(candleSnapshotPages(config, params, options, signal));
+  return collectPages(candleSnapshotPages(config, params, options, signalOrOptions));
 }

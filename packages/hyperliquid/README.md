@@ -120,10 +120,10 @@ await exchange.updateLeverage({ asset: 0, isCross: true, leverage: 5 });
 await exchange.withdraw3({ destination: "0x...", amount: "1" });
 ```
 
-For low-latency bots, prefer
-[`createFastLocalWallet`](https://bloxwap.github.io/hyperliquid/docs/signing/#fast-local-wallet-wasm-secp256k1) (WASM
-secp256k1) and install the optional `hash-wasm` package for ambient keccak acceleration. Trusted callers can also pass
-`{ skipValidation: true }` — see the
+For low-latency bots, pass the raw private key string as `wallet`: the client then signs with WASM secp256k1 by
+default, with a pure-JS fallback where WASM cannot load (~274 to ~104 µs per order on Node 24, ~155 to ~102 µs on
+Bun 1.4). Install the optional `hash-wasm` package for ambient keccak acceleration. Trusted callers can also pass
+`{ skipValidation: true }`. See the
 [low-latency recipe](https://bloxwap.github.io/hyperliquid/docs/signing/#low-latency-recipe-bots--hft).
 
 ### Subscribe

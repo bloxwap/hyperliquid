@@ -8,17 +8,23 @@ from the SDK package published from `packages/hyperliquid/dist`.
 
 ## Design system
 
-The design follows the Bloxwap monorepo's documentation site at commit `15201923b`:
+The shared presentation uses the HIG 0.1.0 candidate packages packed from `bloxwap/hig` commit
+`7c67a07` (`0.1.0-candidate.sha7c67a07c`). HIG has no npm release yet, so the packed tarballs are checked in under
+[`vendor/bloxwap-hig`](../../vendor/bloxwap-hig/README.md) and installed with `file:` dependencies.
 
-- `app/brand-tokens.css` is a verbatim snapshot of `packages/ui/src/styles/tokens.generated.css`.
-- Fumadocs colors, typography, navigation, and forced dark mode follow `workers/docs/src/app/global.css` and its layouts.
+- `@bloxwap/hig-tokens/css` supplies every color, spacing and control-size variable (`--hig-*`); `@bloxwap/hig-react/css`
+  supplies the button, field, surface, skeleton and alert recipes. There is no copied palette in this app.
+- HIG React components render shared controls and states: copy/install buttons, playground options and retry,
+  search loading/empty/error, and callouts (GitHub `> [!NOTE]` alerts map to `Callout` via `lib/remark-callouts.ts`).
+- `app/global.css` maps HIG tokens onto Fumadocs and keeps only host layout, the landing page and the market playground.
+- Fumadocs owns routing, navigation, search and MDX adapters; dark mode remains forced. `HIGProvider` sets comfortable
+  density and follows reduced motion; no feedback sink is configured, so controls are silent.
 - The app icon and favicon in `public/logos/` preserve the original Bloxwap artwork and metadata.
-- Bloxwap Sans body text and Bloxwap Mono code use the self-hosted Next.js exports from `@bloxwap/font@0.1.2`.
-- Space Grotesk Bold headings retain the local asset and OFL notice in `public/fonts/`.
-- Static Open Graph font instances and their license/provenance are documented in `public/fonts/README.md`.
+- Headings/body use Bloxwap Sans and code uses Bloxwap Mono from self-hosted `@bloxwap/font@0.1.2` Next.js exports.
 
-Update these snapshots from the monorepo when its design changes. Keep the artwork and font notices intact.
-Building this site does not require a checkout of the monorepo or a request to a font CDN.
+Read the [HIG package migration evidence](design-review/hig-packages/README.md) for validation, measurements,
+screenshots, exceptions and rollback, and the [first HIG migration](design-review/hig/README.md) for its history.
+No monorepo checkout, font CDN or npm publication is required.
 
 The [historical design review](design-review/README.md) preserves the original findings and screenshots from 2026-09-26.
 
@@ -45,6 +51,7 @@ code generation.
 - Native HTML details, summaries, and explicit anchors are supported. Existing code examples remain Markdown.
 
 Run `bun run docs:check` from the repository root to check content and app types.
+App types are checked with tsrs (`bun run typecheck` in `apps/docs`), which also runs before `next build`; Next's own TypeScript pass is off (`typescript.ignoreBuildErrors` in `next.config.mjs`), so type errors still fail the build. On Windows or Intel macOS, where tsrs has no binary, run `bun run typecheck:tsc` instead.
 For content checks alone, run `bun run check:docs` from the root or `bun run check:content` from `apps/docs`.
 The repository's `bun run check` also formats and lints app source.
 
@@ -54,6 +61,9 @@ The repository's `bun run check` also formats and lints app source.
 NEXT_PUBLIC_BASE_PATH=/hyperliquid bun run docs:build
 NEXT_PUBLIC_BASE_PATH=/hyperliquid bun run docs:preview
 ```
+
+Run `bun run --cwd apps/docs test:browser` after the production build to test the static shell
+and market playground interactions. Install Chromium with `bunx --cwd apps/docs playwright install chromium`.
 
 Open `http://localhost:4173/hyperliquid/`. The preview serves only the static files in `apps/docs/out`.
 The build verifies every documentation page, internal link, asset, and anchor, plus the static JSON search index and
@@ -95,8 +105,8 @@ always point to the published GitHub Pages site, including when previewing local
 - `app/og/[...slug]/route.tsx` generates `/og/home.png`, `/og/docs.png`, and `/og/docs/<slug>.png` during the static build.
 
 Cards use Bloxwap Sans Black for titles and Bloxwap Sans Bold for the owner, description, and stats. The static Bloxwap Sans
-faces are instantiated from the published `@bloxwap/font@0.1.2` variable WOFF2;
-their license is included as `public/fonts/Bloxwap-OFL.txt`.
+faces and the card colors come from `@bloxwap/hig-tokens` (`assets/fonts/*.ttf`, OFL license included in the package;
+`tokens.colors.*.srgb`). The remaining bar colors are the Bloxwap brand palette.
 The renderer uses bundled fonts and brand geometry locally; it needs no font CDN, API credentials, or image server after
 deployment. Generated PNGs live in `out/` and are included in the GitHub Pages artifact.
 

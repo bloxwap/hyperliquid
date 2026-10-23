@@ -80,14 +80,14 @@ export type OutcomeMetaResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request prediction market outcome metadata.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Prediction market outcome metadata including outcomes and questions.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -105,9 +105,17 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-outcome-metadata
  */
-export function outcomeMeta(config: InfoConfig, signal?: AbortSignal): Promise<OutcomeMetaResponse> {
-  const request = parse(OutcomeMetaRequest, {
-    type: "outcomeMeta",
-  });
+export function outcomeMeta(
+  config: InfoConfig,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<OutcomeMetaResponse> {
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    OutcomeMetaRequest,
+    {
+      type: "outcomeMeta",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

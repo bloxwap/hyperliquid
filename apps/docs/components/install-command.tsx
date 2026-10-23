@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
-import { type CSSProperties, useRef, useState } from "react";
+import { Button } from "@bloxwap/hig-react/button";
+import { useState } from "react";
+import { CopyButton } from "./copy-button";
 
 const installers = [
   { name: "bun", command: "bun add @bloxwap/hyperliquid" },
@@ -12,52 +13,24 @@ const installers = [
 
 export function InstallCommand() {
   const [active, setActive] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const resetTimer = useRef<ReturnType<typeof setTimeout>>(null);
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(installers[active].command);
-    setCopied(true);
-    if (resetTimer.current) clearTimeout(resetTimer.current);
-    resetTimer.current = setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div className="install-picker">
-      <div
-        className="install-tabs"
-        role="tablist"
-        aria-label="Package manager"
-        style={{ "--count": installers.length, "--active": active } as CSSProperties}
-      >
-        <span className="install-tabs-thumb" aria-hidden="true" />
+      <fieldset className="install-tabs hig-group" aria-label="Package manager">
         {installers.map((installer, index) => (
-          <button
+          <Button
             key={installer.name}
-            type="button"
-            role="tab"
-            aria-selected={index === active}
-            className={index === active ? "active" : undefined}
-            onClick={() => {
-              setActive(index);
-              setCopied(false);
-            }}
+            intent={index === active ? "secondary" : "ghost"}
+            aria-pressed={index === active}
+            onClick={() => setActive(index)}
           >
             {installer.name}
-          </button>
+          </Button>
         ))}
-      </div>
+      </fieldset>
       <div className="install-command">
         <span aria-hidden="true">$</span>
         <code>{installers[active].command}</code>
-        <button
-          type="button"
-          className="install-copy"
-          onClick={copy}
-          aria-label={copied ? "Copied to clipboard" : "Copy install command"}
-        >
-          {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
-        </button>
+        <CopyButton text={installers[active].command} label="Copy install command" className="install-copy" />
       </div>
     </div>
   );

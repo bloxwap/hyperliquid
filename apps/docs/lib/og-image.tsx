@@ -3,31 +3,35 @@ import { join } from "node:path";
 import { ExchangeClient } from "@bloxwap/hyperliquid/api/exchange/client";
 import { InfoClient } from "@bloxwap/hyperliquid/api/info/client";
 import { SubscriptionClient } from "@bloxwap/hyperliquid/api/subscription/client";
+import { tokens } from "@bloxwap/hig-tokens";
+import { readOgFont } from "@bloxwap/hig-og-fonts/node";
 import { ImageResponse } from "next/og";
-import { BRAND_GREEN, BRAND_ICON } from "@/lib/brand";
+import { BRAND_ICON } from "@/lib/brand";
 import { socialImageSize } from "@/lib/social";
 
 // Modeled on GitHub's repository cards in dark mode, matching the chart and sfx docs cards: the site's black
 // canvas, an owner/repo title, a muted description, the logo tile top right, a stats row, and the Bloxwap
-// brand palette as the color bar along the bottom. Colors are sRGB hex for the Satori/resvg renderer.
+// brand palette as the color bar along the bottom. Colors are the HIG tokens' sRGB values for the Satori/resvg renderer.
 const BRAND = {
-  black: "#0A0A0A",
-  ink: "#F5F7FA",
-  muted: "#A1A1A1",
+  black: tokens.colors.background.srgb,
+  ink: tokens.colors.text.srgb,
+  muted: tokens.colors.muted.srgb,
+  green: tokens.colors.action.srgb,
 };
 
 /** The brand palette weighted like a GitHub language bar, green leading. */
 const BAR: [color: string, share: number][] = [
-  [BRAND_GREEN, 62],
-  ["#35B5FF", 14],
+  [BRAND.green, 62],
+  [tokens.colors.info.srgb, 14],
   ["#B300FF", 10],
   ["#FF479C", 8],
   ["#FFFB38", 6],
 ];
 
+// The dedicated OG subset verifies each packaged face against its SHA-256 manifest.
 const assets = Promise.all([
-  readFile(join(process.cwd(), "public/fonts/BloxwapSans-Bold.ttf")),
-  readFile(join(process.cwd(), "public/fonts/BloxwapSans-Black.ttf")),
+  readOgFont("BloxwapSans-Bold.ttf"),
+  readOgFont("BloxwapSans-Black.ttf"),
   readFile(join(process.cwd(), "../../packages/hyperliquid/package.json"), "utf8"),
 ]);
 
@@ -149,7 +153,7 @@ export async function createSocialImage({ title, description, category, home = f
           role="img"
           aria-label="Bloxwap"
         >
-          <rect width="100" height="100" rx={BRAND_ICON.radius} fill={BRAND_GREEN} />
+          <rect width="100" height="100" rx={BRAND_ICON.radius} fill={BRAND.green} />
           <g fill="none" stroke={BRAND.black} strokeWidth={BRAND_ICON.strokeWidth} strokeLinecap="round">
             {BRAND_ICON.paths.map((d) => (
               <path key={d} d={d} />

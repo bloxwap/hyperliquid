@@ -1,8 +1,13 @@
 "use client";
 
-import type { WebSocketTransport } from "@bloxwap/hyperliquid/transport/websocket";
+import { Button } from "@bloxwap/hig-react/button";
+import { Alert } from "@bloxwap/hig-react/status";
+import { SubscriptionClient } from "@bloxwap/hyperliquid/api/subscription/client";
+import { WebSocketTransport } from "@bloxwap/hyperliquid/transport/websocket";
+import { animate } from "animejs/animation";
+import { scrambleText } from "animejs/text";
 import { Radio, RotateCcw } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CopyButton } from "@/components/copy-button";
 
 const assets = [
@@ -106,53 +111,40 @@ function AnimatedCode({ text }: { text: string }) {
       return;
     }
 
-    // Keep the code usable while interaction-only animation modules load. A retired effect
-    // must not animate a later selection or touch a component that has unmounted.
-    highlight(code, text);
-    let retired = false;
-    let cancel = () => {};
-    Promise.all([import("animejs/animation"), import("animejs/text")])
-      .then(([{ animate }, { scrambleText }]) => {
-        if (retired) return;
-        viewport.style.height = `${oldHeight}px`;
-        const oldLines = previous.current.split("\n");
-        const newLines = text.split("\n");
-        const lines = newLines.map((line, index) => {
-          const span = document.createElement("span");
-          span.className = "playground-code-line";
-          span.textContent = oldLines[index] || line;
-          return span;
-        });
-        code.replaceChildren(...lines);
-        const reveal = animate(lines, {
-          innerHTML: scrambleText({ text: (_target, index) => newLines[index], chars: "a-z0-9_", duration: 420 }),
-          onComplete: () => {
-            highlight(code, text);
-            previous.current = text;
-          },
-        });
-        const resize = animate(viewport, {
-          height: [`${oldHeight}px`, `${newHeight}px`],
-          duration: 420,
-          ease: "out(3)",
-          onComplete: () => {
-            viewport.style.height = "auto";
-          },
-        });
-        cancel = () => {
-          reveal.cancel();
-          resize.cancel();
-        };
-      })
-      .catch(() => {
-        if (retired) return;
+    // Pin the current height before swapping in the new line count, so the first frame (and a
+    // Strict Mode re-run of this effect) still starts from the old height.
+    viewport.style.height = `${oldHeight}px`;
+
+    // Animate each line independently so scrambling never removes the code's line breaks.
+    const oldLines = previous.current.split("\n");
+    const newLines = text.split("\n");
+    const lines = newLines.map((line, index) => {
+      const span = document.createElement("span");
+      span.className = "playground-code-line";
+      span.textContent = oldLines[index] || line;
+      return span;
+    });
+    code.replaceChildren(...lines);
+    const reveal = animate(lines, {
+      innerHTML: scrambleText({ text: (_target, index) => newLines[index], chars: "a-z0-9_", duration: 420 }),
+      onComplete: () => {
         highlight(code, text);
+        // Committed only once the reveal lands: a cancelled run (Strict Mode, or a quick second
+        // click) must animate again rather than snap.
         previous.current = text;
+      },
+    });
+    const resize = animate(viewport, {
+      height: [`${oldHeight}px`, `${newHeight}px`],
+      duration: 420,
+      ease: "out(3)",
+      onComplete: () => {
         viewport.style.height = "auto";
-      });
+      },
+    });
     return () => {
-      retired = true;
-      cancel();
+      reveal.cancel();
+      resize.cancel();
     };
   }, [text]);
 
@@ -193,7 +185,9 @@ function useMarketStream(coin: Coin, feed: Feed | null, retry: number): Stream {
       return;
     }
     const controller = new AbortController();
-    let transport: WebSocketTransport | undefined;
+    const transport = transportRef.current ?? new WebSocketTransport();
+    transportRef.current = transport;
+    const client = new SubscriptionClient({ transport });
     let timer: ReturnType<typeof setTimeout> | undefined;
     let count = 0;
     let latest: unknown;
@@ -218,34 +212,45 @@ function useMarketStream(coin: Coin, feed: Feed | null, retry: number): Stream {
       if (controller.signal.aborted) return;
       clearTimeout(timer);
       controller.abort();
-      transport?.close();
+      transport.close();
       if (transportRef.current === transport) transportRef.current = null;
       setStream({ ...idle, status: "error" });
     };
-    // The SDK is loaded only after selecting a feed. Checking the effect's lease before
-    // constructing a socket also handles rapid feed changes, Off, unmount, and Strict Mode.
-    import("./market-playground-stream")
-      .then(({ WebSocketTransport, subscribeMarketFeed }) => {
-        if (controller.signal.aborted) return;
-        transport = transportRef.current ?? new WebSocketTransport();
-        transportRef.current = transport;
-        transport.events.addEventListener(
-          "connectionstatechange",
-          (event) => {
-            if (event.detail === "connected") {
-              setStream((current) => ({ ...current, status: "waiting" }));
-            } else if (event.detail === "reconnecting" || event.detail === "connecting") {
-              clearTimeout(timer);
-              timer = undefined;
-              setStream((current) => ({ ...current, status: "reconnecting" }));
-            } else if (event.detail === "disconnected") {
-              fail();
-            }
-          },
-          { signal: controller.signal },
-        );
-        return subscribeMarketFeed(transport, coin, feed, receive, { signal: controller.signal, onError: fail });
-      })
+    transport.events.addEventListener(
+      "connectionstatechange",
+      (event) => {
+        if (event.detail === "connected") {
+          setStream((current) => ({ ...current, status: "waiting" }));
+        } else if (event.detail === "reconnecting" || event.detail === "connecting") {
+          clearTimeout(timer);
+          timer = undefined;
+          setStream((current) => ({ ...current, status: "reconnecting" }));
+        } else if (event.detail === "disconnected") {
+          fail();
+        }
+      },
+      { signal: controller.signal },
+    );
+
+    const options = { signal: controller.signal, onError: fail };
+    const subscription =
+      feed === "allMids"
+        ? client.allMids(
+            {},
+            (data) => {
+              if (data.mids[coin] !== undefined) receive({ coin, midPx: data.mids[coin] });
+            },
+            options,
+          )
+        : feed === "l2Book"
+          ? client.l2Book({ coin }, receive, options)
+          : feed === "trades"
+            ? client.trades({ coin }, receive, options)
+            : feed === "candle"
+              ? client.candle({ coin, interval: "1m" }, receive, options)
+              : client.activeAssetCtx({ coin }, receive, options);
+
+    subscription
       .then(() => {
         if (!controller.signal.aborted) {
           setStream((current) => (current.status === "live" ? current : { ...current, status: "waiting" }));
@@ -269,6 +274,15 @@ const statusLabels: Record<Status, string> = {
   reconnecting: "Reconnecting",
   error: "Connection unavailable",
 };
+
+/** A single-choice option: HIG button geometry with the pressed state exposed to assistive technology. */
+function Option({ pressed, onPress, children }: { pressed: boolean; onPress: () => void; children: ReactNode }) {
+  return (
+    <Button intent={pressed ? "primary" : "secondary"} aria-pressed={pressed} onClick={onPress}>
+      {children}
+    </Button>
+  );
+}
 
 export function MarketPlayground() {
   const [coin, setCoin] = useState<Coin>("BTC");
@@ -294,33 +308,28 @@ export function MarketPlayground() {
       <div className="playground-body">
         <div className="playground-editor">
           <div className="playground-controls">
-            <fieldset>
+            <fieldset className="hig-group">
               <legend>Asset</legend>
               <div className="playground-options">
                 {assets.map((asset) => (
-                  <button
-                    key={asset.coin}
-                    type="button"
-                    aria-pressed={coin === asset.coin}
-                    onClick={() => setCoin(asset.coin)}
-                  >
+                  <Option key={asset.coin} pressed={coin === asset.coin} onPress={() => setCoin(asset.coin)}>
                     {asset.label}
-                  </button>
+                  </Option>
                 ))}
               </div>
             </fieldset>
-            <fieldset>
+            <fieldset className="hig-group">
               <legend>
                 Data feed <span>Select to start streaming</span>
               </legend>
               <div className="playground-options playground-feeds">
-                <button type="button" aria-pressed={feed === null} onClick={() => setFeed(null)}>
+                <Option pressed={feed === null} onPress={() => setFeed(null)}>
                   Off
-                </button>
+                </Option>
                 {feeds.map((item) => (
-                  <button key={item.id} type="button" aria-pressed={feed === item.id} onClick={() => setFeed(item.id)}>
+                  <Option key={item.id} pressed={feed === item.id} onPress={() => setFeed(item.id)}>
                     {item.label}
-                  </button>
+                  </Option>
                 ))}
               </div>
             </fieldset>
@@ -339,26 +348,31 @@ export function MarketPlayground() {
               </span>
             )}
             {stream.status === "off" && <span className="playground-network">Mainnet</span>}
-            {stream.status === "error" && (
-              <button type="button" className="playground-retry" onClick={() => setRetry((value) => value + 1)}>
-                <RotateCcw size={12} aria-hidden /> Retry
-              </button>
-            )}
           </div>
           {stream.payload ? (
             /* biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll the live JSON. */
             <pre className="playground-json" tabIndex={0}>
               <code>{stream.payload}</code>
             </pre>
+          ) : stream.status === "error" ? (
+            <div className="playground-empty playground-error">
+              <Alert
+                severity="error"
+                title="Couldn't connect"
+                action={
+                  <Button intent="secondary" onClick={() => setRetry((value) => value + 1)}>
+                    <RotateCcw size={14} aria-hidden /> Retry
+                  </Button>
+                }
+              >
+                <p>Retry or choose another feed. {coin} · Hyperliquid mainnet</p>
+              </Alert>
+            </div>
           ) : (
             <div className="playground-empty">
               <Radio size={20} aria-hidden />
               <p>
-                {stream.status === "off"
-                  ? "Pick a feed. Watch the market move."
-                  : stream.status === "error"
-                    ? "Couldn't connect. Retry or choose another feed."
-                    : "Listening for the first update…"}
+                {stream.status === "off" ? "Pick a feed. Watch the market move." : "Listening for the first update…"}
               </p>
               <span>
                 {stream.status === "off" ? "Real data. Your code. No API key needed." : `${coin} · Hyperliquid mainnet`}

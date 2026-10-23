@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert, EmptyState, Skeleton } from "@bloxwap/hig-react/status";
 import { useDocsSearch } from "fumadocs-core/search/client";
 import { staticClient } from "fumadocs-core/search/client/orama-static";
 import {
@@ -26,12 +27,13 @@ const SUGGESTIONS = [
   { title: "Guides", href: "/docs/guides/" },
 ];
 
+/** HIG skeleton rows; only the first is announced, the others are decorative. */
 function SearchSkeleton() {
   return (
-    <div className="search-skeleton" role="status" aria-label="Searching">
-      <span />
-      <span />
-      <span />
+    <div className="search-skeleton" aria-busy="true">
+      <Skeleton label="Searching" />
+      <div className="hig-skeleton" aria-hidden="true" />
+      <div className="hig-skeleton" aria-hidden="true" />
     </div>
   );
 }
@@ -39,16 +41,21 @@ function SearchSkeleton() {
 function SearchEmpty({ onNavigate }: { onNavigate: () => void }) {
   return (
     <div className="search-empty" role="status">
-      <p>No matches. Try a method name, or start from a section:</p>
-      <ul>
-        {SUGGESTIONS.map((suggestion) => (
-          <li key={suggestion.href}>
-            <Link href={suggestion.href} onClick={onNavigate}>
-              {suggestion.title}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <EmptyState
+        title="No matches"
+        description="Try a method name, or start from a section:"
+        action={
+          <ul>
+            {SUGGESTIONS.map((suggestion) => (
+              <li key={suggestion.href}>
+                <Link href={suggestion.href} onClick={onNavigate}>
+                  {suggestion.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        }
+      />
     </div>
   );
 }
@@ -76,10 +83,18 @@ export default function DocsSearchDialog(props: SharedProps) {
           <SearchDialogInput />
           <SearchDialogClose />
         </SearchDialogHeader>
-        <SearchDialogList
-          items={items}
-          Empty={() => (pending ? <SearchSkeleton /> : <SearchEmpty onNavigate={() => props.onOpenChange(false)} />)}
-        />
+        {query.error ? (
+          <div className="search-error">
+            <Alert severity="error" title="Search unavailable">
+              <p>Reload to retry, or use the navigation.</p>
+            </Alert>
+          </div>
+        ) : (
+          <SearchDialogList
+            items={items}
+            Empty={() => (pending ? <SearchSkeleton /> : <SearchEmpty onNavigate={() => props.onOpenChange(false)} />)}
+          />
+        )}
       </SearchDialogContent>
     </SearchDialog>
   );

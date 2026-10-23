@@ -79,8 +79,24 @@ interface BaseConfig<T extends IRequestTransport = IRequestTransport> {
 
 /** Configuration for single-wallet Exchange API requests. */
 export interface ExchangeSingleWalletConfig<T extends IRequestTransport = IRequestTransport> extends BaseConfig<T> {
-  /** The wallet used to sign requests. */
-  wallet: AbstractWallet;
+  /**
+   * The wallet used to sign requests.
+   *
+   * Either a wallet object (viem, ethers-shaped adapter, or custom signer) or a raw 32-byte hex
+   * private key string. A key string is signed for in-process with the WASM secp256k1
+   * implementation of the optional `tiny-secp256k1` dependency when it loads and passes its
+   * self-check (the default in Node, Bun, and Deno), and with the pure-JS `@noble/curves`
+   * implementation otherwise (the usual outcome in browsers and bundled apps, where the opaque
+   * import cannot resolve) — silently, since the fallback is not something the user opted into.
+   * Both backends produce byte-identical signatures, so the choice is never observable beyond
+   * latency.
+   *
+   * A malformed key string throws `AbstractWalletError` synchronously from the `ExchangeClient`
+   * constructor; a well-formed key outside the secp256k1 scalar range rejects on the first
+   * signing call. To opt out of the WASM path entirely, pass a viem account
+   * (`privateKeyToAccount(key)`) or `createFastLocalWallet(key, { wasm: false })` as before.
+   */
+  wallet: AbstractWallet | `0x${string}`;
 }
 
 /** Configuration for multi-signature Exchange API requests. */

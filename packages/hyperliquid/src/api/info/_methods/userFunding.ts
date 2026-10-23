@@ -66,8 +66,7 @@ export type UserFundingResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode userFunding} function. */
 export type UserFundingParameters = Omit<v.InferInput<typeof UserFundingRequest>, "type">;
@@ -77,7 +76,8 @@ export type UserFundingParameters = Omit<v.InferInput<typeof UserFundingRequest>
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of user funding ledger updates.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -100,11 +100,16 @@ export type UserFundingParameters = Omit<v.InferInput<typeof UserFundingRequest>
 export function userFunding(
   config: InfoConfig,
   params: UserFundingParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserFundingResponse> {
-  const request = parse(UserFundingRequest, {
-    type: "userFunding",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UserFundingRequest,
+    {
+      type: "userFunding",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

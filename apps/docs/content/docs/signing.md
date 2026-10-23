@@ -593,6 +593,60 @@ Ethers-style wallets with positional `signTypedData(domain, types, value)` are *
 an explicit error — wrap them in an adapter whose `signTypedData` takes a single viem-style params object
 (`{ domain, types, primaryType, message }`).
 
+## Private keys (WASM by default)
+
+The simplest wallet is no wallet object at all: `ExchangeClient` accepts a raw 32-byte hex private key string as
+`wallet`, and signs with it in-process:
+
+```ts
+import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
+
+const transport = new HttpTransport();
+const client = new ExchangeClient({ transport, wallet: "0x..." }); // 0x + 64 hex chars
+
+await client.order({ orders: [/* ... */], grouping: "na" });
+```
+
+A key string signs with WASM secp256k1 ([`tiny-secp256k1`](https://github.com/bitcoinjs/tiny-secp256k1)) by default,
+the same accelerator [`createFastLocalWallet`](#fast-local-wallet-wasm-secp256k1) uses, without the extra async call.
+The client starts initializing the backend in the background when it is constructed: the module is loaded through a
+dynamic import, its shape is validated, and a known-answer signature self-check must pass before it is trusted with
+real keys. If the module is missing, broken, or fails the self-check, signing falls back to the pure-JS secp256k1 in
+`@noble/curves`, silently, because you never opted into WASM in the first place. Both backends are RFC 6979
+deterministic with low-S normalization, so the signature is byte-identical either way (and to viem's); the SDK's
+differential tests pin that identity across keys, networks, L1 actions and user-signed actions.
+
+Measured on a Linux x64 box with an Intel Xeon CPU (`ExchangeClient.order()`, one order per call, zero-latency mock
+transport, WASM keccak loaded; results vary by machine):
+
+| Runtime      | viem `privateKeyToAccount` | raw key string (WASM) |
+| ------------ | -------------------------- | --------------------- |
+| Node 24.22   | ~274 µs per order          | ~104 to ~109 µs       |
+| Bun 1.4.2    | ~149 to ~159 µs            | ~101 to ~103 µs       |
+
+The one-time backend initialization (loading and compiling the WASM module plus the self-check) measured ~16 to
+~18 ms in a fresh process, about 20 to 37 ms on the pure-JS fallback. It runs in the background from construction, so
+call `await exchange.warmup()` at start-up if the very first order is latency-sensitive.
+
+- **Where WASM loads.** In Node, Bun, and Deno the import resolves natively and WASM is used. In browsers, bundled
+  apps, and Workers the import is deliberately opaque (bundlers cannot follow it: the browser build of
+  `tiny-secp256k1` imports a `.wasm` file, which breaks Vite/webpack builds without a WASM plugin), so those
+  environments land on the pure-JS path. For WASM in a browser bundle, use
+  [`createFastLocalWallet`](#fast-local-wallet-wasm-secp256k1) with a bundler WASM plugin instead.
+- **Opting out.** Pass a wallet object instead of the string: a viem account (`privateKeyToAccount(key)`) signs with
+  viem's pure-JS noble as before, and `createFastLocalWallet(key, { wasm: false })` does the same through the SDK.
+  Wallet objects are never upgraded: a viem account does not expose its key, so it keeps viem's signer.
+- **Identity helpers.** `getWalletAddress`, `getWalletChainId` and `warmupSigning` also accept the key string, so
+  `getWalletAddress(exchange.config.wallet)` keeps working whichever form you passed.
+- **Typed-data fallback.** The SDK computes every built-in user-signed digest itself. Only an action its encoder cannot
+  reproduce (for example a mixed-case checksummed address) is handed to `signTypedData`, which for a key string
+  delegates to viem, imported lazily; that path needs `viem` installed.
+- **Error surface.** A malformed key string throws `AbstractWalletError` synchronously from the `ExchangeClient`
+  constructor (the key is never echoed into the message). A well-formed key outside the secp256k1 scalar range rejects
+  on the first signing call.
+- **Security note.** The key is held in-process for the life of the client, as with any local wallet; it is kept out
+  of the carrier object's enumerable properties, so `JSON.stringify` and object spreads do not leak it.
+
 ## Fast local wallet (WASM secp256k1)
 
 `createFastLocalWallet` builds a local account whose raw-digest signing runs on
@@ -651,41 +705,61 @@ already create today.
 
 ## Low-latency recipe (bots / HFT)
 
-Stack the accelerators when signature latency is on the critical path:
+Stack the accelerators when signature and request latency are on the critical path:
 
-1. **`createFastLocalWallet`** — halves ECDSA (~55 µs vs ~85 µs). ECDSA is ~90% of a single-order `signL1Action`.
-2. **`hash-wasm`** — ambient keccak speedup on every L1 hash and Agent digest (install the optional dep; no code change).
-3. **`skipValidation: true`** — skip the valibot parse + key canonicalization on trusted, already-canonical wire input
-   (~3× less non-ECDSA CPU). See [ExchangeClient](clients.md#skipping-validation-unsafe) for the contract.
-4. **`await exchange.warmup()`** at start-up — the first order a cold process signs is several times slower than the
-   steady state (measured ~5.5 ms vs ~0.1 ms with a viem local account): the WASM keccak is still loading, the curve's
-   precomputed tables are not built, and nothing is compiled yet. `warmup()` settles all three (first order ~1.3 ms)
-   without sending anything or consuming a nonce. It signs throwaway data only with keys held in the process (viem
-   `privateKeyToAccount` / `mnemonicToAccount` / `hdKeyToAccount`, `createFastLocalWallet`, or a `WalletClient`
-   wrapping one) — never with a JSON-RPC wallet or a custom HSM / MPC / remote signer. `warmupSigning(wallet)` from
-   `@bloxwap/hyperliquid/signing` does the signing part without a client.
+1. **Batch orders.** Put many orders into one `exchange.order({ orders: [...] })` call: the whole batch is a single
+   action with a single signature, which amortizes both the ECDSA cost and the request round trip. When orders arrive
+   from independent call sites, [`createOrderBatcher`](clients.md#optional-order-batching) (from
+   `@bloxwap/hyperliquid/actions/orderBatcher`) collects them into shared actions automatically.
+2. **Pass the key directly.** `new ExchangeClient({ transport, wallet: "0x..." })` signs with WASM secp256k1 by
+   default for every signature that remains (see [Private keys](#private-keys-wasm-by-default)).
+   [`createFastLocalWallet`](#fast-local-wallet-wasm-secp256k1) is the equivalent wallet object, for the low-level
+   signing functions. A viem `privateKeyToAccount` stays on pure-JS noble.
+3. **`hash-wasm`.** Ambient keccak speedup on every L1 hash and Agent digest. Install the optional dep; no code change.
+4. **`skipValidation: true`.** Skip the valibot parse and key canonicalization on trusted, already-canonical wire
+   input (about 3× less non-ECDSA CPU). See [ExchangeClient](clients.md#skipping-validation-unsafe) for the contract.
+5. **`await exchange.warmup()`.** Run it at start-up: the first order a cold process signs is several times slower than
+   the steady state (measured ~5.5 ms vs ~0.1 ms with a viem local account). The WASM keccak is still loading, the
+   curve's precomputed tables are not built, and nothing is compiled yet. `warmup()` settles all three (first order
+   ~1.3 ms) without sending anything or consuming a nonce. It signs throwaway data only with keys held in the process
+   (a raw private key string passed as `wallet`, viem `privateKeyToAccount` / `mnemonicToAccount` / `hdKeyToAccount`,
+   `createFastLocalWallet`, or a `WalletClient` wrapping one), never with a JSON-RPC wallet or a custom HSM / MPC /
+   remote signer. `warmupSigning(wallet)` from `@bloxwap/hyperliquid/signing` does the signing part without a client.
+
+Measured (median of `bun run tests/perf/run.ts`, Bun 1.4.2 on a Linux x64 box with an Intel Xeon CPU; results vary by
+machine):
+
+- **Signing.** `signing/sign_l1_action_order_1`: ~159 µs per signed order with a viem local account, ~118 µs with
+  `createFastLocalWallet`, about 26% less.
+- **End to end.** `transaction/order_sequential` (one order per `order()` call, viem wallet, zero-latency mock
+  transport): ~161 µs per order. `transaction/order_batch_100` (100 orders in one `order()` call): ~3.2 µs per order,
+  about 50x less, because one action carries one signature for the whole batch.
 
 ```ts
 import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
-import { createFastLocalWallet } from "@bloxwap/hyperliquid/signing";
 
-// npm i tiny-secp256k1 hash-wasm   # optional deps; install explicitly if your package manager skips them
-const wallet = await createFastLocalWallet("0x...");
-const exchange = new ExchangeClient({ transport: new HttpTransport(), wallet });
-await exchange.warmup(); // before the first latency-sensitive order
+// Install the optional deps explicitly if your package manager skips them: npm i tiny-secp256k1 hash-wasm
+// A raw key string signs with WASM secp256k1 by default; no wallet object needed.
+const exchange = new ExchangeClient({ transport: new HttpTransport(), wallet: "0x..." });
+await exchange.warmup(); // settle the WASM modules and the JIT before the first latency-sensitive order
 
-// Action must already be in canonical wire form (schema key order, normalized decimals, lowercase hex, defaults filled).
+// One call carries one signature for the whole batch.
+// The action must already be in canonical wire form when skipValidation is set.
 await exchange.order(
   {
-    orders: [{ a: 0, b: true, p: "95000", s: "0.01", r: false, t: { limit: { tif: "Gtc" } } }],
+    orders: [
+      { a: 0, b: true, p: "95000", s: "0.01", r: false, t: { limit: { tif: "Gtc" } } },
+      { a: 0, b: true, p: "94900", s: "0.02", r: false, t: { limit: { tif: "Gtc" } } },
+      { a: 0, b: false, p: "95100", s: "0.01", r: false, t: { limit: { tif: "Gtc" } } },
+    ],
     grouping: "na",
   },
   { skipValidation: true },
 );
 ```
 
-Without step 3 the other steps still apply and are safe for any input. Step 3 is an escape hatch: invalid input is no
-longer a client-side `ValidationError` — the server rejects it instead.
+Without `skipValidation: true` the other steps still apply and are safe for any input. Skipping validation is an
+escape hatch: invalid input is no longer a client-side `ValidationError`; the server rejects it instead.
 
 ## Helpers
 

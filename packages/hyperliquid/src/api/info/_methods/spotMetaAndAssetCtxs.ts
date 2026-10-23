@@ -34,14 +34,14 @@ export type SpotMetaAndAssetCtxsResponse = [
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request spot metadata and asset contexts.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Metadata and context for spot assets.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -59,9 +59,17 @@ import type { InfoConfig } from "./_base/mod.ts";
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/spot#retrieve-spot-asset-contexts
  */
-export function spotMetaAndAssetCtxs(config: InfoConfig, signal?: AbortSignal): Promise<SpotMetaAndAssetCtxsResponse> {
-  const request = parse(SpotMetaAndAssetCtxsRequest, {
-    type: "spotMetaAndAssetCtxs",
-  });
+export function spotMetaAndAssetCtxs(
+  config: InfoConfig,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<SpotMetaAndAssetCtxsResponse> {
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    SpotMetaAndAssetCtxsRequest,
+    {
+      type: "spotMetaAndAssetCtxs",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

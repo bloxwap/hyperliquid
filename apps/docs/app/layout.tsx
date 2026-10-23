@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Provider } from "@/components/provider";
-import { display, mono, sans } from "@/lib/fonts";
+import { mono, sans } from "@/lib/fonts";
 import { homeDescription, siteUrl, socialMetadata } from "@/lib/social";
 import "./global.css";
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable} ${display.variable} dark`} suppressHydrationWarning>
+    <html lang="en" className={`${sans.variable} ${mono.variable} dark`} suppressHydrationWarning>
       <body>
         <Provider>{children}</Provider>
       </body>

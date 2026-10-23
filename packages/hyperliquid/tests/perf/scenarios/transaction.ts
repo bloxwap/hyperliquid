@@ -46,6 +46,31 @@ scenario({
   },
 });
 
+// The raw-private-key counterpart of `order_sequential`: the key string signs with the WASM
+// secp256k1 backend by default (see `_privateKeyWallet.ts`). warmup() in setup awaits the
+// one-time backend init, so the measured window holds steady-state signing only.
+scenario({
+  name: "transaction/order_sequential_private_key",
+  group: "transaction",
+  description:
+    "ExchangeClient.order() with wallet: TEST_PRIVATE_KEY (raw key, WASM secp256k1 by default), one order at a time, 0 ms transport latency",
+  unit: "order",
+  iterations: 50,
+  samples: 10,
+  setup: async () => {
+    const transport = new MockExchangeTransport(0);
+    const client = new ExchangeClient({ transport, wallet: TEST_PRIVATE_KEY });
+    await client.warmup();
+    return { client };
+  },
+  run: async ({ client }: { client: ExchangeClient }) => {
+    await client.order({
+      orders: [order(0)],
+      grouping: "na",
+    });
+  },
+});
+
 scenario({
   name: "transaction/order_batch_100",
   group: "transaction",

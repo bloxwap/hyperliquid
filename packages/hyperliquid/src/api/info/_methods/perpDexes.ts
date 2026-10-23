@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import type { InfoConfig } from "./_base/mod.ts";
+import type { InfoConfig, InfoRequestOptions } from "./_base/mod.ts";
 import { perpDexs, type PerpDexsResponse } from "./perpDexs.ts";
 
 /** Response of the {@linkcode perpDexes} function. */
@@ -15,7 +15,8 @@ export type PerpDexesResponse = PerpDexsResponse;
  * returns its response unchanged.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of perpetual dexes (null is main dex).
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -33,6 +34,9 @@ export type PerpDexesResponse = PerpDexsResponse;
  *
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals#retrieve-all-perpetual-dexs
  */
-export function perpDexes(config: InfoConfig, signal?: AbortSignal): Promise<PerpDexesResponse> {
-  return perpDexs(config, signal);
+export function perpDexes(
+  config: InfoConfig,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<PerpDexesResponse> {
+  return perpDexs(config, signalOrOptions);
 }

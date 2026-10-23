@@ -50,14 +50,14 @@ export type VaultSummariesResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request a list of vaults less than 2 hours old.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of vaults less than 2 hours old.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -73,9 +73,17 @@ import type { InfoConfig } from "./_base/mod.ts";
  * const data = await vaultSummaries({ transport });
  * ```
  */
-export function vaultSummaries(config: InfoConfig, signal?: AbortSignal): Promise<VaultSummariesResponse> {
-  const request = parse(VaultSummariesRequest, {
-    type: "vaultSummaries",
-  });
+export function vaultSummaries(
+  config: InfoConfig,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<VaultSummariesResponse> {
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    VaultSummariesRequest,
+    {
+      type: "vaultSummaries",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

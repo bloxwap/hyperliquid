@@ -17,8 +17,9 @@
  * @module
  */
 
-import { type AbstractWallet, SIGN_DIGEST_BYTES } from "./_abstractWallet.ts";
+import { type AbstractWallet, PRIVATE_KEY_SIGNER, SIGN_DIGEST_BYTES } from "./_abstractWallet.ts";
 import { createL1AgentDigestBytes } from "./_fastDigest.ts";
+import { createPrivateKeyWallet } from "./_privateKeyWallet.ts";
 import { preloadWasmKeccak } from "./_keccak.ts";
 import { createL1ActionHashBytes, signL1Action } from "./_l1.ts";
 
@@ -45,6 +46,9 @@ const IN_PROCESS_SOURCES: ReadonlySet<unknown> = new Set(["privateKey", "hd"]);
  * Whether signing with `wallet` is a pure in-process computation with no outside side effect.
  *
  * - `createFastLocalWallet` accounts carry the internal bytes-level digest capability.
+ * - A raw private key string passed as `wallet` arrives here as its carrier object
+ *   (`_privateKeyWallet.ts`), recognizable by the internal ready-made-signer capability. Signing
+ *   its throwaway actions also awaits the carrier's one-time backend initialization.
  * - viem accounts from `privateKeyToAccount` / `mnemonicToAccount` / `hdKeyToAccount` are tagged
  *   `type: "local"` with `source` `"privateKey"` or `"hd"`. `toAccount` custom signers are tagged
  *   `source: "custom"` and are excluded, since they may front an HSM or remote service.
@@ -54,8 +58,14 @@ const IN_PROCESS_SOURCES: ReadonlySet<unknown> = new Set(["privateKey", "hd"]);
  * sending one to a remote signer costs the user something they did not ask for.
  */
 function isInProcessKey(wallet: AbstractWallet): boolean {
-  const account = wallet as { type?: unknown; source?: unknown; [SIGN_DIGEST_BYTES]?: unknown };
+  const account = wallet as {
+    type?: unknown;
+    source?: unknown;
+    [SIGN_DIGEST_BYTES]?: unknown;
+    [PRIVATE_KEY_SIGNER]?: unknown;
+  };
   if (typeof account[SIGN_DIGEST_BYTES] === "function") return true;
+  if (account[PRIVATE_KEY_SIGNER] !== undefined) return true;
   if (account.type === "local" && IN_PROCESS_SOURCES.has(account.source)) return true;
   const embedded = (wallet as { account?: unknown }).account;
   return typeof embedded === "object" && embedded !== null && isInProcessKey(embedded as AbstractWallet);
@@ -72,7 +82,7 @@ function isInProcessKey(wallet: AbstractWallet): boolean {
  *
  * Nothing is sent and no nonce is consumed. Safe to call more than once; later calls are cheap.
  *
- * @param wallets The wallet(s) that will sign, or none for the hash-path warm-up only.
+ * @param wallets The wallet(s) or raw private key string(s) that will sign, or none for the hash-path warm-up only.
  * @throws {AbstractWalletError} If an in-process wallet fails to sign — the same failure the first
  *   real action would hit, surfaced before trading starts rather than on it.
  *
@@ -85,15 +95,22 @@ function isInProcessKey(wallet: AbstractWallet): boolean {
  * await warmupSigning(wallet); // before the first order, e.g. during start-up
  * ```
  */
-export async function warmupSigning(wallets?: AbstractWallet | readonly AbstractWallet[]): Promise<void> {
+export async function warmupSigning(
+  wallets?: AbstractWallet | `0x${string}` | readonly (AbstractWallet | `0x${string}`)[],
+): Promise<void> {
   await preloadWasmKeccak();
 
   // The hash path runs for every wallet kind, including the ones never asked to sign below.
   const actionHash = createL1ActionHashBytes({ action: WARMUP_ACTION, nonce: 0 });
   createL1AgentDigestBytes(actionHash, true);
 
-  const list: readonly AbstractWallet[] = wallets === undefined ? [] : Array.isArray(wallets) ? wallets : [wallets];
-  for (const wallet of list) {
+  const given: readonly (AbstractWallet | `0x${string}`)[] =
+    wallets === undefined ? [] : Array.isArray(wallets) ? wallets : [wallets as AbstractWallet | `0x${string}`];
+  for (const entry of given) {
+    // A raw private key string warms a throwaway carrier. That still loads and compiles the
+    // backend module (cached by the runtime for every later carrier) and JIT-compiles the
+    // signing path; `ExchangeClient.warmup()` passes its own carrier, so nothing is left cold.
+    const wallet = typeof entry === "string" ? createPrivateKeyWallet(entry) : entry;
     if (!isInProcessKey(wallet)) continue;
     for (let i = 0; i < WARMUP_SIGNATURES; i++) {
       await signL1Action({ wallet, action: WARMUP_ACTION, nonce: i, isTestnet: true });

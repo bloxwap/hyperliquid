@@ -15,6 +15,8 @@
     "check:sdk": "cd packages/hyperliquid && bun run check",
     "check:types": "cd packages/hyperliquid && bun run check:types",
     "check:ts7": "cd packages/hyperliquid && bun run check:ts7",
+    "//typecheck:tsc": "TypeScript 5 fallback for check:types and the docs type-check, for platforms tsrs ships no binary for (Windows, Intel macOS).",
+    "typecheck:tsc": "cd packages/hyperliquid && bun run typecheck:tsc && cd ../../apps/docs && bun run typecheck:tsc",
     "check:jsdoc": "cd packages/hyperliquid && bun run check:jsdoc",
     "check:export": "cd packages/hyperliquid && bun run check:export",
     "check:imports": "cd packages/hyperliquid && bun run check:imports",
@@ -34,6 +36,8 @@
     "@biomejs/biome": "2.5.5"
   },
   "overrides": {
+    "@bloxwap/hig-contracts": "file:./vendor/bloxwap-hig/bloxwap-hig-contracts-0.1.0-candidate.sha0e239442.tgz",
+    "@bloxwap/hig-tokens": "file:./vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha0e239442.tgz",
     "katex": "0.18.11",
     "sharp": "0.35.5",
     "source-map-js": "1.2.2"

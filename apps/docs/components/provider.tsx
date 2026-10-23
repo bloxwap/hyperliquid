@@ -1,20 +1,20 @@
 "use client";
 
+import { HIGProvider } from "@bloxwap/hig-react/provider";
 import { RootProvider } from "fumadocs-ui/provider/next";
-import { lazy, type ReactNode } from "react";
-
-const SearchDialog = lazy(() => import("./search"));
+import type { ReactNode } from "react";
+import SearchDialog from "./search";
 
 /**
- * The docs are dark-only by brand decision, not by omission: Bloxwap's identity is built on neon
- * accents over near-black, and the generated brand tokens in app/brand-tokens.css exist in that
- * mode only. Offering light mode would first need light values from the brand source; the semantic
- * color layer in app/global.css is where they would go, with no component changes.
+ * Fumadocs keeps routing, search and theme; HIGProvider supplies comfortable density and follows the OS
+ * reduced-motion setting. No feedback sink is passed, so HIG controls stay silent on this documentation site.
  */
 export function Provider({ children }: { children: ReactNode }) {
   return (
-    <RootProvider theme={{ forcedTheme: "dark" }} search={{ SearchDialog, preload: false }}>
-      {children}
+    <RootProvider theme={{ forcedTheme: "dark" }} search={{ SearchDialog }}>
+      <HIGProvider density="comfortable" locale="en">
+        {children}
+      </HIGProvider>
     </RootProvider>
   );
 }

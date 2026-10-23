@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { collectPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import type { UserFillsByTimeParameters, UserFillsByTimeResponse } from "./userFillsByTime.ts";
 import { userFillsByTimePages } from "./userFillsByTimePages.ts";
 
@@ -31,7 +31,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of user trade fills by time.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -56,7 +57,7 @@ export function userFillsByTimeAll(
   config: InfoConfig,
   params: UserFillsByTimeAllParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserFillsByTimeResponse> {
-  return collectPages(userFillsByTimePages(config, params, options, signal));
+  return collectPages(userFillsByTimePages(config, params, options, signalOrOptions));
 }

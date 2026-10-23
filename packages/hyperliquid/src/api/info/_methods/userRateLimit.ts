@@ -42,8 +42,7 @@ export type UserRateLimitResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode userRateLimit} function. */
 export type UserRateLimitParameters = Omit<v.InferInput<typeof UserRateLimitRequest>, "type">;
@@ -53,7 +52,8 @@ export type UserRateLimitParameters = Omit<v.InferInput<typeof UserRateLimitRequ
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return User rate limits.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -76,11 +76,16 @@ export type UserRateLimitParameters = Omit<v.InferInput<typeof UserRateLimitRequ
 export function userRateLimit(
   config: InfoConfig,
   params: UserRateLimitParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserRateLimitResponse> {
-  const request = parse(UserRateLimitRequest, {
-    type: "userRateLimit",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UserRateLimitRequest,
+    {
+      type: "userRateLimit",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

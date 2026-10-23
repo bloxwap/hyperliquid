@@ -54,8 +54,7 @@ export type UserFillsResponse = (UserFill & {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode userFills} function. */
 export type UserFillsParameters = Omit<v.InferInput<typeof UserFillsRequest>, "type">;
@@ -67,7 +66,8 @@ export type UserFillsParameters = Omit<v.InferInput<typeof UserFillsRequest>, "t
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of user trade fills.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -90,11 +90,16 @@ export type UserFillsParameters = Omit<v.InferInput<typeof UserFillsRequest>, "t
 export function userFills(
   config: InfoConfig,
   params: UserFillsParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserFillsResponse> {
-  const request = parse(UserFillsRequest, {
-    type: "userFills",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UserFillsRequest,
+    {
+      type: "userFills",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

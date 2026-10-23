@@ -4,17 +4,50 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: perf-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
+  changes:
+    # Security: never run fork PR code on the self-hosted runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.code }}
+    steps:
+      # Skip doc-only PRs; SDK tests and performance scenarios do not read Markdown.
+      # Non-PR events always run every heavy job, including reusable-workflow calls.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!**/*.mdx'
+              - '!LICENSE'
+              - '!.github/ISSUE_TEMPLATE/**'
+              - '!.github/pull_request_template.md'
+              - '!CODEOWNERS'
+              - '!.github/CODEOWNERS'
+
   # Enforces the zero-performance-regression policy: a change may keep performance the same or
   # improve it, never regress it.
   #
   # WHY THIS MEASURES TWICE INSTEAD OF USING THE SDK'S tests/perf/results/baseline.json:
-  # the scenarios measure between 9 ns and 600 µs per unit. A GitHub-hosted runner is several times
-  # slower than a developer machine, so comparing a committed baseline (recorded on whatever machine
-  # last touched it) against a runner would flag nearly every scenario as a regression on every PR.
+  # the scenarios measure between 9 ns and 600 µs per unit. A CI runner (even this Mac mini) is
+  # not the machine that last recorded the committed baseline, so comparing that file against a
+  # runner would flag nearly every scenario as a regression on every PR.
   # The SDK's `.dev/perf/compare.ts` refuses such a comparison outright. So this job measures the base
   # commit and the head commit back to back on the SAME runner and compares those two reports.
   # The committed baseline stays useful for local runs (`bun run perf:gate`) on one machine.
@@ -35,18 +68,25 @@ jobs:
   # changes the workload being compared and is flagged for explicit review, not waved through.
   # If this job flaps, widen the threshold — do not add retries and do not drop the job.
   perf:
-    runs-on: ubuntu-latest
+    needs: changes
+    # Security: never run fork PR code on the self-hosted runner.
+    if: needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
+      # Job-level env cannot use the runner context on these Mac minis.
+      - name: Point TMPDIR at runner temp
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # The base commit must be reachable so it can be checked out into a second worktree.
           fetch-depth: 0
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          # Bun 1.4 (the Rust rewrite) ships only as canary; the `canary` tag moves with each build.
-          bun-version: canary
+      # setup-bun writes ~/.bun, shared across runner instances on one Mac mini.
+      # Parallel canary installs overwrite each other; the perf compare then
+      # sees two Bun versions in one job and refuses the comparison.
+      - name: Install Bun canary into runner temp
+        run: sh .github/scripts/setup-bun-isolated.sh
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -67,6 +107,11 @@ jobs:
             exit 1
           }
           echo "Base: $BASE_REF -> $BASE_SHA"
+          # Self-hosted workspaces persist. A prior job can leave $RUNNER_TEMP/base
+          # registered after the directory was wiped; `worktree add` then fails.
+          git worktree prune
+          git worktree remove --force "$RUNNER_TEMP/base" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/base"
           git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
           # Locate each revision independently: older commits keep the SDK at the repository
           # root, while workspace commits keep the same suite under packages/hyperliquid.

@@ -248,9 +248,11 @@ export class WebSocketDispatcher {
       this._echoCandidates?.clear();
       for (const entry of abandoned) {
         entry.reject(
-          new WebSocketRequestError(
+          frameError(
             entry.sent ? "WebSocket connection closed" : "WebSocket connection closed before the request was sent",
-            { request: payloadSnapshot(entry.frame, typeof entry.id === "number") },
+            entry.frame,
+            typeof entry.id === "number",
+            entry,
           ),
         );
       }
@@ -427,26 +429,18 @@ export class WebSocketDispatcher {
     } catch (error) {
       if (error instanceof TransportError) throw error;
       if (timeout !== undefined && error === timeout.reason) {
-        throw new WebSocketRequestError(`Request timed out after ${timeoutMs} ms`, {
-          cause: error,
-          request: payloadSnapshot(frame, method === "post"),
-        });
+        throw frameError(`Request timed out after ${timeoutMs} ms`, frame, method === "post", entry, { cause: error });
       }
       if (this._socket.terminationSignal.aborted && error === this._socket.terminationSignal.reason) {
-        throw new WebSocketRequestError("WebSocket connection permanently terminated", {
+        throw frameError("WebSocket connection permanently terminated", frame, method === "post", entry, {
           cause: error,
-          request: payloadSnapshot(frame, method === "post"),
         });
       }
       if (controller.signal.aborted && error === controller.signal.reason) {
-        throw new WebSocketRequestError("Request aborted", {
-          cause: error,
-          request: payloadSnapshot(frame, method === "post"),
-        });
+        throw frameError("Request aborted", frame, method === "post", entry, { cause: error });
       }
-      throw new WebSocketRequestError(`Unknown error while making a WebSocket request: ${error}`, {
+      throw frameError(`Unknown error while making a WebSocket request: ${error}`, frame, method === "post", entry, {
         cause: error,
-        request: payloadSnapshot(frame, method === "post"),
       });
     } finally {
       if (entry) this._dequeue(entry);
@@ -526,9 +520,12 @@ export class WebSocketDispatcher {
     // request would hang until the timeout).
     const response = detail.response as { type?: unknown; payload?: unknown } | null | undefined;
     const malformed = (): WebSocketRequestError =>
-      new WebSocketRequestError(`Malformed post response: ${JSON.stringify(detail)}`, {
-        request: payloadSnapshot(pending.frame, typeof pending.id === "number"),
-      });
+      frameError(
+        `Malformed post response: ${JSON.stringify(detail)}`,
+        pending.frame,
+        typeof pending.id === "number",
+        pending,
+      );
 
     if (typeof response !== "object" || response === null || typeof response.type !== "string") {
       pending.reject(malformed());
@@ -537,9 +534,7 @@ export class WebSocketDispatcher {
 
     if (response.type === "error") {
       const message = typeof response.payload === "string" ? response.payload : malformed().message;
-      pending.reject(
-        new WebSocketRequestError(message, { request: payloadSnapshot(pending.frame, typeof pending.id === "number") }),
-      );
+      pending.reject(frameError(message, pending.frame, typeof pending.id === "number", pending));
       return;
     }
     if (response.type === "info") {
@@ -573,9 +568,12 @@ export class WebSocketDispatcher {
       return;
     }
     pending.reject(
-      new WebSocketRequestError(`Unknown post response type "${response.type}"`, {
-        request: payloadSnapshot(pending.frame, typeof pending.id === "number"),
-      }),
+      frameError(
+        `Unknown post response type "${response.type}"`,
+        pending.frame,
+        typeof pending.id === "number",
+        pending,
+      ),
     );
   }
 
@@ -623,9 +621,7 @@ export class WebSocketDispatcher {
 
   /** Rejects `pending`, when found, with the server text as the message. */
   private _reject(pending: PendingRequest | undefined, detail: string): void {
-    pending?.reject(
-      new WebSocketRequestError(detail, { request: payloadSnapshot(pending.frame, typeof pending.id === "number") }),
-    );
+    pending?.reject(frameError(detail, pending.frame, typeof pending.id === "number", pending));
   }
 
   /**
@@ -706,14 +702,59 @@ function echoData(request: unknown): NonNullable<PendingRequest["echo"]> {
 }
 
 /**
- * The payload as the one wire serialization produced it, for the `request` field of dispatcher
- * errors: always a plain-data snapshot parsed from the frame, never the live object. `post`
- * envelopes carry it under `request`, subscription envelopes under `subscription`. When the
- * frame was never produced (the serialization itself failed), a safe constant remains and the
- * original is never traversed as a fallback.
+ * Builds the {@linkcode WebSocketRequestError} a settled-by-failure entry rejects with.
+ *
+ * The snapshot is plain data (`JSON.parse` output or a {@linkcode jsonClone} of it), and
+ * `redactSignature` rewrites only values under keys named exactly `signature`/`signatures` —
+ * characters `JSON.stringify` never escapes — so a frame without the substring `"signature`
+ * provably carries no such key and redaction would return the snapshot by reference untouched.
+ * In that case the error is built without `request` in options (redacting `undefined` is free)
+ * and the snapshot is assigned directly, skipping the redaction walk — its WeakMap, WeakSet,
+ * holder and stack allocations included — on exactly the frames that cannot contain a signature.
+ * The result is indistinguishable from the constructor path: same message, same own `request`
+ * data property, same `name`, and `cause` present in options exactly when the caller passes
+ * `withCause` — the same `{ cause: error }` the hand-built options carried, even when the caught
+ * value is itself `undefined`, so `"cause" in error` is unchanged on every path.
  */
-function payloadSnapshot(frame: string | undefined, post: boolean): unknown {
+function frameError(
+  message: string,
+  frame: string | undefined,
+  post: boolean,
+  entry?: PendingRequest,
+  withCause?: { cause: unknown },
+): WebSocketRequestError {
+  const snapshot = payloadSnapshot(frame, post, entry);
+  const options: ErrorOptions & { request?: unknown } = withCause === undefined ? {} : { cause: withCause.cause };
+  if (frame !== undefined && !frame.includes('"signature')) {
+    const error = new WebSocketRequestError(message, options);
+    error.request = snapshot;
+    return error;
+  }
+  options.request = snapshot;
+  return new WebSocketRequestError(message, options);
+}
+
+/**
+ * The payload as the one wire serialization produced it, for the `request` field of dispatcher
+ * errors: always a plain-data snapshot, never the live object. `post` envelopes carry it under
+ * `request`, subscription envelopes under `subscription` — and a post always parses: the frame
+ * is its only copy. When the frame was never produced (the serialization itself failed), a safe
+ * constant remains and the original is never traversed as a fallback.
+ *
+ * A subscription entry whose frame IS its string id — the subscription-manager hint path, where
+ * the frame is literally the serialization of the normalized envelope `entry.echo.request` —
+ * already holds the parsed subscription, so {@linkcode jsonClone} copies that subtree instead of
+ * re-parsing the frame. The echo object is SHARED with the subscription manager's
+ * `SubscriptionState.payload`, so the copy is mandatory (the error must never hand out the live
+ * object), and it is taken only when the clone is provably identical to what
+ * `JSON.parse(frame).subscription` would produce; anything else falls back to the parse.
+ */
+function payloadSnapshot(frame: string | undefined, post: boolean, entry?: PendingRequest): unknown {
   if (frame === undefined) return UNSERIALIZABLE_REQUEST;
+  if (!post && entry?.echo !== undefined && entry.frame === entry.id) {
+    const cloned = jsonClone((entry.echo.request as SubscribeUnsubscribeRequest).subscription);
+    if (cloned !== NOT_JSON) return cloned;
+  }
   const parsed = JSON.parse(frame) as Record<string, unknown>;
   return post ? parsed.request : parsed.subscription;
 }
@@ -732,4 +773,70 @@ function echoDiscriminators(
 /** The single secondary bucket occupied by a normalized pending request. */
 function echoIndexKey(request: unknown): string {
   return JSON.stringify(echoDiscriminators(request));
+}
+
+/**
+ * Sentinel {@linkcode jsonClone} returns for a value it cannot prove identical to its
+ * `JSON.parse(JSON.stringify(...))` round-trip: the caller falls back to parsing the frame.
+ */
+const NOT_JSON: unique symbol = Symbol();
+
+/**
+ * Deep-copies plain JSON data into a fresh object, enumerating keys in `Object.keys` order —
+ * exactly the order `JSON.parse(JSON.stringify(value))` produces for round-trippable data, so a
+ * successful clone is byte-for-byte the parse of the serialization. Returns {@linkcode NOT_JSON}
+ * the moment it meets anything that would not round-trip identically: non-finite numbers, `-0`,
+ * `undefined` anywhere (array elements included), functions, symbols, bigints, sparse-array
+ * holes, objects whose prototype is not `Object.prototype` or `null`, arrays whose prototype is
+ * not `Array.prototype`, any `toJSON` key, or any own `__proto__` key.
+ *
+ * Measured in Bun on the typical tiny subscription payload
+ * (`{"method":"subscribe","subscription":{"coin":"BTC","type":"l2Book"}}`): ~24-32 ns vs
+ * ~140-152 ns for `JSON.parse(frame).subscription` — the clone walks four small nodes instead of
+ * re-scanning the frame string. Cycles cannot occur: the input is `normalize()` output or
+ * `JSON.parse` output, both acyclic by construction (and `normalize` itself recurses, so any
+ * depth the clone meets is a depth the pipeline already survived).
+ */
+function jsonClone(value: unknown): unknown {
+  switch (typeof value) {
+    case "string":
+    case "boolean":
+      return value;
+    case "number":
+      // JSON.stringify emits non-finite numbers and -0 as `null`/`0`: not identity-preserving.
+      return Number.isFinite(value) && !Object.is(value, -0) ? value : NOT_JSON;
+    case "object": {
+      if (value === null) return null;
+      if (Array.isArray(value)) {
+        if (Object.getPrototypeOf(value) !== Array.prototype) return NOT_JSON;
+        const copy: unknown[] = new Array(value.length);
+        for (let i = 0; i < value.length; i++) {
+          // A hole serializes as `null`; an undefined element does too. Neither round-trips.
+          if (!(i in value)) return NOT_JSON;
+          const item = jsonClone(value[i]);
+          if (item === NOT_JSON) return NOT_JSON;
+          copy[i] = item;
+        }
+        return copy;
+      }
+      const proto = Object.getPrototypeOf(value);
+      // A `toJSON` (own or inherited) would rewrite the serialization; with the prototype
+      // restricted to Object.prototype/null, only an own one can exist.
+      if ((proto !== Object.prototype && proto !== null) || "toJSON" in value) return NOT_JSON;
+      const source = value as Record<string, unknown>;
+      const copy: Record<string, unknown> = {};
+      for (const key of Object.keys(source)) {
+        // Falling back beats replaying normalize()'s defineProperty dance for the one key with
+        // a setter on Object.prototype; JSON.parse handles it correctly.
+        if (key === "__proto__") return NOT_JSON;
+        const item = jsonClone(source[key]);
+        if (item === NOT_JSON) return NOT_JSON;
+        copy[key] = item;
+      }
+      return copy;
+    }
+    default:
+      // undefined, function, symbol, bigint: none survive a JSON round-trip as themselves.
+      return NOT_JSON;
+  }
 }

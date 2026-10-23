@@ -4,7 +4,7 @@ const outDir = resolve(import.meta.dir, "../out");
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/+$/, "");
 const server = Bun.serve({
   hostname: "127.0.0.1",
-  port: 4173,
+  port: Number(process.env.PORT ?? 4173),
   async fetch(request) {
     const url = new URL(request.url);
     if (basePath && url.pathname === basePath) return Response.redirect(`${url.origin}${basePath}/`, 301);

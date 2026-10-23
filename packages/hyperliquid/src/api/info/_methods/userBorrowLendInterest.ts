@@ -47,8 +47,7 @@ export type UserBorrowLendInterestResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode userBorrowLendInterest} function. */
 export type UserBorrowLendInterestParameters = Omit<v.InferInput<typeof UserBorrowLendInterestRequest>, "type">;
@@ -58,7 +57,8 @@ export type UserBorrowLendInterestParameters = Omit<v.InferInput<typeof UserBorr
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return User's borrow/lend interest.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -80,11 +80,16 @@ export type UserBorrowLendInterestParameters = Omit<v.InferInput<typeof UserBorr
 export function userBorrowLendInterest(
   config: InfoConfig,
   params: UserBorrowLendInterestParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserBorrowLendInterestResponse> {
-  const request = parse(UserBorrowLendInterestRequest, {
-    type: "userBorrowLendInterest",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    UserBorrowLendInterestRequest,
+    {
+      type: "userBorrowLendInterest",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

@@ -28,8 +28,7 @@ export type PerpsAtOpenInterestCapResponse = string[];
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import { type InfoConfig, isAbortSignal } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, isAbortSignal, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode perpsAtOpenInterestCap} function. */
 export type PerpsAtOpenInterestCapParameters = Omit<v.InferInput<typeof PerpsAtOpenInterestCapRequest>, "type">;
@@ -39,7 +38,8 @@ export type PerpsAtOpenInterestCapParameters = Omit<v.InferInput<typeof PerpsAtO
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of perpetuals at open interest caps.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -60,7 +60,7 @@ export type PerpsAtOpenInterestCapParameters = Omit<v.InferInput<typeof PerpsAtO
 export function perpsAtOpenInterestCap(
   config: InfoConfig,
   params?: PerpsAtOpenInterestCapParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<PerpsAtOpenInterestCapResponse>;
 export function perpsAtOpenInterestCap(
   config: InfoConfig,
@@ -69,14 +69,18 @@ export function perpsAtOpenInterestCap(
 export function perpsAtOpenInterestCap(
   config: InfoConfig,
   paramsOrSignal?: PerpsAtOpenInterestCapParameters | AbortSignal,
-  maybeSignal?: AbortSignal,
+  maybeSignalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<PerpsAtOpenInterestCapResponse> {
   const params = isAbortSignal(paramsOrSignal) ? {} : paramsOrSignal;
-  const signal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignal;
+  const { signal, skipValidation } = infoOptions(isAbortSignal(paramsOrSignal) ? paramsOrSignal : maybeSignalOrOptions);
 
-  const request = parse(PerpsAtOpenInterestCapRequest, {
-    type: "perpsAtOpenInterestCap",
-    ...params,
-  });
+  const request = parseInfo(
+    PerpsAtOpenInterestCapRequest,
+    {
+      type: "perpsAtOpenInterestCap",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

@@ -23,7 +23,7 @@ export class AbstractWalletError extends HyperliquidError {
 // ============================================================
 
 /** Common domain type for EIP-712 typed data signing. */
-interface TypedDataDomain {
+export interface TypedDataDomain {
   name: string;
   version: string;
   chainId: number;
@@ -31,12 +31,12 @@ interface TypedDataDomain {
 }
 
 /** Common types structure for EIP-712 typed data. */
-interface TypedDataTypes {
+export interface TypedDataTypes {
   [key: string]: readonly { name: string; type: string }[];
 }
 
 /** Arguments passed to {@link Signer.signTypedData}. */
-interface TypedDataArgs {
+export interface TypedDataArgs {
   domain: TypedDataDomain;
   types: TypedDataTypes;
   primaryType: string;
@@ -54,9 +54,9 @@ export interface Signature {
 }
 
 /** Uniform interface produced by adapting any {@link AbstractWallet}. */
-interface Signer {
+export interface Signer {
   /** Wallet kind label, used in error messages. */
-  readonly kind: "viem-local" | "viem-jsonrpc";
+  readonly kind: "viem-local" | "viem-jsonrpc" | "local-key";
   /** Sign EIP-712 typed data and return the parsed signature. */
   signTypedData(args: TypedDataArgs): Promise<Signature>;
   /**
@@ -73,8 +73,25 @@ interface Signer {
   getChainId(): Promise<`0x${string}`>;
 }
 
-/** Parse a 65-byte hex signature into `{r, s, v}`. Normalizes raw recovery 0/1 to 27/28. */
-function parseSignature(hex: `0x${string}`): Signature {
+/**
+ * Property key for the internal ready-made-{@linkcode Signer} capability. A raw private key passed
+ * as `ExchangeSingleWalletConfig.wallet` is carried by an opaque object (see
+ * `_privateKeyWallet.ts`) whose only meaningful property is this symbol; {@linkcode createSigner}
+ * returns the carried signer as-is instead of running the structural guards, which no
+ * string-keyed carrier could satisfy. Package-internal: never re-exported from `mod.ts`.
+ */
+export const PRIVATE_KEY_SIGNER: unique symbol = Symbol("hyperliquid.privateKeySigner");
+
+/** Internal capability interface for a wallet object carrying a ready-made {@linkcode Signer}. */
+export interface PrivateKeySignerCarrier {
+  [PRIVATE_KEY_SIGNER]?: Signer;
+}
+
+/**
+ * Parse a 65-byte hex signature into `{r, s, v}`. Normalizes raw recovery 0/1 to 27/28.
+ * Exported (never from `mod.ts`) so the private-key wallet's viem delegation parses identically.
+ */
+export function parseSignature(hex: `0x${string}`): Signature {
   if (hex.length !== 132) {
     throw new AbstractWalletError(`Expected 65-byte signature (132 hex chars), got ${hex.length}`);
   }
@@ -103,8 +120,11 @@ const EIP712_DOMAIN_TYPE = [
 /** Cache of viem `types` objects merged with `EIP712Domain` (keyed by the original `types` object identity). */
 const viemTypesCache = new WeakMap<TypedDataTypes, TypedDataTypes>();
 
-/** Merges `EIP712Domain` into `types` for viem wallets (memoized per `types` object). */
-function mergeViemTypes(types: TypedDataTypes): TypedDataTypes {
+/**
+ * Merges `EIP712Domain` into `types` for viem wallets (memoized per `types` object).
+ * Exported (never from `mod.ts`) so the private-key wallet's viem delegation merges identically.
+ */
+export function mergeViemTypes(types: TypedDataTypes): TypedDataTypes {
   let merged = viemTypesCache.get(types);
   if (merged === undefined) {
     merged = { EIP712Domain: EIP712_DOMAIN_TYPE, ...types };
@@ -356,6 +376,10 @@ function adapt(wallet: AbstractWallet): Signer {
  * @throws {AbstractWalletError} If the wallet is ethers-shaped or matches neither supported shape.
  */
 function createSigner(wallet: AbstractWallet): Signer {
+  // A carrier produced from a raw private key (`_privateKeyWallet.ts`) brings its own signer;
+  // return it before the structural guards, none of which a key-carrying object could satisfy.
+  const carried = (wallet as PrivateKeySignerCarrier)[PRIVATE_KEY_SIGNER];
+  if (carried !== undefined) return carried;
   const signTypedData = (wallet as Partial<Record<"signTypedData", unknown>>).signTypedData;
   if (typeof signTypedData === "function" && signTypedData.length >= 3) {
     throw new AbstractWalletError(
@@ -460,7 +484,10 @@ function cachedPerWallet<T>(
 
 /** True when a wallet's address and chain cannot change under us, making a fulfilled value reusable. */
 function hasStableIdentity(wallet: AbstractWallet): boolean {
-  return adapt(wallet).kind === "viem-local";
+  // `local-key` (a raw private key carried by `_privateKeyWallet.ts`) is exactly as stable as a
+  // viem local account: fixed address, and no notion of chain ("0x1").
+  const kind = adapt(wallet).kind;
+  return kind === "viem-local" || kind === "local-key";
 }
 
 /**

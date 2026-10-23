@@ -190,9 +190,15 @@ export class WebSocketSubscriptionManager {
     if (signal?.aborted) {
       throw new WebSocketRequestError("Subscription was aborted", { cause: signal.reason, request: payload });
     }
-    // `normalize()` returns a fresh deep copy of the payload in the normalized form the server
-    // echoes, so the id is its serialization and the snapshot for a new subscription is already
-    // in hand — no stringify/parse round-trip.
+    // This normalized copy IS the id computation: `normalize()` returns a fresh deep copy in
+    // the normalized form the server echoes, and its serialization is the registry key. A
+    // listener joining an existing subscription discards the copy — only the id and the call's
+    // event type survive — but paying normalize (~184-270 ns in Bun) + stringify (~70-90 ns)
+    // on every join is still the cheapest correct option measured: a hand-written
+    // allocation-free serializer is slower (~450-570 ns), a JSON.stringify array-replacer
+    // ~800 ns, and caching ids by payload identity is unsafe (the caller owns and may mutate
+    // the object). The ~3 µs per-joiner total is dominated by listener registration and
+    // promise plumbing, not by the id.
     const snapshot = normalize(payload);
     const id = JSON.stringify(snapshot);
     // The routed event type belongs to this call, not to the subscription entry: an entry keyed

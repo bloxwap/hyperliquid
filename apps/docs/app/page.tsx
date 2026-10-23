@@ -65,10 +65,10 @@ export default function Home() {
               JavaScript.
             </p>
             <div className="hero-actions">
-              <a className="button-primary" href="#playground">
+              <a className="hig-button hero-action" data-intent="primary" href="#playground">
                 Try the playground <ArrowDown size={16} aria-hidden />
               </a>
-              <Link className="button-secondary" href="/docs/">
+              <Link className="hig-button hero-action" data-intent="secondary" href="/docs/">
                 Get started <ArrowRight size={16} aria-hidden />
               </Link>
             </div>

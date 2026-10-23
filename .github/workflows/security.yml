@@ -8,39 +8,84 @@ on:
     - cron: "17 5 * * 1"
   workflow_dispatch:
 
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
-  osv-scan:
-    name: OSV-Scanner (dependency vulnerabilities)
+  changes:
+    # Security: never run fork PR code on the self-hosted runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 5
     permissions:
-      # Required by the reusable workflow even when SARIF upload is disabled.
-      actions: read
       contents: read
-      security-events: write
-    # SHA is the v2.3.8 tag target, verified via `gh api repos/google/osv-scanner-action/git/ref/tags/v2.3.8`.
-    # The reusable workflow pins its own sub-actions and the osv-scanner container image by SHA internally.
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
-    with:
-      # Explicit lockfiles instead of the default recursive `-r ./`: bun audit skips every @jsr/*
-      # package ("do not come from the default registry"), and the SDK's .dev/ts7 resolves
-      # crypto-critical deps (@noble/hashes, valibot) through JSR. The root workspace lockfile
-      # covers both the SDK and documentation app; TS7 retains its isolated lockfile.
+      pull-requests: read
+    outputs:
+      dependencies: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.dependencies }}
+    steps:
+      # Scan only when PRs change the two scanned lockfiles, manifests/overrides, or scan implementation.
+      # Non-PR events always run every heavy job, including reusable-workflow calls.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          filters: |
+            dependencies:
+              - 'bun.lock'
+              - 'packages/hyperliquid/.dev/ts7/bun.lock'
+              - '**/package.json'
+              - '.github/scripts/osv-scan.sh'
+              - '.github/workflows/security.yml'
+
+  osv-scan:
+    needs: changes
+    # Security: never run fork PR code on the self-hosted runner.
+    if: needs.changes.outputs.dependencies == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    name: OSV-Scanner (dependency vulnerabilities)
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 15
+
+    steps:
+      # Job-level env cannot use the runner context on these Mac minis.
+      - name: Point TMPDIR at runner temp
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # google/osv-scanner-action's reusable workflow pins `runs-on: ubuntu-latest`
+      # and a Linux container. Same scanner version (v2.3.8), same lockfiles,
+      # same fail-on-vuln, installed into $RUNNER_TEMP for the Mac mini.
       #
-      # Known residual gap (verified 2026-07-26 against OSV-Scanner v2.4.0): OSV has no JSR
-      # ecosystem, and @jsr/scope__name aliases do not match npm advisories — e.g.
-      # @jsr/valibot__valibot@1.4.1 is not flagged although npm valibot@1.4.1 maps to
-      # GHSA-5qjj-4xww-7phc. npm-named packages in these lockfiles (the vast majority, including
-      # all npm transitives) are covered; JSR-aliased entries are extracted and queried but only
-      # match if OSV ever learns the alias.
+      # Explicit lockfiles instead of the default recursive `-r ./`: bun audit skips
+      # every @jsr/* package ("do not come from the default registry"), and the
+      # SDK's .dev/ts7 resolves crypto-critical deps (@noble/hashes, valibot)
+      # through JSR. The root workspace lockfile covers both the SDK and
+      # documentation app; TS7 retains its isolated lockfile.
       #
-      # Patched versions of vulnerable transitive dependencies are pinned through "overrides" in
-      # the root package.json.
-      scan-args: |-
-        --lockfile=bun.lock
-        --lockfile=packages/hyperliquid/.dev/ts7/bun.lock
-      # Keep SARIF upload disabled; results are available as a build artifact and
-      # the job fails on any vulnerability. The callee still requires the permissions above.
-      upload-sarif: false
-      fail-on-vuln: true
+      # Known residual gap (verified 2026-07-26 against OSV-Scanner v2.4.0): OSV
+      # has no JSR ecosystem, and @jsr/scope__name aliases do not match npm
+      # advisories — e.g. @jsr/valibot__valibot@1.4.1 is not flagged although
+      # npm valibot@1.4.1 maps to GHSA-5qjj-4xww-7phc. npm-named packages in
+      # these lockfiles (the vast majority, including all npm transitives) are
+      # covered; JSR-aliased entries are extracted and queried but only match if
+      # OSV ever learns the alias.
+      #
+      # Patched versions of vulnerable transitive dependencies are pinned through
+      # "overrides" in the root package.json.
+      - name: Scan lockfiles with OSV-Scanner
+        run: sh .github/scripts/osv-scan.sh
+
+      # Results stay available as a build artifact when the scan finds
+      # vulnerabilities (the scan step fails the job). SARIF upload stays
+      # disabled, matching the previous reusable-workflow inputs.
+      - name: Upload OSV results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: OSV Scanner results
+          path: osv-results.json
+          if-no-files-found: warn
+          retention-days: 5

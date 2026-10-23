@@ -33,7 +33,7 @@ import { type IRequestTransport, TransportError } from "../_base.ts";
 import * as abort from "../_abort.ts";
 import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import { TokenBucketRateLimiter } from "../_rateLimiter.ts";
-import { exchangeWeight, exchangeWireJSON, type ExchangeWireWeight } from "../_wire.ts";
+import { exchangeWireJSON } from "../_wire.ts";
 import { delay, resolveRuntime, type Runtime } from "../runtime.ts";
 
 /** Configuration options for the HTTP transport layer. */
@@ -415,15 +415,19 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
     // The one serialization of the payload — wire form, weight source, and error snapshot all
     // derive from it, so getters/proxies/toJSON run exactly once per request.
     let body: string | undefined;
-    // The parsed form of `body`, materialized lazily: up front when the limiter needs an
-    // info/exchange weight, otherwise only if a response surcharge or an error requires it.
+    // The parsed form of `body`, materialized lazily: only when the rate-limit weight cannot be
+    // computed from the payload directly (see below), or when a response surcharge or an error
+    // requires it. NEVER the live payload and never the `{ type }` stand-in the weight fast path
+    // verifies — error snapshots must stay the parsed wire form.
     let snapshot: unknown;
 
     try {
       // --- Serialize -----------------------------------------------------------
-      const billing: ExchangeWireWeight | undefined =
-        endpoint === "exchange" && this._rateLimit !== null ? {} : undefined;
-      body = (endpoint === "exchange" ? exchangeWireJSON(payload, billing) : undefined) ?? JSON.stringify(payload);
+      // An SDK-built exchange envelope serializes from its registered pre-built fragments; the
+      // result doubles as proof the envelope's action tree is SDK-owned plain data (see
+      // _wire.ts), which the rate-limit weight below can then walk without parsing the wire.
+      const sdkEnvelope = endpoint === "exchange" ? exchangeWireJSON(payload) : undefined;
+      body = sdkEnvelope ?? JSON.stringify(payload);
 
       // --- Rate limiting -------------------------------------------------------
       // Opt-in token bucket: the request waits here for its weight. The wait honors caller
@@ -434,13 +438,41 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
       const rateLimit = this._rateLimit;
       // Hoisted for the retry loop below: a retried attempt debits the bucket again.
       let weight = 0;
+      // The request `type` when it was verified WITHOUT parsing `body` (the info fast path, or
+      // the action type of an SDK-built exchange envelope). The response surcharge bills off a
+      // tiny `{ type }` stand-in built from it instead of re-parsing the wire; the stand-in is
+      // never stored in `snapshot` (error snapshots must be the parsed wire form).
+      let verifiedType: string | undefined;
       if (rateLimit !== null) {
-        // The parsed wire form — never the live payload — is the billing source, so
-        // getters/proxies/toJSON cannot move the weight off what was actually sent. Explorer
-        // requests are a flat 40 whatever the payload, so they skip the parse entirely.
-        // Registered immutable actions can reuse the guarded wire serializer's cached weight.
-        weight =
-          billing?.weight ?? (endpoint === "explorer" ? 40 : requestWeight(endpoint, (snapshot = JSON.parse(body))));
+        // The billed weight must always equal what the wire body would cost, and no caller
+        // getter/toJSON/proxy may run a second time, so each endpoint skips the JSON.parse
+        // round-trip only under proof that the wire agrees with the payload read:
+        // - explorer: a flat 40 whatever the payload — no parse at all;
+        // - info: the weight depends only on `type`, read off the payload WITHOUT invoking
+        //   getters (own data descriptor) and VERIFIED against the wire string (see
+        //   infoTypeFromPayload — the wire is the ground truth, so a toJSON override, a
+        //   stateful getter, or a proxy can only force the fallback, never mis-bill);
+        // - exchange: an SDK-built envelope (`sdkEnvelope`) has an SDK-owned plain-data action
+        //   tree, so the batch length is walked off the action, read via its own data
+        //   descriptor. Arbitrary caller objects may carry getters/toJSON, so they keep
+        //   billing off the parsed wire form.
+        if (endpoint === "explorer") {
+          weight = 40;
+        } else if (endpoint === "info") {
+          verifiedType = infoTypeFromPayload(payload, body);
+          weight =
+            verifiedType !== undefined
+              ? infoWeight(verifiedType)
+              : requestWeight(endpoint, (snapshot = JSON.parse(body)));
+        } else if (sdkEnvelope !== undefined) {
+          const actionDescriptor = Object.getOwnPropertyDescriptor(payload, "action");
+          const action =
+            actionDescriptor !== undefined && "value" in actionDescriptor ? actionDescriptor.value : undefined;
+          verifiedType = payloadType(action);
+          weight = exchangeWeightFromAction(action);
+        } else {
+          weight = requestWeight(endpoint, (snapshot = JSON.parse(body)));
+        }
         await rateLimit.acquire(weight, controller?.signal);
       }
 
@@ -526,8 +558,15 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
           // Response-size surcharges can only be billed after the fact: debit the bucket so
           // later requests wait off the real cost instead of the pre-request estimate.
           if (rateLimit !== null && Array.isArray(parsed) && parsed.length > 0) {
-            snapshot ??= JSON.parse(body); // explorer skipped the pre-send parse (flat weight 40)
-            const surcharge = responseSurcharge(endpoint, snapshot, parsed);
+            // The surcharge keys off the request `type` alone: bill off a stand-in carrying
+            // the type verified before sending, or parse the wire form now — explorer skipped
+            // the pre-send parse (flat weight 40), and a fallback path may have as well. The
+            // stand-in is local to this branch; `snapshot` stays the parsed wire form.
+            const surcharge = responseSurcharge(
+              endpoint,
+              snapshot ?? (verifiedType !== undefined ? { type: verifiedType } : (snapshot = JSON.parse(body))),
+              parsed,
+            );
             if (surcharge > 0) rateLimit.charge(surcharge);
           }
           return parsed as T;
@@ -675,11 +714,114 @@ function requestWeight(endpoint: "info" | "exchange" | "explorer", payload: unkn
   if (endpoint === "explorer") return 40;
   if (endpoint === "info") {
     const type = payloadType(payload);
-    if (type !== undefined && INFO_WEIGHT_2.has(type)) return 2;
-    if (type !== undefined && INFO_WEIGHT_60.has(type)) return 60;
-    return 20; // all other documented info requests
+    return type !== undefined ? infoWeight(type) : 20; // all other documented info requests
   }
   return exchangeWeight(payload);
+}
+
+/** The documented weight of an info request `type`: 2/20/60, 20 for everything else. */
+function infoWeight(type: string): number {
+  if (INFO_WEIGHT_2.has(type)) return 2;
+  if (INFO_WEIGHT_60.has(type)) return 60;
+  return 20;
+}
+
+/**
+ * The info request `type`, proven to be what the wire body bills — read from the payload WITHOUT
+ * invoking user code: `payload` must be a non-null non-array object whose own `type` property is
+ * a data descriptor holding a string (an accessor would be a getter, which must not run here).
+ *
+ * The candidate is then verified against the wire string itself: the body must open with
+ * `{"type":"`, continue with the candidate's characters verbatim, and close the string with `"`
+ * followed by `,` or `}`. `JSON.stringify` never emits a key twice, so this proves the parsed
+ * body's top-level `type` equals the candidate — provided the candidate contains no `"` or `\`:
+ * then the matched span holds no escape sequence, decodes to itself, and its closing quote is
+ * not escaped. Candidates with either character (which a real request type never has) fall back.
+ * The wire is the ground truth, so a `toJSON` override, a stateful getter, or a proxy can only
+ * make this check FAIL — falling back to the parsed form — never bill a weight the wire would not.
+ * The comparison runs in place, without serializing the candidate, so it costs no more than
+ * parsing even the smallest body.
+ */
+function infoTypeFromPayload(payload: unknown, body: string): string | undefined {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(payload, "type");
+  if (descriptor === undefined || !("value" in descriptor) || typeof descriptor.value !== "string") return undefined;
+  const type: string = descriptor.value;
+  if (type.includes('"') || type.includes("\\")) return undefined;
+  const end = INFO_TYPE_PREFIX.length + type.length;
+  if (!body.startsWith(INFO_TYPE_PREFIX) || !body.startsWith(type, INFO_TYPE_PREFIX.length)) return undefined;
+  if (body.charCodeAt(end) !== 0x22 /* " */) return undefined;
+  const next = body.charCodeAt(end + 1);
+  return next === 0x2c /* , */ || next === 0x7d /* } */ ? type : undefined;
+}
+
+/** The wire prefix of an info body whose first key is a string `type`. */
+const INFO_TYPE_PREFIX = '{"type":"';
+
+/**
+ * Exchange weight: `1 + floor(batchLength / 40)`, where the docs define `batchLength` as "the
+ * length of the array in the action" (a batched order request is their example). The confirmed
+ * batch arrays are `orders` (order), `cancels` (cancel / cancelByCloid) and `modifies`
+ * (batchModify), but the docs never close the set, so the batch length here is the LONGEST array
+ * found anywhere in the action at any depth — which also bills the deployer arrays (`spotDeploy`
+ * genesis tuples, `perpDeploy` setter lists) and any future batch action. Over-billing only
+ * throttles the client harder while under-billing risks the server limit (429s, ultimately an IP
+ * ban), so the max is the conservative reading. Actions without arrays — or with only short ones
+ * (`< 40` entries: fixed tuples, a single `twap` object carries no array at all,
+ * `convertToMultiSigUser`'s wire-stringified `signers`) — cost the documented minimum of 1.
+ *
+ * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
+ */
+function exchangeWeight(payload: unknown): number {
+  const action = exchangeAction(payload);
+  if (action === undefined) return 1;
+  return 1 + Math.floor(maxArrayLength(action) / 40);
+}
+
+/**
+ * {@linkcode exchangeWeight} for an action read directly off an SDK-built envelope (whose action
+ * tree is SDK-owned plain data — see `_wire.ts`), skipping the payload walk. A non-record action
+ * bills the documented minimum of 1, exactly as the walking variant does.
+ */
+function exchangeWeightFromAction(action: unknown): number {
+  if (!isRecord(action)) return 1;
+  return 1 + Math.floor(maxArrayLength(unwrapMultiSigAction(action)) / 40);
+}
+
+/** The length of the longest array found in `value` at any depth (0 when there is none). */
+function maxArrayLength(value: unknown): number {
+  if (Array.isArray(value)) {
+    let max = value.length;
+    for (const item of value) max = Math.max(max, maxArrayLength(item));
+    return max;
+  }
+  if (isRecord(value)) {
+    let max = 0;
+    for (const key in value) max = Math.max(max, maxArrayLength(value[key]));
+    return max;
+  }
+  return 0;
+}
+
+/**
+ * The action carrying the batch: the payload's `action`, unwrapped one level for multi-sig.
+ * Unwrapping also keeps the wrapper's `signatures` array — authentication material, not batch
+ * items — out of the billing walk.
+ */
+function exchangeAction(payload: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(payload) || !isRecord(payload.action)) return undefined;
+  return unwrapMultiSigAction(payload.action);
+}
+
+/**
+ * Unwraps a multi-sig action one level: `{ type: "multiSig", signatures, payload: { ..., action } }`
+ * yields the wrapped action; anything else is returned as-is.
+ */
+function unwrapMultiSigAction(action: Record<string, unknown>): Record<string, unknown> {
+  if (action.type === "multiSig" && isRecord(action.payload) && isRecord(action.payload.action)) {
+    return action.payload.action;
+  }
+  return action;
 }
 
 /**

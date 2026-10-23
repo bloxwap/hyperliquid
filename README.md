@@ -1,12 +1,6 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./.github/hyperliquid-light.svg">
-    <img alt="Hyperliquid" src="./.github/hyperliquid-dark.svg" height="50">
-  </picture>
-  <br>
-  <strong>Blazing fast typescript
-    <a href="https://bloxwap.github.io/hyperliquid/docs/">Hyperliquid SDK</a></strong>
-</p>
+<h1 align="center">Hyperliquid SDK</h1>
+
+<p align="center"><strong>Blazing fast TypeScript SDK for Hyperliquid. <a href="https://bloxwap.github.io/hyperliquid/docs/">Try the docs</a>.</strong></p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@bloxwap/hyperliquid"><img alt="npm version" src="https://img.shields.io/npm/v/@bloxwap/hyperliquid?color=blue&style=flat-square"></a>
@@ -17,44 +11,11 @@
 
 ## Features
 
-- **Typed**: Source code is 100% TypeScript.
-- **Tested**: Good code coverage and type relevance.
-- **Minimal dependencies**: A few small trusted dependencies.
-- **Cross-Environment Support**: Compatible with all major JS runtimes.
-- **Integratable**: Easy to use with [viem](https://github.com/wevm/viem) accounts — local (private key) or JSON-RPC
-  (browser wallet).
-
-## Documentation
-
-Browse the [SDK documentation](https://bloxwap.github.io/hyperliquid/docs/) for installation, clients, transports, signing,
-utilities, and guides.
-
-The documentation uses [Fumadocs](https://www.fumadocs.dev/) and is hosted on GitHub Pages. Its Markdown source lives in
-[`apps/docs/content/docs/`](apps/docs/content/docs/README.md).
-
-## Workspace
-
-This repository is a Bun workspace with one install and one root `bun.lock`:
-
-| Workspace | Purpose |
-| --- | --- |
-| [`packages/hyperliquid`](packages/hyperliquid/README.md) | Published `@bloxwap/hyperliquid` SDK, source, tests, and package tooling |
-| [`apps/docs`](apps/docs/README.md) | Fumadocs application, Markdown content, and GitHub Pages export |
-
-The root package is private and coordinates development. The SDK builds to `packages/hyperliquid/dist`; the docs app
-exports static files to `apps/docs/out`. Only the SDK's generated package is published to npm.
-
-Run these commands from the repository root:
-
-```sh
-bun install --frozen-lockfile
-bun run check
-bun run test:offline
-bun run build
-```
-
-To develop the documentation, run `bun run docs:dev` and open `http://localhost:3901`. See the
-[documentation app guide](apps/docs/README.md) for content checks, production builds, and GitHub Pages deployment.
+- **Typed.** Source code is 100% TypeScript with comprehensive type safety.
+- **Minimal dependencies.** A few small, trusted dependencies keep the bundle lean.
+- **Cross-environment support.** Compatible with Bun, Node.js, React Native, and all major JavaScript runtimes.
+- **Easy integration.** Works seamlessly with [viem](https://github.com/wevm/viem) accounts, local private keys or JSON-RPC browser wallets.
+- **Tested.** Offline and online test suites run in CI.
 
 ## Installation
 
@@ -82,22 +43,26 @@ pnpm add @bloxwap/hyperliquid
 yarn add @bloxwap/hyperliquid
 ```
 
-> React Native needs polyfills for the `fastAssetCtxs` subscription and for versions below 0.86 — see the
+> React Native needs polyfills for the `fastAssetCtxs` subscription and for versions below 0.86. See the
 > [documentation](https://bloxwap.github.io/hyperliquid/docs/).
 
-## Quick Example
+## Release status
+
+`0.6.0` is an early developer preview; expect breaking changes before `1.0`.
+
+## Usage
 
 ### Read
 
 ```ts
-// 1. Import module
+// Import module
 import { HttpTransport, InfoClient } from "@bloxwap/hyperliquid";
 
-// 2. Set up client with transport
+// Set up client with transport
 const transport = new HttpTransport();
 const info = new InfoClient({ transport });
 
-// 3. Query data
+// Query data
 
 // Retrieve mids for all coins
 const mids = await info.allMids();
@@ -112,17 +77,17 @@ const book = await info.l2Book({ coin: "BTC" });
 ### Trade
 
 ```ts
-// 1. Import modules
+// Import modules
 import { ExchangeClient, HttpTransport } from "@bloxwap/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
 
-// 2. Set up client with wallet and transport
+// Set up client with wallet and transport
 const wallet = privateKeyToAccount("0x...");
 
 const transport = new HttpTransport();
 const exchange = new ExchangeClient({ transport, wallet });
 
-// 3. Execute an action
+// Execute an action
 
 // Place an order
 const result = await exchange.order({
@@ -144,23 +109,23 @@ await exchange.updateLeverage({ asset: 0, isCross: true, leverage: 5 });
 await exchange.withdraw3({ destination: "0x...", amount: "1" });
 ```
 
-For low-latency bots, prefer
-[`createFastLocalWallet`](https://bloxwap.github.io/hyperliquid/docs/signing/#fast-local-wallet-wasm-secp256k1) (WASM
-secp256k1) and install the optional `hash-wasm` package for ambient keccak acceleration. Trusted callers can also pass
-`{ skipValidation: true }` — see the
+For low-latency bots, pass the raw private key string as `wallet`: the client then signs with WASM secp256k1 by
+default, with a pure-JS fallback where WASM cannot load (~274 to ~104 µs per order on Node 24, ~155 to ~102 µs on
+Bun 1.4, measured on a Linux box). Also batch many orders into one `exchange.order({ orders: [...] })` call: ~161 µs
+down to ~3.2 µs per order when 100 orders share one call. Details in the
 [low-latency recipe](https://bloxwap.github.io/hyperliquid/docs/signing/#low-latency-recipe-bots--hft).
 
 ### Subscribe
 
 ```ts
-// 1. Import module
+// Import module
 import { SubscriptionClient, WebSocketTransport } from "@bloxwap/hyperliquid";
 
-// 2. Set up client with transport
+// Set up client with transport
 const transport = new WebSocketTransport();
 const subs = new SubscriptionClient({ transport });
 
-// 3. Subscribe to events
+// Subscribe to events
 
 // Subscribe to mids for all coins
 await subs.allMids((data) => {
@@ -178,10 +143,53 @@ await subs.l2Book({ coin: "ETH" }, (data) => {
 });
 ```
 
-> [!WARNING]
->
-> - **Never hardcode private keys** in source or commit them to git. Load them from environment variables or a secret
->   store (Bun auto-loads a local `.env`, which is gitignored in this repo).
-> - For trading bots, prefer a Hyperliquid **agent wallet** (API wallet) over the master account key: an agent key can
->   trade but cannot withdraw, and it can be revoked without rotating the master key.
-> - See [Signing](https://bloxwap.github.io/hyperliquid/docs/signing/) for how wallets, signatures, and nonces work.
+## Documentation
+
+Browse the [SDK documentation](https://bloxwap.github.io/hyperliquid/docs/) for installation, clients, transports, signing,
+utilities, and guides.
+
+The documentation uses [Fumadocs](https://www.fumadocs.dev/) and is hosted on GitHub Pages. Its Markdown source lives in
+[`apps/docs/content/docs/`](apps/docs/content/docs/README.md).
+
+## Development
+
+This repository is a Bun workspace with one install and one root `bun.lock`:
+
+| Workspace | Purpose |
+| --- | --- |
+| [`packages/hyperliquid`](packages/hyperliquid/README.md) | Published `@bloxwap/hyperliquid` SDK, source, tests, and package tooling |
+| [`apps/docs`](apps/docs/README.md) | Fumadocs application, Markdown content, and GitHub Pages export |
+
+The root package is private and coordinates development. The SDK builds to `packages/hyperliquid/dist`; the docs app
+exports static files to `apps/docs/out`. Only the SDK's generated package is published to npm.
+
+Run these commands from the repository root:
+
+```sh
+bun install --frozen-lockfile
+bun run check
+bun run test:offline
+bun run build
+```
+
+Type-checking and declaration emit use [tsrs](https://github.com/oxc-project/tsrs), the Rust port of the TypeScript 7
+compiler, which ships native binaries for macOS arm64 and Linux x64/arm64. On other platforms, or to compare against
+TypeScript 5, run `bun run typecheck:tsc` and build with `HL_TSC=tsc bun run build`. TypeScript 5.9 stays installed
+for the build's JS-API tooling and for the published-consumer check.
+
+To develop the documentation, run `bun run docs:dev` and open `http://localhost:3901`. See the
+[documentation app guide](apps/docs/README.md) for content checks, production builds, and GitHub Pages deployment.
+
+Coverage target is 100% line, branch, and function coverage.
+
+## Security
+
+**This SDK handles private keys and wallet operations.** Never hardcode private keys in source or commit them to git. Load them from environment variables or a secret store (Bun auto-loads a local `.env`, which is gitignored in this repo).
+
+For trading bots, prefer a Hyperliquid agent wallet (API wallet) over the master account key: an agent key can trade but cannot withdraw, and it can be revoked without rotating the master key.
+
+See [Signing](https://bloxwap.github.io/hyperliquid/docs/signing/) for how wallets, signatures, and nonces work.
+
+## License
+
+[MIT](LICENSE)

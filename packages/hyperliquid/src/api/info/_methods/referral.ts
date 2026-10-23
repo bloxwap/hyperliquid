@@ -186,8 +186,7 @@ export type ReferralResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode referral} function. */
 export type ReferralParameters = Omit<v.InferInput<typeof ReferralRequest>, "type">;
@@ -197,7 +196,8 @@ export type ReferralParameters = Omit<v.InferInput<typeof ReferralRequest>, "typ
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Referral details for a user.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -220,11 +220,16 @@ export type ReferralParameters = Omit<v.InferInput<typeof ReferralRequest>, "typ
 export function referral(
   config: InfoConfig,
   params: ReferralParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<ReferralResponse> {
-  const request = parse(ReferralRequest, {
-    type: "referral",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    ReferralRequest,
+    {
+      type: "referral",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

@@ -468,6 +468,35 @@ scenario({
   },
 });
 
+// --- Raw private key (WASM by default) -----------------------------------------
+// Passing the key string itself as the wallet (the `ExchangeSingleWalletConfig.wallet` form)
+// signs on WASM tiny-secp256k1 when it loads and passes its self-check, else on pure-JS noble —
+// the default counterpart of the opt-in `_wasm` scenario below. Byte-identity is pinned by
+// `tests/signing/privateKeyWallet.test.ts`, not here. The backend init settles in `setup`.
+// (The import declaration is hoisted; keeping it next to the scenario keeps this file append-only.)
+
+import type { AbstractWallet } from "@bloxwap/hyperliquid/signing";
+import { createPrivateKeyWallet, preloadPrivateKeyWallet } from "../../../src/signing/_privateKeyWallet.ts";
+
+scenario({
+  name: "signing/sign_l1_action_order_1_private_key",
+  group: "signing",
+  description:
+    "signL1Action() with a raw private key wallet (WASM secp256k1 by default); counterpart of sign_l1_action_order_1",
+  unit: "order",
+  unitsPerIteration: 1,
+  iterations: 50,
+  samples: 10,
+  setup: async () => {
+    const wallet = createPrivateKeyWallet(TEST_PRIVATE_KEY);
+    await preloadPrivateKeyWallet(wallet);
+    return { wallet, action: orderAction(1) };
+  },
+  run: async ({ wallet, action }: { wallet: AbstractWallet; action: object }) => {
+    await signL1Action({ wallet, action: action as Record<string, unknown>, nonce: NONCE, isTestnet: true });
+  },
+});
+
 // --- WASM secp256k1 -------------------------------------------------------------
 // `createFastLocalWallet` (issue #13) swaps noble's pure-JS secp256k1 for tiny-secp256k1
 // (WASM libsecp256k1) on the raw-digest `sign` the L1 path uses — the opt-in counterpart of

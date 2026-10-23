@@ -76,14 +76,14 @@ export type ValidatorSummariesResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request validator summaries.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of validator performance statistics.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -99,9 +99,17 @@ import type { InfoConfig } from "./_base/mod.ts";
  * const data = await validatorSummaries({ transport });
  * ```
  */
-export function validatorSummaries(config: InfoConfig, signal?: AbortSignal): Promise<ValidatorSummariesResponse> {
-  const request = parse(ValidatorSummariesRequest, {
-    type: "validatorSummaries",
-  });
+export function validatorSummaries(
+  config: InfoConfig,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
+): Promise<ValidatorSummariesResponse> {
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    ValidatorSummariesRequest,
+    {
+      type: "validatorSummaries",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

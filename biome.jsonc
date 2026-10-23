@@ -35,7 +35,12 @@
       "!apps/docs/next-env.d.ts",
       // Copied brand assets retain their original formatting and provenance metadata.
       "!apps/docs/public/logos",
-      "!apps/docs/app/brand-tokens.css"
+      "!.hig-source",
+      "!.hig-artifacts",
+      "!apps/docs/test-results",
+      "!apps/docs/playwright-report",
+      // Exact release report bytes are verified by lib/hig-artifacts.test.ts.
+      "!vendor/bloxwap-hig/source-report.json"
     ]
   },
   "formatter": {

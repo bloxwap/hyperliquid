@@ -2,7 +2,7 @@
 // Execution Logic
 // ============================================================
 
-import { collectPages, type InfoConfig, type PaginationOptions } from "./_base/mod.ts";
+import { collectPages, type InfoConfig, type InfoRequestOptions, type PaginationOptions } from "./_base/mod.ts";
 import type {
   UserNonFundingLedgerUpdatesParameters,
   UserNonFundingLedgerUpdatesResponse,
@@ -30,7 +30,8 @@ export type { PaginationOptions } from "./_base/mod.ts";
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
  * @param options Pagination options (see {@linkcode PaginationOptions}).
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of user's non-funding ledger update.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -55,7 +56,7 @@ export function userNonFundingLedgerUpdatesAll(
   config: InfoConfig,
   params: UserNonFundingLedgerUpdatesAllParameters,
   options?: PaginationOptions,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<UserNonFundingLedgerUpdatesResponse> {
-  return collectPages(userNonFundingLedgerUpdatesPages(config, params, options, signal));
+  return collectPages(userNonFundingLedgerUpdatesPages(config, params, options, signalOrOptions));
 }

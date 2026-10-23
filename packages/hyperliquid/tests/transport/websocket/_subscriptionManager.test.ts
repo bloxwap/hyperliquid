@@ -11,6 +11,7 @@ import type { ISubscription } from "../../../src/transport/_base.ts";
 import { WebSocketDispatcher, WebSocketRequestError } from "../../../src/transport/websocket/_dispatcher.ts";
 import { HyperliquidEventTarget } from "../../../src/transport/websocket/_events.ts";
 import { WebSocketSubscriptionManager } from "../../../src/transport/websocket/_subscriptionManager.ts";
+import { requestToId } from "../../../src/transport/websocket/_id.ts";
 import { drain, MockWebSocket, RESPONSES } from "./_mock.ts";
 
 // =============================================================================
@@ -20,7 +21,7 @@ import { drain, MockWebSocket, RESPONSES } from "./_mock.ts";
 /** Strips private/protected modifiers so intersections with internal-state types don't collapse to `never`. */
 type Public<T> = { [K in keyof T]: T[K] };
 type ManagerWithInternals = Public<WebSocketSubscriptionManager> & {
-  _subscriptions: Map<string, { listeners: Map<unknown, unknown> }>;
+  _subscriptions: Map<string, { listeners: Map<unknown, unknown>; payload: unknown }>;
 };
 
 /** Creates a new WebSocketSubscriptionManager with mock socket. */
@@ -323,6 +324,172 @@ describe("WebSocketSubscriptionManager", () => {
         WebSocketRequestError,
       );
       assertEquals(err.request, payload15);
+    });
+  });
+
+  describe("disconnect error snapshots", () => {
+    test("abandoned subscribes reject with a fresh copy of the normalized payload, and no cause", async () => {
+      const { socket, manager } = createManager(true);
+
+      // One subscribe already sent (socket open), one queued behind a dropped connection:
+      // the two rejection messages must stay distinct.
+      const callerPayload = { type: "l2Book", coin: "BTC" }; // unnormalized key order on purpose
+      const sentPromise = manager.subscribe("l2Book", callerPayload, () => {});
+      assertEquals(socket.sentMessages.length, 1);
+      const storedPayload = manager._subscriptions.get(requestToId(callerPayload))?.payload;
+
+      socket.readyState = ReconnectingWebSocket.CONNECTING;
+      const queuedPayload = { type: "l2Book", coin: "ETH" };
+      const queuedPromise = manager.subscribe("l2Book", queuedPayload, () => {});
+      assertEquals(socket.sentMessages.length, 1); // the second frame was held back
+
+      socket.disconnect();
+
+      const sentErr = await assertRejects(() => sentPromise, WebSocketRequestError, "WebSocket connection closed");
+      const queuedErr = await assertRejects(
+        () => queuedPromise,
+        WebSocketRequestError,
+        "WebSocket connection closed before the request was sent",
+      );
+
+      // The snapshot is the normalized subscription, as a plain-data copy: neither the
+      // caller's object nor the manager's stored payload.
+      assertEquals(sentErr.request, { coin: "BTC", type: "l2Book" });
+      assert(sentErr.request !== callerPayload);
+      assert(sentErr.request !== storedPayload);
+      assertFalse("cause" in sentErr);
+      assertEquals(queuedErr.request, { coin: "ETH", type: "l2Book" });
+      assert(queuedErr.request !== queuedPayload);
+      assertFalse("cause" in queuedErr);
+
+      socket.terminate();
+    });
+
+    test("mutating a rejection's request does not corrupt the resubscribe frame", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { type: "l2Book", coin: "BTC" };
+
+      const subPromise = manager.subscribe("l2Book", payload, () => {});
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      await subPromise;
+      const subscribeFrame = socket.sentMessages[0];
+      const storedPayload = manager._subscriptions.get(requestToId(payload))?.payload;
+
+      // Reconnect: the resubscribe is in flight when a joiner attaches, then the connection
+      // drops again — the joiner rejects with a snapshot cloned from the manager's stored payload.
+      socket.disconnect();
+      socket.open();
+      assertEquals(socket.sentMessages.length, 2);
+      const joiner = manager.subscribe("l2Book", { type: "l2Book", coin: "BTC" }, () => {});
+      socket.disconnect();
+
+      const err = await assertRejects(() => joiner, WebSocketRequestError, "WebSocket connection closed");
+      assertEquals(err.request, { coin: "BTC", type: "l2Book" });
+      assert(err.request !== storedPayload); // a copy, never the shared live object
+      assertFalse("cause" in err);
+
+      // Corrupting the snapshot must not reach the subscription the manager still serves.
+      (err.request as Record<string, unknown>).coin = "CORRUPTED";
+
+      socket.open();
+      assertEquals(socket.sentMessages.length, 3);
+      assertEquals(socket.sentMessages[2], subscribeFrame); // resubscribed with the original frame
+
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      await drain();
+      socket.terminate();
+    });
+
+    test("a payload that does not JSON-round-trip still snapshots from the parsed frame", async () => {
+      const { socket, manager } = createManager(true);
+
+      // normalize keeps NaN, but JSON.stringify writes it as `null`: the clone cannot prove
+      // itself identical to the parse, so the snapshot must come from the parsed frame.
+      const payload = { type: "l2Book", coin: "BTC", nSigFigs: NaN };
+      const promise = manager.subscribe("l2Book", payload, () => {});
+
+      socket.disconnect();
+
+      const err = await assertRejects(() => promise, WebSocketRequestError, "WebSocket connection closed");
+      assertEquals(err.request, { coin: "BTC", nSigFigs: null, type: "l2Book" });
+
+      socket.terminate();
+    });
+  });
+
+  describe("joiners", () => {
+    test("a payload differing only in key order and hex case joins the same subscription", async () => {
+      const { socket, manager } = createManager();
+      const user = "0xabcdef0123456789abcdef0123456789abcdef01";
+      const creatorPayload = { type: "userFills", user: "0xABCDEF0123456789ABCDEF0123456789ABCDEF01" };
+
+      let first = 0;
+      let second = 0;
+      const creatorPromise = manager.subscribe("userFills", creatorPayload, () => first++);
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { type: "userFills", user }));
+      await creatorPromise;
+
+      const sentBefore = socket.sentMessages.length;
+      // Reordered keys, lowercase hex: the normalized id is identical, so this joins.
+      await manager.subscribe("userFills", { user, type: "userFills" }, () => second++);
+      assertEquals(socket.sentMessages.length, sentBefore); // no second subscribe frame
+      assertEquals(manager._subscriptions.size, 1); // one entry, one quota slot
+
+      socket.mockMessage(RESPONSES.channelEvent("userFills", { user, fills: [] }));
+      assertEquals(first, 1);
+      assertEquals(second, 1);
+
+      socket.terminate();
+    });
+
+    test("mutating the caller's payload after subscribing does not change the resubscribe frame", async () => {
+      const { socket, manager } = createManager(true);
+      const payload = { type: "l2Book", coin: "BTC" };
+
+      const subPromise = manager.subscribe("l2Book", payload, () => {});
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload));
+      await subPromise;
+      const subscribeFrame = socket.sentMessages[0];
+
+      payload.coin = "ETH"; // the caller still owns the object it passed
+
+      socket.disconnect();
+      socket.open();
+      assertEquals(socket.sentMessages.length, 2);
+      assertEquals(socket.sentMessages[1], subscribeFrame); // re-subscribed as originally subscribed
+
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", { type: "l2Book", coin: "BTC" }));
+      await drain();
+      socket.terminate();
+    });
+
+    test("each confirmed subscription resubscribes exactly once with the identical frame", async () => {
+      const { socket, manager } = createManager(true);
+      const payload1 = { type: "l2Book", coin: "BTC" };
+      const payload2 = { type: "userFills", user: "0x0000000000000000000000000000000000000001" };
+
+      const p1 = manager.subscribe("l2Book", payload1, () => {});
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload1));
+      await p1;
+      const p2 = manager.subscribe("userFills", payload2, () => {});
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload2));
+      await p2;
+      // A joiner on a confirmed subscription sends no frame and adds no resubscription later.
+      await manager.subscribe("l2Book", payload1, () => {});
+
+      const frames = [...socket.sentMessages];
+      assertEquals(frames.length, 2);
+
+      socket.disconnect();
+      socket.open();
+      assertEquals(socket.sentMessages.length, 4); // exactly one resubscribe per subscription
+      assertEquals(socket.sentMessages[2], frames[0]);
+      assertEquals(socket.sentMessages[3], frames[1]);
+
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload1));
+      socket.mockMessage(RESPONSES.subscriptionResponse("subscribe", payload2));
+      await drain();
+      socket.terminate();
     });
   });
 

@@ -46,14 +46,14 @@ export type PerpDeployAuctionStatusResponse = {
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /**
  * Request for the status of the perpetual deploy auction.
  *
  * @param config General configuration for Info API requests.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Status of the perpetual deploy auction.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -73,10 +73,15 @@ import type { InfoConfig } from "./_base/mod.ts";
  */
 export function perpDeployAuctionStatus(
   config: InfoConfig,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<PerpDeployAuctionStatusResponse> {
-  const request = parse(PerpDeployAuctionStatusRequest, {
-    type: "perpDeployAuctionStatus",
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    PerpDeployAuctionStatusRequest,
+    {
+      type: "perpDeployAuctionStatus",
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }

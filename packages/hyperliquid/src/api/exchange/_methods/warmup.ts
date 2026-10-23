@@ -1,5 +1,6 @@
 import { warmupSigning } from "../../../signing/mod.ts";
 import { buildAction, type ExchangeConfig } from "./_base/mod.ts";
+import { configWallet } from "./_base/_wallet.ts";
 import { OrderRequest } from "./order.ts";
 
 /** Sample order validated by {@linkcode warmup}; never signed or sent. */
@@ -20,11 +21,11 @@ const WARMUP_VALIDATIONS = 3;
  * built yet, and none of the validation or signing code is compiled. Call this during start-up,
  * before the first latency-sensitive action.
  *
- * Signs throwaway data only with wallets whose key is held in this process (viem
- * `privateKeyToAccount` / `mnemonicToAccount` / `hdKeyToAccount`, `createFastLocalWallet`, or a
- * viem `WalletClient` wrapping one). JSON-RPC wallets and custom signers (HSM, MPC, remote
- * services) are never asked to sign; they get the hash-path warm-up only. Nothing is sent and no
- * nonce is consumed.
+ * Signs throwaway data only with wallets whose key is held in this process (a raw private key
+ * string passed as `wallet`, viem `privateKeyToAccount` / `mnemonicToAccount` /
+ * `hdKeyToAccount`, `createFastLocalWallet`, or a viem `WalletClient` wrapping one). JSON-RPC
+ * wallets and custom signers (HSM, MPC, remote services) are never asked to sign; they get the
+ * hash-path warm-up only. Nothing is sent and no nonce is consumed.
  *
  * @param config General configuration for Exchange API requests.
  * @return A promise that resolves when the warm-up has finished.
@@ -47,5 +48,5 @@ export async function warmup(config: ExchangeConfig): Promise<void> {
   // Validate and canonicalize a sample order so the request-validation code is compiled too;
   // measured, this takes the first order from ~1.65 ms to ~1.1 ms after signing warm-up alone.
   for (let i = 0; i < WARMUP_VALIDATIONS; i++) buildAction(OrderRequest.entries.action, WARMUP_ORDER_ACTION);
-  await warmupSigning("wallet" in config ? config.wallet : config.signers);
+  await warmupSigning("wallet" in config ? configWallet(config) : config.signers);
 }

@@ -15,6 +15,7 @@ import {
 import { Address, Hex, UnsignedInteger } from "../../../_schemas.ts";
 import type { ExchangeConfig } from "./_config.ts";
 import { executeWithShell } from "./_shell.ts";
+import { configWallet } from "./_wallet.ts";
 
 // ============================================================
 // Schemas
@@ -110,7 +111,7 @@ function executeL1ActionResolved<T>(
         action.type === "createVault" || action.type === "agentSendAsset" ? { ...action, nonce } : action;
       if ("wallet" in config) {
         const signature = await signL1Action({
-          wallet: config.wallet,
+          wallet: configWallet(config),
           action: wireAction,
           nonce,
           isTestnet: config.transport.isTestnet,
@@ -187,7 +188,7 @@ export function executeUserSignedAction<T>(
       // --- Sign (single-wallet or multi-sig) -------------------
       if ("wallet" in config) {
         const signature = await signUserSignedAction({
-          wallet: config.wallet,
+          wallet: configWallet(config),
           action: fullAction,
           types,
         });
@@ -262,6 +263,6 @@ async function resolveSignatureChainId(config: ExchangeConfig): Promise<`0x${str
     }
     return entry.parsed;
   }
-  const leader = "wallet" in config ? config.wallet : config.signers[0];
+  const leader = "wallet" in config ? configWallet(config) : config.signers[0];
   return await getWalletChainId(leader);
 }

@@ -30,8 +30,7 @@ export type ApprovedBuildersResponse = `0x${string}`[];
 // Execution Logic
 // ============================================================
 
-import { parse } from "../../../_base.ts";
-import type { InfoConfig } from "./_base/mod.ts";
+import { type InfoConfig, type InfoRequestOptions, infoOptions, parseInfo } from "./_base/mod.ts";
 
 /** Request parameters for the {@linkcode approvedBuilders} function. */
 export type ApprovedBuildersParameters = Omit<v.InferInput<typeof ApprovedBuildersRequest>, "type">;
@@ -41,7 +40,8 @@ export type ApprovedBuildersParameters = Omit<v.InferInput<typeof ApprovedBuilde
  *
  * @param config General configuration for Info API requests.
  * @param params Parameters specific to the API request.
- * @param signal {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel the request.
+ * @param signalOrOptions {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal | AbortSignal} to cancel
+ * the request, or an {@linkcode InfoRequestOptions} object.
  * @return Array of approved builder addresses.
  *
  * @throws {ValidationError} When the request parameters fail validation (before sending).
@@ -64,11 +64,16 @@ export type ApprovedBuildersParameters = Omit<v.InferInput<typeof ApprovedBuilde
 export function approvedBuilders(
   config: InfoConfig,
   params: ApprovedBuildersParameters,
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | InfoRequestOptions,
 ): Promise<ApprovedBuildersResponse> {
-  const request = parse(ApprovedBuildersRequest, {
-    type: "approvedBuilders",
-    ...params,
-  });
+  const { signal, skipValidation } = infoOptions(signalOrOptions);
+  const request = parseInfo(
+    ApprovedBuildersRequest,
+    {
+      type: "approvedBuilders",
+      ...params,
+    },
+    skipValidation,
+  );
   return config.transport.request("info", request, signal);
 }
