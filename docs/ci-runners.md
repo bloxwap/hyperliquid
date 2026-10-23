@@ -1,6 +1,6 @@
 # CI runners
 
-Every GitHub Actions job in this repository runs on self-hosted Apple Silicon Mac minis.
+Build, test, documentation, and security jobs run on self-hosted Apple Silicon Mac minis.
 
 ```yaml
 runs-on: [self-hosted, macOS, ARM64]
@@ -8,9 +8,13 @@ runs-on: [self-hosted, macOS, ARM64]
 
 The runner must carry those three labels exactly. Workflows do not use `apt`, `sudo`, Homebrew, or Docker.
 
-## Trusted publishing is unavailable
+## npm publishing uses a GitHub-hosted runner
 
-[npm trusted publishing does not support self-hosted runners](https://docs.npmjs.com/trusted-publishers/). The publish job therefore authenticates with the org-level `NPM_TOKEN` secret (`NODE_AUTH_TOKEN`). That **drops OIDC trusted publishing and automatic provenance**.
+[npm trusted publishing requires a supported cloud-hosted runner](https://docs.npmjs.com/trusted-publishers/).
+The npm publish job runs on `ubuntu-latest` with `id-token: write`, using the trusted publisher configured for
+`bloxwap/hyperliquid` and `publish_npm.yml`. Node.js 24 provides a compatible npm CLI, which detects OIDC automatically
+and attaches provenance. The package can retain its 2FA requirement and disallow traditional publishing tokens.
+The workflow does not use `NPM_TOKEN`.
 
 ## What the runner must already have
 
@@ -35,7 +39,7 @@ The runner user must be able to write the workspace and `$RUNNER_TEMP`. The mach
 
 These are not machine prerequisites. The jobs fetch them into the job environment or `$RUNNER_TEMP`:
 
-- **Bun canary** — downloaded into `$RUNNER_TEMP` (`bun-darwin-aarch64` zip) on every job that runs workspace scripts. `oven-sh/setup-bun` is not used: it installs into `~/.bun`, which is shared across runner instances on the same Mac mini, and a mid-job overwrite makes the perf gate see two Bun versions.
+- **Bun canary** — downloaded into `$RUNNER_TEMP` (`bun-darwin-aarch64` zip) on self-hosted jobs that run workspace scripts. `oven-sh/setup-bun` installs it only on the ephemeral GitHub-hosted publishing runner; its shared `~/.bun` location would permit mid-job overwrites across runner instances on a Mac mini.
 - **Node.js 24** — `actions/setup-node` on the npm publish job only (the npm CLI used to publish `@bloxwap/hyperliquid`).
 - **Playwright Chromium** — `bunx playwright install chromium` in the docs job. `--with-deps` is omitted; that flag installs Linux apt packages. Chromium's macOS libraries ship with the OS. The first docs run downloads the browser into Playwright's cache on the runner.
 - **lychee v0.24.2** (`aarch64-apple-darwin`) — downloaded into `$RUNNER_TEMP`, checksum-verified, and used for the same Markdown link scan as before. The `lychee-action` composite only ships a Linux GNU binary.
@@ -56,7 +60,8 @@ The runner needs outbound HTTPS to:
 
 ## Secrets
 
-Unchanged: `CODECOV_TOKEN`, `PRIVATE_KEY` (online tests), and the default `GITHUB_TOKEN`. npm publish uses the org-level `NPM_TOKEN` secret (`NODE_AUTH_TOKEN`), not OIDC trusted publishing.
+`CODECOV_TOKEN`, `PRIVATE_KEY` (online tests), and the default `GITHUB_TOKEN` are used by their respective jobs.
+npm publishing uses the job's short-lived OIDC identity and needs no npm publishing token.
 
 ## Jobs
 
@@ -67,7 +72,7 @@ Unchanged: `CODECOV_TOKEN`, `PRIVATE_KEY` (online tests), and the default `GITHU
 | `docs.yml` | `docs` | self-hosted Mac mini |
 | `docs.yml` | `deploy` | self-hosted Mac mini |
 | `perf.yml` | `perf` | self-hosted Mac mini |
-| `publish_npm.yml` | `publish` | self-hosted Mac mini; `NPM_TOKEN`; release / workflow_dispatch |
+| `publish_npm.yml` | `publish` | GitHub-hosted Ubuntu; OIDC trusted publishing; release / workflow_dispatch |
 | `tests_offline.yml` | `test` | self-hosted Mac mini |
 | `tests_online.yml` | `test` | self-hosted Mac mini |
 | `security.yml` | `osv-scan` | self-hosted Mac mini |
