@@ -2,7 +2,7 @@
 
 This follow-up to [bloxwap/hig#69](https://github.com/bloxwap/hig/issues/69) refreshes the docs from candidate
 `7c67a07c` to exact clean `0e2394428a3971e677e0a97ef5259ac4ca1ec064`. The consumer baseline is
-`3ce98ef377250406ad65a2b163b1a4161d2f9983`. [Vendored provenance](../../../../vendor/bloxwap-hig/README.md) and
+`3ce98ef377250406ad65a2b163b1a4161d2f9983`. [Vendored provenance](https://github.com/bloxwap/hyperliquid/blob/8056522454517528de0b94550e272d9679f83740/vendor/bloxwap-hig/README.md) and
 [verification.json](verification.json) retain archive/report hashes, internal versions and font/card hashes.
 Nothing is published or deployed by this change.
 

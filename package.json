@@ -36,8 +36,6 @@
     "@biomejs/biome": "2.5.15"
   },
   "overrides": {
-    "@bloxwap/hig-contracts": "file:./vendor/bloxwap-hig/bloxwap-hig-contracts-0.1.0-candidate.sha0e239442.tgz",
-    "@bloxwap/hig-tokens": "file:./vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha0e239442.tgz",
     "katex": "0.18.11",
     "sharp": "0.35.5",
     "source-map-js": "1.2.2"
