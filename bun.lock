@@ -12,9 +12,9 @@
       "name": "@bloxwap/hyperliquid-docs",
       "dependencies": {
         "@bloxwap/font": "0.1.2",
-        "@bloxwap/hig-og-fonts": "file:../../vendor/bloxwap-hig/bloxwap-hig-og-fonts-0.1.0-candidate.sha0e239442.tgz",
-        "@bloxwap/hig-react": "file:../../vendor/bloxwap-hig/bloxwap-hig-react-0.1.0-candidate.sha0e239442.tgz",
-        "@bloxwap/hig-tokens": "file:../../vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha0e239442.tgz",
+        "@bloxwap/hig-og-fonts": "0.1.0",
+        "@bloxwap/hig-react": "0.1.0",
+        "@bloxwap/hig-tokens": "0.1.0",
         "@bloxwap/hyperliquid": "workspace:*",
         "animejs": "4.5.0",
         "fumadocs-core": "16.17.7",
@@ -70,8 +70,6 @@
     },
   },
   "overrides": {
-    "@bloxwap/hig-contracts": "file:./vendor/bloxwap-hig/bloxwap-hig-contracts-0.1.0-candidate.sha0e239442.tgz",
-    "@bloxwap/hig-tokens": "file:./vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha0e239442.tgz",
     "katex": "0.18.11",
     "sharp": "0.35.5",
     "source-map-js": "1.2.2",
@@ -101,13 +99,13 @@
 
     "@bloxwap/font": ["@bloxwap/font@0.1.2", "", { "peerDependencies": { "next": ">=15.0.0" }, "optionalPeers": ["next"] }, "sha512-3aWepyHUKhbRtpIZxYYN4ixY703YsKXcfgsRQR1BjiH8hkvahm/xfCkzFhb8fKoN6g1y6vTSb9FA5HCxJ9O0uQ=="],
 
-    "@bloxwap/hig-contracts": ["@bloxwap/hig-contracts@./vendor/bloxwap-hig/bloxwap-hig-contracts-0.1.0-candidate.sha0e239442.tgz", {}, "sha512-ny1ESP73JCQ7axoj6FKBYptR55Z1hBf/hIKj6ClEo0IFHqIW+IV23KM1bgRDSj+rP6c90OAa/f1Y8FTdgKADSw=="],
+    "@bloxwap/hig-contracts": ["@bloxwap/hig-contracts@0.1.0", "", {}, "sha512-FshDRNoR8/qMySeQHzJE4VWN4X1W8XVoKH7Cx3bVD8e0Tw+eq9qU9KGVPzTbiHRa/Axp6xwNxrS81TPU90xzUA=="],
 
-    "@bloxwap/hig-og-fonts": ["@bloxwap/hig-og-fonts@../../vendor/bloxwap-hig/bloxwap-hig-og-fonts-0.1.0-candidate.sha0e239442.tgz", {}, "sha512-A+qfIaJZCFdE6BvixhShQvmTG8ExXYIApbp4OsT73kHXpZj7TM84Yl9ND9S8utsMiCwFoGE1N24dQ0iSMsZKLw=="],
+    "@bloxwap/hig-og-fonts": ["@bloxwap/hig-og-fonts@0.1.0", "", {}, "sha512-Mu2bBjXL+SkswkTAS1m66M4x8r1qRFi6SM6LwJ3ehh99bJp2CBzVpLGVZWvIzR+lJ5nzl5kyE12+Pitq/HW5FA=="],
 
-    "@bloxwap/hig-react": ["@bloxwap/hig-react@../../vendor/bloxwap-hig/bloxwap-hig-react-0.1.0-candidate.sha0e239442.tgz", { "dependencies": { "@bloxwap/hig-contracts": "0.1.0-candidate.sha0e239442", "@bloxwap/hig-tokens": "0.1.0-candidate.sha0e239442" }, "peerDependencies": { "@radix-ui/react-dialog": "^1.1.15", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.15", "@radix-ui/react-tooltip": "^1.2.8", "react": "^19.1.0", "react-dom": "^19.1.0", "vaul": "^1.1.2" }, "optionalPeers": ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-popover", "@radix-ui/react-tooltip", "vaul"] }, "sha512-MBt2e2Q00umhyLCbzuAMGJBKqVXa9DEZ6S1l+NeOeLjQPUl5wtT9Iqo4TI7O0Uirf9PRKOWSqmr8o/qqdugbaQ=="],
+    "@bloxwap/hig-react": ["@bloxwap/hig-react@0.1.0", "", { "dependencies": { "@bloxwap/hig-contracts": "0.1.0", "@bloxwap/hig-tokens": "0.1.0" }, "peerDependencies": { "@radix-ui/react-dialog": "^1.1.15", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.15", "@radix-ui/react-tooltip": "^1.2.8", "react": "^19.1.0", "react-dom": "^19.1.0", "vaul": "^1.1.2" }, "optionalPeers": ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-popover", "@radix-ui/react-tooltip", "vaul"] }, "sha512-0LdFe1i79CHWi6wjZnC+Khj+2wyQgH6RHhu1EGSL0eL1W+jQhEAXr7GmMS7eulJJeijlW6a1wbQgA7FkczvyZw=="],
 
-    "@bloxwap/hig-tokens": ["@bloxwap/hig-tokens@./vendor/bloxwap-hig/bloxwap-hig-tokens-0.1.0-candidate.sha0e239442.tgz", {}, "sha512-/NV86ZbgbuHJPdNWKZFwJEcta8zMEP1iCoe6/VSFZlGeanSRU6uF5SDUJg43FsPoEwV9XVCur8GGNOwWMPPYjg=="],
+    "@bloxwap/hig-tokens": ["@bloxwap/hig-tokens@0.1.0", "", {}, "sha512-udpntFJd+V056S9CtBYQWFKY++me1h7fTTXfwq+ivyfDIveZrUW4tE10fghAtmDPz2m6jzOzMRCm/Cg5lw09GA=="],
 
     "@bloxwap/hyperliquid": ["@bloxwap/hyperliquid@workspace:packages/hyperliquid"],
 

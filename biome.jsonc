@@ -38,9 +38,7 @@
       "!.hig-source",
       "!.hig-artifacts",
       "!apps/docs/test-results",
-      "!apps/docs/playwright-report",
-      // Exact release report bytes are verified by lib/hig-artifacts.test.ts.
-      "!vendor/bloxwap-hig/source-report.json"
+      "!apps/docs/playwright-report"
     ]
   },
   "formatter": {

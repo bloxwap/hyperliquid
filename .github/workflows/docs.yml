@@ -15,7 +15,6 @@ on:
       - "package.json"
       - "bun.lock"
       - "bunfig.toml"
-      - "vendor/bloxwap-hig/**"
   pull_request:
     paths:
       - "README.md"
@@ -28,7 +27,6 @@ on:
       - "package.json"
       - "bun.lock"
       - "bunfig.toml"
-      - "vendor/bloxwap-hig/**"
   workflow_dispatch:
 
 permissions:
