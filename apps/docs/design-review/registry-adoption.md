@@ -17,7 +17,7 @@ subsequent frozen installs need no exemption. Non-HIG locked package versions re
 
 ## Verification
 
-All checks passed on Bun 1.4.4 and Node 24.22.1: 20 documentation unit tests and 10 Chromium
+All checks passed on Bun 1.4.4 and Node 24.6.0: 20 documentation unit tests and 10 Chromium
 production interaction tests. The static build verified 13 docs pages, 20 HTML files, 1,119 internal
 links/assets, 367 anchors and 14 unique social cards. Root formatting, lint, SDK checks and docs types passed.
 
