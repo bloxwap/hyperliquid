@@ -37,6 +37,19 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  security:
+    # Release scan, parallel with docs. Skipped on PRs.
+    if: github.event_name != 'pull_request'
+    uses: bloxwap/.github/.github/workflows/security-scan.yml@90c5e7f20cef611a83ea7db51f9b85478d714fa6 # v1
+    permissions:
+      contents: read
+    with:
+      runs-on: '["self-hosted","macOS","ARM64"]'
+      profile: release
+      secrets-days: "7"
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}
+
   docs:
     # Security: never run fork PR code on the self-hosted runner.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -131,7 +144,7 @@ jobs:
   deploy:
     # Security: never run fork PR code on the self-hosted runner.
     if: (github.event_name != 'pull_request' && github.ref == 'refs/heads/main') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    needs: docs
+    needs: [docs, security]
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 10
     permissions:

@@ -9,7 +9,20 @@ on:
   workflow_dispatch:
 
 jobs:
+  security:
+    # publish runs on ubuntu-latest; the scan runs on a mini (binaries are darwin_arm64). Adds the scan serially.
+    uses: bloxwap/.github/.github/workflows/security-scan.yml@90c5e7f20cef611a83ea7db51f9b85478d714fa6 # v1
+    permissions:
+      contents: read
+    with:
+      runs-on: '["self-hosted","macOS","ARM64"]'
+      profile: release
+      secrets-days: "7"
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}
+
   publish:
+    needs: security
     runs-on: ubuntu-latest
 
     permissions:
