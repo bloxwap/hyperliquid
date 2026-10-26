@@ -8,9 +8,9 @@ from the SDK package published from `packages/hyperliquid/dist`.
 
 ## Design system
 
-The shared presentation uses the HIG 0.1.0 candidate packages packed from `bloxwap/hig` commit
-`7c67a07` (`0.1.0-candidate.sha7c67a07c`). HIG has no npm release yet, so the packed tarballs are checked in under
-[`vendor/bloxwap-hig`](../../vendor/bloxwap-hig/README.md) and installed with `file:` dependencies.
+The shared presentation uses the published HIG `0.1.0` packages from npm. Exact versions and registry integrity
+hashes are pinned in the shared `bun.lock`; no vendored archives or HIG dependency overrides are required.
+The [registry migration record](design-review/registry-adoption.md) documents validation and rollback.
 
 - `@bloxwap/hig-tokens/css` supplies every color, spacing and control-size variable (`--hig-*`); `@bloxwap/hig-react/css`
   supplies the button, field, surface, skeleton and alert recipes. There is no copied palette in this app.
@@ -24,7 +24,7 @@ The shared presentation uses the HIG 0.1.0 candidate packages packed from `bloxw
 
 Read the [HIG package migration evidence](design-review/hig-packages/README.md) for validation, measurements,
 screenshots, exceptions and rollback, and the [first HIG migration](design-review/hig/README.md) for its history.
-No monorepo checkout, font CDN or npm publication is required.
+No monorepo checkout or font CDN is required.
 
 The [historical design review](design-review/README.md) preserves the original findings and screenshots from 2026-09-26.
 
@@ -105,8 +105,8 @@ always point to the published GitHub Pages site, including when previewing local
 - `app/og/[...slug]/route.tsx` generates `/og/home.png`, `/og/docs.png`, and `/og/docs/<slug>.png` during the static build.
 
 Cards use Bloxwap Sans Black for titles and Bloxwap Sans Bold for the owner, description, and stats. The static Bloxwap Sans
-faces and the card colors come from `@bloxwap/hig-tokens` (`assets/fonts/*.ttf`, OFL license included in the package;
-`tokens.colors.*.srgb`). The remaining bar colors are the Bloxwap brand palette.
+faces come from `@bloxwap/hig-og-fonts/node` (OFL license included in the package), and card colors use
+`@bloxwap/hig-tokens` (`tokens.colors.*.srgb`). The remaining bar colors are the Bloxwap brand palette.
 The renderer uses bundled fonts and brand geometry locally; it needs no font CDN, API credentials, or image server after
 deployment. Generated PNGs live in `out/` and are included in the GitHub Pages artifact.
 

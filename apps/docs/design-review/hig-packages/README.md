@@ -8,7 +8,7 @@ Part of [bloxwap/hig#34](https://github.com/bloxwap/hig/issues/34), following th
 
 - Baseline: Hyperliquid `33e42d7` (after [PR #179](https://github.com/bloxwap/hyperliquid/pull/179), which used a
   hand-copied plain-CSS snapshot of HIG `1a776b9`).
-- HIG: `0.1.0-candidate.sha7c67a07c`, packed tarballs in [`vendor/bloxwap-hig`](../../../../vendor/bloxwap-hig/README.md)
+- HIG: `0.1.0-candidate.sha7c67a07c`, packed tarballs in [`vendor/bloxwap-hig`](https://github.com/bloxwap/hyperliquid/blob/8056522454517528de0b94550e272d9679f83740/vendor/bloxwap-hig/README.md)
   (provenance, hashes, update and rollback). Nothing is published, tagged or released.
 
 ## What changed
