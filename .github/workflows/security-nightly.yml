@@ -1,0 +1,42 @@
+# Nightly security scan. Shared logic: bloxwap/.github/.github/workflows/security-scan.yml
+name: security-nightly
+
+on:
+  schedule:
+    - cron: "45 11 * * 1-6"   # Mon-Sat 11:45 UTC: incremental secrets window
+    - cron: "45 11 * * 0"     # Sunday: full git history for gitleaks
+  workflow_dispatch:
+    inputs:
+      secrets-mode:
+        type: choice
+        options: [incremental, full]
+        default: full
+  # Re-run the full scan (enforced) when the scan setup or its ignore lists change.
+  pull_request:
+    paths:
+      - .github/workflows/security-nightly.yml
+      - osv-scanner.toml
+      - .gitleaksignore
+      - .gitleaks.toml
+
+permissions: {}
+
+concurrency:
+  group: security-nightly-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    # Fork guard: never run fork PR code on self-hosted minis
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    uses: bloxwap/.github/.github/workflows/security-scan.yml@90c5e7f20cef611a83ea7db51f9b85478d714fa6 # v1
+    permissions:
+      contents: read
+    with:
+      runs-on: '["self-hosted","macOS","ARM64"]'
+      profile: nightly
+      secrets-mode: ${{ inputs.secrets-mode || (github.event.schedule == '45 11 * * 0' && 'full' || 'incremental') }}
+      upload-sarif: false     # no GHAS code scanning
+      upload-secret-report: false
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}  # optional; without it Slack is skipped
