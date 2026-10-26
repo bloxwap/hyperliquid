@@ -29,7 +29,7 @@ jobs:
   scan:
     # Fork guard: never run fork PR code on self-hosted minis
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    uses: bloxwap/.github/.github/workflows/security-scan.yml@0387d86d796b5a80509a9862b35991a160ff13b4 # v1.0.1
+    uses: bloxwap/.github/.github/workflows/security-scan.yml@6755bcc6a591531ae95a5babfa389c329f71ba0b # v1.0.2
     permissions:
       contents: read
     with:
