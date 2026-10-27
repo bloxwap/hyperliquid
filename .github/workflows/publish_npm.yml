@@ -11,7 +11,7 @@ on:
 jobs:
   security:
     # publish runs on ubuntu-latest; the scan runs on a mini (binaries are darwin_arm64). Adds the scan serially.
-    uses: bloxwap/.github/.github/workflows/security-scan.yml@6755bcc6a591531ae95a5babfa389c329f71ba0b # v1.0.2
+    uses: bloxwap/.github/.github/workflows/security-scan.yml@2a70724cd0d803abef5f5a7c64c46065f4fda19b # v1.1.0
     permissions:
       contents: read
     with:
@@ -31,6 +31,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       # npm >= 11.5.1 detects the OIDC environment and uses the configured trusted publisher.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -39,6 +41,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: canary
+          no-cache: true
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

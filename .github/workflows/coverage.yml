@@ -54,6 +54,8 @@ jobs:
       - name: Point TMPDIR at runner temp
         run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       # setup-bun writes ~/.bun, shared across runner instances on one Mac mini.
       - name: Install Bun canary into runner temp
         run: sh .github/scripts/setup-bun-isolated.sh

@@ -81,6 +81,7 @@ jobs:
         with:
           # The base commit must be reachable so it can be checked out into a second worktree.
           fetch-depth: 0
+          persist-credentials: false
 
       # setup-bun writes ~/.bun, shared across runner instances on one Mac mini.
       # Parallel canary installs overwrite each other; the perf compare then
