@@ -37,6 +37,7 @@
   },
   "overrides": {
     "katex": "0.18.11",
+    "re2js": "2.8.7",
     "sharp": "0.35.5",
     "source-map-js": "1.2.2"
   }
