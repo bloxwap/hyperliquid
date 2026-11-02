@@ -1,6 +1,8 @@
 name: Tests (offline)
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -60,12 +62,22 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Runs the same root script contributors run; it delegates to packages/hyperliquid.
-      # It sets HL_OFFLINE=1, which makes tests needing live Hyperliquid endpoints skip.
-      #
-      # Inside the SDK, `bun test tests/ -- --offline` also works: tests/_offline.ts recovers the raw command line
-      # because `bun test` does not forward argv to test files. The env var is preferred here because
-      # it needs no such recovery — that path reads /proc/self/cmdline on Linux or `ps` on Darwin
-      # and is the least-tested branch, so it stays off the CI critical path.
-      - name: bun test (offline)
-        run: bun run test:offline
+      # Fold coverage.yml into the offline suite so tests run once; keep both workflows' triggers.
+      - name: Generate coverage report with Bun
+        working-directory: packages/hyperliquid
+        env:
+          HL_OFFLINE: "1"
+        run: |
+          bun test tests/ --coverage --coverage-reporter=lcov --coverage-dir=coverage
+          test -s coverage/lcov.info
+          # Bun writes SDK-relative source paths; coverage services need repository-relative paths.
+          # Rewrite via $RUNNER_TEMP: BSD sed has no GNU `sed -i` in-place form.
+          sed 's|^SF:|SF:packages/hyperliquid/|' coverage/lcov.info > "$RUNNER_TEMP/lcov.info"
+          mv "$RUNNER_TEMP/lcov.info" coverage/lcov.info
+
+      # codecov-action requires host `gpg` for CLI integrity. These Mac minis do
+      # not have it; same pinned CLI + SHA256 check as lychee, same upload flags.
+      - name: Upload coverage reports to Codecov
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: sh .github/scripts/codecov-upload.sh ./packages/hyperliquid/coverage/lcov.info
