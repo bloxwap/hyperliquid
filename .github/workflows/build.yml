@@ -1,0 +1,98 @@
+name: SDK build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    # Security: never run fork PR code on the self-hosted runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.code }}
+    steps:
+      # SDK sources and the workspace build (root manifest, lockfile, bunfig, this workflow, the Bun installer).
+      # Doc-only PRs use the same excludes as the offline tests and the perf job. Non-PR events always run,
+      # including every push to main, so a release is not the first time the package is built.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            code:
+              - 'packages/hyperliquid/**'
+              - 'package.json'
+              - 'bun.lock'
+              - 'bunfig.toml'
+              - '.github/workflows/build.yml'
+              - '.github/scripts/setup-bun-isolated.sh'
+              - '!**/*.md'
+              - '!**/*.mdx'
+              - '!LICENSE'
+              - '!.github/ISSUE_TEMPLATE/**'
+              - '!.github/pull_request_template.md'
+              - '!CODEOWNERS'
+              - '!.github/CODEOWNERS'
+
+  build:
+    needs: changes
+    # Security: never run fork PR code on the self-hosted runner.
+    if: needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 20
+
+    steps:
+      # Job-level env cannot use the runner context on these Mac minis.
+      - name: Point TMPDIR at runner temp
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # Pinned release, checksum from bun-v1.4.4 SHASUMS256.txt (bun-darwin-aarch64.zip).
+      # Other jobs leave BUN_VERSION unset and still install canary.
+      - name: Install pinned Bun into runner temp
+        env:
+          BUN_VERSION: "1.4.4"
+          BUN_SHA256: "c240d7f0ccb90c263a849fcdb09b7ee62630d921348ed6aafda86b9d577bc510"
+        run: sh .github/scripts/setup-bun-isolated.sh
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # tsrs declarations. The build loads every entry in Node and type-checks a published consumer
+      # (nodenext, node16, bundler) against dist/. That is the built-package smoke check.
+      - name: Build package
+        run: bun run build
+
+      - name: Save the tsrs build
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/dts-tsrs"
+          mkdir -p "$RUNNER_TEMP/dts-tsrs"
+          tar -cf - -C packages/hyperliquid/dist . | tar -xf - -C "$RUNNER_TEMP/dts-tsrs"
+
+      # Same pipeline with TypeScript 5.9 emit, including its own consumer load.
+      - name: Build package with TypeScript 5.9
+        env:
+          HL_TSC: tsc
+        run: bun run build
+
+      # Union-member order and inferred object-member order may differ. Anything else fails.
+      - name: Compare tsrs declarations against TypeScript 5.9
+        working-directory: packages/hyperliquid
+        run: bun run check:declarations "$RUNNER_TEMP/dts-tsrs" dist
