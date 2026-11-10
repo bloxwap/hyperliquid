@@ -2,6 +2,14 @@
 
 All notable changes to `@bloxwap/hyperliquid` are documented in this file.
 
+## Unreleased
+
+### Changed
+
+- Pull requests that change the SDK or its build configuration build the publishable package, load that package, and
+  compare tsrs declaration files with TypeScript 5.9. Union-member order and inferred object-member order may differ;
+  any other declaration difference fails the check.
+
 ## 0.7.0 - 2026-10-23
 
 ### Added

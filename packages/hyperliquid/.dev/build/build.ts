@@ -107,8 +107,9 @@ const TSRS_PLATFORMS: ReadonlySet<string> = new Set(["darwin-arm64", "linux-x64"
 /**
  * Declaration compiler: tsrs (the Rust port of the TypeScript 7 compiler) by default, or TypeScript 5 `tsc` when
  * `HL_TSC=tsc` or on a platform tsrs ships no binary for (Windows, Intel macOS). Both emit semantically identical
- * declarations; tsrs output is byte-identical to TypeScript 7.0.2's and differs from TypeScript 5's only in the order
- * it prints union members.
+ * declarations. tsrs output is byte-identical to TypeScript 7.0.2's. Against TypeScript 5 it differs only by the
+ * order of union members and of properties in inferred object types: the same characters, printed in a different
+ * order. CI keeps that from turning into any other difference (see `declaration_parity.ts`).
  */
 const DECLARATION_COMPILER: string =
   process.env.HL_TSC === "tsc" || !TSRS_PLATFORMS.has(`${process.platform}-${process.arch}`) ? "tsc" : "tsrs";

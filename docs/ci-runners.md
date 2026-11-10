@@ -39,7 +39,7 @@ The runner user must be able to write the workspace and `$RUNNER_TEMP`. The mach
 
 These are not machine prerequisites. The jobs fetch them into the job environment or `$RUNNER_TEMP`:
 
-- **Bun canary** — downloaded into `$RUNNER_TEMP` (`bun-darwin-aarch64` zip) on self-hosted jobs that run workspace scripts. `oven-sh/setup-bun` installs it only on the ephemeral GitHub-hosted publishing runner; its shared `~/.bun` location would permit mid-job overwrites across runner instances on a Mac mini.
+- **Bun** — downloaded into `$RUNNER_TEMP` (`bun-darwin-aarch64` zip) on self-hosted jobs that run workspace scripts. `oven-sh/setup-bun` installs it only on the ephemeral GitHub-hosted publishing runner; its shared `~/.bun` location would permit mid-job overwrites across runner instances on a Mac mini. Jobs call `.github/scripts/setup-bun-isolated.sh`. With `BUN_VERSION` unset this is the unpinned canary. The SDK build job pins Bun 1.4.4 and checks `BUN_SHA256` against that release's `SHASUMS256.txt` entry for `bun-darwin-aarch64.zip`, so a canary 404 or a canary change cannot hide a broken publishable build. Other jobs leave the variables unset and still install canary.
 - **Node.js 24** — `actions/setup-node` on the npm publish job only (the npm CLI used to publish `@bloxwap/hyperliquid`).
 - **Playwright Chromium** — `bunx playwright install chromium` in the docs job. `--with-deps` is omitted; that flag installs Linux apt packages. Chromium's macOS libraries ship with the OS. The first docs run downloads the browser into Playwright's cache on the runner.
 - **lychee v0.24.2** (`aarch64-apple-darwin`) — downloaded into `$RUNNER_TEMP`, checksum-verified, and used for the same Markdown link scan as before. The `lychee-action` composite only ships a Linux GNU binary.
@@ -67,6 +67,7 @@ npm publishing uses the job's short-lived OIDC identity and needs no npm publish
 
 | Workflow | Job | Runner |
 | --- | --- | --- |
+| `build.yml` | `build` | self-hosted Mac mini |
 | `code_quality.yml` | `quality` | self-hosted Mac mini |
 | `coverage.yml` | `coverage` | self-hosted Mac mini |
 | `docs.yml` | `docs` | self-hosted Mac mini |

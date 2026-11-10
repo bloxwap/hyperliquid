@@ -335,7 +335,9 @@
     "//perf:gate": "Zero-regression gate: fails if any scenario got materially slower than the baseline.",
     "perf:gate": "bun run .dev/perf/gate.ts",
     "//build": "Emits declarations with tsrs; set HL_TSC=tsc to emit them with TypeScript 5 instead.",
-    "build": "bun run .dev/build/build.ts"
+    "build": "bun run .dev/build/build.ts",
+    "//check:declarations": "Compares two declaration trees. Order of union members and of properties in inferred object types may differ; any other difference fails. CI runs this on the tsrs build and the HL_TSC=tsc build.",
+    "check:declarations": "bun run .dev/build/declaration_parity.ts"
   },
   "dependencies": {
     "@noble/curves": "2.4.0",
