@@ -71,8 +71,10 @@ jobs:
           BUN_SHA256: "c240d7f0ccb90c263a849fcdb09b7ee62630d921348ed6aafda86b9d577bc510"
         run: sh .github/scripts/setup-bun-isolated.sh
 
+      # SDK workspace only. The docs app's packages are not needed to emit or load dist/,
+      # and a full workspace install would make this gate depend on them.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --filter @bloxwap/hyperliquid --frozen-lockfile
 
       # tsrs declarations. The build loads every entry in Node and type-checks a published consumer
       # (nodenext, node16, bundler) against dist/. That is the built-package smoke check.
