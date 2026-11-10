@@ -130,8 +130,15 @@ jobs:
           # the round steps then skip the base side and the Compare step passes the job.
           if [ -f "$BASE_SDK_DIR/tests/perf/run.ts" ]; then
             # Install from the base repository root so its own lockfile/workspaces apply.
+            # The suite only needs the SDK workspace. A full install also fetches apps/docs,
+            # and an unpublished docs dependency on the base lockfile fails the job before
+            # either revision is measured.
             cd "$RUNNER_TEMP/base"
-            bun install --frozen-lockfile
+            if [ -f packages/hyperliquid/package.json ]; then
+              bun install --frozen-lockfile --filter @bloxwap/hyperliquid
+            else
+              bun install --frozen-lockfile
+            fi
           else
             echo "Base commit $BASE_SHA has no performance suite; skipping the comparison."
           fi

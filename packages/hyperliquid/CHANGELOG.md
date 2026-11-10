@@ -14,6 +14,14 @@ All notable changes to `@bloxwap/hyperliquid` are documented in this file.
   when the flag is omitted, and throw when an explicit flag disagrees with one of those hosts (or when `apiUrl` and
   `rpcUrl` name different networks). The other URL defaults to the derived network. Custom hosts are not checked.
   A derived WebSocket network also selects that network's shared quota.
+- Browser bundles of `ExchangeClient`, `@bloxwap/hyperliquid/api/exchange`, and `@bloxwap/hyperliquid/signing` no
+  longer pull in optional `tiny-secp256k1`, `hash-wasm`, or `viem/accounts`. Those packages load through opaque dynamic
+  imports, so esbuild (`platform: browser`), Vite, and webpack build without a WASM loader. Node, Bun, and Deno still
+  use the WASM secp256k1 and keccak signers by default, and fall back to pure JS when a package is missing or fails its
+  self-check.
+- `createFastLocalWallet` applies the same known-answer self-check as raw private-key signing before trusting
+  `tiny-secp256k1`. The check runs once per loader. A module that later returns a short signature or a recovery id
+  other than 0 or 1 is rejected instead of being hex-encoded and sent.
 
 ### Added
 
@@ -21,6 +29,12 @@ All notable changes to `@bloxwap/hyperliquid` are documented in this file.
   (`sharedHttpRateLimiter`, `rateLimit: true`, or the same defaults on the platform clock). Pass a
   `TokenBucketRateLimiter` as `rateLimit` to share any other budget, or set `shared: false` for a private bucket.
   A custom capacity stays per instance unless `shared: true`. Mainnet and testnet do not share a bucket.
+
+### Changed
+
+- Pull requests that change the SDK or its build configuration build the publishable package, load that package, and
+  compare tsrs declaration files with TypeScript 5.9. Union-member order and inferred object-member order may differ;
+  any other declaration difference fails the check.
 
 ## 0.7.0 - 2026-10-23
 

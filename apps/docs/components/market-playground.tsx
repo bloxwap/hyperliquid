@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@bloxwap/hig-react/button";
-import { Alert } from "@bloxwap/hig-react/status";
+import { Button } from "@bloxwap/hig/react/button";
+import { Alert } from "@bloxwap/hig/react/status";
 import type { WebSocketTransport } from "@bloxwap/hyperliquid/transport/websocket";
 import { Radio, RotateCcw } from "lucide-react";
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
