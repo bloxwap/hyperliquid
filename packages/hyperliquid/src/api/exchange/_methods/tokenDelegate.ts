@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Delegate or undelegate native tokens to or from a validator.
@@ -97,7 +98,7 @@ export type TokenDelegateOptions = ExtractRequestOptions<v.InferInput<typeof Tok
 export type TokenDelegateSuccessResponse = ExcludeErrorResponse<TokenDelegateResponse>;
 
 /** EIP-712 types for the {@linkcode tokenDelegate} function. */
-export const TokenDelegateTypes = {
+export const TokenDelegateTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:TokenDelegate": [
     { name: "hyperliquidChain", type: "string" },
     { name: "validator", type: "address" },

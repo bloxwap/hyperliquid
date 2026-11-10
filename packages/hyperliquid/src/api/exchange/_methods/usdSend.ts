@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Send USD to another address.
@@ -91,7 +92,7 @@ export type UsdSendOptions = ExtractRequestOptions<v.InferInput<typeof UsdSendRe
 export type UsdSendSuccessResponse = ExcludeErrorResponse<UsdSendResponse>;
 
 /** EIP-712 types for the {@linkcode usdSend} function. */
-export const UsdSendTypes = {
+export const UsdSendTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:UsdSend": [
     { name: "hyperliquidChain", type: "string" },
     { name: "destination", type: "string" },

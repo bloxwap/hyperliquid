@@ -12,9 +12,11 @@ import {
   signMultiSigUserSigned,
   signUserSignedAction,
 } from "../../../../signing/mod.ts";
+import { userSignedPrimaryType } from "../../../../signing/_userSigned.ts";
 import { Address, Hex, UnsignedInteger } from "../../../_schemas.ts";
 import type { ExchangeConfig } from "./_config.ts";
 import { executeWithShell } from "./_shell.ts";
+import { actionClock, assertExpiresAfterTimestamp } from "./_timestamp.ts";
 import { configWallet } from "./_wallet.ts";
 
 // ============================================================
@@ -99,10 +101,17 @@ function executeL1ActionResolved<T>(
       ? undefined // `parse(optional(...))` on undefined always yields undefined — skip the call
       : parse(OptionalVaultAddressSchema, vaultAddressInput);
   const expiresAfter = options?.skipValidation
-    ? (expiresAfterInput as number | undefined)
+    ? expiresAfterInput === undefined
+      ? undefined
+      : typeof expiresAfterInput === "number"
+        ? expiresAfterInput
+        : Number(expiresAfterInput)
     : expiresAfterInput === undefined
       ? undefined
       : parse(OptionalExpiresAfterSchema, expiresAfterInput);
+  // Stays on with `skipValidation`: a seconds-scale or out-of-window expiry is a protocol reject,
+  // and checking it here is a few comparisons before any signature work.
+  if (expiresAfter !== undefined) assertExpiresAfterTimestamp(expiresAfter, actionClock(config.runtime));
 
   return executeWithShell<T>(
     config,
@@ -221,7 +230,7 @@ const nonceFieldNameCache = new WeakMap<Record<string, readonly { name: string; 
 function extractNonceFieldName(types: Record<string, readonly { name: string; type: string }[]>): "nonce" | "time" {
   let name = nonceFieldNameCache.get(types);
   if (name === undefined) {
-    const primaryType = Object.keys(types)[0];
+    const primaryType = userSignedPrimaryType(types);
     const field = types[primaryType].find((f) => f.name === "nonce" || f.name === "time");
     if (!field) {
       throw new HyperliquidError(`EIP-712 types must contain a "nonce" or "time" field in "${primaryType}"`);

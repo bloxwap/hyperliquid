@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Transfer tokens from Core to EVM with an additional data payload for `ICoreReceiveWithData` contracts.
@@ -107,7 +108,7 @@ export type SendToEvmWithDataOptions = ExtractRequestOptions<v.InferInput<typeof
 export type SendToEvmWithDataSuccessResponse = ExcludeErrorResponse<SendToEvmWithDataResponse>;
 
 /** EIP-712 types for the {@linkcode sendToEvmWithData} function. */
-export const SendToEvmWithDataTypes = {
+export const SendToEvmWithDataTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:SendToEvmWithData": [
     { name: "hyperliquidChain", type: "string" },
     { name: "token", type: "string" },

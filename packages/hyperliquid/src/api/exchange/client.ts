@@ -532,6 +532,12 @@ async function resolveCoinRefs<E extends { coin?: string }>(
  * Execute actions: place orders, cancel orders, transfer funds, etc.
  *
  * Corresponds to the {@link https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint | Exchange endpoint}.
+ *
+ * Nonces come from one realm-wide manager per signer address and network, shared by every
+ * `ExchangeClient` and every loaded copy of the SDK in this process. Another OS process or worker
+ * thread does not share that map: give it a different API wallet, or pass one coordinated
+ * `nonceManager` on `config`. A custom manager must return millisecond timestamps inside the
+ * exchange's `(now - 2 days, now + 1 day)` window.
  */
 export class ExchangeClient<C extends ExchangeConfig = ExchangeSingleWalletConfig> {
   readonly config: C;

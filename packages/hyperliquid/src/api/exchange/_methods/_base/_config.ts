@@ -32,14 +32,19 @@ interface BaseConfig<T extends IRequestTransport = IRequestTransport> {
   /**
    * How signed requests for this signer/network reach the transport. Default: `"ordered"`, which
    * dispatches in nonce issuance order. `{ mode: "bounded" }` lets a ready signature overtake a
-   * slower earlier one within the exchange's nonce window; it supports managed execution only and
-   * assumes this process is the signer's only nonce producer.
+   * slower earlier one within the exchange's nonce window; it supports managed execution only.
+   *
+   * The default nonce manager is the only producer for a signer inside this realm (one process,
+   * one worker, including every loaded copy of the SDK). Another OS process or worker thread is a
+   * different realm and does not share it — use a separate API wallet, or pass one coordinated
+   * `nonceManager`, for each.
    */
   dispatchPolicy?: DispatchPolicy;
 
   /**
-   * Wall clock used by bounded dispatch to re-check the nonce timestamp window and `expiresAfter`
-   * immediately before sending. Only `now` is read. Default: the platform clock.
+   * Wall clock used to check that nonces and `expiresAfter` are millisecond timestamps inside the
+   * protocol window, at issuance and again immediately before sending. Only `now` is read.
+   * Default: the platform clock.
    */
   runtime?: Partial<Runtime>;
 
@@ -54,13 +59,27 @@ interface BaseConfig<T extends IRequestTransport = IRequestTransport> {
 
   /**
    * Default expiration time in milliseconds, used when not specified in action options.
+   *
+   * Must be a safe-integer millisecond timestamp strictly after now and less than one day ahead.
+   * A seconds value is rejected before signing, in every dispatch mode, including `skipValidation`.
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#expires-after
    */
   defaultExpiresAfter?: number | (() => MaybePromise<number>);
 
   /**
    * Custom nonce generator function.
-   * Defaults to a global manager using timestamp with auto-increment.
+   *
+   * Defaults to a realm-wide manager: one map per signer address and network (`address:isTestnet`),
+   * shared by every `ExchangeClient` and every copy of this package loaded in the same realm
+   * (`globalThis`, so duplicate installs in one bundle do not collide). It uses `Date.now()` in
+   * milliseconds and bumps by 1 when the previous nonce is already ahead of the clock.
+   *
+   * The returned value must be a safe-integer millisecond timestamp inside
+   * `(now - 2 days, now + 1 day)`. Seconds, fractions, and out-of-window values throw
+   * `HyperliquidError` before signing, in every dispatch mode.
+   *
+   * Not shared across OS processes or worker threads — each has its own realm. Give each its own
+   * API wallet, or pass the same externally coordinated manager (for example backed by Redis).
    * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets#hyperliquid-nonces
    */
   nonceManager?: (address: string) => MaybePromise<number>;
@@ -136,8 +155,9 @@ interface BaseOptions {
    *
    * Invalid input on this path is the caller's problem: instead of a client-side
    * `ValidationError`, the server rejects the request — detecting that drift is the cost of the
-   * saved microseconds. Client-side guards for documented constraints (e.g. `scheduleCancel`'s
-   * 5-second lead time) are cheap and still run.
+   * saved microseconds. Client-side guards for documented constraints are cheap and still run:
+   * `scheduleCancel`'s 5-second lead time, and the millisecond window on `nonce` and
+   * `expiresAfter`.
    *
    * Default: `false` (validate).
    */

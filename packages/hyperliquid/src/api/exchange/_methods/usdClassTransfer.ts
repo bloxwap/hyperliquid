@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Transfer funds between spot account and perp account.
@@ -103,7 +104,7 @@ export type UsdClassTransferOptions = ExtractRequestOptions<v.InferInput<typeof 
 export type UsdClassTransferSuccessResponse = ExcludeErrorResponse<UsdClassTransferResponse>;
 
 /** EIP-712 types for the {@linkcode usdClassTransfer} function. */
-export const UsdClassTransferTypes = {
+export const UsdClassTransferTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:UsdClassTransfer": [
     { name: "hyperliquidChain", type: "string" },
     { name: "amount", type: "string" },

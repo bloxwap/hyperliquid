@@ -26,6 +26,7 @@ function harness(handler?: (body: { action: { orders: unknown[] } }) => unknown)
       },
     },
     nonceManager: () => nonce++,
+    runtime: clock,
     transport: {
       isTestnet: true,
       request: async <T>(_endpoint: "info" | "exchange", payload: unknown): Promise<T> => {
@@ -305,6 +306,7 @@ test("HTTP rate limiting charges one batch weight of 1 + floor(n / 40), not one 
       signTypedData: async () => `0x${"11".repeat(64)}1b`,
     },
     nonceManager: () => nonce++,
+    runtime: clock,
   };
   const batcher = createOrderBatcher(config, { runtime: clock, maxBatchSize: 80 });
   const results = Array.from({ length: 80 }, () => batcher.enqueue(input));

@@ -71,9 +71,17 @@ larger than the smallest stored, never repeat, and fall within `(T - 2 days, T +
 
 #### Operational nonce rules
 
-- **One signer = one process.** A wallet must be driven by a single nonce source. Multi-process deployments
-  (replicas, workers) need a shared `nonceManager` backed by external state (e.g. Redis), or the processes emit
-  colliding nonces, or nonces that fall outside the 100-highest window the exchange tracks, and get rejected.
+- **One signer = one realm.** The default nonce manager is a single map per signer address and network, stored on
+  `globalThis`. Every `ExchangeClient` and every copy of the SDK loaded in that realm (duplicate package versions,
+  ESM and CJS in one bundle) share it, so two clients for the same key do not emit the same millisecond nonce.
+- **Processes and workers do not share it.** Each OS process and each worker thread has its own realm. A replica
+  or worker that signs for the same wallet needs its own API wallet, or one `nonceManager` coordinated outside the
+  process (for example Redis). Otherwise the processes emit colliding nonces, or nonces that fall outside the
+  100-highest window the exchange tracks, and get rejected.
+- **Custom nonces are millisecond timestamps.** A `nonceManager` result and `expiresAfter` must be safe-integer
+  milliseconds inside the protocol window `(now - 2 days, now + 1 day)` (`expiresAfter` also has to be in the
+  future and under one day ahead). Seconds, fractions, and out-of-window values throw `HyperliquidError` before
+  signing, in every dispatch mode, including `skipValidation`.
 - **Restarts after running ahead of wall-clock.** Under burst load the built-in manager issues `last + 1`, running
   ahead of `Date.now()`. A restarted process re-derives nonces from the wall clock, so until real time catches up
   with the previously issued nonces the exchange can reject fresh requests.

@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Set user abstraction mode.
@@ -98,7 +99,7 @@ export type UserSetAbstractionOptions = ExtractRequestOptions<v.InferInput<typeo
 export type UserSetAbstractionSuccessResponse = ExcludeErrorResponse<UserSetAbstractionResponse>;
 
 /** EIP-712 types for the {@linkcode userSetAbstraction} function. */
-export const UserSetAbstractionTypes = {
+export const UserSetAbstractionTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:UserSetAbstraction": [
     { name: "hyperliquidChain", type: "string" },
     { name: "user", type: "address" },

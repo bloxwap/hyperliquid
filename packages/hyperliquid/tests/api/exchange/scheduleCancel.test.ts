@@ -73,7 +73,7 @@ describe("scheduleCancel (offline)", () => {
     Date.now = () => FROZEN;
     const { transport, payloads } = recordingTransport();
 
-    await scheduleCancel({ transport, wallet }, { time: FROZEN + 5_000 });
+    await scheduleCancel({ transport, wallet, nonceManager: () => Date.now() }, { time: FROZEN + 5_000 });
 
     assertEquals(payloads[0].action.time, FROZEN + 5_000);
   });
@@ -82,7 +82,7 @@ describe("scheduleCancel (offline)", () => {
     Date.now = () => FROZEN;
     const { transport, payloads } = recordingTransport();
 
-    await scheduleCancel({ transport, wallet }, { time: FROZEN + 30_000 });
+    await scheduleCancel({ transport, wallet, nonceManager: () => Date.now() }, { time: FROZEN + 30_000 });
 
     assertEquals(payloads.length, 1);
   });
@@ -92,12 +92,12 @@ describe("scheduleCancel (offline)", () => {
     const { transport, payloads } = recordingTransport();
 
     assertThrows(
-      () => scheduleCancel({ transport, wallet }, { time: FROZEN + 4_999 }),
+      () => scheduleCancel({ transport, wallet, nonceManager: () => Date.now() }, { time: FROZEN + 4_999 }),
       ValidationError,
       "at least 5 seconds in the future",
     );
     assertThrows(
-      () => scheduleCancel({ transport, wallet }, { time: FROZEN }),
+      () => scheduleCancel({ transport, wallet, nonceManager: () => Date.now() }, { time: FROZEN }),
       ValidationError,
       "at least 5 seconds in the future",
     );
@@ -109,7 +109,14 @@ describe("scheduleCancel (offline)", () => {
     const { transport, payloads } = recordingTransport();
 
     assertThrows(
-      () => scheduleCancel({ transport, wallet }, { time: FROZEN + 4_999 }, { skipValidation: true }),
+      () =>
+        scheduleCancel(
+          { transport, wallet, nonceManager: () => Date.now() },
+          { time: FROZEN + 4_999 },
+          {
+            skipValidation: true,
+          },
+        ),
       ValidationError,
       "at least 5 seconds in the future",
     );
@@ -119,7 +126,7 @@ describe("scheduleCancel (offline)", () => {
   test("time: null is treated as unset (python SDK parity)", async () => {
     const { transport, payloads } = recordingTransport();
 
-    await scheduleCancel({ transport, wallet }, { time: null });
+    await scheduleCancel({ transport, wallet, nonceManager: () => Date.now() }, { time: null });
 
     assertEquals("time" in payloads[0].action, false);
   });
@@ -127,7 +134,7 @@ describe("scheduleCancel (offline)", () => {
   test("omitted time posts an action without the time key", async () => {
     const { transport, payloads } = recordingTransport();
 
-    await scheduleCancel({ transport, wallet });
+    await scheduleCancel({ transport, wallet, nonceManager: () => Date.now() });
 
     assertEquals("time" in payloads[0].action, false);
   });

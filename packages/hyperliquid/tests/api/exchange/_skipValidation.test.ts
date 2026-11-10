@@ -41,7 +41,7 @@ describe("skipValidation", () => {
   test("produces wire output identical to the validated path for valid input", async () => {
     const { calls, transport } = recordingTransport();
     // Fixed nonce so the two payloads are comparable byte-for-byte (the signature commits to it).
-    const config = { transport, wallet, nonceManager: () => 1700000000000 };
+    const config = { transport, wallet, nonceManager: () => 1700000000000, runtime: { now: () => 1700000000000 } };
 
     await order(config, PARAMS);
     await order(config, PARAMS, { skipValidation: true });
@@ -52,7 +52,7 @@ describe("skipValidation", () => {
 
   test("produces wire output identical to the validated path with vaultAddress and expiresAfter", async () => {
     const { calls, transport } = recordingTransport();
-    const config = { transport, wallet, nonceManager: () => 1700000000000 };
+    const config = { transport, wallet, nonceManager: () => 1700000000000, runtime: { now: () => 1700000000000 } };
     const opts = {
       vaultAddress: "0x1234567890123456789012345678901234567890" as const,
       expiresAfter: 1700000060000,

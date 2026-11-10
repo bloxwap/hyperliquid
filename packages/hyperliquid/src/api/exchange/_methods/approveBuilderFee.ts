@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, Percent, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Approve a maximum fee rate for a builder.
@@ -95,7 +96,7 @@ export type ApproveBuilderFeeOptions = ExtractRequestOptions<v.InferInput<typeof
 export type ApproveBuilderFeeSuccessResponse = ExcludeErrorResponse<ApproveBuilderFeeResponse>;
 
 /** EIP-712 types for the {@linkcode approveBuilderFee} function. */
-export const ApproveBuilderFeeTypes = {
+export const ApproveBuilderFeeTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:ApproveBuilderFee": [
     { name: "hyperliquidChain", type: "string" },
     { name: "maxFeeRate", type: "string" },

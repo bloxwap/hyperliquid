@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /** Multi-sig config or `null` to revert to single-sig. */
 const ConvertToMultiSigUserRequestSignersSchema = /* @__PURE__ */ (() => {
@@ -120,7 +121,7 @@ export type ConvertToMultiSigUserOptions = ExtractRequestOptions<v.InferInput<ty
 export type ConvertToMultiSigUserSuccessResponse = ExcludeErrorResponse<ConvertToMultiSigUserResponse>;
 
 /** EIP-712 types for the {@linkcode convertToMultiSigUser} function. */
-export const ConvertToMultiSigUserTypes = {
+export const ConvertToMultiSigUserTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:ConvertToMultiSigUser": [
     { name: "hyperliquidChain", type: "string" },
     { name: "signers", type: "string" },

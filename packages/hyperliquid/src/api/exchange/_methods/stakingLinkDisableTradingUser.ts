@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Permanently disable a linked trading user, locking its funds.
@@ -100,7 +101,7 @@ export type StakingLinkDisableTradingUserOptions = ExtractRequestOptions<
 export type StakingLinkDisableTradingUserSuccessResponse = ExcludeErrorResponse<StakingLinkDisableTradingUserResponse>;
 
 /** EIP-712 types for the {@linkcode stakingLinkDisableTradingUser} function. */
-export const StakingLinkDisableTradingUserTypes = {
+export const StakingLinkDisableTradingUserTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:StakingLinkDisableTradingUser": [
     { name: "hyperliquidChain", type: "string" },
     { name: "tradingUser", type: "address" },

@@ -114,7 +114,7 @@ describe("approveAgent (offline)", () => {
 
     for (const params of unnamed) {
       const { transport, payloads } = recordingTransport();
-      await approveAgent({ transport, wallet, signatureChainId: "0x66eee" }, params);
+      await approveAgent({ transport, wallet, signatureChainId: "0x66eee", nonceManager: () => Date.now() }, params);
       assertEquals("agentName" in payloads[0].action, false);
     }
   });
@@ -123,7 +123,7 @@ describe("approveAgent (offline)", () => {
     const { transport, payloads } = recordingTransport();
 
     await approveAgent(
-      { transport, wallet, signatureChainId: "0x66eee" },
+      { transport, wallet, signatureChainId: "0x66eee", nonceManager: () => Date.now() },
       { agentAddress: randomAddress(), agentName: "myAgent" },
     );
 
@@ -139,6 +139,7 @@ describe("approveAgent (offline)", () => {
         signers: [wallet],
         multiSigUser: "0x0000000000000000000000000000000000000001",
         signatureChainId: "0x66eee",
+        nonceManager: () => Date.now(),
       },
       { agentAddress: randomAddress() },
     );
@@ -169,7 +170,7 @@ describe("approveAgent expiration guard (offline)", () => {
     const { transport, payloads } = recordingTransport();
 
     await approveAgent(
-      { transport, wallet, signatureChainId: "0x66eee" },
+      { transport, wallet, signatureChainId: "0x66eee", nonceManager: () => Date.now() },
       { agentAddress: randomAddress(), agentName: `agent valid_until ${FROZEN + 180 * DAY_MS}` },
     );
 
@@ -183,7 +184,7 @@ describe("approveAgent expiration guard (offline)", () => {
     assertThrows(
       () =>
         approveAgent(
-          { transport, wallet, signatureChainId: "0x66eee" },
+          { transport, wallet, signatureChainId: "0x66eee", nonceManager: () => Date.now() },
           { agentAddress: randomAddress(), agentName: `agent valid_until ${FROZEN + 180 * DAY_MS + 1}` },
         ),
       ValidationError,
@@ -199,7 +200,7 @@ describe("approveAgent expiration guard (offline)", () => {
     assertThrows(
       () =>
         approveAgent(
-          { transport, wallet, signatureChainId: "0x66eee" },
+          { transport, wallet, signatureChainId: "0x66eee", nonceManager: () => Date.now() },
           { agentAddress: randomAddress(), agentName: `agent valid_until ${FROZEN + 181 * DAY_MS}` },
           { skipValidation: true },
         ),
@@ -214,7 +215,7 @@ describe("approveAgent expiration guard (offline)", () => {
     const { transport, payloads } = recordingTransport();
 
     await approveAgent(
-      { transport, wallet, signatureChainId: "0x66eee" },
+      { transport, wallet, signatureChainId: "0x66eee", nonceManager: () => Date.now() },
       { agentAddress: randomAddress(), agentName: "myAgent" },
     );
 

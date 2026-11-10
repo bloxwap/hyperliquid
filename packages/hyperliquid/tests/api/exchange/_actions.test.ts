@@ -26,7 +26,12 @@ function harness(multi = false): { config: ExchangeConfig; calls: unknown[] } {
       return { status: "ok", response: { type: "order", data: { statuses: [{ resting: { oid: 1 } }] } } } as T;
     },
   };
-  const base = { transport, signatureChainId: "0x1" as const, nonceManager: () => 1_700_000_000_000 };
+  const base = {
+    transport,
+    signatureChainId: "0x1" as const,
+    nonceManager: () => 1_700_000_000_000,
+    runtime: { now: () => 1_700_000_000_000 },
+  };
   return {
     config: multi ? { ...base, signers: [wallet, secondWallet], multiSigUser: address } : { ...base, wallet },
     calls,

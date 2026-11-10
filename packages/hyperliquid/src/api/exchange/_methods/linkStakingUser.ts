@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Link staking and trading accounts for fee discount attribution.
@@ -103,7 +104,7 @@ export type LinkStakingUserOptions = ExtractRequestOptions<v.InferInput<typeof L
 export type LinkStakingUserSuccessResponse = ExcludeErrorResponse<LinkStakingUserResponse>;
 
 /** EIP-712 types for the {@linkcode linkStakingUser} function. */
-export const LinkStakingUserTypes = {
+export const LinkStakingUserTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:LinkStakingUser": [
     { name: "hyperliquidChain", type: "string" },
     { name: "user", type: "address" },

@@ -61,7 +61,12 @@ describe("prepareRequest + submitPrepared", () => {
   test("prepare → submit round-trip produces the same wire body as the direct call", async () => {
     const { calls, transport } = recordingTransport();
     // Fixed nonce so the two payloads are comparable byte-for-byte (the signature commits to it).
-    const config: ExchangeConfig = { transport, wallet, nonceManager: () => 1700000000000 };
+    const config: ExchangeConfig = {
+      transport,
+      wallet,
+      nonceManager: () => 1700000000000,
+      runtime: { now: () => 1700000000000 },
+    };
 
     await order(config, PARAMS);
     const prepared = await prepareRequest(config, (c) => order(c, PARAMS));
