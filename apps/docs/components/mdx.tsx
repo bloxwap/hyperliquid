@@ -1,4 +1,4 @@
-import { type AlertSeverity, Callout as HIGCallout } from "@bloxwap/hig-react/status";
+import { type AlertSeverity, Callout as HIGCallout } from "@bloxwap/hig/react/status";
 import defaultComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 import type { ReactNode } from "react";

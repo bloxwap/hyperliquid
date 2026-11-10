@@ -16,8 +16,7 @@
   },
   "dependencies": {
     "@bloxwap/font": "0.1.2",
-    "@bloxwap/hig-react": "0.1.0",
-    "@bloxwap/hig-tokens": "0.1.0",
+    "@bloxwap/hig": "0.2.0",
     "@bloxwap/hyperliquid": "workspace:*",
     "animejs": "4.5.0",
     "fumadocs-core": "16.17.7",
@@ -27,8 +26,7 @@
     "next": "16.4.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "rehype-raw": "7.0.0",
-    "@bloxwap/hig-og-fonts": "0.1.0"
+    "rehype-raw": "7.0.0"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

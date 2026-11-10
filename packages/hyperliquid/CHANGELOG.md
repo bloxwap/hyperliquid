@@ -15,6 +15,12 @@ All notable changes to `@bloxwap/hyperliquid` are documented in this file.
   `tiny-secp256k1`. The check runs once per loader. A module that later returns a short signature or a recovery id
   other than 0 or 1 is rejected instead of being hex-encoded and sent.
 
+### Changed
+
+- Pull requests that change the SDK or its build configuration build the publishable package, load that package, and
+  compare tsrs declaration files with TypeScript 5.9. Union-member order and inferred object-member order may differ;
+  any other declaration difference fails the check.
+
 ## 0.7.0 - 2026-10-23
 
 ### Added
