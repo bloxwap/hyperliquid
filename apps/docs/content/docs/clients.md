@@ -102,6 +102,12 @@ market data (`metaAndAssetCtxs`, `spotMetaAndAssetCtxs`), exchange status, user 
 through uncached. Cache keys incorporate the request params, so e.g. `marginTable` with different `id`/`dex` values
 never collide, and concurrent identical calls share one in-flight request.
 
+Cached responses are one shared object, deep-frozen when the response arrives. `SymbolConverter` reads perpetual
+asset ids from the order of `meta().universe` on that object, and `ExchangeClient` signs whatever id the converter
+returns. Sorting the array in place for a UI used to remap BTC and ETH for every later reader until the TTL expired;
+that mutation now throws `TypeError` and the order stays the listing order. Copy before you sort
+(`universe.slice().sort(...)`). A cache hit does not copy the payload.
+
 Metadata changes are rare but unannounced (new listings, new DEXs), so the useful TTL band is seconds to minutes:
 30 s – 5 min for the `meta` family and `outcomeMeta`; 5 – 10 min or more for the near-static `marginTable`,
 `perpDexs`, `tokenDetails`, and `outcomeTemplates`. The default is 60 s. Call `transport.clear()` to force a refetch
@@ -134,9 +140,9 @@ const [a, b] = await Promise.all([client.l2Book({ coin: "BTC" }), client.l2Book(
 ```
 
 Each joined duplicate saves a full round trip and the request's weight against the rate limit. The shared request is
-forgotten as soon as it settles, so the next call always refetches. Every caller receives the same response object, so
-treat it as read-only. An abort signal detaches only its own caller; the shared request is aborted only once every
-caller waiting on it has aborted.
+forgotten as soon as it settles, so the next call always refetches. Every caller receives the same deep-frozen
+response object. Copy it before editing; mutation throws. An abort signal detaches only its own caller; the shared
+request is aborted only once every caller waiting on it has aborted.
 
 ## Exchange endpoint
 

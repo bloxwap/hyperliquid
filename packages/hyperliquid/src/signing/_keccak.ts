@@ -13,10 +13,13 @@
  * The acceleration is ambient and lazy, mirroring the `tiny-secp256k1` wiring in
  * `_fastWallet.ts`: the first hash kicks a guarded dynamic import (deduped to one in-flight load),
  * and until the WASM module is ready, hashes transparently use noble — the sync API never blocks
- * on the async init. A missing or broken package — including one that fails the known-answer
- * self-check — leaves every hash on noble for the life of the process. The fallback is silent:
- * unlike the fast wallet, dispatch here is not something the user asked for, so there is nothing
- * to warn about. Users who never hash never load the WASM module.
+ * on the async init. The import specifier is opaque (`import(SPEC)`, with `webpackIgnore` /
+ * `@vite-ignore`) so a browser bundle of `ExchangeClient` does not resolve `hash-wasm` at build
+ * time. Node, Bun, and Deno still resolve it at runtime. A missing or broken package — including
+ * one that fails the known-answer self-check — leaves every hash on noble for the life of the
+ * process. The fallback is silent: unlike the fast wallet, dispatch here is not something the
+ * user asked for, so there is nothing to warn about. Users who never hash never load the WASM
+ * module.
  * @module
  */
 
@@ -39,13 +42,25 @@ type CheckpointHasher = WasmKeccak & Required<Pick<WasmKeccak, "save" | "load">>
 const KECCAK256_EMPTY = "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
 
 /**
+ * Opaque specifier for the optional `hash-wasm` import. A string literal is statically reachable
+ * from `ExchangeClient`; installs that skip the optional dependency, and browser bundles that
+ * cannot resolve it, must fall through to noble instead of failing the build.
+ */
+const HASH_WASM_SPEC = "hash-wasm";
+
+/** The real `hash-wasm` import. The specifier is not a literal, so the type is asserted here. */
+function importHashWasm(): Promise<{ createKeccak?: (bits: number) => Promise<WasmKeccak> }> {
+  return import(/* @vite-ignore */ /* webpackIgnore: true */ HASH_WASM_SPEC);
+}
+
+/**
  * Dynamically imports `hash-wasm` and creates its keccak-256 hasher, returning `undefined` when the
  * optional dependency is missing. The `try` routes an absent package to the noble fallback exactly
  * like the known-answer check in {@linkcode validateWasmKeccak} routes a broken one.
  */
 async function loadWasmKeccak(): Promise<WasmKeccak | undefined> {
   try {
-    const { createKeccak } = await import("hash-wasm");
+    const { createKeccak } = await importHashWasm();
     if (typeof createKeccak !== "function") return undefined;
     return await createKeccak(256);
   } catch {
@@ -80,7 +95,7 @@ function validateWasmKeccak(hasher: WasmKeccak | undefined): hasher is WasmKecca
 let keccakLoader: () => Promise<WasmKeccak | undefined> = loadWasmKeccak;
 
 /**
- * The one in-flight (or settled) load attempt. Deduped deliberately: a failed `import("hash-wasm")`
+ * The one in-flight (or settled) load attempt. Deduped deliberately: a failed `hash-wasm` import
  * is not necessarily cached by the runtime, so re-trying on every hash would put a rejected module
  * resolution on the hot path of installs without the package.
  */

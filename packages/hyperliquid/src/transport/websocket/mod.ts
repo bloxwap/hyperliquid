@@ -34,6 +34,7 @@ import {
   type WebSocketRateLimitOptions,
 } from "./_quota.ts";
 import { WebSocketSubscriptionManager } from "./_subscriptionManager.ts";
+import { resolveTransportIsTestnet } from "../_network.ts";
 import { resolveRuntime, type Runtime } from "../runtime.ts";
 
 export { WebSocketQuota, type WebSocketQuotaOptions, type WebSocketRateLimitOptions, WebSocketRequestError };
@@ -62,7 +63,13 @@ export interface WebSocketTransportOptions {
   /**
    * Indicates this transport uses testnet endpoint.
    *
-   * Default: `false`
+   * When omitted, a known Hyperliquid {@linkcode url} selects the network
+   * (`api.hyperliquid.xyz` and `rpc.hyperliquid.xyz` are mainnet,
+   * `api.hyperliquid-testnet.xyz` and `rpc.hyperliquid-testnet.xyz` are testnet), which also
+   * selects the shared WebSocket quota. An explicit value that disagrees with one of those
+   * hosts throws. Any other host — a proxy, a local node — is not checked.
+   *
+   * Default: `false`, or the network derived from a known Hyperliquid URL
    */
   isTestnet?: boolean;
   /**
@@ -147,7 +154,12 @@ export const TESTNET_RPC_WS_URL = "wss://rpc.hyperliquid-testnet.xyz/ws";
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/post-requests
  */
 export class WebSocketTransport implements IRequestTransport<"info" | "exchange">, ISubscriptionTransport {
-  /** Indicates this transport uses testnet endpoint. */
+  /**
+   * Indicates this transport uses testnet endpoint.
+   *
+   * Resolved at construction from {@linkcode WebSocketTransportOptions.isTestnet} and `url`
+   * when that URL is a known Hyperliquid host. The shared quota is keyed by this value.
+   */
   readonly isTestnet: boolean;
   /** The WebSocket that is used for communication. */
   readonly socket: ReconnectingWebSocket;
@@ -195,9 +207,17 @@ export class WebSocketTransport implements IRequestTransport<"info" | "exchange"
   private readonly _dispatcher: WebSocketDispatcher;
   private readonly _subscriptionManager: WebSocketSubscriptionManager;
 
-  /** Creates the transport and immediately starts connecting. */
+  /**
+   * Creates the transport and immediately starts connecting.
+   *
+   * @throws {TypeError} When `isTestnet` disagrees with a known Hyperliquid `url`.
+   */
   constructor(options?: WebSocketTransportOptions) {
-    this.isTestnet = options?.isTestnet ?? false;
+    // Before the quota and the socket: a mismatch must not open a connection or take a slot
+    // on the wrong network's shared budget.
+    this.isTestnet = resolveTransportIsTestnet("WebSocketTransport", options?.isTestnet, [
+      { name: "url", url: options?.url },
+    ]);
     this.quota = options?.quota ?? sharedWebSocketQuota(this.isTestnet);
     // Resolved once and shared by the socket, dispatcher, and keep-alive.
     const runtime = resolveRuntime(options?.runtime ?? options?.reconnect?.runtime);

@@ -638,9 +638,9 @@ call `await exchange.warmup()` at start-up if the very first order is latency-se
 
 - **Where WASM loads.** In Node, Bun, and Deno the import resolves natively and WASM is used. In browsers, bundled
   apps, and Workers the import is deliberately opaque (bundlers cannot follow it: the browser build of
-  `tiny-secp256k1` imports a `.wasm` file, which breaks Vite/webpack builds without a WASM plugin), so those
-  environments land on the pure-JS path. For WASM in a browser bundle, use
-  [`createFastLocalWallet`](#fast-local-wallet-wasm-secp256k1) with a bundler WASM plugin instead.
+  `tiny-secp256k1` imports a `.wasm` file, which breaks esbuild, Vite, and webpack builds without a WASM plugin), so
+  those environments land on the pure-JS path. [`createFastLocalWallet`](#fast-local-wallet-wasm-secp256k1) uses the
+  same opaque import, so a browser bundle of the SDK does not pull the WASM module in either.
 - **Opting out.** Pass a wallet object instead of the string: a viem account (`privateKeyToAccount(key)`) signs with
   viem's pure-JS noble as before, and `createFastLocalWallet(key, { wasm: false })` does the same through the SDK.
   Wallet objects are never upgraded: a viem account does not expose its key, so it keeps viem's signer.
@@ -674,13 +674,15 @@ const signature = await signL1Action({ wallet, action, nonce: Date.now() });
 
 The acceleration is strictly opt-in:
 
-- **Extra dependency.** `tiny-secp256k1` is an optional dependency, loaded through a guarded dynamic import inside the
-  factory — wallets created any other way never touch the WASM module. It pulls in one small package of its own
-  (`uint8array-tools`). If your package manager skips optional dependencies, install it explicitly:
-  `npm install tiny-secp256k1`.
-- **Graceful fallback.** If the module is missing or fails to initialize, the factory warns once and returns the plain
-  viem account (noble path) — signing keeps working, just slower. Pass `{ wasm: false }` to skip the WASM path (and the
-  warning) deliberately.
+- **Extra dependency.** `tiny-secp256k1` is an optional dependency, loaded through an opaque dynamic import inside the
+  factory — wallets created any other way never touch the WASM module, and browser bundlers do not follow the import
+  (the package's browser build imports a `.wasm` file). It pulls in one small package of its own (`uint8array-tools`).
+  If your package manager skips optional dependencies, install it explicitly: `npm install tiny-secp256k1`.
+- **Graceful fallback.** If the module is missing, fails to initialize, or fails the same known-answer self-check the
+  raw-key signer uses, the factory warns once and returns the plain viem account (noble path) — signing keeps working,
+  just slower. The self-check is cached so it runs once per process. Pass `{ wasm: false }` to skip the WASM path (and
+  the warning) deliberately. A module that passes the check and later returns a short signature or a recovery id other
+  than 0 or 1 is rejected instead of being sent.
 - **`signTypedData` is not accelerated.** User-signed actions and multi-sig wrappers delegate to a viem local account
   created from the same key (imported lazily on first use), so those flows require `viem` installed. A wallet used only
   for L1 actions never loads viem.
@@ -704,9 +706,10 @@ The acceleration needs no code changes:
   `@bloxwap/hyperliquid/signing`) waits until the load has settled. Both compute keccak-256, so the
   output is byte-identical either way; the SDK's differential tests pin that identity across input sizes, block
   boundaries, and real action preimages.
-- **Optional dependency.** `hash-wasm` is declared as an optional dependency and loaded through a guarded dynamic
-  import — if your package manager skips optional dependencies, install it explicitly: `npm install hash-wasm`. A
-  missing or broken module is never an error; the SDK just keeps the noble path.
+- **Optional dependency.** `hash-wasm` is declared as an optional dependency and loaded through an opaque dynamic
+  import, so a browser bundle does not have to resolve it. If your package manager skips optional dependencies, install
+  it explicitly: `npm install hash-wasm`. A missing or broken module is never an error; the SDK just keeps the noble
+  path.
 
 Unlike `createFastLocalWallet`, the dispatch is ambient: every signing entry point benefits, including wallets you
 already create today.
