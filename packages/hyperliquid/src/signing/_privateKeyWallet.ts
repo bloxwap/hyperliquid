@@ -12,9 +12,10 @@
  * RFC 6979 deterministic with low-S normalization, so the signature is byte-identical to viem's;
  * `tests/signing/privateKeyWallet.test.ts` pins that identity across keys, networks, and actions.
  *
- * The dynamic imports are OPAQUE (`import(SPEC)` with a non-literal specifier): the browser build
- * of `tiny-secp256k1` does `import * as wasm from "./secp256k1.wasm"`, which breaks Vite/webpack
- * builds without a WASM plugin when the specifier is statically reachable from `ExchangeClient`.
+ * The dynamic imports are OPAQUE (`import(SPEC)` with a non-literal specifier, plus
+ * `webpackIgnore` / `@vite-ignore`): the browser build of `tiny-secp256k1` does
+ * `import * as wasm from "./secp256k1.wasm"`, which breaks esbuild, Vite, and webpack builds
+ * without a WASM plugin when the specifier is statically reachable from `ExchangeClient`.
  * With the opaque form bundlers never follow the import; Node, Bun, and Deno resolve it at
  * runtime, and bundled/browser builds transparently land on the pure-JS fallback. `viem/accounts`
  * gets the same treatment for the `signTypedData` delegation, and because viem is not a
@@ -41,13 +42,7 @@ import {
   type TypedDataArgs,
 } from "./_abstractWallet.ts";
 import { keccak256 } from "./_keccak.ts";
-
-/** The subset of the `tiny-secp256k1` API the WASM backend relies on (validated after import). */
-interface TinySecp256k1 {
-  isPrivate(d: Uint8Array): boolean;
-  pointFromScalar(d: Uint8Array, compressed?: boolean): Uint8Array | null;
-  signRecoverable(h: Uint8Array, d: Uint8Array): { signature: Uint8Array; recoveryId: number };
-}
+import { acceptTinySecp256k1, type TinySecp256k1 } from "./_secp256k1SelfCheck.ts";
 
 /** The subset of the `@noble/curves` secp256k1 API the pure-JS backend relies on. */
 interface NobleSecp256k1 {
@@ -116,44 +111,15 @@ export function _setPrivateKeyBackendLoaderForTests(loader: (() => Promise<unkno
 }
 
 /**
- * Known-answer self-test the WASM module must pass before it is trusted with real keys: a fixed
- * key signing a fixed digest must reproduce a hard-coded viem signature byte-for-byte. A module
- * with the right shape but a broken or mismatched implementation (wrong curve parameters, a
- * non-deterministic nonce scheme, missing low-S normalization) fails here and routes to the
- * pure-JS fallback, exactly like a missing package.
- */
-const KAT_KEY = hexToBytes("822e9959e022b78423eb653a62ea0020cd283e71a2a8133a6ff2aeffaf373cff");
-const KAT_DIGEST = new Uint8Array(32).fill(0x07);
-const KAT_EXPECTED =
-  "0679e17743b3bc599274a8fac074deaa1eb696b6224984f4142a759d81ee6e6d7065f593377652847b9730aa9e2bc2dfe0e1de8bdbdef9bf6ca9c2ac8ded0cf21b";
-
-/**
  * Loads `tiny-secp256k1` through the current loader and validates it, returning `undefined` on
  * ANY failure: import throws, the three required functions are absent, or the known-answer
- * signature does not match. A `false` `isPrivate` for the user key is NOT handled here — that is
- * an invalid key, not a broken module, and throws rather than falling back.
+ * signature does not match ({@linkcode acceptTinySecp256k1}). A `false` `isPrivate` for the user
+ * key is NOT handled here — that is an invalid key, not a broken module, and throws rather than
+ * falling back.
  */
 async function loadWasmBackend(): Promise<TinySecp256k1 | undefined> {
   try {
-    const ecc = (await eccLoader()) as TinySecp256k1 | undefined;
-    if (
-      ecc === undefined ||
-      ecc === null ||
-      typeof ecc.signRecoverable !== "function" ||
-      typeof ecc.pointFromScalar !== "function" ||
-      typeof ecc.isPrivate !== "function"
-    ) {
-      return undefined;
-    }
-    const { signature, recoveryId } = ecc.signRecoverable(KAT_DIGEST, KAT_KEY);
-    if (
-      !(signature instanceof Uint8Array) ||
-      signature.length !== 64 ||
-      bytesToHex(signature) + (27 + (recoveryId & 1)).toString(16) !== KAT_EXPECTED
-    ) {
-      return undefined;
-    }
-    return ecc;
+    return acceptTinySecp256k1(await eccLoader());
   } catch {
     return undefined;
   }

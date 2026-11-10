@@ -10,18 +10,23 @@
  * and actions.
  *
  * The acceleration is strictly opt-in and lazy: `tiny-secp256k1` is an optional dependency loaded
- * through a guarded dynamic import inside the factory, so users who never call it never load the
- * WASM module. If the package is missing or fails to initialize, the factory warns once and
- * returns the plain viem account — signing keeps working through the noble path.
+ * through an opaque dynamic import (`import(SPEC)`, not a string literal, with `webpackIgnore` /
+ * `@vite-ignore`) inside the factory, so users who never call it never load the WASM module and
+ * bundlers of `ExchangeClient` never follow the import. The browser build of the package imports
+ * a `.wasm` file, which breaks esbuild, Vite, and webpack without a WASM plugin. Node, Bun, and
+ * Deno still resolve the specifier at runtime. The module must pass the same known-answer
+ * self-check as the raw-key wallet before it is trusted; the check is cached for the life of the
+ * loader. If the package is missing, fails to initialize, or fails that check, the factory warns
+ * once and returns the plain viem account — signing keeps working through the noble path.
  *
  * `signTypedData` (user-signed actions, multi-sig wrappers) is not accelerated: it delegates to a
- * viem local account created from the same key, imported lazily on first use. A wallet used only
- * for L1 actions therefore never loads viem at all.
+ * viem local account created from the same key, imported lazily on first use through the same
+ * opaque-specifier pattern (`viem` is not a dependency of this package). A wallet used only for
+ * L1 actions therefore never loads viem at all.
  *
- * viem is not a dependency of this package, so both viem-dependent paths reach it through
- * `import()`. Environments that cannot service a dynamic import (Jest without
- * `--experimental-vm-modules`, some React Native bundlers) supply `options.privateKeyToAccount`
- * instead; without it those paths throw an error saying so.
+ * Environments that cannot service a dynamic import (Jest without `--experimental-vm-modules`,
+ * some React Native bundlers) supply `options.privateKeyToAccount` instead; without it those
+ * paths throw an error saying so.
  * @module
  */
 
@@ -33,21 +38,28 @@ import {
   type DigestBytesCapable,
   SIGN_DIGEST_BYTES,
 } from "./_abstractWallet.ts";
-
-/** The subset of the `tiny-secp256k1` API the fast wallet relies on (validated after import). */
-interface TinySecp256k1 {
-  isPrivate(d: Uint8Array): boolean;
-  pointFromScalar(d: Uint8Array, compressed?: boolean): Uint8Array | null;
-  signRecoverable(h: Uint8Array, d: Uint8Array): { signature: Uint8Array; recoveryId: number };
-}
+import { acceptTinySecp256k1, type TinySecp256k1 } from "./_secp256k1SelfCheck.ts";
 
 /** Guards the one-time fallback warning so a burst of factory calls logs exactly once. */
 let fallbackWarningShown = false;
 
 /**
- * Dynamically imports `tiny-secp256k1`, returning `undefined` when the optional dependency is
- * missing or unusable. The shape check guards against a partially linked install the same way the
- * `try` guards against an absent one: both route to the viem/noble fallback.
+ * Opaque specifier for the optional `tiny-secp256k1` import. A string literal here is statically
+ * reachable from `ExchangeClient` and makes esbuild pull in `secp256k1.wasm`. See the module
+ * docstring.
+ */
+const TINY_SECP256K1_SPEC = "tiny-secp256k1";
+
+/** The real `tiny-secp256k1` import; production calls always take this one. */
+function importTinySecp256k1(): Promise<unknown> {
+  return import(/* @vite-ignore */ /* webpackIgnore: true */ TINY_SECP256K1_SPEC);
+}
+
+/**
+ * Dynamically imports `tiny-secp256k1` and accepts it only after the shared known-answer
+ * self-check, returning `undefined` when the optional dependency is missing or unusable. The
+ * shape check and the self-check both route to the viem/noble fallback, the same way a thrown
+ * import does.
  *
  * Exported (never from `mod.ts`) so tests can drive the failure arms through the same code the
  * real path uses: ESM module records are immutable, so a rejecting or partially linked real
@@ -55,28 +67,57 @@ let fallbackWarningShown = false;
  * mocking is not an option. Production calls always take the default real import.
  */
 export async function loadTinySecp256k1(
-  importEcc: () => Promise<unknown> = () => import("tiny-secp256k1"),
+  importEcc: () => Promise<unknown> = importTinySecp256k1,
 ): Promise<TinySecp256k1 | undefined> {
   try {
-    const ecc = (await importEcc()) as TinySecp256k1;
-    if (
-      typeof ecc.signRecoverable !== "function" ||
-      typeof ecc.pointFromScalar !== "function" ||
-      typeof ecc.isPrivate !== "function"
-    ) {
-      return undefined;
-    }
-    return ecc;
+    return acceptTinySecp256k1(await importEcc());
   } catch {
     return undefined;
   }
 }
 
 /** The loader the factory uses; replaced only by tests through {@linkcode _setEccLoaderForTests}. */
-let eccLoader: () => Promise<TinySecp256k1 | undefined> = loadTinySecp256k1;
+let eccLoader: () => Promise<unknown> = loadTinySecp256k1;
+
+/**
+ * One validation per loader. The self-check signs a fixed digest, so repeating it on every
+ * `createFastLocalWallet` call would put that signature on wallet construction. Production uses
+ * {@linkcode loadTinySecp256k1} for the life of the process; a test loader is cached until
+ * {@linkcode _setEccLoaderForTests} replaces it.
+ */
+let validatedLoader: (() => Promise<unknown>) | undefined;
+let validatedEcc: Promise<TinySecp256k1 | undefined> | undefined;
+
+/** Loads and validates the current loader, reusing the result while the loader is unchanged. */
+function resolveEcc(): Promise<TinySecp256k1 | undefined> {
+  if (validatedLoader === eccLoader && validatedEcc !== undefined) return validatedEcc;
+  const loader = eccLoader;
+  validatedLoader = loader;
+  // The default loader already runs the self-check. A test loader returns a raw module, so the
+  // check has to happen here or a wrong-answer module would be trusted.
+  validatedEcc =
+    loader === loadTinySecp256k1
+      ? loadTinySecp256k1()
+      : Promise.resolve()
+          .then(() => loader())
+          .then((value) => acceptTinySecp256k1(value))
+          .catch(() => undefined);
+  return validatedEcc;
+}
 
 /** `privateKeyToAccount` from `viem/accounts`, however the caller obtained it. */
 export type PrivateKeyToAccount = (privateKey: `0x${string}`) => AbstractViemLocalAccount;
+
+/**
+ * Opaque specifier for `viem/accounts`. viem is not a dependency of this package, so a literal
+ * import of it would fail every consumer bundle that does not install it.
+ */
+const VIEM_ACCOUNTS_SPEC = "viem/accounts";
+
+/** The real `viem/accounts` import; production calls always take this one. */
+function importViemAccounts(): Promise<{ privateKeyToAccount: unknown }> {
+  return import(/* @vite-ignore */ /* webpackIgnore: true */ VIEM_ACCOUNTS_SPEC);
+}
 
 /**
  * Resolves `privateKeyToAccount`, preferring one the caller supplied.
@@ -98,7 +139,7 @@ export type PrivateKeyToAccount = (privateKey: `0x${string}`) => AbstractViemLoc
 export async function resolvePrivateKeyToAccount(
   provided: PrivateKeyToAccount | undefined,
   need: "the tiny-secp256k1 fallback" | "signTypedData",
-  importViem: () => Promise<{ privateKeyToAccount: unknown }> = () => import("viem/accounts"),
+  importViem: () => Promise<{ privateKeyToAccount: unknown }> = importViemAccounts,
 ): Promise<PrivateKeyToAccount> {
   if (provided !== undefined) return provided;
   try {
@@ -145,9 +186,11 @@ function assertDelegateMatches(delegate: AbstractViemLocalAccount, expected: `0x
  * loaded real module shadows the mock, so which path a test sees would depend on file order. Not
  * re-exported from `mod.ts`; the public surface is {@linkcode createFastLocalWallet} only.
  */
-export function _setEccLoaderForTests(loader: (() => Promise<TinySecp256k1 | undefined>) | undefined): void {
+export function _setEccLoaderForTests(loader: (() => Promise<unknown>) | undefined): void {
   eccLoader = loader ?? loadTinySecp256k1;
   fallbackWarningShown = false;
+  validatedLoader = undefined;
+  validatedEcc = undefined;
 }
 
 /** Derives the Ethereum address from a private key via the WASM module (`keccak256(uncompressedPoint[1:])[12:]`). */
@@ -183,8 +226,8 @@ function toChecksumAddress(address: `0x${string}`): `0x${string}` {
  * CPU cost, which is what `signL1Action` pays per L1 action.
  *
  * Fallbacks, in order:
- * - `tiny-secp256k1` missing or broken → a one-time `console.warn`, and the factory returns the
- *   plain viem local account (the noble path).
+ * - `tiny-secp256k1` missing, broken, or failing its known-answer self-check → a one-time
+ *   `console.warn`, and the factory returns the plain viem local account (the noble path).
  * - `signTypedData` → always delegated to viem (imported lazily on first use), since the WASM
  *   module accelerates raw digests only.
  *
@@ -231,13 +274,14 @@ export async function createFastLocalWallet(
   }
   const privateKeyBytes = hexToBytes(privateKey.slice(2));
 
-  const ecc = options?.wasm === false ? undefined : await eccLoader();
+  const ecc = options?.wasm === false ? undefined : await resolveEcc();
   if (ecc === undefined) {
     if (options?.wasm !== false && !fallbackWarningShown) {
       fallbackWarningShown = true;
       console.warn(
-        "createFastLocalWallet: the optional dependency `tiny-secp256k1` could not be loaded; " +
-          "falling back to the viem/noble signing path. Install `tiny-secp256k1` to enable WASM acceleration.",
+        "createFastLocalWallet: the optional dependency `tiny-secp256k1` could not be loaded or failed its " +
+          "self-check; falling back to the viem/noble signing path. Install `tiny-secp256k1` to enable WASM " +
+          "acceleration.",
       );
     }
     const privateKeyToAccount = await resolvePrivateKeyToAccount(
@@ -270,10 +314,23 @@ export async function createFastLocalWallet(
 
   // libsecp256k1 signs RFC 6979 deterministically and normalizes to low-S, flipping the
   // recovery id on normalization — the same output noble produces with `lowS: true`, so the
-  // 65-byte layout is byte-identical to viem's `sign`. `v` keeps only the parity bit: the
-  // overflow bit (recoveryId 2/3) is unrepresentable in Ethereum's 27/28 scheme.
+  // 65-byte layout is byte-identical to viem's `sign`. A module that passed the known-answer
+  // check can still return a short buffer or a recovery id outside {0, 1} for some other digest.
+  // Those are not Ethereum signatures (`v` is only 27/28); sending them would authorize nothing
+  // and point nowhere. `(recoveryId & ~1) === 0` is the overflow-bit check, and the strict
+  // `0`/`1` test rejects values whose ToInt32 coercion would otherwise pass the mask.
   const signDigestBytes = (digest: Uint8Array): `0x${string}` => {
     const { signature, recoveryId } = ecc.signRecoverable(digest, privateKeyBytes);
+    if (
+      !(signature instanceof Uint8Array) ||
+      signature.length !== 64 ||
+      (recoveryId !== 0 && recoveryId !== 1) ||
+      (recoveryId & ~1) !== 0
+    ) {
+      throw new AbstractWalletError(
+        "tiny-secp256k1 returned a signature that cannot be recovered (expected 64 bytes and recovery id 0 or 1)",
+      );
+    }
     return `0x${bytesToHex(signature)}${(27 + (recoveryId & 1)).toString(16)}`;
   };
 
