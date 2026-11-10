@@ -31,10 +31,13 @@
 
 import { type IRequestTransport, TransportError } from "../_base.ts";
 import * as abort from "../_abort.ts";
-import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
+import { resolveTransportIsTestnet } from "../_network.ts";
 import { TokenBucketRateLimiter } from "../_rateLimiter.ts";
+import { redactSignature, UNSERIALIZABLE_REQUEST } from "../_redact.ts";
 import { exchangeWeight, exchangeWireJSON, type ExchangeWireWeight } from "../_wire.ts";
-import { delay, resolveRuntime, type Runtime } from "../runtime.ts";
+import { delay, resolveRuntime, systemRuntime, type Runtime } from "../runtime.ts";
+
+export { TokenBucketRateLimiter };
 
 /** Configuration options for the HTTP transport layer. */
 export interface HttpTransportOptions {
@@ -53,7 +56,14 @@ export interface HttpTransportOptions {
   /**
    * Indicates this transport uses testnet endpoint.
    *
-   * Default: `false`
+   * When omitted, a known Hyperliquid {@linkcode apiUrl} or {@linkcode rpcUrl} selects the
+   * network (`api.hyperliquid.xyz` / `rpc.hyperliquid.xyz` are mainnet,
+   * `api.hyperliquid-testnet.xyz` / `rpc.hyperliquid-testnet.xyz` are testnet) and the URL you
+   * did not pass defaults to that same network. An explicit value that disagrees with one of
+   * those hosts throws, and so do two known hosts on different networks. Any other host — a
+   * proxy, a local node — is not checked.
+   *
+   * Default: `false`, or the network derived from a known Hyperliquid URL
    */
   isTestnet?: boolean;
   /**
@@ -88,16 +98,32 @@ export interface HttpTransportOptions {
    * The wait honors caller aborts and ends before the request timeout is armed, so deliberate
    * throttling never trips {@linkcode HttpTransportOptions.timeout}.
    *
+   * Hyperliquid's budget is per IP. The default 1200/1200 budget on the platform clock is one
+   * process-wide bucket per API host ({@linkcode sharedHttpRateLimiter}), so two transports to
+   * `api.hyperliquid.xyz` cannot each spend 1200 weight/minute. `true` selects that bucket.
+   * A custom capacity stays private to this instance unless {@linkcode HttpRateLimitOptions.shared}
+   * is set or a {@linkcode TokenBucketRateLimiter} is passed in. A custom {@linkcode runtime}
+   * drives a private bucket; it does not retarget the process-wide one. Pass a limiter built
+   * with that clock when several transports must share it.
+   *
+   * The bucket is chosen from {@linkcode apiUrl} at construction. Later assignments to `apiUrl`
+   * do not move it. Explorer requests debit the same bucket.
+   *
    * Default: `undefined` (no client-side limiting)
    *
    * @example
    * ```ts
-   * import { HttpTransport } from "@bloxwap/hyperliquid";
+   * import { HttpTransport, sharedHttpRateLimiter } from "@bloxwap/hyperliquid";
    *
-   * const transport = new HttpTransport({ rateLimit: { capacity: 1200, refillPerMinute: 1200 } });
+   * // One shared 1200/minute bucket for this process and host.
+   * const info = new HttpTransport({ rateLimit: true });
+   * const exchange = new HttpTransport({ rateLimit: true });
+   *
+   * // The same bucket, fetched directly so it can be handed to a transport with its own clock.
+   * const limiter = sharedHttpRateLimiter("https://api.hyperliquid.xyz");
    * ```
    */
-  rateLimit?: HttpRateLimitOptions;
+  rateLimit?: boolean | HttpRateLimitOptions | TokenBucketRateLimiter;
   /**
    * Opt-in automatic retry of requests the server answers with `429 Too Many Requests`.
    *
@@ -153,6 +179,47 @@ export interface HttpRateLimitOptions {
    * Default: `1200` (Hyperliquid's per-IP REST budget)
    */
   refillPerMinute?: number;
+  /**
+   * Draw from the process-wide bucket for this transport's API host.
+   *
+   * The REST budget is per IP. Transports that share a host and leave this unset share that
+   * bucket when `capacity` and `refillPerMinute` are both the default 1200 and the transport
+   * uses the platform clock. Any other capacity is private unless this is `true`. Set `false`
+   * for a private bucket even at 1200 — a process with several egress IPs needs one bucket per
+   * IP. A second shared bucket for the same host with a different capacity or refill throws:
+   * one host has one budget.
+   *
+   * Default: `true` for the 1200/1200 platform-clock budget, otherwise `false`
+   */
+  shared?: boolean;
+}
+
+/**
+ * Options for {@linkcode sharedHttpRateLimiter}.
+ *
+ * The first call for a host creates the bucket. Later calls with the same capacity and refill
+ * return that bucket; a different capacity or refill throws. A `runtime` passed to a later call
+ * does not replace the clock the bucket was created with.
+ */
+export interface SharedHttpRateLimitOptions {
+  /**
+   * Maximum burst size, in weight units.
+   *
+   * Default: `1200`
+   */
+  capacity?: number;
+  /**
+   * Steady-state refill rate, in weight units per minute.
+   *
+   * Default: `1200`
+   */
+  refillPerMinute?: number;
+  /**
+   * Clock and timers for the bucket, used only when this call creates it.
+   *
+   * Default: the platform clock
+   */
+  runtime?: Partial<Runtime>;
 }
 
 /** Configuration for the HTTP transport's opt-in 429 retry ({@linkcode HttpTransportOptions.retryOnRateLimit}). */
@@ -182,6 +249,101 @@ export const TESTNET_API_URL = "https://api.hyperliquid-testnet.xyz";
 export const MAINNET_RPC_URL = "https://rpc.hyperliquid.xyz";
 /** Testnet RPC URL. */
 export const TESTNET_RPC_URL = "https://rpc.hyperliquid-testnet.xyz";
+
+/** One process-wide REST bucket per API host. The first creator's capacity, refill, and clock stick. */
+const SHARED_HTTP_LIMITERS = new Map<
+  string,
+  { limiter: TokenBucketRateLimiter; capacity: number; refillPerMinute: number }
+>();
+
+/**
+ * The process-wide REST weight bucket for one API host.
+ *
+ * Hyperliquid allows 1200 weight per minute per IP. Each `HttpTransport` used to keep a private
+ * bucket, so N transports could send N × 1200 while each believed it was inside the budget.
+ * Transports that enable the default budget share the limiter this returns for their `apiUrl`
+ * host. Mainnet and testnet are different hosts (different servers, different counters). A
+ * custom host gets its own bucket; pass one limiter into every transport yourself when several
+ * hosts egress through the same IP and must share a budget.
+ *
+ * `host` is a URL or a bare hostname. The key is the hostname plus a non-default port, so a
+ * path or a change of case does not create a second bucket.
+ *
+ * @param host API URL or hostname the transports send info and exchange requests to.
+ * @param options Capacity, refill, and the clock used when this call creates the bucket.
+ * @returns The limiter for `host`. Pass it as {@linkcode HttpTransportOptions.rateLimit}.
+ *
+ * @throws {TypeError} When `host` already has a bucket with a different capacity or refill.
+ * @throws {RangeError} When `capacity` or `refillPerMinute` cannot drive a token bucket.
+ *
+ * @example
+ * ```ts
+ * import { HttpTransport, sharedHttpRateLimiter } from "@bloxwap/hyperliquid";
+ *
+ * const limiter = sharedHttpRateLimiter("https://api.hyperliquid.xyz");
+ * const info = new HttpTransport({ rateLimit: limiter });
+ * const exchange = new HttpTransport({ rateLimit: limiter });
+ * ```
+ */
+export function sharedHttpRateLimiter(
+  host: string | URL,
+  options?: SharedHttpRateLimitOptions,
+): TokenBucketRateLimiter {
+  const key = httpRateLimitHost(host);
+  const capacity = options?.capacity ?? 1200;
+  const refillPerMinute = options?.refillPerMinute ?? 1200;
+  const existing = SHARED_HTTP_LIMITERS.get(key);
+  if (existing !== undefined) {
+    if (existing.capacity !== capacity || existing.refillPerMinute !== refillPerMinute) {
+      throw new TypeError(
+        `sharedHttpRateLimiter: host ${key} already has a bucket of capacity ${existing.capacity} refilling ${existing.refillPerMinute}/minute (asked for capacity ${capacity} refilling ${refillPerMinute}/minute). One host shares one per-IP budget; pass that limiter, or set rateLimit.shared to false for a private bucket.`,
+      );
+    }
+    return existing.limiter;
+  }
+  const limiter = new TokenBucketRateLimiter(capacity, refillPerMinute, options?.runtime);
+  SHARED_HTTP_LIMITERS.set(key, { limiter, capacity, refillPerMinute });
+  return limiter;
+}
+
+/** Hostname, plus a non-default port, that keys {@linkcode sharedHttpRateLimiter}. */
+function httpRateLimitHost(host: string | URL): string {
+  try {
+    const parsed = typeof host === "string" ? new URL(host.includes("://") ? host : `https://${host}`) : host;
+    return parsed.port === "" ? parsed.hostname : `${parsed.hostname}:${parsed.port}`;
+  } catch {
+    return typeof host === "string" ? host : host.href;
+  }
+}
+
+/**
+ * The limiter a transport should draw from, or `null` when limiting is off.
+ *
+ * A passed-in limiter is used as-is. The default 1200/1200 budget on the platform clock joins
+ * the process-wide bucket for `apiUrl`. Any other shape is a private bucket driven by `runtime`,
+ * so an injected clock still paces the transport that asked for it.
+ */
+function resolveHttpRateLimit(
+  option: boolean | HttpRateLimitOptions | TokenBucketRateLimiter | undefined,
+  apiUrl: string | URL,
+  runtime: Runtime,
+): TokenBucketRateLimiter | null {
+  if (option === undefined || option === false) return null;
+  if (option instanceof TokenBucketRateLimiter) return option;
+  if (option !== true && (typeof option !== "object" || option === null)) {
+    throw new TypeError("HttpTransport: rateLimit must be true, false, an options object, or a TokenBucketRateLimiter");
+  }
+  const spec: HttpRateLimitOptions = option === true ? {} : option;
+  if (spec.shared !== undefined && typeof spec.shared !== "boolean") {
+    throw new TypeError("HttpTransport: rateLimit.shared must be a boolean");
+  }
+  const capacity = spec.capacity ?? 1200;
+  const refillPerMinute = spec.refillPerMinute ?? 1200;
+  const defaults = capacity === 1200 && refillPerMinute === 1200;
+  const shared = spec.shared ?? (option === true || (defaults && runtime === systemRuntime));
+  if (!shared) return new TokenBucketRateLimiter(capacity, refillPerMinute, runtime);
+  return sharedHttpRateLimiter(apiUrl, { capacity, refillPerMinute });
+}
 
 /**
  * Error thrown when an HTTP request fails.
@@ -319,7 +481,12 @@ export class HttpRateLimitError extends HttpRequestError {
  * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint
  */
 export class HttpTransport implements IRequestTransport<"info" | "exchange" | "explorer"> {
-  /** Indicates this transport uses testnet endpoint. */
+  /**
+   * Indicates this transport uses testnet endpoint.
+   *
+   * Resolved at construction from {@linkcode HttpTransportOptions.isTestnet} and any known
+   * Hyperliquid URL. Assigning it later is a type error; the value signing reads is this one.
+   */
   readonly isTestnet: boolean;
   /** Request timeout in ms. Set to `null` to disable. */
   timeout: number | null;
@@ -336,7 +503,12 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   rpcUrl: string | URL;
   /** A custom {@link https://developer.mozilla.org/en-US/docs/Web/API/RequestInit | RequestInit} that is merged with a fetch request. */
   fetchOptions: Omit<RequestInit, "body" | "method">;
-  /** Opt-in token-bucket rate limiter; `null` keeps requests unthrottled (the default). */
+  /**
+   * Opt-in token-bucket rate limiter.
+   *
+   * `null` keeps requests unthrottled (the default). Otherwise a private bucket, or the
+   * process-wide bucket for this transport's API host.
+   */
   private readonly _rateLimit: TokenBucketRateLimiter | null;
   /** Opt-in 429 retry policy; `null` throws {@linkcode HttpRateLimitError} on the first 429 (the default). */
   private readonly _retryOnRateLimit: { maxRetries: number; maxDelayMs: number } | null;
@@ -352,20 +524,18 @@ export class HttpTransport implements IRequestTransport<"info" | "exchange" | "e
   constructor(options?: HttpTransportOptions) {
     this._runtime = resolveRuntime(options?.runtime);
     this._fetch = options?.fetch;
-    this.isTestnet = options?.isTestnet ?? false;
+    // Known hosts select or reject the network before either URL is defaulted, so an omitted
+    // flag follows the URL that was actually passed and the other URL defaults to that network.
+    this.isTestnet = resolveTransportIsTestnet("HttpTransport", options?.isTestnet, [
+      { name: "apiUrl", url: options?.apiUrl },
+      { name: "rpcUrl", url: options?.rpcUrl },
+    ]);
     this.timeout = options?.timeout === undefined ? 10_000 : options.timeout;
     this.exchangeTimeout = options?.exchangeTimeout;
     this.apiUrl = options?.apiUrl ?? (this.isTestnet ? TESTNET_API_URL : MAINNET_API_URL);
     this.rpcUrl = options?.rpcUrl ?? (this.isTestnet ? TESTNET_RPC_URL : MAINNET_RPC_URL);
     this.fetchOptions = options?.fetchOptions ?? {};
-    this._rateLimit =
-      options?.rateLimit === undefined
-        ? null
-        : new TokenBucketRateLimiter(
-            options.rateLimit.capacity ?? 1200,
-            options.rateLimit.refillPerMinute ?? 1200,
-            this._runtime,
-          );
+    this._rateLimit = resolveHttpRateLimit(options?.rateLimit, this.apiUrl, this._runtime);
     this._retryOnRateLimit = normalizeRetryOnRateLimit(options?.retryOnRateLimit);
     this._timeouts = new abort.TimeoutWheel(this._runtime);
     this._urlCache = new Map();

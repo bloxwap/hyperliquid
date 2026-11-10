@@ -2,10 +2,12 @@
  * Token-bucket rate limiter shared by both transports.
  *
  * Hyperliquid budgets REST requests at 1200 weight per minute per IP; exceeding it yields
- * HTTP 429 and ultimately an IP ban. An opt-in instance of this bucket on `HttpTransport`
- * paces outgoing requests: each request acquires its weight before sending and WAITS (instead of
- * throwing) until the bucket has refilled enough to cover it. Weights that only become knowable
- * after the fact (response-size surcharges) are debited with {@linkcode TokenBucketRateLimiter.charge}.
+ * HTTP 429 and ultimately an IP ban. An opt-in bucket on `HttpTransport` paces outgoing
+ * requests: each request acquires its weight before sending and WAITS (instead of throwing)
+ * until the bucket has refilled enough to cover it. The default 1200/1200 budget is one
+ * process-wide bucket per API host (`sharedHttpRateLimiter`); pass an instance as `rateLimit`
+ * to share any other budget across transports. Weights that only become knowable after the
+ * fact (response-size surcharges) are debited with {@linkcode TokenBucketRateLimiter.charge}.
  *
  * The WebSocket transport budgets a different quantity against the same machinery — outbound
  * *messages*, capped at 2000/minute per IP across every connection — through

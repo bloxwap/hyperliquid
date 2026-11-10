@@ -6,10 +6,12 @@
  */
 
 import { beforeEach, describe, test } from "bun:test";
-import { assertEquals, assertRejects, assertThrows } from "@jsr/std__assert";
-import { FakeRuntime } from "../_fakeRuntime.ts";
+import { assert, assertEquals, assertRejects, assertThrows } from "@jsr/std__assert";
+import { InfoClient } from "../../src/api/info/client.ts";
 import { InfoCacheTransport } from "../../src/transport/_infoCache.ts";
 import type { IRequestTransport } from "../../src/transport/_base.ts";
+import { SymbolConverter } from "../../src/utils/_symbolConverter.ts";
+import { FakeRuntime } from "../_fakeRuntime.ts";
 
 type Endpoint = "info" | "exchange" | "explorer";
 
@@ -238,6 +240,101 @@ describe("InfoCacheTransport", () => {
     const mock = new MockTransport(echoHandler);
     assertEquals(new InfoCacheTransport(mock).isTestnet, mock.isTestnet);
   });
+
+  test("does not freeze responses that are not shared", async () => {
+    const mock = new MockTransport(echoHandler);
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
+
+    const mids = (await transport.request("info", { type: "allMids" })) as { echo: unknown; extra?: number };
+    mids.extra = 1;
+    assertEquals(mids.extra, 1);
+    assertEquals(Object.isFrozen(mids), false);
+  });
+
+  test("freezes a cyclic cached response without walking it forever", async () => {
+    const cyclic: { name: string; self?: unknown } = { name: "loop" };
+    cyclic.self = cyclic;
+    const mock = new MockTransport(() => cyclic);
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
+
+    const value = await transport.request("info", { type: "meta" });
+    assert(value === cyclic);
+    assert(Object.isFrozen(cyclic));
+    assertThrows(() => {
+      cyclic.name = "rewritten";
+    }, TypeError);
+  });
+
+  test("does not invoke response getters while freezing", async () => {
+    let reads = 0;
+    const response: { universe: { name: string }[] } = { universe: [{ name: "BTC" }] };
+    Object.defineProperty(response, "live", {
+      enumerable: true,
+      get: () => {
+        reads++;
+        return { n: reads };
+      },
+    });
+    const mock = new MockTransport(() => response);
+    const transport = new InfoCacheTransport(mock, { runtime: time, ttl: 60_000 });
+
+    const value = await transport.request("info", { type: "meta" });
+    assert(value === response);
+    assertEquals(reads, 0);
+    assert(Object.isFrozen(response));
+    assert(Object.isFrozen(response.universe));
+    assert(Object.isFrozen(response.universe[0]));
+  });
+});
+
+describe("InfoCacheTransport asset ids", () => {
+  test("a cached meta().universe sort cannot remap BTC and ETH", async () => {
+    // The order of `universe` is the perpetual asset id. InfoClient returns the transport's
+    // object, and SymbolConverter reads that same object on a cache hit.
+    const meta = {
+      universe: [
+        { name: "BTC", szDecimals: 5, maxLeverage: 50, marginTableId: 0 },
+        { name: "ETH", szDecimals: 4, maxLeverage: 50, marginTableId: 0 },
+      ],
+      marginTables: [] as [number, { description: string; marginTiers: [] }][],
+      collateralToken: 0,
+    };
+    const responses: Record<string, unknown> = {
+      meta,
+      spotMeta: { tokens: [], universe: [] },
+      outcomeMeta: { outcomes: [], questions: [] },
+    };
+    const inner: IRequestTransport = {
+      isTestnet: false,
+      request<T>(_endpoint: "info" | "exchange" | "explorer", payload: unknown): Promise<T> {
+        const { type } = payload as { type: string };
+        const body = responses[type];
+        if (body === undefined) return Promise.reject(new Error(`unexpected ${type}`));
+        return Promise.resolve(body as T);
+      },
+    };
+    const transport = new InfoCacheTransport(inner);
+    const info = new InfoClient({ transport });
+
+    const snapshot = await info.meta();
+    const again = await info.meta();
+    assert(again === snapshot, "a cache hit must keep returning the same object");
+    assert(Object.isFrozen(snapshot.universe));
+    assert(Object.isFrozen(snapshot.universe[0]));
+
+    // Sorting for display used to rewrite the shared array. The sort throws and changes nothing.
+    assertThrows(() => {
+      snapshot.universe.sort((a, b) => b.name.localeCompare(a.name));
+    }, TypeError);
+    assertEquals(
+      snapshot.universe.map((asset) => asset.name),
+      ["BTC", "ETH"],
+    );
+
+    const converter = await SymbolConverter.create({ transport });
+    assertEquals(converter.getAssetId("BTC"), 0);
+    assertEquals(converter.getAssetId("ETH"), 1);
+  });
 });
 
 /** A transport whose responses stay pending until the test settles them, and which honors aborts. */
@@ -267,10 +364,15 @@ describe("InfoCacheTransport coalescing", () => {
     const b = transport.request("info", { coin: "BTC", type: "l2Book" }); // key order is irrelevant
     assertEquals(mock.calls.length, 1);
 
-    const response = { levels: [] };
+    const response = { levels: [] as unknown[] };
     mock.calls[0].resolve(response);
     const [ra, rb] = await Promise.all([a, b]);
     assertEquals(ra === response && rb === response, true);
+    assert(Object.isFrozen(response));
+    assert(Object.isFrozen(response.levels));
+    assertThrows(() => {
+      response.levels.push([]);
+    }, TypeError);
   });
 
   test("keeps nothing once the request settles", async () => {

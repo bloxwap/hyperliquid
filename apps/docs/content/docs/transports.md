@@ -16,7 +16,9 @@ The choice comes down to [subscriptions](clients.md#websocket-subscriptions): li
 
 Both transports take the same two options:
 
-- `isTestnet` — connect to the Hyperliquid testnet instead of mainnet.
+- `isTestnet` — connect to the Hyperliquid testnet instead of mainnet. When you pass a known Hyperliquid
+  `apiUrl`, `rpcUrl`, or WebSocket `url` and omit the flag, the transport derives it from that host. An explicit flag
+  that disagrees with a known host throws. Custom hosts (a proxy or your own node) are not checked.
 - `timeout` — abort a request after this many milliseconds (default `10_000`; pass `null` to disable).
 
 ```ts
@@ -110,11 +112,20 @@ batch of 40–79 orders (or cancels) costs 2, 80–119 costs 3. Info endpoints c
 weight before sending and **waits** while the bucket is empty instead of failing with a 429 after the fact:
 
 ```ts
-import { HttpTransport } from "@bloxwap/hyperliquid";
+import { HttpTransport, sharedHttpRateLimiter, TokenBucketRateLimiter } from "@bloxwap/hyperliquid";
 
+// One process-wide 1200/minute bucket for this API host. A second transport with
+// `rateLimit: true` (or the same defaults) draws from that same bucket.
 const transport = new HttpTransport({
   rateLimit: { capacity: 1200, refillPerMinute: 1200 }, // the defaults, shown for clarity
 });
+
+// Share an explicit limiter — a private slice, several hosts on one IP, or a virtual clock.
+const limiter = new TokenBucketRateLimiter(1200, 1200);
+const proxied = new HttpTransport({ apiUrl: "https://proxy.example", rateLimit: limiter });
+
+// The same instance `rateLimit: true` uses for the official mainnet API.
+const mainnet = sharedHttpRateLimiter("https://api.hyperliquid.xyz");
 ```
 
 The limiter bills the documented weights:
@@ -152,12 +163,21 @@ truth remains outstanding ([issue #49](https://github.com/bloxwap/hyperliquid/is
   conservative reading.
 - The limiter is off by default; without `rateLimit` the transport never delays a request client-side.
 
-**The limiter is per `HttpTransport` instance.** It tracks only the requests it sends itself — other transport
-instances, other processes, and other machines behind the same IP do not coordinate, yet they all share the same
-1200 weight/minute budget. Treat it as best-effort local throttling, not a guarantee against 429s: bursts that
-exceed what one instance can see still hit the server limit, and there is no endpoint that reports the IP bucket's
-state. Handle [`HttpRateLimitError`](error-handling.md#httpratelimiterror) (which carries `status` and, when the
-server sends a `Retry-After` header, a `retryAfter` hint in seconds) as the backstop.
+The 1200 weight/minute budget is **per IP**, not per client. With the default budget and the platform clock, every
+`HttpTransport` aimed at the same API host in this process shares one bucket (`sharedHttpRateLimiter`, keyed by
+hostname and a non-default port), so an info client and an exchange client cannot each spend a full budget. Mainnet
+and testnet are different hosts and keep separate buckets, because they are different servers. A custom capacity
+stays private to the instance unless you set `shared: true` or pass a `TokenBucketRateLimiter`. A private bucket
+does not see other transports. Set `shared: false` to keep a private bucket even at 1200 — a process that egresses
+from several IPs needs one bucket per IP. A second shared bucket for a host that already has one, with a different
+capacity or refill, throws.
+
+The bucket is chosen from `apiUrl` at construction. Explorer requests on that transport debit it too. A custom
+`runtime` drives a **private** bucket; the process-wide bucket keeps the platform clock unless you created it with
+`sharedHttpRateLimiter(host, { runtime })` and passed that instance in. Other processes and other machines on the
+IP still do not coordinate. Treat the limiter as best-effort local throttling, not a guarantee against 429s, and
+handle [`HttpRateLimitError`](error-handling.md#httpratelimiterror) (which carries `status` and, when the server
+sends a `Retry-After` header, a `retryAfter` hint in seconds) as the backstop.
 
 ### Automatic retry on 429
 

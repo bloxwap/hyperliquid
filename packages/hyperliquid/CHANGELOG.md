@@ -6,6 +6,14 @@ All notable changes to `@bloxwap/hyperliquid` are documented in this file.
 
 ### Fixed
 
+- `InfoCacheTransport` deep-freezes cached and coalesced responses once, when the shared request resolves.
+  Callers still receive the same object, and a cache hit does not copy it. An in-place sort of `meta().universe`
+  throws instead of remapping the asset ids `SymbolConverter` and `ExchangeClient` sign against. Copy a response
+  before mutating it for display.
+- `HttpTransport` and `WebSocketTransport` derive `isTestnet` from a known Hyperliquid `apiUrl`, `rpcUrl`, or `url`
+  when the flag is omitted, and throw when an explicit flag disagrees with one of those hosts (or when `apiUrl` and
+  `rpcUrl` name different networks). The other URL defaults to the derived network. Custom hosts are not checked.
+  A derived WebSocket network also selects that network's shared quota.
 - Browser bundles of `ExchangeClient`, `@bloxwap/hyperliquid/api/exchange`, and `@bloxwap/hyperliquid/signing` no
   longer pull in optional `tiny-secp256k1`, `hash-wasm`, or `viem/accounts`. Those packages load through opaque dynamic
   imports, so esbuild (`platform: browser`), Vite, and webpack build without a WASM loader. Node, Bun, and Deno still
@@ -14,6 +22,13 @@ All notable changes to `@bloxwap/hyperliquid` are documented in this file.
 - `createFastLocalWallet` applies the same known-answer self-check as raw private-key signing before trusting
   `tiny-secp256k1`. The check runs once per loader. A module that later returns a short signature or a recovery id
   other than 0 or 1 is rejected instead of being hex-encoded and sent.
+
+### Added
+
+- HTTP rate limits for the default 1200 weight/minute budget are one process-wide bucket per API host
+  (`sharedHttpRateLimiter`, `rateLimit: true`, or the same defaults on the platform clock). Pass a
+  `TokenBucketRateLimiter` as `rateLimit` to share any other budget, or set `shared: false` for a private bucket.
+  A custom capacity stays per instance unless `shared: true`. Mainnet and testnet do not share a bucket.
 
 ### Changed
 
