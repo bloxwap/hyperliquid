@@ -14,9 +14,9 @@
  * InfoCacheTransport.request():
  *   endpoint !== "info" or type not allowlisted ─► inner transport (no cache, no overhead)
  *   allowlisted ─► key = type + sorted params
- *     ├─ fresh entry ─► cached promise
+ *     ├─ fresh entry ─► cached promise (response deep-frozen once, when it arrives)
  *     └─ miss/expired ─► inner transport ─► cache promise (TTL from dispatch)
- *                        ├─ resolves ─► served until expiry
+ *                        ├─ resolves ─► frozen, then served until expiry
  *                        └─ rejects ─► evicted (next call retries)
  *   coalesced type ─► key = type + sorted params
  *     ├─ identical request in flight ─► join it (own signal only detaches this caller)
@@ -113,7 +113,8 @@ export interface InfoCacheOptions {
    * `clearinghouseState`, …) independently: each duplicate that joins a request already in
    * flight saves a full round trip and the request's weight against the rate limit.
    *
-   * Every caller receives the same response object, so treat it as read-only. Unlike the TTL
+   * Every caller receives the same response object, and that object is deep-frozen before
+   * anyone observes it. Mutating it throws; copy it before editing. Unlike the TTL
    * cache, a caller's abort signal only detaches that caller (its promise rejects with the
    * signal's reason); the shared request itself is aborted only when every caller waiting on it
    * has aborted, and never while a caller without a signal is waiting.
@@ -162,6 +163,12 @@ interface InFlightEntry {
  * rejects every waiter and evicts the entry (the next call simply refetches). A rejected request
  * is never served from cache. Cached responses ignore later callers' signals — a hit needs no
  * network at all.
+ *
+ * Cached and coalesced responses are deep-frozen once, when the shared request resolves, and
+ * then handed out by reference. A hit does not copy or walk the payload. `SymbolConverter`
+ * reads perpetual asset ids from the array order of `meta().universe` on that shared object, so
+ * an in-place sort used to remap ids for every later converter (and for `ExchangeClient`) until
+ * the entry expired. Mutation now throws instead. Copy a response before sorting it for display.
  *
  * The wrapper implements only {@linkcode IRequestTransport}: wrapping a `WebSocketTransport`
  * hides its subscription interface, so pass the raw WebSocket transport to `SubscriptionClient`
@@ -271,7 +278,9 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
     // Cache the in-flight promise itself, so concurrent identical calls share one request. The
     // TTL runs from dispatch: a response is served until `ttl` after its request started, and a
     // rejection evicts the entry (guarded against evicting a newer entry for the same key).
-    const promise = this.inner.request<T>(endpoint, payload, signal);
+    // The freeze runs once, inside this promise, before any caller observes the value. Hits
+    // return the promise as stored and do not walk the payload again.
+    const promise = this.inner.request<T>(endpoint, payload, signal).then(freezeResponse);
     const entry: CacheEntry = { key, expiryIndex: -1, promise, expiresAt: now + (this._ttlByType[type] ?? this._ttl) };
     this._removeEntry(key); // re-insert so eviction order tracks recency
     this._evict(now);
@@ -320,7 +329,7 @@ export class InfoCacheTransport<E extends "info" | "exchange" | "explorer" = "in
     if (entry === undefined) {
       const controller = new AbortController();
       const created: InFlightEntry = {
-        promise: this.inner.request<T>(endpoint, payload, controller.signal),
+        promise: this.inner.request<T>(endpoint, payload, controller.signal).then(freezeResponse),
         controller,
         abortable: 0,
         pinned: false,
@@ -444,6 +453,37 @@ const CACHEABLE_TYPES: ReadonlySet<string> = new Set([
   "outcomeMeta",
   "outcomeTemplates",
 ]);
+
+/**
+ * Deep-freezes `value` in place and returns it.
+ *
+ * One walk per shared response, not per caller: cache hits hand back the stored promise.
+ * Getters are not invoked. Typed-array views are frozen as objects but their indexed bytes are
+ * not walked (info payloads are JSON). Cycles terminate. A frozen value is still walked so a
+ * shallow freeze cannot leave a nested `universe` mutable — that array's order is the asset id.
+ */
+function freezeResponse<T>(value: T): T {
+  if (value === null || typeof value !== "object") return value;
+  const seen = new WeakSet<object>();
+  const stack: object[] = [value];
+  let current = stack.pop();
+  while (current !== undefined) {
+    if (!seen.has(current)) {
+      seen.add(current);
+      // ArrayBuffer views expose one own property per byte; info JSON never is one.
+      if (!ArrayBuffer.isView(current)) {
+        for (const key of Reflect.ownKeys(current)) {
+          const desc = Object.getOwnPropertyDescriptor(current, key);
+          const child = desc !== undefined && "value" in desc ? desc.value : undefined;
+          if (child !== null && typeof child === "object") stack.push(child);
+        }
+      }
+      if (!Object.isFrozen(current)) Object.freeze(current);
+    }
+    current = stack.pop();
+  }
+  return value;
+}
 
 /** The payload's `type` when it names an allowlisted info request, otherwise `undefined`. */
 function cacheableType(payload: unknown): InfoCacheableRequestType | undefined {
