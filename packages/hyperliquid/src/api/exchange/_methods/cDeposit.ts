@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Transfer native token from the user spot account into staking for delegating to validators.
@@ -89,7 +90,7 @@ export type CDepositOptions = ExtractRequestOptions<v.InferInput<typeof CDeposit
 export type CDepositSuccessResponse = ExcludeErrorResponse<CDepositResponse>;
 
 /** EIP-712 types for the {@linkcode cDeposit} function. */
-export const CDepositTypes = {
+export const CDepositTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:CDeposit": [
     { name: "hyperliquidChain", type: "string" },
     { name: "wei", type: "uint64" },

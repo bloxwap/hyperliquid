@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Initiate a withdrawal request.
@@ -91,7 +92,7 @@ export type Withdraw3Options = ExtractRequestOptions<v.InferInput<typeof Withdra
 export type Withdraw3SuccessResponse = ExcludeErrorResponse<Withdraw3Response>;
 
 /** EIP-712 types for the {@linkcode withdraw3} function. */
-export const Withdraw3Types = {
+export const Withdraw3Types: UserSignedActionTypes = {
   "HyperliquidTransaction:Withdraw": [
     { name: "hyperliquidChain", type: "string" },
     { name: "destination", type: "string" },

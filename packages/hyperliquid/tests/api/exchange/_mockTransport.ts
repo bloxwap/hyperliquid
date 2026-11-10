@@ -112,6 +112,9 @@ export function singleWalletConfig(
     transport,
     wallet,
     nonceManager: () => FIXED_NONCE,
+    // The fixed nonce is a 2023 millisecond timestamp. The shell checks it against this clock,
+    // so the suite does not depend on the wall clock still being inside that window.
+    runtime: { now: () => FIXED_NONCE },
     signatureChainId: SIGNATURE_CHAIN_ID,
     ...extra,
   };
@@ -127,6 +130,7 @@ export function multiSigConfig(
     signers: [wallet, secondSigner],
     multiSigUser: MULTI_SIG_USER,
     nonceManager: () => FIXED_NONCE,
+    runtime: { now: () => FIXED_NONCE },
     signatureChainId: SIGNATURE_CHAIN_ID,
     ...extra,
   };

@@ -3,6 +3,7 @@
  * @module
  */
 
+import { HyperliquidError } from "../_errors.ts";
 import {
   type AbstractWallet,
   canSignRawDigest,
@@ -15,6 +16,38 @@ import { trimSignature } from "./_multiSig.ts";
 
 /** EIP-712 type definitions; the hash depends on key and field order. */
 type TypedDataTypes = Record<string, readonly { name: string; type: string }[]>;
+
+/**
+ * Primary type of a user-signed `types` object, checked once per object.
+ *
+ * `Object.keys(types)[0]` is the primary type, and that type's first field is `hyperliquidChain`
+ * (multi-sig inserts its fields immediately after it). `EIP712Domain` is not listed: the SDK
+ * supplies the domain. A viem-style object with `EIP712Domain` first would otherwise be signed
+ * as that type.
+ */
+const primaryTypeCache = new WeakMap<TypedDataTypes, string>();
+
+/** Returns the primary type, throwing when key order or the leading field is wrong. */
+export function userSignedPrimaryType(types: TypedDataTypes): string {
+  const cached = primaryTypeCache.get(types);
+  if (cached !== undefined) return cached;
+  const primaryType = Object.keys(types)[0];
+  const first = primaryType === undefined ? undefined : types[primaryType]?.[0];
+  if (
+    primaryType === undefined ||
+    !primaryType.startsWith("HyperliquidTransaction:") ||
+    first === undefined ||
+    first.name !== "hyperliquidChain" ||
+    first.type !== "string"
+  ) {
+    throw new HyperliquidError(
+      "User-signed EIP-712 types must list the primary HyperliquidTransaction type first, " +
+        "with hyperliquidChain as its first field. The SDK supplies the EIP-712 domain; do not put EIP712Domain first.",
+    );
+  }
+  primaryTypeCache.set(types, primaryType);
+  return primaryType;
+}
 
 /** Cache of multi-sig-extended `types` objects (keyed by the original `types` object identity). */
 const multiSigExtendedTypesCache = new WeakMap<TypedDataTypes, TypedDataTypes>();
@@ -32,7 +65,7 @@ const multiSigExtendedTypesCache = new WeakMap<TypedDataTypes, TypedDataTypes>()
 function getMultiSigExtendedTypes(types: TypedDataTypes): TypedDataTypes {
   let extended = multiSigExtendedTypesCache.get(types);
   if (extended === undefined) {
-    const primaryType = Object.keys(types)[0];
+    const primaryType = userSignedPrimaryType(types);
     const primaryTypeFields = types[primaryType];
     extended = {
       ...types,
@@ -144,6 +177,7 @@ async function signUserSignedActionDigest(args: {
   digestThunk?: () => Uint8Array | undefined;
 }): Promise<Signature> {
   const { wallet, action, types } = args;
+  const primaryType = userSignedPrimaryType(types);
 
   if (canSignRawDigest(wallet)) {
     const digest = args.digestThunk
@@ -166,7 +200,7 @@ async function signUserSignedActionDigest(args: {
       verifyingContract: "0x0000000000000000000000000000000000000000",
     },
     types,
-    primaryType: Object.keys(types)[0],
+    primaryType,
     message: action,
   });
 }

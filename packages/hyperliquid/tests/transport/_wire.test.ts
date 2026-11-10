@@ -202,6 +202,7 @@ test("managed execution registers owned envelopes while preserving generic custo
       signTypedData: async () => `0x${"11".repeat(64)}1b` as const,
     },
     nonceManager: () => nonce++,
+    runtime: { now: () => 1_700_000_000_000 },
     transport: {
       isTestnet: true,
       async request<T>(_endpoint: string, payload: unknown): Promise<T> {
@@ -229,6 +230,7 @@ test("separate sign/submit retains immutable payload ownership, fresh signatures
       signTypedData: async () => `0x${(++signatures).toString(16).padStart(128, "0")}1b` as const,
     },
     nonceManager: () => nonce++,
+    runtime: { now: () => 1_700_000_000_000 },
     transport: {
       isTestnet: true,
       async request<T>(_endpoint: string, payload: unknown): Promise<T> {

@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Approve an agent to sign on behalf of the master account.
@@ -113,7 +114,7 @@ export type ApproveAgentOptions = ExtractRequestOptions<v.InferInput<typeof Appr
 export type ApproveAgentSuccessResponse = ExcludeErrorResponse<ApproveAgentResponse>;
 
 /** EIP-712 types for the {@linkcode approveAgent} function. */
-export const ApproveAgentTypes = {
+export const ApproveAgentTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:ApproveAgent": [
     { name: "hyperliquidChain", type: "string" },
     { name: "agentAddress", type: "address" },

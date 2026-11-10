@@ -71,6 +71,7 @@ test("reused action signatures still match fresh serialization on both networks 
       const config = {
         wallet,
         nonceManager: () => nonce,
+        runtime: { now: () => nonce },
         transport: {
           isTestnet,
           async request<T>(): Promise<T> {

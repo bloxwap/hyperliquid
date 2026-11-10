@@ -6,6 +6,14 @@ All notable changes to `@bloxwap/hyperliquid` are documented in this file.
 
 ### Fixed
 
+- The default nonce manager is stored on `globalThis` and shared by every `ExchangeClient` and every copy of the SDK
+  in the same realm, so two clients for one signer cannot issue the same millisecond nonce. Separate processes and
+  worker threads still need their own API wallet or a coordinated `nonceManager`.
+- Custom nonces and `expiresAfter` are checked in every dispatch mode, including `skipValidation`. A seconds-scale,
+  fractional, or out-of-window value throws `HyperliquidError` before it is sent.
+- User-signed EIP-712 `types` must list the `HyperliquidTransaction:` primary type first, with `hyperliquidChain` as
+  its first field. Definitions are checked at build time, and `signUserSignedAction` rejects a caller-supplied
+  object that puts `EIP712Domain` (or any other type) first.
 - `InfoCacheTransport` deep-freezes cached and coalesced responses once, when the shared request resolves.
   Callers still receive the same object, and a cache hit does not copy it. An in-place sort of `meta().universe`
   throws instead of remapping the asset ids `SymbolConverter` and `ExchangeClient` sign against. Copy a response

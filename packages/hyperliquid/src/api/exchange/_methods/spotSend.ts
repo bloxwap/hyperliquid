@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Send spot assets to another address.
@@ -93,7 +94,7 @@ export type SpotSendOptions = ExtractRequestOptions<v.InferInput<typeof SpotSend
 export type SpotSendSuccessResponse = ExcludeErrorResponse<SpotSendResponse>;
 
 /** EIP-712 types for the {@linkcode spotSend} function. */
-export const SpotSendTypes = {
+export const SpotSendTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:SpotSend": [
     { name: "hyperliquidChain", type: "string" },
     { name: "destination", type: "string" },

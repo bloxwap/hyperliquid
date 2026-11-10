@@ -14,9 +14,10 @@ import {
 import { createL1AgentDigestBytes, createMultiSigDigestBytes } from "./_fastDigest.ts";
 import { createL1ActionHashBytes, preadjustL1Action, signL1InnerBytes } from "./_l1.ts";
 import { createUserSignedInnerDigestThunk, signUserSignedInner } from "./_userSigned.ts";
+import type { UserSignedActionTypes } from "./_userSignedShape.ts";
 
-/** EIP-712 types for the multi-sig outer wrapper. */
-const MULTI_SIG_TYPES = {
+/** EIP-712 types for the multi-sig outer wrapper. Primary type first; `hyperliquidChain` leads it. */
+export const MULTI_SIG_TYPES: UserSignedActionTypes = {
   "HyperliquidTransaction:SendMultiSig": [
     { name: "hyperliquidChain", type: "string" },
     { name: "multiSigActionHash", type: "bytes32" },

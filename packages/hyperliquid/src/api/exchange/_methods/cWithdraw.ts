@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Transfer native token from staking into the user's spot account.
@@ -89,7 +90,7 @@ export type CWithdrawOptions = ExtractRequestOptions<v.InferInput<typeof CWithdr
 export type CWithdrawSuccessResponse = ExcludeErrorResponse<CWithdrawResponse>;
 
 /** EIP-712 types for the {@linkcode cWithdraw} function. */
-export const CWithdrawTypes = {
+export const CWithdrawTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:CWithdraw": [
     { name: "hyperliquidChain", type: "string" },
     { name: "wei", type: "uint64" },

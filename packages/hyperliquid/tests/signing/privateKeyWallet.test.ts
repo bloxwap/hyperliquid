@@ -393,7 +393,12 @@ describe("private key wallet invalid inputs", () => {
 describe("ExchangeClient with a raw private key", () => {
   test("order() posts a signature identical to the viem account's for the same nonce", async () => {
     const { calls, transport } = recordingTransport();
-    const config = { transport, wallet: WELL_KNOWN_KEY, nonceManager: () => FIXED_NONCE } as const;
+    const config = {
+      transport,
+      wallet: WELL_KNOWN_KEY,
+      nonceManager: () => FIXED_NONCE,
+      runtime: { now: () => FIXED_NONCE },
+    } as const;
     const client = new ExchangeClient(config);
 
     const params: CoinOrderParameters = { orders: [LIMIT_ORDER], grouping: "na" };
@@ -404,6 +409,7 @@ describe("ExchangeClient with a raw private key", () => {
       transport: oracle.transport,
       wallet: privateKeyToAccount(WELL_KNOWN_KEY),
       nonceManager: () => FIXED_NONCE,
+      runtime: { now: () => FIXED_NONCE },
     });
     await oracleClient.order(params);
 
@@ -420,6 +426,7 @@ describe("ExchangeClient with a raw private key", () => {
       transport,
       wallet: WELL_KNOWN_KEY,
       nonceManager: () => FIXED_NONCE,
+      runtime: { now: () => FIXED_NONCE },
       signatureChainId: "0x66eee",
     });
     await client.approveAgent({ agentAddress: "0x0000000000000000000000000000000000000001", agentName: "Agent" });
@@ -429,6 +436,7 @@ describe("ExchangeClient with a raw private key", () => {
       transport: oracle.transport,
       wallet: privateKeyToAccount(WELL_KNOWN_KEY),
       nonceManager: () => FIXED_NONCE,
+      runtime: { now: () => FIXED_NONCE },
       signatureChainId: "0x66eee",
     });
     await oracleClient.approveAgent({ agentAddress: "0x0000000000000000000000000000000000000001", agentName: "Agent" });

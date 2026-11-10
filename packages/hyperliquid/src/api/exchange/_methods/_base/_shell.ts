@@ -12,6 +12,7 @@ import { admitBounded, assertDetachedAllowed, assertOrderedAllowed, reserveDispa
 import { assertSuccessResponse } from "./errors.ts";
 import { globalNonceManager } from "./_nonce.ts";
 import { withLock } from "./_semaphore.ts";
+import { actionClock, assertExpiresAfterTimestamp, assertNonceTimestamp } from "./_timestamp.ts";
 import { configWallet } from "./_wallet.ts";
 
 /** Result returned by the {@linkcode executeWithShell} `build` callback. */
@@ -102,10 +103,6 @@ export function linkPreparedRequestState(
 export function getPreparedRequestState(prepared: PreparedExchangeRequest<unknown>): PreparedRequestState | undefined {
   return preparedRequestStates.get(prepared);
 }
-
-/** Protocol nonce window: a nonce must lie within `(now - 2 days, now + 1 day)` when it arrives. */
-const NONCE_MAX_AGE_MS = 2 * 86_400_000;
-const NONCE_MAX_LEAD_MS = 86_400_000;
 
 /**
  * Cache of the nonce-lock key per (leader wallet × transport), keyed by object identity so a wallet
@@ -208,9 +205,12 @@ export async function executeWithShell<T>(
 
     // --- Generate nonce --------------------------------------
     // `globalNonceManager.getNonce` returns a plain number: skip the await (and its async hop)
-    // unless a custom `nonceManager` actually handed back a promise.
+    // unless a custom `nonceManager` actually handed back a promise. The timestamp check runs
+    // for both sources, before a dispatch slot is claimed, so a seconds-scale or out-of-window
+    // nonce never signs and never occupies the lane.
     const nonceOrPromise = config.nonceManager?.(walletAddress) ?? globalNonceManager.getNonce(key);
     const nonce = typeof nonceOrPromise === "number" ? nonceOrPromise : await nonceOrPromise;
+    assertNonceTimestamp(nonce, actionClock(config.runtime));
 
     // --- Claim this nonce's slot in the dispatch order --------
     // Taken under the lock, so slots are claimed in the same order nonces are issued.
@@ -232,6 +232,10 @@ export async function executeWithShell<T>(
       try {
         const { action, signature, extras } = await race(build(nonce), signal);
         if (signal?.aborted) throw signal.reason;
+        const expiresAfter = extras?.expiresAfter;
+        // Before the wire, in every mode. A seconds-scale or already-past expiry used to be
+        // signed and posted under the ordered policy; bounded mode was the only check.
+        if (typeof expiresAfter === "number") assertExpiresAfterTimestamp(expiresAfter, actionClock(config.runtime));
         if (prepareOnly) {
           const request = { action, signature, nonce, ...extras };
           registerExchangeWireRequest(request, action);
@@ -239,17 +243,13 @@ export async function executeWithShell<T>(
           return request as T;
         }
         if (predecessor !== undefined) await race(predecessor, signal);
-        if (bounded !== undefined) {
-          await bounded.wait(signal);
-          // Re-checked at dispatch: a request may have waited behind a stalled signature.
-          const now = config.runtime?.now ? config.runtime.now() : Date.now();
-          if (nonce <= now - NONCE_MAX_AGE_MS || nonce >= now + NONCE_MAX_LEAD_MS) {
-            throw new HyperliquidError("Nonce is outside the protocol timestamp window");
-          }
-          const expiresAfter = extras?.expiresAfter;
-          if (typeof expiresAfter === "number" && expiresAfter <= now) {
-            throw new HyperliquidError("Action expired before dispatch");
-          }
+        if (bounded !== undefined) await bounded.wait(signal);
+        // Re-checked at dispatch for every policy: a request may have waited behind a stalled
+        // signature, and the window is measured when the action arrives, not when it was signed.
+        {
+          const now = actionClock(config.runtime);
+          assertNonceTimestamp(nonce, now);
+          if (typeof expiresAfter === "number") assertExpiresAfterTimestamp(expiresAfter, now);
         }
         // `transport.request` runs synchronously up to its first await, so wire order is fixed
         // here. It is assigned rather than awaited so the gate below opens on dispatch, not on

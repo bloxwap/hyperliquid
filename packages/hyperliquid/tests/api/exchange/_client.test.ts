@@ -339,10 +339,10 @@ const METHOD_CASES: Record<string, MethodCase> = {
       } as never),
   },
   noop: {
-    run: (c) => c.noop({ nonce: 12345 }),
+    run: (c) => c.noop({ nonce: 1_700_000_000_123 }),
     action: { type: "noop" },
     // The params nonce takes precedence over the configured nonceManager.
-    nonce: 12345,
+    nonce: 1_700_000_000_123,
   },
   order: {
     run: (c) => c.order({ orders: [LIMIT_ORDER], grouping: "na" }),
@@ -1123,7 +1123,10 @@ describe("executeUserSignedAction internals (offline)", () => {
           config,
           { type: "custom" },
           {
-            "HyperliquidTransaction:Custom": [{ name: "notNonce", type: "string" }],
+            "HyperliquidTransaction:Custom": [
+              { name: "hyperliquidChain", type: "string" },
+              { name: "notNonce", type: "string" },
+            ],
           },
         ),
       HyperliquidError,

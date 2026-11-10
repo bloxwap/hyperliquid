@@ -54,6 +54,7 @@ function config(wallet: AbstractViemLocalAccount, wire: string, count: number): 
   return {
     wallet,
     nonceManager: () => ++nonce,
+    runtime: { now: () => nonce },
     transport:
       wire === "http"
         ? new HttpTransport({ isTestnet: true, timeout: null })

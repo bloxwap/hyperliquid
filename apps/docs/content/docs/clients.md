@@ -343,11 +343,14 @@ const client = new ExchangeClient({
 
 > [!WARNING]
 >
-> A custom `nonceManager` MUST return unique, monotonically increasing values per address — a plain
-> `(address) => Date.now()` reintroduces same-millisecond collisions, and Hyperliquid only tracks the 100 highest
-> nonces per user (rejecting repeats and anything outside that window). When more than one process signs for the same
-> wallet, back the manager with shared state (e.g. Redis). See
-> [Operational nonce rules](signing.md#operational-nonce-rules).
+> A custom `nonceManager` MUST return a safe-integer **millisecond** timestamp, unique and increasing per address,
+> inside `(now - 2 days, now + 1 day)`. A seconds value (`Date.now() / 1000`) or a counter is rejected locally with
+> `HyperliquidError` before signing. A plain `(address) => Date.now()` also reintroduces same-millisecond collisions.
+> Hyperliquid only tracks the 100 highest nonces per user.
+>
+> The default manager is shared by every client and every copy of the SDK **in this process**. Another process or
+> worker thread does not see that map — give it a separate API wallet, or back one `nonceManager` with shared state
+> (e.g. Redis). See [Operational nonce rules](signing.md#operational-nonce-rules).
 
 ### Symbol-based orders
 

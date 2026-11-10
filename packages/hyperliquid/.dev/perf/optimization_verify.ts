@@ -216,7 +216,12 @@ try {
               assert(socket.readyState === 1);
               close.push(() => transport.close!());
             }
-            const config = { wallet, transport, nonceManager: () => nextNonce++ };
+            const config = {
+              wallet,
+              transport,
+              nonceManager: () => nextNonce++,
+              runtime: { now: () => nextNonce },
+            };
             cases[name] = async () => {
               if (path === "execute") await impl.executeAction(config, action);
               else await impl.submitAction(config, await impl.signAction(config, action));

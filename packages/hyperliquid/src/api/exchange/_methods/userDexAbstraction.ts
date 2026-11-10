@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Enable/disable HIP-3 DEX abstraction.
@@ -95,7 +96,7 @@ export type UserDexAbstractionOptions = ExtractRequestOptions<v.InferInput<typeo
 export type UserDexAbstractionSuccessResponse = ExcludeErrorResponse<UserDexAbstractionResponse>;
 
 /** EIP-712 types for the {@linkcode userDexAbstraction} function. */
-export const UserDexAbstractionTypes = {
+export const UserDexAbstractionTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:UserDexAbstraction": [
     { name: "hyperliquidChain", type: "string" },
     { name: "user", type: "address" },

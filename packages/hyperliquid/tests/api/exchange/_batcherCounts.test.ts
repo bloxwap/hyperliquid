@@ -14,6 +14,7 @@ test("cancelled groups and flushed generations cannot inflate subsequent batch t
         signTypedData: async () => `0x${"11".repeat(64)}1b`,
       },
       nonceManager: () => nonce++,
+      runtime: clock,
       transport: {
         isTestnet: true,
         async request<T>(_endpoint: "info" | "exchange", payload: unknown): Promise<T> {

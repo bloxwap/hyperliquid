@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Enable/disable user portfolio margin.
@@ -95,7 +96,7 @@ export type UserPortfolioMarginOptions = ExtractRequestOptions<v.InferInput<type
 export type UserPortfolioMarginSuccessResponse = ExcludeErrorResponse<UserPortfolioMarginResponse>;
 
 /** EIP-712 types for the {@linkcode userPortfolioMargin} function. */
-export const UserPortfolioMarginTypes = {
+export const UserPortfolioMarginTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:UserPortfolioMargin": [
     { name: "hyperliquidChain", type: "string" },
     { name: "user", type: "address" },

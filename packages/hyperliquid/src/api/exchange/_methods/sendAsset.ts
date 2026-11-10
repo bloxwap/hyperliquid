@@ -6,6 +6,7 @@ import * as v from "valibot";
 // ============================================================
 
 import { Address, Hex, UnsignedDecimal, UnsignedInteger } from "../../_schemas.ts";
+import type { UserSignedActionTypes } from "../../../signing/_userSignedShape.ts";
 
 /**
  * Transfer tokens between different perp DEXs, spot balance, users, and/or sub-accounts.
@@ -102,7 +103,7 @@ export type SendAssetOptions = ExtractRequestOptions<v.InferInput<typeof SendAss
 export type SendAssetSuccessResponse = ExcludeErrorResponse<SendAssetResponse>;
 
 /** EIP-712 types for the {@linkcode sendAsset} function. */
-export const SendAssetTypes = {
+export const SendAssetTypes: UserSignedActionTypes = {
   "HyperliquidTransaction:SendAsset": [
     { name: "hyperliquidChain", type: "string" },
     { name: "destination", type: "string" },
