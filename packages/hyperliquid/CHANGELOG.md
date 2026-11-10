@@ -4,6 +4,17 @@ All notable changes to `@bloxwap/hyperliquid` are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Browser bundles of `ExchangeClient`, `@bloxwap/hyperliquid/api/exchange`, and `@bloxwap/hyperliquid/signing` no
+  longer pull in optional `tiny-secp256k1`, `hash-wasm`, or `viem/accounts`. Those packages load through opaque dynamic
+  imports, so esbuild (`platform: browser`), Vite, and webpack build without a WASM loader. Node, Bun, and Deno still
+  use the WASM secp256k1 and keccak signers by default, and fall back to pure JS when a package is missing or fails its
+  self-check.
+- `createFastLocalWallet` applies the same known-answer self-check as raw private-key signing before trusting
+  `tiny-secp256k1`. The check runs once per loader. A module that later returns a short signature or a recovery id
+  other than 0 or 1 is rejected instead of being hex-encoded and sent.
+
 ### Changed
 
 - Pull requests that change the SDK or its build configuration build the publishable package, load that package, and

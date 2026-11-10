@@ -346,15 +346,16 @@ describe("createFastLocalWallet() fallback", () => {
 // --- WASM module validation -----------------------------------------------------
 
 describe("createFastLocalWallet() WASM module validation", () => {
-  test("throws when the module cannot derive a public key from the private key", async () => {
-    // `pointFromScalar` returning null: the guard rejects instead of building a broken address.
+  test("throws when a self-check-passing module cannot derive a public key", async () => {
+    // The known-answer check runs before address derivation. A module that signs the vector
+    // correctly and then fails `pointFromScalar` is a bad key/derivation, not a bad backend, so
+    // it still throws instead of falling back.
+    const real = await import("tiny-secp256k1");
     _setEccLoaderForTests(() =>
       Promise.resolve({
         isPrivate: () => true,
         pointFromScalar: () => null,
-        signRecoverable: () => {
-          throw new Error("unreachable");
-        },
+        signRecoverable: real.signRecoverable,
       }),
     );
     await expect(createFastLocalWallet(PRIVATE_KEYS[0])).rejects.toThrow("Failed to derive the public key");
@@ -364,9 +365,7 @@ describe("createFastLocalWallet() WASM module validation", () => {
       Promise.resolve({
         isPrivate: () => true,
         pointFromScalar: () => new Uint8Array(33),
-        signRecoverable: () => {
-          throw new Error("unreachable");
-        },
+        signRecoverable: real.signRecoverable,
       }),
     );
     await expect(createFastLocalWallet(PRIVATE_KEYS[0])).rejects.toThrow("Failed to derive the public key");
@@ -390,13 +389,28 @@ describe("loadTinySecp256k1() failure arms", () => {
     ).resolves.toBeUndefined();
   });
 
-  test("returns the module when the shape check passes", async () => {
+  test("returns undefined when the known-answer self-check fails", async () => {
+    // Right shape, wrong signature: the same refusal the raw-key wallet applies.
     const ecc = {
       isPrivate: () => true,
-      pointFromScalar: () => new Uint8Array(33),
+      pointFromScalar: () => new Uint8Array(65),
       signRecoverable: () => ({ signature: new Uint8Array(64), recoveryId: 0 }),
     };
-    await expect(loadTinySecp256k1(() => Promise.resolve(ecc))).resolves.toBe(ecc);
+    await expect(loadTinySecp256k1(() => Promise.resolve(ecc))).resolves.toBeUndefined();
+  });
+
+  test("returns undefined when the known-answer self-check throws", async () => {
+    await expect(
+      loadTinySecp256k1(() =>
+        Promise.resolve({
+          isPrivate: () => true,
+          pointFromScalar: () => new Uint8Array(65),
+          signRecoverable: () => {
+            throw new Error("broken WASM");
+          },
+        }),
+      ),
+    ).resolves.toBeUndefined();
   });
 
   test("the default import resolves to the real tiny-secp256k1", async () => {
@@ -421,6 +435,74 @@ describe("resolvePrivateKeyToAccount() failure arm", () => {
 
   test("the default import resolves to viem's privateKeyToAccount", async () => {
     await expect(resolvePrivateKeyToAccount(undefined, "signTypedData")).resolves.toBe(privateKeyToAccount);
+  });
+});
+
+describe("createFastLocalWallet() known-answer self-check", () => {
+  test("a wrong-answer module falls back to viem once, and the self-check is not repeated", async () => {
+    let signatures = 0;
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    _setEccLoaderForTests(() =>
+      Promise.resolve({
+        isPrivate: () => true,
+        pointFromScalar: () => new Uint8Array(65),
+        signRecoverable: () => {
+          signatures++;
+          return { signature: new Uint8Array(64), recoveryId: 0 };
+        },
+      }),
+    );
+    try {
+      const fast = await createFastLocalWallet(PRIVATE_KEYS[0]);
+      const second = await createFastLocalWallet(PRIVATE_KEYS[1]);
+      expect(signatures).toBe(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      const args = { action: { ...CANCEL }, nonce: NONCE, isTestnet: true } as const;
+      expect(await signL1Action({ wallet: fast, ...args })).toEqual(
+        await signL1Action({ wallet: privateKeyToAccount(PRIVATE_KEYS[0]), ...args }),
+      );
+      expect(second.address).toBe(privateKeyToAccount(PRIVATE_KEYS[1]).address);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("a self-check-passing module that then returns a short signature is refused", async () => {
+    const real = await import("tiny-secp256k1");
+    let armed = false;
+    _setEccLoaderForTests(() =>
+      Promise.resolve({
+        isPrivate: (d: Uint8Array) => real.isPrivate(d),
+        pointFromScalar: (d: Uint8Array, compressed?: boolean) => real.pointFromScalar(d, compressed),
+        signRecoverable: (h: Uint8Array, d: Uint8Array) => {
+          if (!armed) return real.signRecoverable(h, d);
+          return { signature: new Uint8Array(32), recoveryId: 0 };
+        },
+      }),
+    );
+    const fast = await createFastLocalWallet(PRIVATE_KEYS[0]);
+    armed = true;
+    await expect(fast.sign!({ hash: `0x${"11".repeat(32)}` })).rejects.toThrow("64 bytes and recovery id 0 or 1");
+  });
+
+  test("a self-check-passing module that then returns recovery id 2 is refused", async () => {
+    const real = await import("tiny-secp256k1");
+    let armed = false;
+    _setEccLoaderForTests(() =>
+      Promise.resolve({
+        isPrivate: (d: Uint8Array) => real.isPrivate(d),
+        pointFromScalar: (d: Uint8Array, compressed?: boolean) => real.pointFromScalar(d, compressed),
+        signRecoverable: (h: Uint8Array, d: Uint8Array) => {
+          if (!armed) return real.signRecoverable(h, d);
+          const signed = real.signRecoverable(h, d);
+          return { signature: signed.signature, recoveryId: 2 };
+        },
+      }),
+    );
+    const fast = await createFastLocalWallet(PRIVATE_KEYS[0]);
+    armed = true;
+    await expect(fast.sign!({ hash: `0x${"22".repeat(32)}` })).rejects.toThrow("64 bytes and recovery id 0 or 1");
   });
 });
 
