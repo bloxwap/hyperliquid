@@ -1,9 +1,9 @@
 @import "tailwindcss";
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
-@import "@bloxwap/hig-tokens/css";
-@import "@bloxwap/hig-react/css/base";
-@import "@bloxwap/hig-react/css";
+@import "@bloxwap/hig/tokens/css";
+@import "@bloxwap/hig/react/css/base";
+@import "@bloxwap/hig/react/css";
 
 @source "../node_modules/fumadocs-ui/dist/**/*.js";
 
@@ -12,7 +12,7 @@
   --font-mono: var(--font-bloxwap-mono), ui-monospace, monospace;
 }
 
-/* HIG geometry and motion (tokens.radius / tokens.motion in @bloxwap/hig-tokens) that tokens.css does not emit as
+/* HIG geometry and motion (tokens.radius / tokens.motion in @bloxwap/hig/tokens) that tokens.css does not emit as
    variables. Colors, spacing and control sizes come straight from the package's --hig-* variables. */
 :root {
   --radius: 10px; /* radius.lg */

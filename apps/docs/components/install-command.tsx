@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@bloxwap/hig-react/button";
+import { Button } from "@bloxwap/hig/react/button";
 import { useState } from "react";
 import { CopyButton } from "./copy-button";
 
