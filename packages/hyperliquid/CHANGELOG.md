@@ -2,7 +2,7 @@
 
 All notable changes to `@bloxwap/hyperliquid` are documented in this file.
 
-## Unreleased
+## 0.8.0 - 2026-11-10
 
 ### Fixed
 
@@ -43,6 +43,17 @@ All notable changes to `@bloxwap/hyperliquid` are documented in this file.
 - Pull requests that change the SDK or its build configuration build the publishable package, load that package, and
   compare tsrs declaration files with TypeScript 5.9. Union-member order and inferred object-member order may differ;
   any other declaration difference fails the check.
+
+### Upgrading from 0.7.0
+
+The default nonce manager is shared by every `ExchangeClient` for one signer in the same realm. Custom nonces and
+`expiresAfter` are rejected when they fall outside the exchange window, including under `skipValidation`.
+User-signed EIP-712 types must list the `HyperliquidTransaction:` primary type first. Cached info responses are
+frozen; copy one before mutating it. Known Hyperliquid hosts select `isTestnet`, and a conflicting flag throws.
+The default HTTP weight budget is one bucket per API host; pass `shared: false` for a private bucket. The Node.js
+minimum remains 22.12.0.
+
+Full comparison: https://github.com/bloxwap/hyperliquid/compare/v0.7.0...v0.8.0
 
 ## 0.7.0 - 2026-10-23
 
