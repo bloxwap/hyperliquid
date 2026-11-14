@@ -36,7 +36,9 @@
     "@biomejs/biome": "2.5.15"
   },
   "overrides": {
+    "glob": "14.0.2",
     "katex": "0.18.11",
+    "minimatch": "11.0.1",
     "re2js": "2.8.7",
     "sharp": "0.35.5",
     "source-map-js": "1.2.2"

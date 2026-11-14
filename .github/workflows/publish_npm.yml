@@ -3,10 +3,15 @@ name: Publish to npm
 # npm trusted publishing requires a GitHub-hosted runner. This publishing job
 # uses OIDC so the package can retain its 2FA requirement and disallow tokens.
 # https://docs.npmjs.com/trusted-publishers/
+# The organization NPM_TOKEN stays as a transitional fallback until the npm
+# Trusted Publisher for @bloxwap/hyperliquid is verified (same as chart).
 on:
   release:
     types: [published]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   security:
@@ -24,6 +29,7 @@ jobs:
   publish:
     needs: security
     runs-on: ubuntu-latest
+    environment: npm-release
 
     permissions:
       contents: read
@@ -37,6 +43,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24.x"
+          registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -66,7 +73,13 @@ jobs:
           echo "value=$TAG" >> "$GITHUB_OUTPUT"
 
       # Scoped packages default to private access (paid); this SDK publishes public.
-      # Trusted publishing automatically attaches provenance for this public package.
+      # --provenance attaches the GitHub Actions attestation. id-token: write above
+      # is what trusted publishing uses; NODE_AUTH_TOKEN is only the fallback.
       - name: Publish package
         working-directory: ./packages/hyperliquid/dist
-        run: npm publish --access public --tag ${{ steps.tag.outputs.value }}
+        env:
+          NPM_TAG: ${{ steps.tag.outputs.value }}
+          # Transitional fallback: delete once the npm Trusted Publisher is verified.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance --tag "$NPM_TAG"
+
